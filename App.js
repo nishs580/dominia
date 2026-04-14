@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
+import ActivityScreen from './screens/ActivityScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -25,7 +26,7 @@ export default function App() {
         <Tab.Screen
           name="Activity"
           options={{ title: 'Activity' }}
-          children={() => <PlaceholderScreen label="Activity" />}
+          component={ActivityScreen}
         />
         <Tab.Screen
           name="Alliance"
