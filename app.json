@@ -20,10 +20,24 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.nish_s.dominia"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a102d35e-f0f0-4753-8a80-a7d6b438bcaf"
+      }
     }
   }
 }
