@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AllianceScreen from './screens/AllianceScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,7 +33,7 @@ export default function App() {
         <Tab.Screen
           name="Alliance"
           options={{ title: 'Alliance' }}
-          children={() => <PlaceholderScreen label="Alliance" />}
+          component={AllianceScreen}
         />
         <Tab.Screen
           name="Profile"
