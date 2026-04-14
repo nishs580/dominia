@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
 import ActivityScreen from './screens/ActivityScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -36,7 +37,7 @@ export default function App() {
         <Tab.Screen
           name="Profile"
           options={{ title: 'Profile' }}
-          children={() => <PlaceholderScreen label="Profile" />}
+          component={ProfileScreen}
         />
       </Tab.Navigator>
       <StatusBar style="auto" />
