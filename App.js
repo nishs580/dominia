@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AllianceScreen from './screens/AllianceScreen';
+import MapScreen from './screens/MapScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -23,7 +24,7 @@ export default function App() {
         <Tab.Screen
           name="Map"
           options={{ title: 'Map' }}
-          children={() => <PlaceholderScreen label="Map" />}
+          component={MapScreen}
         />
         <Tab.Screen
           name="Activity"
