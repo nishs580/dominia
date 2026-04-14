@@ -1,20 +1,57 @@
 import { StatusBar } from 'expo-status-bar';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function App() {
+const Tab = createBottomTabNavigator();
+
+function PlaceholderScreen({ label }) {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
+    <View style={styles.screen}>
+      <Text style={styles.title}>{label}</Text>
     </View>
   );
 }
 
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
+        <Tab.Screen
+          name="Map"
+          options={{ title: 'Map' }}
+          children={() => <PlaceholderScreen label="Map" />}
+        />
+        <Tab.Screen
+          name="Activity"
+          options={{ title: 'Activity' }}
+          children={() => <PlaceholderScreen label="Activity" />}
+        />
+        <Tab.Screen
+          name="Alliance"
+          options={{ title: 'Alliance' }}
+          children={() => <PlaceholderScreen label="Alliance" />}
+        />
+        <Tab.Screen
+          name="Profile"
+          options={{ title: 'Profile' }}
+          children={() => <PlaceholderScreen label="Profile" />}
+        />
+      </Tab.Navigator>
+      <StatusBar style="auto" />
+    </NavigationContainer>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '600',
   },
 });
