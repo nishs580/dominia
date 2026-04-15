@@ -43,7 +43,8 @@ const TERRITORIES = {
       id: 'prinsengracht',
       properties: {
         name: 'Prinsengracht',
-        owner: 'Iron Wolves',
+        owner: 'Alena.S',
+        alliance: 'INW',
         perimeter: 1460,
         color: ALLIANCE,
       },
@@ -65,7 +66,8 @@ const TERRITORIES = {
       id: 'leidseplein',
       properties: {
         name: 'Leidseplein',
-        owner: 'Erik V.',
+        owner: 'Erik.V',
+        alliance: 'FBM',
         perimeter: 980,
         color: ENEMY,
       },
@@ -112,62 +114,68 @@ function TerritorySheet({ territory, onClose }) {
   if (!territory) return null;
 
   const name = territory.properties?.name ?? 'Territory';
-  const owner = territory.properties?.owner ?? 'Unknown';
-  const perimeter = territory.properties?.perimeter ?? 0;
+  const ownerRaw = territory.properties?.owner;
+  const isUnclaimed = ownerRaw == null || ownerRaw === 'Unclaimed';
+  const owner = !isUnclaimed ? ownerRaw : null;
+
+  const tier = territory.properties?.tier ?? 'Medium';
+  const level = territory.properties?.level ?? 'D0';
+  const alliance = territory.properties?.alliance ?? (!isUnclaimed ? 'INW' : null);
+
+  const perimeterDistanceRaw = territory.properties?.perimeterDistance ?? territory.properties?.perimeter ?? 0;
+  const perimeterDistance =
+    typeof perimeterDistanceRaw === 'number'
+      ? perimeterDistanceRaw
+      : Number(String(perimeterDistanceRaw).replace(/[^\d.]/g, '')) || 0;
+  const perimeterDistanceLabel = `${Math.round(perimeterDistance)}m`;
+
   const selectedTerritory = {
     name,
-    perimeter: typeof perimeter === 'number' ? perimeter : Number(String(perimeter).replace(/[^\d.]/g, '')) || 0,
+    perimeter: perimeterDistance,
   };
-  const perimeterLabel =
-    typeof perimeter === 'number'
-      ? `${Math.round(perimeter)}m`
-      : typeof perimeter === 'string'
-        ? perimeter
-        : '-';
 
   const isYours = owner === 'You';
   const isAlliance = owner === 'Iron Wolves';
-  const isUnclaimed = owner === 'Unclaimed';
+  const isOwned = !isUnclaimed;
 
-  const ownerTone =
-    owner === 'Iron Wolves'
-      ? ALLIANCE
-      : owner === 'You'
-        ? ACCENT
-        : owner === 'Unclaimed'
-          ? UNCLAIMED
-          : ENEMY;
+  const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
 
   return (
     <View style={styles.sheet}>
       <View style={styles.sheetHandle} />
       <View style={styles.sheetTopRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sheetTitle}>{name}</Text>
+          <View style={styles.sheetTitleRow}>
+            <Text style={styles.sheetTitle}>{name}</Text>
+            <View style={styles.sheetTierBadge}>
+              <Text style={styles.sheetTierBadgeText}>{tier}</Text>
+            </View>
+          </View>
+
           <Text style={styles.sheetSubtitle}>
-            Owner <Text style={[styles.sheetSubtitleStrong, { color: ownerTone }]}>{owner}</Text>
+            Level <Text style={styles.sheetSubtitleStrong}>{level}</Text>
           </Text>
-          <Text style={styles.sheetPerimeter}>Perimeter: {perimeterLabel}</Text>
+
+          <Text style={styles.sheetSubtitle}>
+            Owner{' '}
+            {isUnclaimed ? (
+              <Text style={styles.sheetOwnerUnclaimed}>Unclaimed</Text>
+            ) : (
+              <>
+                <Text style={[styles.sheetSubtitleStrong, { color: ownerTone }]}>{owner ?? 'defender_x'}</Text>
+                <Text style={styles.sheetAllianceTag}>{` [${alliance ?? 'INW'}]`}</Text>
+              </>
+            )}
+          </Text>
+
+          <Text style={styles.sheetPerimeter}>
+            {isOwned ? 'Walk to contest' : 'Walk to claim'}: {perimeterDistanceLabel}
+          </Text>
         </View>
         <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetClose}>
           <Text style={styles.sheetCloseText}>×</Text>
         </Pressable>
       </View>
-
-      {isAlliance && (
-        <Text style={styles.sheetAllianceNote}>Alliance territory — defended collectively</Text>
-      )}
-
-      {isYours && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Abandon territory"
-          onPress={() => {}}
-          style={({ pressed }) => [styles.sheetAbandon, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.sheetAbandonText}>Abandon territory</Text>
-        </Pressable>
-      )}
 
       {isUnclaimed && (
         <Pressable
@@ -180,17 +188,26 @@ function TerritorySheet({ territory, onClose }) {
             });
           }}
         >
-          <Text style={styles.sheetActionText}>{`Claim · ${perimeterLabel}`}</Text>
+          <Text style={styles.sheetActionText}>Claim</Text>
         </Pressable>
       )}
 
-      {!isAlliance && !isYours && !isUnclaimed && (
+      {isOwned && (
         <Pressable
           accessibilityRole="button"
-          style={({ pressed }) => [styles.sheetAction, styles.sheetActionContest, pressed && { opacity: 0.92 }]}
-          onPress={() => {}}
+          style={({ pressed }) => [
+            styles.sheetAction,
+            { backgroundColor: '#E24B4A' },
+            pressed && { opacity: 0.92 },
+          ]}
+          onPress={() => {
+            navigation.navigate('ActiveClaim', {
+              territoryName: selectedTerritory.name,
+              perimeterDistance: selectedTerritory.perimeter,
+            });
+          }}
         >
-          <Text style={styles.sheetActionText}>{`Contest · ${perimeter}`}</Text>
+          <Text style={styles.sheetActionText}>Contest</Text>
         </Pressable>
       )}
     </View>
@@ -408,6 +425,25 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -0.2,
   },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sheetTierBadge: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 1,
+  },
+  sheetTierBadgeText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
   sheetSubtitle: {
     marginTop: 6,
     color: '#64748B',
@@ -416,6 +452,14 @@ const styles = StyleSheet.create({
   },
   sheetSubtitleStrong: {
     fontWeight: '900',
+  },
+  sheetOwnerUnclaimed: {
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  sheetAllianceTag: {
+    color: '#64748B',
+    fontWeight: '700',
   },
   sheetPerimeter: {
     marginTop: 6,
@@ -437,24 +481,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginTop: -2,
-  },
-  sheetAllianceNote: {
-    marginTop: 12,
-    color: ACCENT,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  sheetAbandon: {
-    marginTop: 14,
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  sheetAbandonText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '600',
   },
   sheetAction: {
     marginTop: 12,
