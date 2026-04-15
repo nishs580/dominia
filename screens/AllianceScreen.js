@@ -2,253 +2,164 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 // Toggle to preview the two states.
-const isMember = false;
+const isMember = true;
 
-const ACCENT = '#1D9E75';
-const ALLIANCE = '#534AB7';
-const BG = '#F6F8F7';
-const CARD = '#FFFFFF';
-const TEXT = '#0F172A';
-const MUTED = '#64748B';
-const BORDER = '#E5E7EB';
+const BG = '#0f0f14';
+const ORANGE = '#ED9332';
 
-function Badge({ text, tone }) {
-  const isOpen = tone === 'open';
-  const isFull = tone === 'full';
+function HeaderKicker({ children }) {
+  return <Text style={styles.headerKicker}>{children}</Text>;
+}
 
-  const bg = isFull ? '#F1F5F9' : isOpen ? '#E8F6F1' : '#F6F5FF';
-  const border = isFull ? '#E2E8F0' : isOpen ? '#C7EADF' : '#DAD7FF';
-  const color = isFull ? '#64748B' : isOpen ? ACCENT : ALLIANCE;
-
+function AllianceCard({ dotColor, nameLine, metaLine, members }) {
   return (
-    <View style={[styles.badge, { backgroundColor: bg, borderColor: border }]}>
-      <Text style={[styles.badgeText, { color }]}>{text}</Text>
+    <View style={styles.allianceCard}>
+      <View style={[styles.allianceDot, { backgroundColor: dotColor }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.allianceCardName}>{nameLine}</Text>
+        <Text style={styles.allianceCardMeta}>{metaLine}</Text>
+      </View>
+      <Text style={styles.allianceCardMembers}>{members}</Text>
     </View>
   );
 }
 
-function Pill({ label, value, variant }) {
-  const isPurple = variant === 'purple';
+function StatCard({ value, label, valueColor }) {
   return (
-    <View
-      style={[
-        styles.pill,
-        isPurple
-          ? { backgroundColor: '#F0EFFF', borderColor: '#DAD7FF' }
-          : { backgroundColor: CARD, borderColor: BORDER },
-      ]}
+    <View style={styles.statCard}>
+      <Text style={[styles.statValue, valueColor && { color: valueColor }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function RosterRow({ initials, name, role, steps, showBorder }) {
+  return (
+    <View style={[styles.rosterRow, showBorder && styles.rosterRowBorder]}>
+      <View style={styles.rosterLeft}>
+        <View style={styles.rosterAvatar}>
+          <Text style={styles.rosterInitials}>{initials}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rosterName}>{name}</Text>
+          <Text style={styles.rosterRole}>{role}</Text>
+        </View>
+      </View>
+      <Text style={styles.rosterSteps}>{steps}</Text>
+    </View>
+  );
+}
+
+function NonMemberContent() {
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.pillValue, isPurple && { color: ALLIANCE }]}>{value}</Text>
-      <Text style={styles.pillLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function Button({ label, variant }) {
-  const isPrimary = variant === 'primary';
-  return (
-    <Pressable
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.button,
-        isPrimary ? styles.buttonPrimary : styles.buttonOutline,
-        pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-      ]}
-    >
-      <Text style={[styles.buttonText, isPrimary ? styles.buttonTextPrimary : styles.buttonTextOutline]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function PeopleIcon() {
-  return (
-    <View style={styles.peopleIcon}>
-      <View style={styles.peopleHeadRow}>
-        <View style={[styles.peopleHead, { opacity: 0.85 }]} />
-        <View style={[styles.peopleHead, { opacity: 1 }]} />
-      </View>
-      <View style={styles.peopleBodyRow}>
-        <View style={[styles.peopleBody, { opacity: 0.85 }]} />
-        <View style={[styles.peopleBody, { opacity: 1 }]} />
-      </View>
-    </View>
-  );
-}
-
-function AllianceRow({ name, members, territories, status }) {
-  const isFull = status === 'Full';
-  return (
-    <View style={styles.allianceRow}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.allianceName}>{name}</Text>
-        <Text style={styles.allianceMeta}>
-          {members} members • {territories} territories
-        </Text>
-      </View>
-      <Badge text={status} tone={isFull ? 'full' : 'open'} />
-    </View>
-  );
-}
-
-function FeedRow({ text, time }) {
-  return (
-    <View style={styles.feedRow}>
-      <View style={styles.feedDot} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.feedText}>{text}</Text>
-        <Text style={styles.feedTime}>{time}</Text>
-      </View>
-    </View>
-  );
-}
-
-function MemberRow({ name, role, territories }) {
-  return (
-    <View style={styles.memberRow}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{name[0]}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.memberName}>{name}</Text>
-        <Text style={styles.memberMeta}>
-          {role} • {territories} territories
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function TerritoryTile({ name, status, isMore }) {
-  if (isMore) {
-    return (
-      <View style={[styles.territoryTile, styles.territoryMore]}>
-        <Text style={styles.moreValue}>+59</Text>
-        <Text style={styles.moreLabel}>more</Text>
-      </View>
-    );
-  }
-
-  const lower = status.toLowerCase();
-  const isContest = lower.includes('contest');
-  const pillBg = isContest ? '#FEF3C7' : '#E8F6F1';
-  const pillBorder = isContest ? '#FDE68A' : '#C7EADF';
-  const pillText = isContest ? '#92400E' : ACCENT;
-
-  return (
-    <View style={styles.territoryTile}>
-      <Text style={styles.territoryName}>{name}</Text>
-      <View style={[styles.statusPill, { backgroundColor: pillBg, borderColor: pillBorder }]}>
-        <Text style={[styles.statusText, { color: pillText }]}>{status}</Text>
-      </View>
-    </View>
-  );
-}
-
-function NoAllianceState() {
-  return (
-    <>
-      <View style={[styles.card, styles.emptyCard]}>
-        <PeopleIcon />
-        <Text style={styles.emptyTitle}>You&apos;re fighting alone</Text>
+      <View style={styles.emptyWrap}>
+        <Text style={styles.emptyEmoji}>🏴</Text>
+        <Text style={styles.emptyTitle}>Join an alliance</Text>
         <Text style={styles.emptySubtitle}>
-          Alliance members defend each other&apos;s territories. Solo players are easier to contest.
+          Alliance warfare unlocks at Level 6. Coordinate with others, share resources, and dominate the map together.
         </Text>
-
-        <View style={styles.buttonRow}>
-          <Button label="Found an alliance" variant="primary" />
-          <Button label="Browse open alliances" variant="outline" />
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.btnPrimaryText}>Find an alliance</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.btnMuted, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.btnMutedText}>Found your own</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Open alliances near you</Text>
+      <HeaderKicker>ALLIANCES IN YOUR CITY</HeaderKicker>
+      <View style={{ marginTop: 10, gap: 10 }}>
+        <AllianceCard
+          dotColor="#ED9332"
+          nameLine="Iron Wolves [INW]"
+          metaLine="Jordaan · Founded 2024"
+          members="14/20"
+        />
+        <AllianceCard
+          dotColor="#7F77DD"
+          nameLine="Fire Blazers [FBM]"
+          metaLine="Leidseplein · Founded 2024"
+          members="8/20"
+        />
       </View>
-
-      <View style={styles.card}>
-        <AllianceRow name="Iron Wolves" members={14} territories={62} status="Open" />
-        <View style={styles.divider} />
-        <AllianceRow name="Northern Pact" members={8} territories={31} status="Open" />
-        <View style={styles.divider} />
-        <AllianceRow name="Canal Saints" members={20} territories={88} status="Full" />
-      </View>
-    </>
+    </ScrollView>
   );
 }
 
-function MemberState() {
+function MemberContent() {
   return (
     <>
-      <View style={[styles.card, styles.allianceHeaderCard]}>
-        <View style={styles.allianceHeaderTop}>
+      <View style={styles.accentBar} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.memberScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.statRow}>
+          <StatCard value="47" label="Territories" />
+          <StatCard value="340" label="Morale" valueColor={ORANGE} />
+          <StatCard value="#2" label="Realm rank" />
+        </View>
+
+        <View style={styles.warChest}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.allianceHeaderName}>Iron Wolves</Text>
-            <Text style={styles.allianceHeaderMeta}>Founded by Erik V.</Text>
+            <Text style={styles.warChestLabel}>War Chest</Text>
+            <Text style={styles.warChestValue}>340 Morale</Text>
+            <Text style={styles.warChestDonor}>Top donor: nishs580</Text>
           </View>
-          <Badge text="Realm #2" tone="purple" />
+          <Text style={styles.warChestIcon}>⚔️</Text>
         </View>
 
-        <View style={styles.pillsRow}>
-          <Pill label="Members" value="14" variant="purple" />
-          <Pill label="Territories" value="62" variant="purple" />
-          <Pill label="Realm Rank" value="#2" variant="purple" />
+        <Text style={styles.sectionLabel}>ACTIVE MISSION</Text>
+        <View style={styles.missionCard}>
+          <Text style={styles.missionTitle}>Collective Fitness — 500,000 steps</Text>
+          <Text style={styles.missionSub}>300,000 / 500,000 steps · 4 days left</Text>
+          <View style={styles.progressTrack}>
+            <View style={styles.progressFill} />
+          </View>
         </View>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Activity</Text>
-        <View style={styles.feed}>
-          <FeedRow text="Erik V. claimed Rembrandtplein" time="2m ago" />
-          <View style={styles.divider} />
-          <FeedRow text="Sara R. defended Dam Square" time="14m ago" />
-          <View style={styles.divider} />
-          <FeedRow text="Mia K. walked 8240 steps" time="1h ago" />
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>ROSTER</Text>
+        <View>
+          <RosterRow initials="NS" name="nishs580" role="Founder" steps="12,400 steps" showBorder />
+          <RosterRow initials="AS" name="Alena.S" role="Officer" steps="9,200 steps" showBorder />
+          <RosterRow initials="EV" name="Erik.V" role="Soldier" steps="6,100 steps" showBorder={false} />
         </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.cardTitle}>Members</Text>
-          <Text style={styles.cardHint}>14 total</Text>
-        </View>
-        <View style={styles.list}>
-          <MemberRow name="Erik V." role="Founder" territories={18} />
-          <View style={styles.divider} />
-          <MemberRow name="Sara R." role="Officer" territories={12} />
-          <View style={styles.divider} />
-          <MemberRow name="You" role="Member" territories={3} />
-          <View style={styles.divider} />
-          <Text style={styles.moreMembers}>+11 more members</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.cardTitle}>Territories</Text>
-          <Text style={styles.cardHint}>Owned</Text>
-        </View>
-        <View style={styles.territoryGrid}>
-          <TerritoryTile name="Dam Square" status="Under contest" />
-          <TerritoryTile name="Jordaan" status="Secured" />
-          <TerritoryTile name="Prinsengracht" status="Secured" />
-          <TerritoryTile isMore />
-        </View>
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 export default function AllianceScreen() {
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Alliance</Text>
-        <Text style={styles.headerSubtitle}>{isMember ? 'Your squad overview' : 'Find allies nearby'}</Text>
+        <HeaderKicker>ALLIANCE</HeaderKicker>
+        {isMember ? (
+          <>
+            <Text style={styles.headerTitle}>Iron Wolves</Text>
+            <Text style={styles.headerSubtitle}>[INW] · Jordaan · 14 members</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.headerTitle}>No Alliance</Text>
+            <Text style={styles.headerSubtitle}>You are unaffiliated</Text>
+          </>
+        )}
       </View>
 
-      {isMember ? <MemberState /> : <NoAllianceState />}
-    </ScrollView>
+      {isMember ? <MemberContent /> : <NonMemberContent />}
+    </View>
   );
 }
 
@@ -257,352 +168,262 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
-  content: {
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  headerKicker: {
+    color: '#555',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  headerTitle: {
+    marginTop: 8,
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  headerSubtitle: {
+    marginTop: 6,
+    color: '#666',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  accentBar: {
+    height: 4,
+    width: '100%',
+    backgroundColor: ORANGE,
+    borderRadius: 2,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+  },
+  memberScrollContent: {
     padding: 16,
     paddingBottom: 28,
   },
-  header: {
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    marginBottom: 10,
-  },
-  headerTitle: {
-    color: TEXT,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  headerSubtitle: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginTop: 12,
-  },
-  cardTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.1,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
+  emptyWrap: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    marginBottom: 28,
   },
-  cardHint: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: BORDER,
-    marginVertical: 10,
-  },
-
-  // Empty state
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: 18,
-  },
-  peopleIcon: {
-    width: 64,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  peopleHeadRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 6,
-  },
-  peopleHead: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    backgroundColor: '#CBD5E1',
-  },
-  peopleBodyRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  peopleBody: {
-    width: 24,
-    height: 16,
-    borderRadius: 10,
-    backgroundColor: '#CBD5E1',
+  emptyEmoji: {
+    fontSize: 56,
+    marginBottom: 12,
   },
   emptyTitle: {
-    marginTop: 6,
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
   },
   emptySubtitle: {
-    marginTop: 8,
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '700',
+    marginTop: 10,
+    color: '#555',
+    fontSize: 11,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 16.5,
     paddingHorizontal: 8,
   },
-  buttonRow: {
-    marginTop: 14,
+  btnPrimary: {
+    marginTop: 18,
     width: '100%',
-    gap: 10,
-  },
-  button: {
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  buttonPrimary: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
-  },
-  buttonOutline: {
-    backgroundColor: CARD,
-    borderColor: BORDER,
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-  buttonTextPrimary: {
-    color: '#FFFFFF',
-  },
-  buttonTextOutline: {
-    color: TEXT,
-  },
-  sectionHeader: {
-    marginTop: 16,
-    paddingHorizontal: 2,
-  },
-  sectionTitle: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-
-  // Open alliances list rows
-  allianceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  allianceName: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-  allianceMeta: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // Badges
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  badgeText: {
-    fontWeight: '900',
-    fontSize: 12,
-  },
-
-  // Member state header
-  allianceHeaderCard: {
-    backgroundColor: '#F6F5FF',
-    borderColor: '#DAD7FF',
-  },
-  allianceHeaderTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  allianceHeaderName: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  allianceHeaderMeta: {
-    marginTop: 6,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  pillsRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pill: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  pillValue: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  pillLabel: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // Feed
-  feed: {
-    marginTop: 12,
-  },
-  feedRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
-  },
-  feedDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: ACCENT,
-    marginTop: 4,
-  },
-  feedText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  feedTime: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // Members list
-  list: {
-    marginTop: 12,
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 34,
-    height: 34,
+    backgroundColor: ORANGE,
     borderRadius: 12,
-    backgroundColor: '#E8F6F1',
-    borderColor: '#C7EADF',
-    borderWidth: 1,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    color: ACCENT,
-    fontWeight: '900',
+  btnPrimaryText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  memberName: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+  btnMuted: {
+    marginTop: 10,
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  memberMeta: {
-    marginTop: 3,
-    color: MUTED,
-    fontSize: 12,
+  btnMutedText: {
+    color: '#aaa',
+    fontSize: 15,
     fontWeight: '700',
   },
-  moreMembers: {
-    color: ALLIANCE,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-
-  // Territories grid
-  territoryGrid: {
-    marginTop: 12,
+  allianceCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+    padding: 10,
     gap: 10,
   },
-  territoryTile: {
-    width: '48.5%',
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    minHeight: 84,
-    justifyContent: 'space-between',
+  allianceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  territoryMore: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
+  allianceCardName: {
+    color: '#ccc',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  allianceCardMeta: {
+    marginTop: 4,
+    color: '#555',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  allianceCardMembers: {
+    color: '#666',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  statValue: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  statLabel: {
+    marginTop: 6,
+    color: '#555',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  warChest: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(237,147,50,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(237,147,50,0.2)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  warChestLabel: {
+    color: '#555',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  warChestValue: {
+    marginTop: 4,
+    color: ORANGE,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  warChestDonor: {
+    marginTop: 4,
+    color: '#555',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  warChestIcon: {
+    fontSize: 20,
+  },
+  sectionLabel: {
+    marginTop: 16,
+    color: '#555',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  missionCard: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: ORANGE,
+  },
+  missionTitle: {
+    color: '#ccc',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  missionSub: {
+    marginTop: 6,
+    color: '#555',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  progressTrack: {
+    marginTop: 10,
+    width: '100%',
+    height: 3,
+    backgroundColor: '#222',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    width: '60%',
+    height: '100%',
+    backgroundColor: ORANGE,
+    borderRadius: 2,
+  },
+  rosterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  rosterRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  rosterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  rosterAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(237,147,50,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
   },
-  territoryName: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+  rosterInitials: {
+    color: ORANGE,
+    fontSize: 10,
+    fontWeight: '600',
   },
-  statusPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusText: {
+  rosterName: {
+    color: '#ccc',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '600',
   },
-  moreValue: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: '900',
+  rosterRole: {
+    marginTop: 2,
+    color: '#555',
+    fontSize: 9,
+    fontWeight: '600',
   },
-  moreLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
+  rosterSteps: {
+    color: '#666',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
-
