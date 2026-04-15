@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
+import { useNavigation } from '@react-navigation/native';
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -21,7 +22,7 @@ const TERRITORIES = {
       properties: {
         name: 'Keizersgracht',
         owner: 'You',
-        perimeter: '320m',
+        perimeter: 1120,
         color: ACCENT,
       },
       geometry: {
@@ -43,7 +44,7 @@ const TERRITORIES = {
       properties: {
         name: 'Prinsengracht',
         owner: 'Iron Wolves',
-        perimeter: '480m',
+        perimeter: 1460,
         color: ALLIANCE,
       },
       geometry: {
@@ -65,7 +66,7 @@ const TERRITORIES = {
       properties: {
         name: 'Leidseplein',
         owner: 'Erik V.',
-        perimeter: '610m',
+        perimeter: 980,
         color: ENEMY,
       },
       geometry: {
@@ -87,7 +88,7 @@ const TERRITORIES = {
       properties: {
         name: 'Vondelpark',
         owner: 'Unclaimed',
-        perimeter: '890m',
+        perimeter: 1780,
         color: UNCLAIMED,
       },
       geometry: {
@@ -107,11 +108,22 @@ const TERRITORIES = {
 };
 
 function TerritorySheet({ territory, onClose }) {
+  const navigation = useNavigation();
   if (!territory) return null;
 
   const name = territory.properties?.name ?? 'Territory';
   const owner = territory.properties?.owner ?? 'Unknown';
-  const perimeter = territory.properties?.perimeter ?? '-';
+  const perimeter = territory.properties?.perimeter ?? 0;
+  const selectedTerritory = {
+    name,
+    perimeter: typeof perimeter === 'number' ? perimeter : Number(String(perimeter).replace(/[^\d.]/g, '')) || 0,
+  };
+  const perimeterLabel =
+    typeof perimeter === 'number'
+      ? `${Math.round(perimeter)}m`
+      : typeof perimeter === 'string'
+        ? perimeter
+        : '-';
 
   const isYours = owner === 'You';
   const isAlliance = owner === 'Iron Wolves';
@@ -135,7 +147,7 @@ function TerritorySheet({ territory, onClose }) {
           <Text style={styles.sheetSubtitle}>
             Owner <Text style={[styles.sheetSubtitleStrong, { color: ownerTone }]}>{owner}</Text>
           </Text>
-          <Text style={styles.sheetPerimeter}>Perimeter: {perimeter}</Text>
+          <Text style={styles.sheetPerimeter}>Perimeter: {perimeterLabel}</Text>
         </View>
         <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetClose}>
           <Text style={styles.sheetCloseText}>×</Text>
@@ -161,9 +173,14 @@ function TerritorySheet({ territory, onClose }) {
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
-          onPress={() => {}}
+          onPress={() => {
+            navigation.navigate('ActiveClaim', {
+              territoryName: selectedTerritory.name,
+              perimeterDistance: selectedTerritory.perimeter,
+            });
+          }}
         >
-          <Text style={styles.sheetActionText}>{`Claim · ${perimeter}`}</Text>
+          <Text style={styles.sheetActionText}>{`Claim · ${perimeterLabel}`}</Text>
         </Pressable>
       )}
 
@@ -181,6 +198,7 @@ function TerritorySheet({ territory, onClose }) {
 }
 
 export default function MapScreen() {
+  const navigation = useNavigation();
   const cameraRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
