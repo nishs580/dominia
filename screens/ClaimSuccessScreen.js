@@ -76,6 +76,75 @@ export default function ClaimSuccessScreen() {
 
       <View style={{ flex: 1 }} />
 
+      <View style={styles.testSection}>
+        <Text style={styles.testTitle}>Test contest result</Text>
+        <View style={styles.testButtonsRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              navigation.navigate('ContestResultScreen', {
+                contestState: 'attack_won',
+                territoryName: 'Vondelpark West',
+                myDistance: 1240,
+                opponentDistance: 890,
+                opponentName: 'attacker_x',
+              })
+            }
+            style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.testBtnText}>attack_won</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              navigation.navigate('ContestResultScreen', {
+                contestState: 'attack_lost',
+                territoryName: 'Vondelpark West',
+                myDistance: 890,
+                opponentDistance: 1240,
+                opponentName: 'attacker_x',
+              })
+            }
+            style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.testBtnText}>attack_lost</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.testButtonsRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              navigation.navigate('ContestResultScreen', {
+                contestState: 'defend_won',
+                territoryName: 'Vondelpark West',
+                myDistance: 1240,
+                opponentDistance: 890,
+                opponentName: 'attacker_x',
+              })
+            }
+            style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.testBtnText}>defend_won</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              navigation.navigate('ContestResultScreen', {
+                contestState: 'defend_lost',
+                territoryName: 'Vondelpark West',
+                myDistance: 890,
+                opponentDistance: 1240,
+                opponentName: 'attacker_x',
+              })
+            }
+            style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.testBtnText}>defend_lost</Text>
+          </Pressable>
+        </View>
+      </View>
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Back to Map"
@@ -190,6 +259,43 @@ const styles = StyleSheet.create({
   ctaText: {
     color: WHITE,
     fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
+  testSection: {
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  testTitle: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+  },
+  testButtonsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  testBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testBtnText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: -0.1,
   },

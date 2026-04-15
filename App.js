@@ -9,6 +9,7 @@ import AllianceScreen from './screens/AllianceScreen';
 import MapScreen from './screens/MapScreen';
 import ActiveClaimScreen from './screens/ActiveClaimScreen';
 import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
+import ContestResultScreen from './screens/ContestResultScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -61,6 +62,11 @@ export default function App() {
         <Stack.Screen
           name="ClaimSuccessScreen"
           component={ClaimSuccessScreen}
+          options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
+        />
+        <Stack.Screen
+          name="ContestResultScreen"
+          component={ContestResultScreen}
           options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
         />
       </Stack.Navigator>
