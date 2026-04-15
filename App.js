@@ -10,6 +10,7 @@ import MapScreen from './screens/MapScreen';
 import ActiveClaimScreen from './screens/ActiveClaimScreen';
 import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -52,7 +53,8 @@ const TabNavigator = () => {
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator initialRouteName="Onboarding" screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         <Stack.Screen
           name="ActiveClaim"
