@@ -2,6 +2,8 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ClerkProvider } from '@clerk/clerk-expo';
+import { tokenCache } from './lib/clerk';
 import { StyleSheet, Text, View } from 'react-native';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -12,6 +14,7 @@ import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
+import SignInScreen from './screens/SignInScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -53,33 +56,23 @@ const TabNavigator = () => {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Onboarding" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
-        <Stack.Screen
-          name="ActiveClaim"
-          component={ActiveClaimScreen}
-          options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
-        />
-        <Stack.Screen
-          name="ClaimSuccessScreen"
-          component={ClaimSuccessScreen}
-          options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
-        />
-        <Stack.Screen
-          name="ContestResultScreen"
-          component={ContestResultScreen}
-          options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
-        />
-        <Stack.Screen
-          name="AllianceJoined"
-          component={AllianceJoinedScreen}
-          options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
-        />
-      </Stack.Navigator>
-      <StatusBar style="auto" />
-    </NavigationContainer>
+    <ClerkProvider
+      publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      tokenCache={tokenCache}
+    >
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="SignIn" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="SignIn" component={SignInScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen name="ActiveClaim" component={ActiveClaimScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+          <Stack.Screen name="ClaimSuccessScreen" component={ClaimSuccessScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+          <Stack.Screen name="ContestResultScreen" component={ContestResultScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+          <Stack.Screen name="AllianceJoined" component={AllianceJoinedScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+        </Stack.Navigator>
+        <StatusBar style="auto" />
+      </NavigationContainer>
+    </ClerkProvider>
   );
 }
 
