@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
 
 const ACCENT = '#1D9E75';
 const ALLIANCE = '#534AB7';
@@ -76,6 +77,8 @@ function SettingsRow({ label }) {
 
 export default function ProfileScreen() {
   const today = useMemo(() => new Date(), []);
+
+  const { signOut } = useAuth();
 
   const playerName = 'Jonas K.';
   const allianceName = 'Iron Wolves';
@@ -160,7 +163,10 @@ export default function ProfileScreen() {
         <View style={styles.settingsList}>
           <SettingsRow label="Notification settings" />
           <View style={styles.listDivider} />
-          <SettingsRow label="Sign out" />
+          <Pressable onPress={() => signOut()} style={styles.settingsRow}>
+            <Text style={[styles.settingsLabel, { color: '#E84040' }]}>Sign out</Text>
+            <Text style={styles.settingsChevron}>›</Text>
+          </Pressable>
         </View>
       </View>
     </ScrollView>

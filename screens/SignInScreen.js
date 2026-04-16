@@ -19,8 +19,8 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signIn.create({ identifier: email, password });
       await setActiveSignIn({ session: result.createdSessionId });
-      await ensurePlayer(result.createdUserId, email);
-      navigation.replace('MainTabs');
+      const { needsUsername } = await ensurePlayer(result.createdUserId, email);
+      navigation.replace(needsUsername ? 'Username' : 'MainTabs');
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign in failed. Check your email and password.');
     } finally {
@@ -35,8 +35,8 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signUp.create({ emailAddress: email, password });
       await setActiveSignUp({ session: result.createdSessionId });
-      await ensurePlayer(result.createdUserId, email);
-      navigation.replace('MainTabs');
+      const { needsUsername } = await ensurePlayer(result.createdUserId, email);
+      navigation.replace(needsUsername ? 'Username' : 'MainTabs');
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign up failed. Try a different email.');
     } finally {

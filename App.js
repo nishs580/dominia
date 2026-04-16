@@ -15,6 +15,8 @@ import ContestResultScreen from './screens/ContestResultScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
 import SignInScreen from './screens/SignInScreen';
+import UsernameScreen from './screens/UsernameScreen';
+import AuthGate from './components/AuthGate';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -61,8 +63,10 @@ export default function App() {
       tokenCache={tokenCache}
     >
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="SignIn" screenOptions={{ headerShown: false }}>
+        <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="AuthGate" component={AuthGate} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
+          <Stack.Screen name="Username" component={UsernameScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="ActiveClaim" component={ActiveClaimScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
