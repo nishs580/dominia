@@ -1,7 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -12,102 +14,6 @@ const ACCENT = '#1D9E75';
 const ALLIANCE = '#534AB7';
 const ENEMY = '#993C1D';
 const UNCLAIMED = '#444441';
-
-const TERRITORIES = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      id: 'keizersgracht',
-      properties: {
-        name: 'Keizersgracht',
-        owner: 'You',
-        perimeter: 1120,
-        color: ACCENT,
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [4.8885, 52.3728],
-            [4.8933, 52.3728],
-            [4.8933, 52.3695],
-            [4.8885, 52.3695],
-            [4.8885, 52.3728],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      id: 'prinsengracht',
-      properties: {
-        name: 'Prinsengracht',
-        owner: 'Alena.S',
-        alliance: 'INW',
-        perimeter: 1460,
-        color: ALLIANCE,
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [4.8952, 52.3715],
-            [4.9002, 52.3715],
-            [4.9002, 52.3684],
-            [4.8952, 52.3684],
-            [4.8952, 52.3715],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      id: 'leidseplein',
-      properties: {
-        name: 'Leidseplein',
-        owner: 'Erik.V',
-        alliance: 'FBM',
-        perimeter: 980,
-        color: ENEMY,
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [4.8808, 52.3658],
-            [4.8862, 52.3658],
-            [4.8862, 52.3629],
-            [4.8808, 52.3629],
-            [4.8808, 52.3658],
-          ],
-        ],
-      },
-    },
-    {
-      type: 'Feature',
-      id: 'vondelpark',
-      properties: {
-        name: 'Vondelpark',
-        owner: 'Unclaimed',
-        perimeter: 1780,
-        color: UNCLAIMED,
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [4.8675, 52.3606],
-            [4.8746, 52.3606],
-            [4.8746, 52.3575],
-            [4.8675, 52.3575],
-            [4.8675, 52.3606],
-          ],
-        ],
-      },
-    },
-  ],
-};
 
 function TerritorySheet({ territory, onClose }) {
   const navigation = useNavigation();
@@ -219,6 +125,41 @@ export default function MapScreen() {
   const cameraRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
+
+  useEffect(() => {
+    async function fetchTerritories() {
+      const { data, error } = await supabase.from('territories').select('*');
+      if (error) {
+        console.error('Error fetching territories:', error);
+        return;
+      }
+      const features = data.map((t) => ({
+        type: 'Feature',
+        id: t.id,
+        properties: {
+          name: t.territory_name,
+          owner: t.owner_id ?? 'Unclaimed',
+          tier: t.tier ?? 'Medium',
+          level: `D${t.development_level ?? 0}`,
+          perimeter: t.perimeter_distance,
+          color: t.owner_id ? '#993C1D' : '#444441',
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [t.longitude - 0.003, t.latitude + 0.002],
+            [t.longitude + 0.003, t.latitude + 0.002],
+            [t.longitude + 0.003, t.latitude - 0.002],
+            [t.longitude - 0.003, t.latitude - 0.002],
+            [t.longitude - 0.003, t.latitude + 0.002],
+          ]],
+        },
+      }));
+      setTerritories({ type: 'FeatureCollection', features });
+    }
+    fetchTerritories();
+  }, []);
 
   const fillStyle = useMemo(
     () => ({
@@ -277,7 +218,7 @@ export default function MapScreen() {
 
         <MapboxGL.ShapeSource
           id="territories"
-          shape={TERRITORIES}
+          shape={territories}
           onPress={(e) => {
             const f = e?.features?.[0];
             if (f) setSelected(f);
