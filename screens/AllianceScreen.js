@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 // Toggle to preview the two states.
-const isMember = True;
+const isMember = true;
 
 const BG = '#0f0f14';
 const ORANGE = '#ED9332';
