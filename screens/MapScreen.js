@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
+import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
@@ -126,12 +127,13 @@ export default function MapScreen() {
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
+  const { userId } = useAuth();
 
   useEffect(() => {
     async function fetchTerritories() {
       const { data, error } = await supabase
         .from('territories')
-        .select('*, players(username), alliances(short_name)');
+        .select('*, players(username, clerk_id), alliances(short_name)');
       if (error) {
         console.error('Error fetching territories:', error);
         return;
@@ -146,12 +148,9 @@ export default function MapScreen() {
           tier: t.tier ?? 'Medium',
           level: `D${t.development_level ?? 0}`,
           perimeter: t.perimeter_distance,
-          color:
-            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc'
-              ? '#534AB7'
-              : t.owner_id
-                ? '#993C1D'
-                : '#444441',
+          color: t.players?.clerk_id === userId ? '#1D9E75' :
+            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
+            t.owner_id ? '#993C1D' : '#444441',
         },
         geometry: {
           type: 'Polygon',
@@ -167,7 +166,7 @@ export default function MapScreen() {
       setTerritories({ type: 'FeatureCollection', features });
     }
     fetchTerritories();
-  }, []);
+  }, [userId]);
 
   const fillStyle = useMemo(
     () => ({

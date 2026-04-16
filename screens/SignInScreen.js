@@ -1,6 +1,7 @@
 import { useSignIn } from '@clerk/clerk-expo';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { ensurePlayer } from '../lib/auth';
 
 export default function SignInScreen({ navigation }) {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -14,6 +15,7 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signIn.create({ identifier: email, password });
       await setActive({ session: result.createdSessionId });
+      await ensurePlayer(result.createdUserId, email);
       navigation.replace('MainTabs');
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign in failed');
