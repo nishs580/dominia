@@ -129,7 +129,9 @@ export default function MapScreen() {
 
   useEffect(() => {
     async function fetchTerritories() {
-      const { data, error } = await supabase.from('territories').select('*');
+      const { data, error } = await supabase
+        .from('territories')
+        .select('*, players(username), alliances(short_name)');
       if (error) {
         console.error('Error fetching territories:', error);
         return;
@@ -139,11 +141,17 @@ export default function MapScreen() {
         id: t.id,
         properties: {
           name: t.territory_name,
-          owner: t.owner_id ?? 'Unclaimed',
+          owner: t.players?.username ?? 'Unclaimed',
+          alliance: t.alliances?.short_name ?? null,
           tier: t.tier ?? 'Medium',
           level: `D${t.development_level ?? 0}`,
           perimeter: t.perimeter_distance,
-          color: t.owner_id ? '#993C1D' : '#444441',
+          color:
+            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc'
+              ? '#534AB7'
+              : t.owner_id
+                ? '#993C1D'
+                : '#444441',
         },
         geometry: {
           type: 'Polygon',
