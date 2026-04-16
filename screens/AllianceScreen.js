@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 // Toggle to preview the two states.
-const isMember = true;
+const isMember = True;
 
 const BG = '#0f0f14';
 const ORANGE = '#ED9332';
@@ -50,7 +50,7 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
   );
 }
 
-function NonMemberContent() {
+function NonMemberContent({ navigation }) {
   return (
     <ScrollView
       style={styles.scroll}
@@ -91,6 +91,12 @@ function NonMemberContent() {
           metaLine="Leidseplein · Founded 2024"
           members="8/20"
         />
+        <TouchableOpacity
+          style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 12 }}
+          onPress={() => navigation.navigate('AllianceJoined')}
+        >
+          <Text style={{ fontSize: 12, color: '#555' }}>Test Alliance Joined screen</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -141,6 +147,7 @@ function MemberContent() {
 }
 
 export default function AllianceScreen() {
+  const navigation = useNavigation();
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -158,7 +165,7 @@ export default function AllianceScreen() {
         )}
       </View>
 
-      {isMember ? <MemberContent /> : <NonMemberContent />}
+      {isMember ? <MemberContent /> : <NonMemberContent navigation={navigation} />}
     </View>
   );
 }
