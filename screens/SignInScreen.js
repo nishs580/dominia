@@ -1,29 +1,56 @@
-import { useSignIn } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { ensurePlayer } from '../lib/auth';
 
 export default function SignInScreen({ navigation }) {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
+  const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mode, setMode] = useState('signin');
+  const [loading, setLoading] = useState(false);
 
   const handleSignIn = async () => {
-    if (!isLoaded) return;
+    if (!signInLoaded) return;
+    setLoading(true);
+    setError('');
     try {
       const result = await signIn.create({ identifier: email, password });
-      await setActive({ session: result.createdSessionId });
+      await setActiveSignIn({ session: result.createdSessionId });
       await ensurePlayer(result.createdUserId, email);
       navigation.replace('MainTabs');
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? 'Sign in failed');
+      setError(err.errors?.[0]?.message ?? 'Sign in failed. Check your email and password.');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleSignUp = async () => {
+    if (!signUpLoaded) return;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await signUp.create({ emailAddress: email, password });
+      await setActiveSignUp({ session: result.createdSessionId });
+      await ensurePlayer(result.createdUserId, email);
+      navigation.replace('MainTabs');
+    } catch (err) {
+      setError(err.errors?.[0]?.message ?? 'Sign up failed. Try a different email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isSignIn = mode === 'signin';
+
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <Text style={styles.title}>Dominia</Text>
       <Text style={styles.subtitle}>Walk. Claim. Conquer. Defend.</Text>
 
@@ -47,10 +74,26 @@ export default function SignInScreen({ navigation }) {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Pressable style={styles.button} onPress={handleSignIn}>
-        <Text style={styles.buttonText}>Sign In</Text>
+      <Pressable
+        style={[styles.button, loading && { opacity: 0.7 }]}
+        onPress={isSignIn ? handleSignIn : handleSignUp}
+        disabled={loading}
+      >
+        <Text style={styles.buttonText}>
+          {loading ? 'Please wait...' : isSignIn ? 'Sign In' : 'Create Account'}
+        </Text>
       </Pressable>
-    </View>
+
+      <Pressable
+        style={styles.toggleButton}
+        onPress={() => { setMode(isSignIn ? 'signup' : 'signin'); setError(''); }}
+      >
+        <Text style={styles.toggleText}>
+          {isSignIn ? "Don't have an account? " : 'Already have an account? '}
+          <Text style={styles.toggleLink}>{isSignIn ? 'Sign Up' : 'Sign In'}</Text>
+        </Text>
+      </Pressable>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -92,6 +135,7 @@ const styles = StyleSheet.create({
     color: '#E84040',
     fontSize: 13,
     marginBottom: 12,
+    textAlign: 'center',
   },
   button: {
     width: '100%',
@@ -106,5 +150,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: -0.2,
+  },
+  toggleButton: {
+    marginTop: 24,
+  },
+  toggleText: {
+    color: '#64748B',
+    fontSize: 13,
+  },
+  toggleLink: {
+    color: '#FF6B35',
+    fontWeight: '900',
   },
 });
