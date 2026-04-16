@@ -26,7 +26,7 @@ function TerritorySheet({ territory, onClose }) {
 
   const tier = territory.properties?.tier ?? 'Medium';
   const level = territory.properties?.level ?? 'D0';
-  const alliance = territory.properties?.alliance ?? (!isUnclaimed ? 'INW' : null);
+  const alliance = territory.properties?.alliance ?? null;
 
   const perimeterDistanceRaw = territory.properties?.perimeterDistance ?? territory.properties?.perimeter ?? 0;
   const perimeterDistance =
@@ -41,7 +41,7 @@ function TerritorySheet({ territory, onClose }) {
   };
 
   const isYours = owner === 'You';
-  const isAlliance = owner === 'Iron Wolves';
+  const isAlliance = alliance != null;
   const isOwned = !isUnclaimed;
 
   const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
@@ -69,7 +69,7 @@ function TerritorySheet({ territory, onClose }) {
             ) : (
               <>
                 <Text style={[styles.sheetSubtitleStrong, { color: ownerTone }]}>{owner ?? 'defender_x'}</Text>
-                <Text style={styles.sheetAllianceTag}>{` [${alliance ?? 'INW'}]`}</Text>
+                <Text style={styles.sheetAllianceTag}>{alliance ? ` [${alliance}]` : ''}</Text>
               </>
             )}
           </Text>
