@@ -27,7 +27,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
