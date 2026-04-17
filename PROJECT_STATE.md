@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 17, 2026
+Last updated: April 17, 2026 (evening)
 
 ---
 
@@ -31,7 +31,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Mobile | React Native + Expo SDK 54 | ✓ Running |
 | Maps | Mapbox GL (`@rnmapbox/maps`) | ✓ Working |
 | Database | Supabase (PostgreSQL) | ✓ Connected |
-| Auth | Clerk (`@clerk/clerk-expo`) | ✓ Auth flow built, minor bug open |
+| Auth | Clerk (`@clerk/clerk-expo`) | ✓ Working end to end |
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
 | Animations | react-native-svg | ✓ Installed |
@@ -52,10 +52,11 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Your player ID | 94a9036e-1d59-49ae-9b5f-eae064913fbf |
 | Your username | nish_s |
 | Your clerk_id | user_3CRjZoj8XaCoFwuAayVcgA2RPaP |
-| Vondelpark owner | your player (94a9036e) — should show green when logged in |
+| Vondelpark owner | your player (94a9036e) — shows green correctly when logged in as nish_s |
+| Iron Wolves [INW] | id=e72aebff |
+| Fire Blades [FBM] | id=127c7666 |
 
-All 4 keys live in `.env` — Mapbox token, Supabase URL, Supabase anon key, Clerk publishable key.  
-`lib/supabase.js` currently has hardcoded URL/key (not env vars) — to fix later.
+Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `lib/supabase.js` — env vars unreliable in React Native at runtime. All 4 keys also in `.env` (gitignored).
 
 ---
 
@@ -77,8 +78,8 @@ All 4 keys live in `.env` — Mapbox token, Supabase URL, Supabase anon key, Cle
 
 **Seeded data:**
 - 4 territories: Vondelpark, Leidseplein, Prinsengracht, Museumplein (Amsterdam, hardcoded bounding box polygons)
-- 2 alliances: Iron Wolves [INW], Fire Blades [FBM]
-- Orphan row `nishan.shetty` (id=5d11b40b) still needs to be deleted from players table
+- 2 alliances: Iron Wolves [INW] id=e72aebff, Fire Blades [FBM] id=127c7666
+- ⚠️ Orphan row `nishan.shetty` (id=5d11b40b) still needs to be deleted from players table via Supabase dashboard
 
 ---
 
@@ -87,16 +88,17 @@ All 4 keys live in `.env` — Mapbox token, Supabase URL, Supabase anon key, Cle
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Done | Map, Activity, Alliance, Profile |
-| Map screen | ✓ Done | Mapbox map, territories from Supabase, bottom sheet with real owner/alliance data |
+| Map screen | ✓ Done | Mapbox map, territories from Supabase, real owner/alliance colours, logged-in user's territory green |
 | Activity screen | ✓ Done | Steps card, active claim progress, weekly bar chart |
-| Profile screen | ✓ Done | XP progress, stats grid, territory list, functional sign out button |
+| Profile screen | ✓ Done | XP progress, stats grid, territory list, functional sign out button — all hardcoded |
 | Alliance screen | ✓ Done | 2 states via `isMember` boolean at top of AllianceScreen.js (currently `true`) |
 | Active Claim screen | ✓ Done | Animated SVG progress ring, navigates to ClaimSuccess at 100% |
 | Claim Success screen | ✓ Done | Celebration screen, fade-in animation, test contest result buttons |
 | Contest Result screen | ✓ Done | 4 states: attack_won / attack_lost / defend_won / defend_lost via route.params |
-| Onboarding screen | ~ Partial | 5-step flow built, but shown every launch (needs first-launch flag) |
-| Sign In screen | ~ Partial | Sign in + sign up modes, Clerk auth working, Vondelpark colour bug unresolved |
-| Username screen | ~ Partial | Built, navigates to MainTabs, ensurePlayer bug not yet fully tested |
+| Sign In screen | ✓ Done | Sign in + sign up modes, Clerk auth working end to end |
+| Username screen | ✓ Done | Commander name picker, updates players.username by clerk_id |
+| AuthGate | ✓ Done | Checks isSignedIn on app load, routes to SignIn or MainTabs |
+| Onboarding screen | ~ Partial | 5-step flow built, but shown every launch (needs first-launch flag in Supabase) |
 | Permissions | ○ Not started | |
 | Alliance Hub (create/join flow) | ○ Not started | |
 | Alliance Joined | ✓ Done | Welcome screen, hardcoded Iron Wolves [INW] data |
@@ -179,35 +181,35 @@ git push
 
 | Bug | Detail |
 |---|---|
-| Vondelpark colour bug | Map colours territory green if `territory.owner_id` matches signed-in `userId`. The clerk_id in the territories fetch isn't matching the session userId correctly. Fix: add console.log to `fetchTerritories` to log `{ name, clerkId from players table, color, userId from useAuth }` and compare. |
-| ensurePlayer not fully tested | On sign-in (not sign-up), `clerkUserId` was incorrectly read from `result.createdUserId` (null for existing users). Fixed in `lib/auth.js` and `SignInScreen.js` to use `useAuth` userId instead — but not confirmed working. |
-| Onboarding shown every launch | No first-launch flag. Needs a `players` table check after auth is stable. |
+| Onboarding shown every launch | No first-launch flag. Needs a check against the `players` table after auth — deferred until after Profile screen is wired to real data. |
 | Orphan DB row | `nishan.shetty` (id=5d11b40b) in players table — delete manually from Supabase dashboard. |
+| Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA flow or email OTP re-enabled before production. |
 
 ---
 
 ## DEFERRED / OUT OF SCOPE
 
 - Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing
-- Supabase wired to all screens — backend phase starts after all screens are built
+- Supabase wired to all screens — doing screen by screen, starting with Profile
 - Alliance chat — post-MVP
 - Branding and visual polish — after screens are complete
-- Onboarding first-launch flag — after auth is stable
+- Onboarding first-launch flag — after Profile screen is wired to real data
 - Backend (Fastify, PostGIS, BullMQ, Ably, FCM) — not started, separate phase
-- Cursor free plan limit hit — manual file creation may be needed
 
 ---
 
 ## WHAT'S NEXT
 
-**Immediate:** Debug Vondelpark green colour bug — confirm clerk_id in territories fetch matches signed-in userId.
+**Immediate:** Wire Profile screen to real Supabase data — fetch logged-in player's username, level, XP, and territories using Clerk userId.
 
-**After bug fixed:** Build the real claim flow — wire Active Claim screen to actual Supabase territory data and start tracking real walked distance via expo-location.
+**After Profile screen:** Wire remaining screens to real data one by one.
 
 **Screen backlog (in rough order):**
-1. Permissions screen
-2. Alliance Hub (create/join flow)
-3. Real claim flow with distance tracking
+1. Profile screen — real Supabase data
+2. Permissions screen
+3. Alliance Hub (create/join flow)
+4. Real claim flow with distance tracking via expo-location
+5. Onboarding first-launch flag
 
 ---
 
@@ -230,6 +232,9 @@ git push
 | OSM real territory shapes deferred | Bounding box polygons sufficient for all game mechanic testing |
 | Alliance chat deferred to post-MVP | Complexity not needed until core loop is working |
 | Clerk password breach protection disabled | Allows use of simple test password (Test1234!) during dev |
+| Clerk publishable key hardcoded in App.js | Env vars unreliable in React Native at runtime |
+| Supabase URL/key hardcoded in lib/supabase.js | Same reason — env vars unreliable at runtime |
+| Client Trust disabled in Clerk dashboard | Was requiring 2FA which blocked sign-in completion — re-evaluate before production |
 
 ---
 
