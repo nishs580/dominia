@@ -59,7 +59,7 @@ const TabNavigator = () => {
 export default function App() {
   return (
     <ClerkProvider
-      publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      publishableKey="pk_test_bGVuaWVudC1nb29zZS01My5jbGVyay5hY2NvdW50cy5kZXYk"
       tokenCache={tokenCache}
     >
       <NavigationContainer>

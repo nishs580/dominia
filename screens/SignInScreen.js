@@ -1,4 +1,4 @@
-import { useSignIn, useSignUp, useAuth } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { ensurePlayer } from '../lib/auth';
@@ -6,7 +6,6 @@ import { ensurePlayer } from '../lib/auth';
 export default function SignInScreen({ navigation }) {
   const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
-  const { userId: clerkUserId } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,7 +19,8 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signIn.create({ identifier: email, password });
       await setActiveSignIn({ session: result.createdSessionId });
-      const { needsUsername } = await ensurePlayer(clerkUserId, email);
+      const userId = result.createdSessionId ? signIn.createdUserId : null;
+      const { needsUsername } = await ensurePlayer(userId, email);
       navigation.replace(needsUsername ? 'Username' : 'MainTabs');
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign in failed. Check your email and password.');
@@ -36,7 +36,7 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signUp.create({ emailAddress: email, password });
       await setActiveSignUp({ session: result.createdSessionId });
-      const { needsUsername } = await ensurePlayer(clerkUserId, email);
+      const { needsUsername } = await ensurePlayer(result.createdUserId, email);
       navigation.replace(needsUsername ? 'Username' : 'MainTabs');
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign up failed. Try a different email.');

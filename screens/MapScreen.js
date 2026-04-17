@@ -138,31 +138,33 @@ export default function MapScreen() {
         console.error('Error fetching territories:', error);
         return;
       }
-      const features = data.map((t) => ({
-        type: 'Feature',
-        id: t.id,
-        properties: {
-          name: t.territory_name,
-          owner: t.players?.username ?? 'Unclaimed',
-          alliance: t.alliances?.short_name ?? null,
-          tier: t.tier ?? 'Medium',
-          level: `D${t.development_level ?? 0}`,
-          perimeter: t.perimeter_distance,
-          color: t.players?.clerk_id === userId ? '#1D9E75' :
-            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
-            t.owner_id ? '#993C1D' : '#444441',
-        },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [t.longitude - 0.003, t.latitude + 0.002],
-            [t.longitude + 0.003, t.latitude + 0.002],
-            [t.longitude + 0.003, t.latitude - 0.002],
-            [t.longitude - 0.003, t.latitude - 0.002],
-            [t.longitude - 0.003, t.latitude + 0.002],
-          ]],
-        },
-      }));
+      const features = data.map((t) => {
+        return {
+          type: 'Feature',
+          id: t.id,
+          properties: {
+            name: t.territory_name,
+            owner: t.players?.username ?? 'Unclaimed',
+            alliance: t.alliances?.short_name ?? null,
+            tier: t.tier ?? 'Medium',
+            level: `D${t.development_level ?? 0}`,
+            perimeter: t.perimeter_distance,
+            color: t.players?.clerk_id === userId ? '#1D9E75' :
+              t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
+              t.owner_id ? '#993C1D' : '#444441',
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [t.longitude - 0.003, t.latitude + 0.002],
+              [t.longitude + 0.003, t.latitude + 0.002],
+              [t.longitude + 0.003, t.latitude - 0.002],
+              [t.longitude - 0.003, t.latitude - 0.002],
+              [t.longitude - 0.003, t.latitude + 0.002],
+            ]],
+          },
+        };
+      });
       setTerritories({ type: 'FeatureCollection', features });
     }
     fetchTerritories();
