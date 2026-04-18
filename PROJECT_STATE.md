@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 17, 2026 (evening)
+Last updated: April 18, 2026
 
 ---
 
@@ -67,18 +67,25 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 | Supabase | Free | 1 project, 500MB DB, 50MB storage, 2GB bandwidth/month |
 | Mapbox | Free | 50,000 map loads/month |
 | Clerk | Free | 10,000 MAU |
-| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **10 Android used, 20 remaining.** |
+| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~13 Android used, ~17 remaining.** |
 | Cursor | Pro | No usage limits on AI edits |
 
 ---
 
 ## SUPABASE SCHEMA
 
-**Tables:** `players`, `alliances`, `territories`
+**Tables:**
 
-**Seeded data:**
-- 4 territories: Vondelpark, Leidseplein, Prinsengracht, Museumplein (Amsterdam, hardcoded bounding box polygons)
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng
+
+`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at
+
+`alliances`: id, name, short_name, city, created_at
+
+**Test data:**
+- 4 territories: Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Prinsengracht (medium, 1800m) · Museumplein (medium, 1200m) — Amsterdam, hardcoded bounding box polygons
 - 2 alliances: Iron Wolves [INW] id=e72aebff, Fire Blades [FBM] id=127c7666
+- nish_s player id: 94a9036e · clerk_id: user_3CRjZoj8XaCoFwuAayVcgA2RPaP
 - ⚠️ Orphan row `nishan.shetty` (id=5d11b40b) still needs to be deleted from players table via Supabase dashboard
 
 ---
@@ -88,20 +95,20 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Done | Map, Activity, Alliance, Profile |
-| Map screen | ✓ Done | Mapbox map, territories from Supabase, real owner/alliance colours, logged-in user's territory green |
-| Activity screen | ✓ Done | Steps card, active claim progress, weekly bar chart |
-| Profile screen | ✓ Done | XP progress, stats grid, territory list, functional sign out button — all hardcoded |
-| Alliance screen | ✓ Done | 2 states via `isMember` boolean at top of AllianceScreen.js (currently `true`) |
-| Active Claim screen | ✓ Done | Animated SVG progress ring, navigates to ClaimSuccess at 100% |
-| Claim Success screen | ✓ Done | Celebration screen, fade-in animation, test contest result buttons |
+| Map screen | ✓ Done | Mapbox map, Supabase territories, owner-aware bottom sheet (Claim/Contest/Abandon), Abandon confirmation Alert, map refreshes after claim/abandon |
+| Activity screen | ✓ Done | Territory count + XP from Supabase, weekly chart highlights real day, steps hardcoded 0 |
+| Profile screen | ✓ Done | Username, level, XP, territory list from Supabase — all real data |
+| Alliance screen | ✓ Done | isMember from Supabase alliance_id, real alliance list with member counts, join flow working end to end |
+| Active Claim screen | ✓ Done | Animated SVG progress ring, DEV_MODE toggle at top (true=fake interval, false=real GPS), passes territoryId through |
+| Claim Success screen | ✓ Done | Updates territories.owner_id in Supabase on mount |
 | Contest Result screen | ✓ Done | 4 states: attack_won / attack_lost / defend_won / defend_lost via route.params |
 | Sign In screen | ✓ Done | Sign in + sign up modes, Clerk auth working end to end |
 | Username screen | ✓ Done | Commander name picker, updates players.username by clerk_id |
-| AuthGate | ✓ Done | Checks isSignedIn on app load, routes to SignIn or MainTabs |
-| Onboarding screen | ~ Partial | 5-step flow built, but shown every launch (needs first-launch flag in Supabase) |
-| Permissions | ○ Not started | |
-| Alliance Hub (create/join flow) | ○ Not started | |
+| AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
+| Onboarding screen | ✓ Done | 5-step flow, has_onboarded flag, home pin on real Mapbox map saved to Supabase, back nav on steps 1–3 |
 | Alliance Joined | ✓ Done | Welcome screen, hardcoded Iron Wolves [INW] data |
+| Permissions | ~ Partial | Permissions requested inline in onboarding step 2 — not a standalone screen |
+| Alliance Hub (create/found flow) | ~ Partial | Join flow works end to end. Create/found flow not built. |
 
 ---
 
@@ -109,26 +116,27 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 
 | File | Purpose |
 |---|---|
-| `App.js` | Root stack navigator, ClerkProvider wrapper, AuthGate as initial route |
-| `components/AuthGate.js` | Checks isSignedIn, redirects to SignIn or MainTabs |
-| `lib/supabase.js` | Supabase client with AsyncStorage (URL/key currently hardcoded) |
+| `App.js` | Root stack navigator, ClerkProvider (hardcoded publishable key), AuthGate as initial route |
+| `components/AuthGate.js` | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
+| `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
 | `lib/clerk.js` | ClerkProvider and tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — finds or creates player row in Supabase |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Mapbox map, Supabase territory fetch, bottom sheet, useAuth for green colouring |
+| `screens/MapScreen.js` | Mapbox map, Supabase territory fetch, TerritorySheet (Claim/Contest/Abandon), owner-aware colouring, Abandon Alert, fetchTerritories as useCallback for refresh |
 | `screens/SignInScreen.js` | Sign in + sign up modes, ensurePlayer call |
 | `screens/UsernameScreen.js` | Commander name picker, updates players.username by clerk_id |
-| `screens/ActiveClaimScreen.js` | Animated SVG ring, navigates to ClaimSuccess at 100% |
-| `screens/ClaimSuccessScreen.js` | Celebration screen, test buttons for ContestResult states |
+| `screens/ActiveClaimScreen.js` | DEV_MODE constant at top (true=fake, false=real GPS), haversine distance tracking, passes territoryId to ClaimSuccessScreen |
+| `screens/ClaimSuccessScreen.js` | Updates territories.owner_id in Supabase on mount |
 | `screens/ContestResultScreen.js` | 4 contest states via route.params |
-| `screens/OnboardingScreen.js` | 5-step flow, expo-location + expo-sensors permissions on step 3 |
-| `screens/AllianceScreen.js` | isMember boolean at top (currently true) |
+| `screens/OnboardingScreen.js` | 5 steps, has_onboarded update on finish, home pin Mapbox map on step 3, saves home_pin_lat/lng |
+| `screens/AllianceScreen.js` | isMember from Supabase alliance_id, real alliance list, inline join confirmation |
 | `screens/AllianceJoinedScreen.js` | Welcome screen, hardcoded Iron Wolves data |
-| `screens/ActivityScreen.js` | Steps card, active claim card, weekly bar chart |
-| `screens/ProfileScreen.js` | XP progress, stats, sign out button |
+| `screens/ActivityScreen.js` | XP + territory count from Supabase, steps hardcoded 0, weekly chart highlights real day |
+| `screens/ProfileScreen.js` | Fetches players row by clerk_id, fetches owned territories — all real Supabase data |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
+| `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26) |
 | `eas.json` | EAS build profiles, MAPBOX_DOWNLOADS_TOKEN env reference |
 | `android/gradle.properties` | Mapbox download token for builds |
 | `package.json` | All installed package versions |
@@ -171,7 +179,7 @@ git commit -m "message"
 git push
 ```
 
-**EAS build budget:** 30/month. ~10 Android used. Only build for new native modules. Batch all native installs into one build — never build for a single package.
+**EAS build budget:** 30/month. ~13 Android used, ~17 remaining. Only build for new native modules. Batch all native installs into one build — never build for a single package.
 
 **Native module rule:** New native modules need an EAS build + APK reinstall. JS-only packages just need a Metro restart.
 
@@ -181,35 +189,36 @@ git push
 
 | Bug | Detail |
 |---|---|
-| Onboarding shown every launch | No first-launch flag. Needs a check against the `players` table after auth — deferred until after Profile screen is wired to real data. |
 | Orphan DB row | `nishan.shetty` (id=5d11b40b) in players table — delete manually from Supabase dashboard. |
-| Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA flow or email OTP re-enabled before production. |
+| Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA or email OTP re-enabled before production. |
+| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. `react-native-health-connect` tried and removed — native crash on load (lateinit property error in HealthConnectManager). Steps currently hardcoded to 0. Revisit when step tracking is prioritised. |
+| Contest flow incomplete | Contest uses same ActiveClaimScreen as claim — needs separate logic for contested territories. |
+| Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
 
 ---
 
 ## DEFERRED / OUT OF SCOPE
 
 - Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing
-- Supabase wired to all screens — doing screen by screen, starting with Profile
+- Real step tracking — Health Connect failed, revisit when prioritised
+- Alliance create/found flow — join works, found not built yet
 - Alliance chat — post-MVP
-- Branding and visual polish — after screens are complete
-- Onboarding first-launch flag — after Profile screen is wired to real data
+- Branding and visual polish — after core loop is complete
+- Onboarding home pin 500m verification — deferred
 - Backend (Fastify, PostGIS, BullMQ, Ably, FCM) — not started, separate phase
 
 ---
 
 ## WHAT'S NEXT
 
-**Immediate:** Wire Profile screen to real Supabase data — fetch logged-in player's username, level, XP, and territories using Clerk userId.
+**Immediate:** Build the Alliance create/found flow — "Found your own" path from Alliance screen, including alliance name, short name (3 letters), and saving to the alliances table in Supabase.
 
-**After Profile screen:** Wire remaining screens to real data one by one.
-
-**Screen backlog (in rough order):**
-1. Profile screen — real Supabase data
-2. Permissions screen
-3. Alliance Hub (create/join flow)
-4. Real claim flow with distance tracking via expo-location
-5. Onboarding first-launch flag
+**Backlog (in rough order):**
+1. Alliance create/found flow
+2. Contest flow — separate logic from claim flow in ActiveClaimScreen
+3. Real step tracking — revisit expo-sensors Pedometer.watchStepCount() as fallback
+4. Onboarding home pin 500m verification
+5. Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
 
 ---
 
@@ -235,6 +244,10 @@ git push
 | Clerk publishable key hardcoded in App.js | Env vars unreliable in React Native at runtime |
 | Supabase URL/key hardcoded in lib/supabase.js | Same reason — env vars unreliable at runtime |
 | Client Trust disabled in Clerk dashboard | Was requiring 2FA which blocked sign-in completion — re-evaluate before production |
+| DEV_MODE = true in ActiveClaimScreen | Fake interval for rapid testing — flip to false for real GPS walk test |
+| Abandon over Patrol for own territories | Patrol mechanic not built end to end; Abandon more useful for testing with limited territory data |
+| react-native-health-connect removed | Native crash on load (lateinit property error) — not worth debugging now, steps hardcoded to 0 |
+| minSdkVersion 26 via expo-build-properties plugin | android.minSdkVersion in app.json not respected by Expo managed workflow — must use plugin |
 
 ---
 
