@@ -258,6 +258,11 @@ export default function OnboardingScreen() {
       <View style={styles.contentWrap}>{content}</View>
 
       <View style={styles.bottom}>
+        {step >= 1 && step <= 3 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => setStep((s) => s - 1)}>
+            <Text style={{ color: MUTED, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>← Back</Text>
+          </Pressable>
+        ) : null}
         <Dots step={step} />
         <PrimaryButton
           label={buttonLabel}
