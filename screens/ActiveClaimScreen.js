@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import * as Location from 'expo-location';
+
+const DEV_MODE = true;
 
 const BG = '#0f0f14';
 const CARD = '#1a1a24';
@@ -14,6 +17,18 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 function formatMeters(m) {
@@ -31,13 +46,16 @@ export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { territoryName = 'Territory', perimeterDistance = 0 } = route?.params ?? {};
+  const { territoryName = 'Territory', perimeterDistance = 0, territoryId } = route?.params ?? {};
   const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
 
   const [pct, setPct] = useState(0);
   const progress = useRef(new Animated.Value(0)).current; // 0..1
   const intervalRef = useRef(null);
   const navigatingRef = useRef(false);
+  const walkedMetresRef = useRef(0);
+  const lastCoordRef = useRef(null);
+  const locationWatchRef = useRef(null);
 
   useEffect(() => {
     navigation.setOptions?.({
@@ -78,6 +96,8 @@ export default function ActiveClaimScreen() {
   }, [perimeterM, walkedM, estTotalMin]);
 
   useEffect(() => {
+    if (!DEV_MODE) return;
+
     const tick = () => {
       setPct((prev) => {
         const inc = 2 + Math.floor(Math.random() * 4); // 2..5
@@ -94,7 +114,11 @@ export default function ActiveClaimScreen() {
           navigatingRef.current = true;
           if (intervalRef.current) clearInterval(intervalRef.current);
           setTimeout(() => {
-            navigation.navigate('ClaimSuccessScreen', { territoryName, perimeterDistance: perimeterM });
+            navigation.navigate('ClaimSuccessScreen', {
+              territoryName,
+              perimeterDistance: perimeterM,
+              territoryId,
+            });
           }, 1000);
         }
 
@@ -108,7 +132,73 @@ export default function ActiveClaimScreen() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [navigation, perimeterM, perimeterDistance, progress, territoryName]);
+  }, [navigation, perimeterM, perimeterDistance, progress, territoryId, territoryName]);
+
+  useEffect(() => {
+    if (DEV_MODE) return;
+
+    walkedMetresRef.current = 0;
+    lastCoordRef.current = null;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        locationWatchRef.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 5,
+          },
+          (loc) => {
+            const { latitude, longitude } = loc.coords ?? {};
+            if (latitude == null || longitude == null) return;
+
+            const prev = lastCoordRef.current;
+            if (prev) {
+              walkedMetresRef.current += haversineMeters(prev.latitude, prev.longitude, latitude, longitude);
+            }
+            lastCoordRef.current = { latitude, longitude };
+
+            const walked = walkedMetresRef.current;
+            const nextPct = perimeterM > 0 ? clamp((walked / perimeterM) * 100, 0, 100) : 0;
+
+            setPct(nextPct);
+            Animated.timing(progress, {
+              toValue: nextPct / 100,
+              duration: 900,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }).start();
+
+            if (nextPct >= 100 && !navigatingRef.current) {
+              navigatingRef.current = true;
+              locationWatchRef.current?.remove();
+              locationWatchRef.current = null;
+              setTimeout(() => {
+                navigation.navigate('ClaimSuccessScreen', {
+                  territoryName,
+                  perimeterDistance: perimeterM,
+                  territoryId,
+                });
+              }, 1000);
+            }
+          },
+        );
+        if (cancelled) {
+          locationWatchRef.current?.remove();
+          locationWatchRef.current = null;
+        }
+      } catch (err) {
+        console.error('ActiveClaim location watch failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      locationWatchRef.current?.remove();
+      locationWatchRef.current = null;
+    };
+  }, [navigation, perimeterM, progress, territoryId, territoryName]);
 
   return (
     <View style={styles.screen}>

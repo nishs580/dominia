@@ -1,6 +1,5 @@
-import React, { useMemo, useRef } from 'react';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
@@ -16,7 +15,7 @@ const ALLIANCE = '#534AB7';
 const ENEMY = '#993C1D';
 const UNCLAIMED = '#444441';
 
-function TerritorySheet({ territory, onClose }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched }) {
   const navigation = useNavigation();
   if (!territory) return null;
 
@@ -41,8 +40,7 @@ function TerritorySheet({ territory, onClose }) {
     perimeter: perimeterDistance,
   };
 
-  const isYours = owner === 'You';
-  const isAlliance = alliance != null;
+  const isYours = territory.properties?.color === '#1D9E75';
   const isOwned = !isUnclaimed;
 
   const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
@@ -92,6 +90,7 @@ function TerritorySheet({ territory, onClose }) {
             navigation.navigate('ActiveClaim', {
               territoryName: selectedTerritory.name,
               perimeterDistance: selectedTerritory.perimeter,
+              territoryId: territory.id,
             });
           }}
         >
@@ -99,7 +98,42 @@ function TerritorySheet({ territory, onClose }) {
         </Pressable>
       )}
 
-      {isOwned && (
+      {isYours && (
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.sheetAction,
+            { backgroundColor: '#E24B4A' },
+            pressed && { opacity: 0.92 },
+          ]}
+          onPress={() => {
+            Alert.alert(
+              `Abandon ${name}?`,
+              'You will lose control of this territory. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Abandon',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const { error } = await supabase.from('territories').update({ owner_id: null }).eq('id', territory.id);
+                    if (error) {
+                      console.error('Abandon territory failed:', error);
+                      return;
+                    }
+                    onClose();
+                    onTerritoriesRefetched?.();
+                  },
+                },
+              ],
+            );
+          }}
+        >
+          <Text style={styles.sheetActionText}>Abandon</Text>
+        </Pressable>
+      )}
+
+      {isOwned && !isYours && (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -111,6 +145,7 @@ function TerritorySheet({ territory, onClose }) {
             navigation.navigate('ActiveClaim', {
               territoryName: selectedTerritory.name,
               perimeterDistance: selectedTerritory.perimeter,
+              territoryId: territory.id,
             });
           }}
         >
@@ -129,46 +164,47 @@ export default function MapScreen() {
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
   const { userId } = useAuth();
 
-  useEffect(() => {
-    async function fetchTerritories() {
-      const { data, error } = await supabase
-        .from('territories')
-        .select('*, players(username, clerk_id), alliances(short_name)');
-      if (error) {
-        console.error('Error fetching territories:', error);
-        return;
-      }
-      const features = data.map((t) => {
-        return {
-          type: 'Feature',
-          id: t.id,
-          properties: {
-            name: t.territory_name,
-            owner: t.players?.username ?? 'Unclaimed',
-            alliance: t.alliances?.short_name ?? null,
-            tier: t.tier ?? 'Medium',
-            level: `D${t.development_level ?? 0}`,
-            perimeter: t.perimeter_distance,
-            color: t.players?.clerk_id === userId ? '#1D9E75' :
-              t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
-              t.owner_id ? '#993C1D' : '#444441',
-          },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [t.longitude - 0.003, t.latitude + 0.002],
-              [t.longitude + 0.003, t.latitude + 0.002],
-              [t.longitude + 0.003, t.latitude - 0.002],
-              [t.longitude - 0.003, t.latitude - 0.002],
-              [t.longitude - 0.003, t.latitude + 0.002],
-            ]],
-          },
-        };
-      });
-      setTerritories({ type: 'FeatureCollection', features });
+  const fetchTerritories = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('territories')
+      .select('*, players(username, clerk_id), alliances(short_name)');
+    if (error) {
+      console.error('Error fetching territories:', error);
+      return;
     }
-    fetchTerritories();
+    const features = data.map((t) => {
+      return {
+        type: 'Feature',
+        id: t.id,
+        properties: {
+          name: t.territory_name,
+          owner: t.players?.username ?? 'Unclaimed',
+          alliance: t.alliances?.short_name ?? null,
+          tier: t.tier ?? 'Medium',
+          level: `D${t.development_level ?? 0}`,
+          perimeter: t.perimeter_distance,
+          color: t.players?.clerk_id === userId ? '#1D9E75' :
+            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
+            t.owner_id ? '#993C1D' : '#444441',
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [t.longitude - 0.003, t.latitude + 0.002],
+            [t.longitude + 0.003, t.latitude + 0.002],
+            [t.longitude + 0.003, t.latitude - 0.002],
+            [t.longitude - 0.003, t.latitude - 0.002],
+            [t.longitude - 0.003, t.latitude + 0.002],
+          ]],
+        },
+      };
+    });
+    setTerritories({ type: 'FeatureCollection', features });
   }, [userId]);
+
+  useEffect(() => {
+    fetchTerritories();
+  }, [fetchTerritories]);
 
   const fillStyle = useMemo(
     () => ({
@@ -255,7 +291,12 @@ export default function MapScreen() {
         <Text style={styles.locateText}>Locate me</Text>
       </Pressable>
 
-      <TerritorySheet territory={selected} onClose={() => setSelected(null)} />
+      <TerritorySheet
+        territory={selected}
+        userId={userId}
+        onClose={() => setSelected(null)}
+        onTerritoriesRefetched={fetchTerritories}
+      />
     </View>
   );
 }
