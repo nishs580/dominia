@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
+import { supabase } from '../lib/supabase';
 
 const ACCENT = '#1D9E75';
 const BG = '#F6F8F7';
@@ -80,7 +82,54 @@ function WeeklyBarChart({ data, highlightIndex }) {
 }
 
 export default function ActivityScreen() {
+  const { userId } = useAuth();
+  const [playerXp, setPlayerXp] = useState(0);
+  const [territoryCount, setTerritoryCount] = useState(0);
+
   const today = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlayerActivity() {
+      if (!userId) {
+        setPlayerXp(0);
+        setTerritoryCount(0);
+        return;
+      }
+
+      const { data: player } = await supabase
+        .from('players')
+        .select('id, xp')
+        .eq('clerk_id', userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (!player?.id) {
+        setPlayerXp(0);
+        setTerritoryCount(0);
+        return;
+      }
+
+      setPlayerXp(Math.max(0, Number(player.xp) || 0));
+
+      const { count } = await supabase
+        .from('territories')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', player.id);
+
+      if (cancelled) return;
+      setTerritoryCount(count ?? 0);
+    }
+
+    loadPlayerActivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const chartHighlightIndex = useMemo(() => (today.getDay() + 6) % 7, [today]);
 
   const steps = 6240;
   const stepsGoal = 10000;
@@ -173,9 +222,9 @@ export default function ActivityScreen() {
       </View>
 
       <View style={styles.pillsRow}>
-        <StatPill label="Territories" value="3" />
+        <StatPill label="Territories" value={String(territoryCount)} />
         <StatPill label="Day Streak" value="12" />
-        <StatPill label="Siege XP" value="840" />
+        <StatPill label="Siege XP" value={String(playerXp)} />
       </View>
 
       <View style={styles.card}>
@@ -183,7 +232,7 @@ export default function ActivityScreen() {
           <Text style={styles.cardTitle}>Weekly steps</Text>
           <Text style={styles.cardHint}>Today highlighted</Text>
         </View>
-        <WeeklyBarChart data={weekly} highlightIndex={4} />
+        <WeeklyBarChart data={weekly} highlightIndex={chartHighlightIndex} />
       </View>
     </ScrollView>
   );
