@@ -22,7 +22,12 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nish_s.dominia",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "ACTIVITY_RECOGNITION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,8 +35,23 @@
     "plugins": [
       "@rnmapbox/maps",
       "expo-web-browser",
-      ["expo-location", { "locationAlwaysAndWhenInUsePermission": "Dominia needs your location to track walks for territory claims.", "locationWhenInUsePermission": "Dominia needs your location to track walks for territory claims.", "isAndroidBackgroundLocationEnabled": true }],
-      "expo-sensors"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Dominia needs your location to track walks for territory claims.",
+          "locationWhenInUsePermission": "Dominia needs your location to track walks for territory claims.",
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-sensors",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

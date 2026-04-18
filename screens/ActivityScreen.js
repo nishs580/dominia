@@ -85,6 +85,7 @@ export default function ActivityScreen() {
   const { userId } = useAuth();
   const [playerXp, setPlayerXp] = useState(0);
   const [territoryCount, setTerritoryCount] = useState(0);
+  const [steps, setSteps] = useState(0);
 
   const today = useMemo(() => new Date(), []);
 
@@ -131,7 +132,6 @@ export default function ActivityScreen() {
 
   const chartHighlightIndex = useMemo(() => (today.getDay() + 6) % 7, [today]);
 
-  const steps = 6240;
   const stepsGoal = 10000;
   const stepsProgress = steps / stepsGoal;
   const stepsPct = Math.round(clamp(stepsProgress, 0, 1) * 100);
@@ -148,7 +148,7 @@ export default function ActivityScreen() {
     { day: 'Tue', steps: 8300 },
     { day: 'Wed', steps: 6100 },
     { day: 'Thu', steps: 9100 },
-    { day: 'Fri', steps: steps },
+    { day: 'Fri', steps: 6240 },
     { day: 'Sat', steps: 7400 },
     { day: 'Sun', steps: 4600 },
   ];
