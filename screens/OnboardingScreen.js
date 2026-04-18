@@ -2,9 +2,24 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { supabase } from '../lib/supabase';
+
+setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
+
+const AMSTERDAM_CENTER = [4.9041, 52.3676];
+const HOME_PIN_ZOOM = 12;
+
+function coordsFromMapPress(payload) {
+  if (!payload) return null;
+  const fromGeometry = payload.geometry?.coordinates ?? payload?.features?.[0]?.geometry?.coordinates;
+  if (Array.isArray(fromGeometry) && fromGeometry.length >= 2) {
+    return [Number(fromGeometry[0]), Number(fromGeometry[1])];
+  }
+  return null;
+}
 
 const BG = '#0f0f14';
 const ORANGE = '#ED9332';
@@ -55,6 +70,8 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
+  const [homePin, setHomePin] = useState(null);
+  const [savingPin, setSavingPin] = useState(false);
 
   const content = useMemo(() => {
     if (step === 0) {
@@ -120,8 +137,35 @@ export default function OnboardingScreen() {
           <Text style={styles.subheading}>This sets your city.</Text>
 
           <View style={styles.mapPlaceholder}>
-            <Text style={styles.pinEmoji}>📍</Text>
-            <Text style={styles.pinHint}>Tap to place your pin</Text>
+            <MapView
+              style={StyleSheet.absoluteFillObject}
+              styleURL={StyleURL.Street}
+              onPress={(payload) => {
+                const c = coordsFromMapPress(payload);
+                if (c) setHomePin(c);
+              }}
+            >
+              <Camera zoomLevel={HOME_PIN_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
+              {homePin ? (
+                <MarkerView coordinate={homePin} anchor={{ x: 0.5, y: 1 }}>
+                  <Text style={styles.pinEmoji}>📍</Text>
+                </MarkerView>
+              ) : null}
+            </MapView>
+            {!homePin ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={styles.pinHint}>Tap to place your pin</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       );
@@ -134,7 +178,7 @@ export default function OnboardingScreen() {
         <Text style={styles.subCentered}>Amsterdam is waiting. Your first territory won't claim itself.</Text>
       </View>
     );
-  }, [step]);
+  }, [step, homePin]);
 
   const buttonLabel =
     step === 0
@@ -156,6 +200,29 @@ export default function OnboardingScreen() {
       } finally {
         setRequesting(false);
         setStep(3);
+      }
+      return;
+    }
+
+    if (step === 3) {
+      if (!homePin || savingPin) return;
+      if (!userId) {
+        Alert.alert('Session error', 'You need to be signed in to continue.');
+        return;
+      }
+      setSavingPin(true);
+      try {
+        const { error } = await supabase
+          .from('players')
+          .update({ home_pin_lat: homePin[1], home_pin_lng: homePin[0] })
+          .eq('clerk_id', userId);
+        if (error) throw error;
+        setStep(4);
+      } catch (err) {
+        console.error('Home pin save failed:', err);
+        Alert.alert('Could not save', err?.message ?? 'Please check your connection and try again.');
+      } finally {
+        setSavingPin(false);
       }
       return;
     }
@@ -195,7 +262,11 @@ export default function OnboardingScreen() {
         <PrimaryButton
           label={buttonLabel}
           onPress={onNext}
-          disabled={(step === 2 && requesting) || (step === 4 && finishingOnboarding)}
+          disabled={
+            (step === 2 && requesting) ||
+            (step === 3 && (!homePin || savingPin)) ||
+            (step === 4 && finishingOnboarding)
+          }
         />
       </View>
     </View>
