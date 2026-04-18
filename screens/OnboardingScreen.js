@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
+import { supabase } from '../lib/supabase';
 
 const BG = '#0f0f14';
 const ORANGE = '#ED9332';
@@ -49,8 +51,10 @@ function CardRow({ icon, title, subtitle, tone = 'how' }) {
 
 export default function OnboardingScreen() {
   const navigation = useNavigation();
+  const { userId } = useAuth();
   const [step, setStep] = useState(0);
   const [requesting, setRequesting] = useState(false);
+  const [finishingOnboarding, setFinishingOnboarding] = useState(false);
 
   const content = useMemo(() => {
     if (step === 0) {
@@ -157,7 +161,25 @@ export default function OnboardingScreen() {
     }
 
     if (step === 4) {
-      navigation.navigate('MainTabs');
+      if (finishingOnboarding) return;
+      if (!userId) {
+        Alert.alert('Session error', 'You need to be signed in to continue.');
+        return;
+      }
+      setFinishingOnboarding(true);
+      try {
+        const { error } = await supabase
+          .from('players')
+          .update({ has_onboarded: true })
+          .eq('clerk_id', userId);
+        if (error) throw error;
+        navigation.replace('MainTabs');
+      } catch (err) {
+        console.error('Onboarding finish failed:', err);
+        Alert.alert('Could not save', 'Please check your connection and try again.');
+      } finally {
+        setFinishingOnboarding(false);
+      }
       return;
     }
 
@@ -170,7 +192,11 @@ export default function OnboardingScreen() {
 
       <View style={styles.bottom}>
         <Dots step={step} />
-        <PrimaryButton label={buttonLabel} onPress={onNext} disabled={step === 2 && requesting} />
+        <PrimaryButton
+          label={buttonLabel}
+          onPress={onNext}
+          disabled={(step === 2 && requesting) || (step === 4 && finishingOnboarding)}
+        />
       </View>
     </View>
   );

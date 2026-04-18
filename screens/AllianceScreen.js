@@ -1,8 +1,7 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-// Toggle to preview the two states.
-const isMember = true;
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
+import { supabase } from '../lib/supabase';
 
 const BG = '#0f0f14';
 const ORANGE = '#ED9332';
@@ -11,17 +10,29 @@ function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
 }
 
-function AllianceCard({ dotColor, nameLine, metaLine, members }) {
-  return (
-    <View style={styles.allianceCard}>
+function AllianceCard({ dotColor, nameLine, metaLine, members, onPress }) {
+  const inner = (
+    <>
       <View style={[styles.allianceDot, { backgroundColor: dotColor }]} />
       <View style={{ flex: 1 }}>
         <Text style={styles.allianceCardName}>{nameLine}</Text>
         <Text style={styles.allianceCardMeta}>{metaLine}</Text>
       </View>
       <Text style={styles.allianceCardMembers}>{members}</Text>
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.allianceCard, pressed && { opacity: 0.92 }]}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+  return <View style={styles.allianceCard}>{inner}</View>;
 }
 
 function StatCard({ value, label, valueColor }) {
@@ -50,7 +61,61 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
   );
 }
 
-function NonMemberContent({ navigation }) {
+function NonMemberContent({ alliances, userId, onRefreshAfterJoin }) {
+  const [confirmAlliance, setConfirmAlliance] = useState(null);
+  const [joinSaving, setJoinSaving] = useState(false);
+
+  const dotColors = ['#ED9332', '#7F77DD'];
+
+  const handleConfirmJoin = async () => {
+    if (!userId || !confirmAlliance) return;
+    setJoinSaving(true);
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ alliance_id: confirmAlliance.id })
+        .eq('clerk_id', userId);
+      if (error) throw error;
+      setConfirmAlliance(null);
+      await onRefreshAfterJoin();
+    } catch (err) {
+      console.error('Join alliance failed:', err);
+      Alert.alert('Could not join', err?.message ?? 'Please try again.');
+    } finally {
+      setJoinSaving(false);
+    }
+  };
+
+  if (confirmAlliance) {
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>{confirmAlliance.name}</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={joinSaving}
+            onPress={handleConfirmJoin}
+            style={({ pressed }) => [styles.btnPrimary, pressed && !joinSaving && { opacity: 0.9 }, joinSaving && { opacity: 0.7 }]}
+          >
+            <Text style={styles.btnPrimaryText}>Join {confirmAlliance.name}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={joinSaving}
+            onPress={() => setConfirmAlliance(null)}
+            style={({ pressed }) => [styles.btnMuted, pressed && !joinSaving && { opacity: 0.9 }]}
+          >
+            <Text style={styles.btnMutedText}>Cancel</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -79,24 +144,16 @@ function NonMemberContent({ navigation }) {
 
       <HeaderKicker>ALLIANCES IN YOUR CITY</HeaderKicker>
       <View style={{ marginTop: 10, gap: 10 }}>
-        <AllianceCard
-          dotColor="#ED9332"
-          nameLine="Iron Wolves [INW]"
-          metaLine="Jordaan · Founded 2024"
-          members="14/20"
-        />
-        <AllianceCard
-          dotColor="#7F77DD"
-          nameLine="Fire Blazers [FBM]"
-          metaLine="Leidseplein · Founded 2024"
-          members="8/20"
-        />
-        <TouchableOpacity
-          style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 12 }}
-          onPress={() => navigation.navigate('AllianceJoined')}
-        >
-          <Text style={{ fontSize: 12, color: '#555' }}>Test Alliance Joined screen</Text>
-        </TouchableOpacity>
+        {alliances.map((a, index) => (
+          <AllianceCard
+            key={a.id}
+            dotColor={dotColors[index % dotColors.length]}
+            nameLine={`${a.name} [${a.short_name}]`}
+            metaLine={a.city ?? '—'}
+            members={`${a.memberCount}/20`}
+            onPress={() => setConfirmAlliance(a)}
+          />
+        ))}
       </View>
     </ScrollView>
   );
@@ -147,15 +204,119 @@ function MemberContent() {
 }
 
 export default function AllianceScreen() {
-  const navigation = useNavigation();
+  const { userId } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [playerRow, setPlayerRow] = useState(null);
+  const [myAlliance, setMyAlliance] = useState(null);
+  const [allianceList, setAllianceList] = useState([]);
+
+  const fetchPlayerAndContext = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!userId) {
+        setPlayerRow(null);
+        setMyAlliance(null);
+        setAllianceList([]);
+        if (!silent) setLoading(false);
+        return;
+      }
+      if (!silent) setLoading(true);
+      try {
+        const { data: player, error: playerError } = await supabase
+          .from('players')
+          .select('id, alliance_id')
+          .eq('clerk_id', userId)
+          .maybeSingle();
+
+        if (playerError) {
+          console.error('AllianceScreen player fetch:', playerError);
+          setPlayerRow(null);
+          setMyAlliance(null);
+          setAllianceList([]);
+          return;
+        }
+
+        setPlayerRow(player);
+
+        if (player?.alliance_id) {
+          const { data: allianceRow, error: allianceError } = await supabase
+            .from('alliances')
+            .select('id, name, short_name, city')
+            .eq('id', player.alliance_id)
+            .maybeSingle();
+
+          const { count, error: countError } = await supabase
+            .from('players')
+            .select('*', { count: 'exact', head: true })
+            .eq('alliance_id', player.alliance_id);
+
+          if (allianceError || countError || !allianceRow) {
+            if (allianceError || countError) {
+              console.error('AllianceScreen alliance detail:', allianceError || countError);
+            }
+            setMyAlliance(null);
+          } else {
+            setMyAlliance({
+              ...allianceRow,
+              memberCount: count ?? 0,
+            });
+          }
+          setAllianceList([]);
+        } else {
+          setMyAlliance(null);
+          const { data: alliances, error: listError } = await supabase
+            .from('alliances')
+            .select('id, name, short_name, city');
+
+          if (listError || !alliances?.length) {
+            if (listError) console.error('AllianceScreen alliances list:', listError);
+            setAllianceList([]);
+            return;
+          }
+
+          const withCounts = await Promise.all(
+            alliances.map(async (a) => {
+              const { count } = await supabase
+                .from('players')
+                .select('*', { count: 'exact', head: true })
+                .eq('alliance_id', a.id);
+              return { ...a, memberCount: count ?? 0 };
+            }),
+          );
+          setAllianceList(withCounts);
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    fetchPlayerAndContext();
+  }, [fetchPlayerAndContext]);
+
+  const isMember = Boolean(playerRow?.alliance_id);
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={ORANGE} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <HeaderKicker>ALLIANCE</HeaderKicker>
         {isMember ? (
           <>
-            <Text style={styles.headerTitle}>Iron Wolves</Text>
-            <Text style={styles.headerSubtitle}>[INW] · Jordaan · 14 members</Text>
+            <Text style={styles.headerTitle}>{myAlliance?.name ?? 'Alliance'}</Text>
+            <Text style={styles.headerSubtitle}>
+              {myAlliance
+                ? `[${myAlliance.short_name}] · ${myAlliance.city ?? '—'} · ${myAlliance.memberCount} members`
+                : '—'}
+            </Text>
           </>
         ) : (
           <>
@@ -165,7 +326,15 @@ export default function AllianceScreen() {
         )}
       </View>
 
-      {isMember ? <MemberContent /> : <NonMemberContent navigation={navigation} />}
+      {isMember ? (
+        <MemberContent />
+      ) : (
+        <NonMemberContent
+          alliances={allianceList}
+          userId={userId}
+          onRefreshAfterJoin={() => fetchPlayerAndContext({ silent: true })}
+        />
+      )}
     </View>
   );
 }

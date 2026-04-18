@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { supabase } from '../lib/supabase';
 
 const ACCENT = '#1D9E75';
 const ALLIANCE = '#534AB7';
@@ -44,23 +45,15 @@ function StatCard({ label, value }) {
   );
 }
 
-function TerritoryRow({ name, daysHeld, distanceM, status }) {
-  const statusLower = status.toLowerCase();
-  const isContested = statusLower === 'contested';
-  const pillBg = isContested ? '#FEF3C7' : '#E8F6F1';
-  const pillBorder = isContested ? '#FDE68A' : '#C7EADF';
-  const pillText = isContested ? '#92400E' : ACCENT;
-
+function OwnedTerritoryRow({ name, tier }) {
+  const tierLabel = tier ?? '—';
   return (
     <View style={styles.territoryRow}>
       <View style={styles.territoryLeft}>
         <Text style={styles.territoryName}>{name}</Text>
-        <Text style={styles.territoryMeta}>
-          Held {daysHeld} day{daysHeld === 1 ? '' : 's'} • {distanceM}m
-        </Text>
       </View>
-      <View style={[styles.statusPill, { backgroundColor: pillBg, borderColor: pillBorder }]}>
-        <Text style={[styles.statusText, { color: pillText }]}>{status}</Text>
+      <View style={[styles.statusPill, { backgroundColor: '#E8F6F1', borderColor: '#C7EADF' }]}>
+        <Text style={[styles.statusText, { color: ACCENT }]}>{tierLabel}</Text>
       </View>
     </View>
   );
@@ -75,21 +68,99 @@ function SettingsRow({ label }) {
   );
 }
 
+function rankLabelForLevel(level) {
+  const n = Math.max(1, Math.floor(Number(level) || 1));
+  if (n === 1) return 'Scout';
+  if (n === 2) return 'Lv 2 Pathfinder';
+  return `Lv ${n}`;
+}
+
 export default function ProfileScreen() {
   const today = useMemo(() => new Date(), []);
+  const { signOut, userId } = useAuth();
 
-  const { signOut } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [playerRow, setPlayerRow] = useState(null);
+  const [ownedTerritories, setOwnedTerritories] = useState([]);
+  const [profileError, setProfileError] = useState(null);
 
-  const playerName = 'Jonas K.';
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      if (!userId) {
+        setPlayerRow(null);
+        setOwnedTerritories([]);
+        setProfileError('Not signed in.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setProfileError(null);
+
+      const { data: player, error: playerError } = await supabase
+        .from('players')
+        .select('id, username, level, xp')
+        .eq('clerk_id', userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (playerError) {
+        setProfileError(playerError.message ?? 'Could not load profile');
+        setPlayerRow(null);
+        setOwnedTerritories([]);
+        setLoading(false);
+        return;
+      }
+
+      if (!player) {
+        setProfileError('No player record for this account.');
+        setPlayerRow(null);
+        setOwnedTerritories([]);
+        setLoading(false);
+        return;
+      }
+
+      setPlayerRow(player);
+
+      const { data: territories, error: terrError } = await supabase
+        .from('territories')
+        .select('id, territory_name, tier')
+        .eq('owner_id', player.id);
+
+      if (cancelled) return;
+
+      if (terrError) {
+        setProfileError(terrError.message ?? 'Could not load territories');
+        setOwnedTerritories([]);
+      } else {
+        setOwnedTerritories(territories ?? []);
+      }
+
+      setLoading(false);
+    }
+
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const allianceName = 'Iron Wolves';
-  const rankBadge = 'Lv 2 Pathfinder';
   const streakDays = 12;
 
-  const xp = 840;
-  const xpNeeded = 1000;
-  const nextLevel = 'Lv 3 Claimer';
-  const xpProgress = xp / xpNeeded;
+  const levelNum = Math.max(1, Math.floor(Number(playerRow?.level) || 1));
+  const xp = Math.max(0, Number(playerRow?.xp) || 0);
+  const xpTowardLevel2 = levelNum === 1;
+  const xpNeeded = xpTowardLevel2 ? 150 : 1000;
+  const nextLevel = xpTowardLevel2 ? 'Level 2' : 'Lv 3 Claimer';
+  const xpProgress = xpNeeded > 0 ? xp / xpNeeded : 0;
   const xpPct = Math.round(clamp(xpProgress, 0, 1) * 100);
+
+  const playerName = playerRow?.username ?? '—';
+  const rankBadge = rankLabelForLevel(playerRow?.level ?? 1);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -100,63 +171,84 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.identityTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.playerName}>{playerName}</Text>
-            <View style={styles.identitySubRow}>
-              <Badge text={allianceName} variant="alliance" />
-              <Badge text={rankBadge} />
+      {loading ? (
+        <View style={styles.loadingBlock}>
+          <ActivityIndicator size="large" color={ALLIANCE} />
+          <Text style={styles.loadingText}>Loading profile…</Text>
+        </View>
+      ) : null}
+
+      {!loading && profileError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{profileError}</Text>
+        </View>
+      ) : null}
+
+      {!loading && playerRow ? (
+        <>
+          <View style={styles.card}>
+            <View style={styles.identityTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.playerName}>{playerName}</Text>
+                <View style={styles.identitySubRow}>
+                  <Badge text={allianceName} variant="alliance" />
+                  <Badge text={rankBadge} />
+                </View>
+              </View>
+              <View style={styles.streakPill}>
+                <Text style={styles.streakValue}>{streakDays}</Text>
+                <Text style={styles.streakLabel}>day streak</Text>
+              </View>
+            </View>
+
+            <View style={styles.identityDivider} />
+
+            <View style={styles.xpTopRow}>
+              <Text style={styles.cardTitle}>XP progress</Text>
+              <Text style={styles.xpPct}>{xpPct}%</Text>
+            </View>
+            <Text style={styles.xpLine}>
+              <Text style={styles.xpStrong}>{xp}</Text>
+              <Text style={styles.xpMuted}> / {xpNeeded} XP</Text>
+              <Text style={styles.xpMuted}> • next: </Text>
+              <Text style={[styles.xpStrong, { color: ALLIANCE }]}>{nextLevel}</Text>
+            </Text>
+
+            <ProgressBar progress={xpProgress} tint={ALLIANCE} />
+
+            <View style={styles.unlockCard}>
+              <Text style={styles.unlockTitle}>Next level unlock</Text>
+              <Text style={styles.unlockText}>Contest other players territories</Text>
             </View>
           </View>
-          <View style={styles.streakPill}>
-            <Text style={styles.streakValue}>{streakDays}</Text>
-            <Text style={styles.streakLabel}>day streak</Text>
+
+          <View style={styles.statsGrid}>
+            <StatCard label="Territories held" value={String(ownedTerritories.length)} />
+            <StatCard label="Total claimed" value="11" />
+            <StatCard label="Distance walked" value="47km" />
+            <StatCard label="Contests won" value="0" />
           </View>
-        </View>
 
-        <View style={styles.identityDivider} />
+          <View style={styles.card}>
+            <View style={styles.cardTopRow}>
+              <Text style={styles.cardTitle}>Your territories</Text>
+              <Text style={styles.cardHint}>Tier</Text>
+            </View>
 
-        <View style={styles.xpTopRow}>
-          <Text style={styles.cardTitle}>XP progress</Text>
-          <Text style={styles.xpPct}>{xpPct}%</Text>
-        </View>
-        <Text style={styles.xpLine}>
-          <Text style={styles.xpStrong}>{xp}</Text>
-          <Text style={styles.xpMuted}> / {xpNeeded} XP</Text>
-          <Text style={styles.xpMuted}> • next: </Text>
-          <Text style={[styles.xpStrong, { color: ALLIANCE }]}>{nextLevel}</Text>
-        </Text>
-
-        <ProgressBar progress={xpProgress} tint={ALLIANCE} />
-
-        <View style={styles.unlockCard}>
-          <Text style={styles.unlockTitle}>Next level unlock</Text>
-          <Text style={styles.unlockText}>Contest other players territories</Text>
-        </View>
-      </View>
-
-      <View style={styles.statsGrid}>
-        <StatCard label="Territories held" value="3" />
-        <StatCard label="Total claimed" value="11" />
-        <StatCard label="Distance walked" value="47km" />
-        <StatCard label="Contests won" value="0" />
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.cardTitle}>Your territories</Text>
-          <Text style={styles.cardHint}>Status</Text>
-        </View>
-
-        <View style={styles.list}>
-          <TerritoryRow name="Keizersgracht" daysHeld={4} distanceM={320} status="Secure" />
-          <View style={styles.listDivider} />
-          <TerritoryRow name="Jordaan" daysHeld={2} distanceM={420} status="Secure" />
-          <View style={styles.listDivider} />
-          <TerritoryRow name="Vondelpark" daysHeld={1} distanceM={890} status="Contested" />
-        </View>
-      </View>
+            <View style={styles.list}>
+              {ownedTerritories.length === 0 ? (
+                <Text style={styles.emptyTerritories}>No territories yet. Claim one on the map.</Text>
+              ) : null}
+              {ownedTerritories.map((t, index) => (
+                <React.Fragment key={t.id ?? `${t.territory_name}-${index}`}>
+                  {index > 0 ? <View style={styles.listDivider} /> : null}
+                  <OwnedTerritoryRow name={t.territory_name ?? 'Territory'} tier={t.tier} />
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Settings</Text>
@@ -198,6 +290,36 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 14,
     fontWeight: '600',
+  },
+  loadingBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    gap: 12,
+  },
+  loadingText: {
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  errorBanner: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyTerritories: {
+    marginTop: 4,
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: '700',
   },
   card: {
     backgroundColor: CARD,
