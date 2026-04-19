@@ -62,7 +62,7 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
   );
 }
 
-function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation }) {
+function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, playerRow }) {
   const [confirmAlliance, setConfirmAlliance] = useState(null);
   const [joinSaving, setJoinSaving] = useState(false);
 
@@ -77,6 +77,12 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation })
         .update({ alliance_id: confirmAlliance.id })
         .eq('clerk_id', userId);
       if (error) throw error;
+
+      await supabase
+        .from('territories')
+        .update({ alliance_id: confirmAlliance.id })
+        .eq('owner_id', playerRow.id);
+
       setConfirmAlliance(null);
       await onRefreshAfterJoin();
     } catch (err) {
@@ -385,6 +391,7 @@ export default function AllianceScreen() {
           userId={userId}
           onRefreshAfterJoin={() => fetchPlayerAndContext({ silent: true })}
           navigation={navigation}
+          playerRow={playerRow}
         />
       )}
     </View>
