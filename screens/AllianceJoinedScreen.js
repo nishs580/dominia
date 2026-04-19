@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 const BENEFITS = [
   { icon: '🛡️', title: 'Collective defence', sub: 'Alliance members defend your territories together' },
@@ -15,14 +15,10 @@ const BENEFITS = [
   { icon: '🎯', title: 'Alliance missions', sub: 'Weekly shared goals for bonus rewards' },
 ];
 
-const MEMBERS = [
-  { initials: 'NS', name: 'nishs580', role: 'Founder' },
-  { initials: 'AS', name: 'Alena.S', role: 'Officer' },
-  { initials: 'EV', name: 'Erik.V', role: 'Soldier' },
-];
-
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { allianceName, shortName, city, memberCount } = route.params ?? {};
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -30,9 +26,13 @@ export default function AllianceJoinedScreen() {
 
       <View style={styles.body}>
         <Text style={styles.youreIn}>YOU'RE IN</Text>
-        <Text style={styles.headline}>Welcome to Iron Wolves [INW]</Text>
-        <Text style={styles.subtitle}>Iron Wolves is proud to have you, Commander.</Text>
-        <Text style={styles.meta}>Jordaan · 14 members</Text>
+        <Text style={styles.headline}>
+          Welcome to {allianceName ?? 'Your Alliance'} [{shortName ?? '???'}]
+        </Text>
+        <Text style={styles.subtitle}>{allianceName ?? 'Your Alliance'} is ready for war.</Text>
+        <Text style={styles.meta}>
+          {city ?? '—'} · {memberCount ?? 1} member{(memberCount ?? 1) === 1 ? '' : 's'}
+        </Text>
 
         <Text style={styles.sectionLabel}>WHAT THIS MEANS</Text>
         {BENEFITS.map((b, i) => (
@@ -45,22 +45,7 @@ export default function AllianceJoinedScreen() {
           </View>
         ))}
 
-        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>YOUR NEW ALLIANCE</Text>
-        {MEMBERS.map((m, i) => (
-          <View key={i} style={[styles.memberRow, i === MEMBERS.length - 1 && { borderBottomWidth: 0 }]}>
-            <View style={styles.memberLeft}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{m.initials}</Text>
-              </View>
-              <View>
-                <Text style={styles.memberName}>{m.name}</Text>
-                <Text style={styles.memberRole}>{m.role}</Text>
-              </View>
-            </View>
-          </View>
-        ))}
-
-        <TouchableOpacity style={styles.btn} onPress={() => navigation.navigate('MainTabs')}>
+        <TouchableOpacity style={styles.btn} onPress={() => navigation.navigate('MainTabs', { screen: 'Alliance' })}>
           <Text style={styles.btnText}>Go to Alliance</Text>
         </TouchableOpacity>
       </View>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 const BG = '#0f0f14';
@@ -61,7 +62,7 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
   );
 }
 
-function NonMemberContent({ alliances, userId, onRefreshAfterJoin }) {
+function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation }) {
   const [confirmAlliance, setConfirmAlliance] = useState(null);
   const [joinSaving, setJoinSaving] = useState(false);
 
@@ -136,9 +137,10 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin }) {
         </Pressable>
         <Pressable
           accessibilityRole="button"
+          onPress={() => navigation.navigate('CreateAlliance')}
           style={({ pressed }) => [styles.btnMuted, pressed && { opacity: 0.9 }]}
         >
-          <Text style={styles.btnMutedText}>Found your own</Text>
+          <Text style={styles.btnMutedText}>Create your alliance</Text>
         </Pressable>
       </View>
 
@@ -159,7 +161,48 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin }) {
   );
 }
 
-function MemberContent() {
+function MemberContent({ myAlliance, playerId }) {
+  const [territoryCount, setTerritoryCount] = useState(null);
+  const [roster, setRoster] = useState([]);
+
+  useEffect(() => {
+    if (!myAlliance?.id) {
+      setTerritoryCount(null);
+      setRoster([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadMemberData() {
+      const [territoriesRes, playersRes] = await Promise.all([
+        supabase
+          .from('territories')
+          .select('*', { count: 'exact', head: true })
+          .eq('alliance_id', myAlliance.id),
+        supabase.from('players').select('id, username, level').eq('alliance_id', myAlliance.id),
+      ]);
+
+      if (territoriesRes.error) {
+        console.error('AllianceScreen territory count:', territoriesRes.error);
+      }
+      if (playersRes.error) {
+        console.error('AllianceScreen roster:', playersRes.error);
+      }
+
+      if (cancelled) return;
+
+      setTerritoryCount(territoriesRes.error ? null : territoriesRes.count ?? 0);
+      setRoster(playersRes.error ? [] : playersRes.data ?? []);
+    }
+
+    loadMemberData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [myAlliance?.id]);
+
   return (
     <>
       <View style={styles.accentBar} />
@@ -169,7 +212,7 @@ function MemberContent() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.statRow}>
-          <StatCard value="47" label="Territories" />
+          <StatCard value={territoryCount !== null ? String(territoryCount) : '—'} label="Territories" />
           <StatCard value="340" label="Morale" valueColor={ORANGE} />
           <StatCard value="#2" label="Realm rank" />
         </View>
@@ -194,9 +237,16 @@ function MemberContent() {
 
         <Text style={[styles.sectionLabel, { marginTop: 18 }]}>ROSTER</Text>
         <View>
-          <RosterRow initials="NS" name="nishs580" role="Founder" steps="12,400 steps" showBorder />
-          <RosterRow initials="AS" name="Alena.S" role="Officer" steps="9,200 steps" showBorder />
-          <RosterRow initials="EV" name="Erik.V" role="Soldier" steps="6,100 steps" showBorder={false} />
+          {roster.map((m, i) => (
+            <RosterRow
+              key={m.id}
+              initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
+              name={m.username ?? '—'}
+              role={m.id === myAlliance.founder_id ? 'Founder' : 'Member'}
+              steps="—"
+              showBorder={i < roster.length - 1}
+            />
+          ))}
         </View>
       </ScrollView>
     </>
@@ -204,6 +254,7 @@ function MemberContent() {
 }
 
 export default function AllianceScreen() {
+  const navigation = useNavigation();
   const { userId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [playerRow, setPlayerRow] = useState(null);
@@ -240,7 +291,7 @@ export default function AllianceScreen() {
         if (player?.alliance_id) {
           const { data: allianceRow, error: allianceError } = await supabase
             .from('alliances')
-            .select('id, name, short_name, city')
+            .select('id, name, short_name, city, founder_id')
             .eq('id', player.alliance_id)
             .maybeSingle();
 
@@ -327,12 +378,13 @@ export default function AllianceScreen() {
       </View>
 
       {isMember ? (
-        <MemberContent />
+        <MemberContent myAlliance={myAlliance} playerId={playerRow?.id} />
       ) : (
         <NonMemberContent
           alliances={allianceList}
           userId={userId}
           onRefreshAfterJoin={() => fetchPlayerAndContext({ silent: true })}
+          navigation={navigation}
         />
       )}
     </View>

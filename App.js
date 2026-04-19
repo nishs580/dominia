@@ -14,6 +14,7 @@ import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
+import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import AuthGate from './components/AuthGate';
@@ -73,6 +74,7 @@ export default function App() {
           <Stack.Screen name="ClaimSuccessScreen" component={ClaimSuccessScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="ContestResultScreen" component={ContestResultScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="AllianceJoined" component={AllianceJoinedScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+          <Stack.Screen name="CreateAlliance" component={CreateAllianceScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>
