@@ -15,7 +15,7 @@ const ALLIANCE = '#534AB7';
 const ENEMY = '#993C1D';
 const UNCLAIMED = '#444441';
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, myPlayer }) {
   const navigation = useNavigation();
   if (!territory) return null;
 
@@ -91,6 +91,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched }) 
               territoryName: selectedTerritory.name,
               perimeterDistance: selectedTerritory.perimeter,
               territoryId: territory.id,
+              playerId: myPlayer?.id,
             });
           }}
         >
@@ -316,6 +317,7 @@ export default function MapScreen() {
         userId={userId}
         onClose={() => setSelected(null)}
         onTerritoriesRefetched={fetchTerritories}
+        myPlayer={myPlayer}
       />
     </View>
   );

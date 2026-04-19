@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 
 const BG = '#0f0f14';
@@ -19,38 +18,40 @@ function formatMeters(m) {
 export default function ClaimSuccessScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId } = useAuth();
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId } = route?.params ?? {};
+  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId } = route?.params ?? {};
 
   const fade = useRef(new Animated.Value(0)).current;
   const pop = useRef(new Animated.Value(0.96)).current;
 
   useEffect(() => {
-    if (!territoryId || !userId) return;
+    if (!territoryId || !playerId) return;
 
     (async () => {
-      const { data: player, error: playerError } = await supabase
-        .from('players')
-        .select('id')
-        .eq('clerk_id', userId)
-        .maybeSingle();
-
-      if (playerError || !player?.id) {
-        if (playerError) console.error('ClaimSuccess player fetch:', playerError);
-        return;
-      }
-
       const { error: updateError } = await supabase
         .from('territories')
-        .update({ owner_id: player.id })
+        .update({ owner_id: playerId })
         .eq('id', territoryId);
 
       if (updateError) {
         console.error('ClaimSuccess territory update:', updateError);
+        return;
+      }
+
+      const { data: playerFull } = await supabase
+        .from('players')
+        .select('alliance_id')
+        .eq('id', playerId)
+        .maybeSingle();
+
+      if (playerFull?.alliance_id) {
+        await supabase
+          .from('territories')
+          .update({ alliance_id: playerFull.alliance_id })
+          .eq('id', territoryId);
       }
     })();
-  }, [territoryId, userId]);
+  }, [territoryId, playerId]);
 
   useEffect(() => {
     Animated.parallel([

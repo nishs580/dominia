@@ -46,7 +46,7 @@ export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId } = route?.params ?? {};
+  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId } = route?.params ?? {};
   const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
 
   const [pct, setPct] = useState(0);
@@ -118,6 +118,7 @@ export default function ActiveClaimScreen() {
               territoryName,
               perimeterDistance: perimeterM,
               territoryId,
+              playerId,
             });
           }, 1000);
         }
@@ -179,6 +180,7 @@ export default function ActiveClaimScreen() {
                   territoryName,
                   perimeterDistance: perimeterM,
                   territoryId,
+                  playerId,
                 });
               }, 1000);
             }
