@@ -162,9 +162,29 @@ export default function MapScreen() {
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
+  const [myAllianceName, setMyAllianceName] = useState(null);
+  const [myPlayer, setMyPlayer] = useState(null);
   const { userId } = useAuth();
 
   const fetchTerritories = useCallback(async () => {
+    const { data: playerRow } = await supabase
+      .from('players')
+      .select('id, alliance_id')
+      .eq('clerk_id', userId)
+      .maybeSingle();
+    setMyPlayer(playerRow);
+
+    if (playerRow?.alliance_id) {
+      const { data: allianceRow } = await supabase
+        .from('alliances')
+        .select('name')
+        .eq('id', playerRow.alliance_id)
+        .maybeSingle();
+      setMyAllianceName(allianceRow?.name ?? null);
+    } else {
+      setMyAllianceName(null);
+    }
+
     const { data, error } = await supabase
       .from('territories')
       .select('*, players(username, clerk_id), alliances(short_name)');
@@ -184,8 +204,8 @@ export default function MapScreen() {
           level: `D${t.development_level ?? 0}`,
           perimeter: t.perimeter_distance,
           color: t.players?.clerk_id === userId ? '#1D9E75' :
-            t.alliance_id === 'e72aebff-41a3-4156-8614-f225c5d828dc' ? '#534AB7' :
-            t.owner_id ? '#993C1D' : '#444441',
+            (playerRow?.alliance_id && t.alliance_id === playerRow.alliance_id) ? '#534AB7' :
+            t.owner_id != null ? '#993C1D' : '#444441',
         },
         geometry: {
           type: 'Polygon',
@@ -282,7 +302,7 @@ export default function MapScreen() {
 
       <View style={styles.hudRight}>
         <View style={styles.allianceBadge}>
-          <Text style={styles.allianceBadgeText}>Iron Wolves</Text>
+          <Text style={styles.allianceBadgeText}>{myAllianceName ?? 'No Alliance'}</Text>
         </View>
       </View>
 

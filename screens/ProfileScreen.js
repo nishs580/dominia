@@ -83,6 +83,7 @@ export default function ProfileScreen() {
   const [playerRow, setPlayerRow] = useState(null);
   const [ownedTerritories, setOwnedTerritories] = useState([]);
   const [profileError, setProfileError] = useState(null);
+  const [allianceName, setAllianceName] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +102,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp')
+        .select('id, username, level, xp, alliance_id')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -124,6 +125,17 @@ export default function ProfileScreen() {
       }
 
       setPlayerRow(player);
+
+      if (player.alliance_id) {
+        const { data: allianceRow } = await supabase
+          .from('alliances')
+          .select('name')
+          .eq('id', player.alliance_id)
+          .maybeSingle();
+        if (!cancelled) setAllianceName(allianceRow?.name ?? null);
+      } else {
+        if (!cancelled) setAllianceName(null);
+      }
 
       const { data: territories, error: terrError } = await supabase
         .from('territories')
@@ -148,7 +160,6 @@ export default function ProfileScreen() {
     };
   }, [userId]);
 
-  const allianceName = 'Iron Wolves';
   const streakDays = 12;
 
   const levelNum = Math.max(1, Math.floor(Number(playerRow?.level) || 1));
@@ -191,7 +202,7 @@ export default function ProfileScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.playerName}>{playerName}</Text>
                 <View style={styles.identitySubRow}>
-                  <Badge text={allianceName} variant="alliance" />
+                  {allianceName ? <Badge text={allianceName} variant="alliance" /> : null}
                   <Badge text={rankBadge} />
                 </View>
               </View>
