@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 
-export default function UsernameScreen({ navigation }) {
-  const { userId } = useAuth();
+export default function UsernameScreen({ navigation, route }) {
+  const playerId = route.params?.playerId;
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,9 +31,9 @@ export default function UsernameScreen({ navigation }) {
       const { error: updateError } = await supabase
         .from('players')
         .update({ username: username.trim() })
-        .eq('clerk_id', userId);
+        .eq('id', playerId);
       if (updateError) throw updateError;
-      navigation.replace('MainTabs');
+      navigation.replace('Onboarding', { playerId });
     } catch (err) {
       setError('Username already taken. Try another.');
     } finally {

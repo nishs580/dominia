@@ -10,6 +10,12 @@ export default function AuthGate({ navigation }) {
   const showSpinner = !isLoaded || (isSignedIn && (!userId || checkingOnboarding));
 
   useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      navigation.replace('SignIn');
+    }
+  }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
     if (!isLoaded) return;
 
     if (!isSignedIn) {

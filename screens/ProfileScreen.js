@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 const ACCENT = '#1D9E75';
@@ -76,6 +77,7 @@ function rankLabelForLevel(level) {
 }
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const today = useMemo(() => new Date(), []);
   const { signOut, userId } = useAuth();
 
@@ -266,7 +268,26 @@ export default function ProfileScreen() {
         <View style={styles.settingsList}>
           <SettingsRow label="Notification settings" />
           <View style={styles.listDivider} />
-          <Pressable onPress={() => signOut()} style={styles.settingsRow}>
+          <Pressable
+            onPress={() => {
+              Alert.alert(
+                'Sign out',
+                'Are you sure you want to sign out?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Sign out',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await signOut();
+                      navigation.replace('SignIn');
+                    },
+                  },
+                ]
+              );
+            }}
+            style={styles.settingsRow}
+          >
             <Text style={[styles.settingsLabel, { color: '#E84040' }]}>Sign out</Text>
             <Text style={styles.settingsChevron}>›</Text>
           </Pressable>

@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '@clerk/clerk-expo';
 import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
@@ -64,9 +63,9 @@ function CardRow({ icon, title, subtitle, tone = 'how' }) {
   );
 }
 
-export default function OnboardingScreen() {
+export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
-  const { userId } = useAuth();
+  const playerId = route.params?.playerId;
   const [step, setStep] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
@@ -206,8 +205,8 @@ export default function OnboardingScreen() {
 
     if (step === 3) {
       if (!homePin || savingPin) return;
-      if (!userId) {
-        Alert.alert('Session error', 'You need to be signed in to continue.');
+      if (!playerId) {
+        Alert.alert('Session error', 'Player ID missing. Please restart the app.');
         return;
       }
       setSavingPin(true);
@@ -215,7 +214,7 @@ export default function OnboardingScreen() {
         const { error } = await supabase
           .from('players')
           .update({ home_pin_lat: homePin[1], home_pin_lng: homePin[0] })
-          .eq('clerk_id', userId);
+          .eq('id', playerId);
         if (error) throw error;
         setStep(4);
       } catch (err) {
@@ -229,8 +228,8 @@ export default function OnboardingScreen() {
 
     if (step === 4) {
       if (finishingOnboarding) return;
-      if (!userId) {
-        Alert.alert('Session error', 'You need to be signed in to continue.');
+      if (!playerId) {
+        Alert.alert('Session error', 'Player ID missing. Please restart the app.');
         return;
       }
       setFinishingOnboarding(true);
@@ -238,7 +237,7 @@ export default function OnboardingScreen() {
         const { error } = await supabase
           .from('players')
           .update({ has_onboarded: true })
-          .eq('clerk_id', userId);
+          .eq('id', playerId);
         if (error) throw error;
         navigation.replace('MainTabs');
       } catch (err) {

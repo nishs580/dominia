@@ -36,8 +36,8 @@ export default function SignInScreen({ navigation }) {
     try {
       const result = await signUp.create({ emailAddress: email, password });
       await setActiveSignUp({ session: result.createdSessionId });
-      const { needsUsername } = await ensurePlayer(result.createdUserId, email);
-      navigation.replace(needsUsername ? 'Username' : 'MainTabs');
+      const { needsUsername, player } = await ensurePlayer(result.createdUserId, email);
+      navigation.replace(needsUsername ? 'Username' : 'Onboarding', { playerId: player?.id });
     } catch (err) {
       setError(err.errors?.[0]?.message ?? 'Sign up failed. Try a different email.');
     } finally {
