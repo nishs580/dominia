@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { getLevelForXp, getXpProgress } from '../lib/level';
 
 const ACCENT = '#1D9E75';
 const ALLIANCE = '#534AB7';
@@ -87,6 +88,7 @@ export default function ProfileScreen() {
   const [profileError, setProfileError] = useState(null);
   const [allianceName, setAllianceName] = useState(null);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +107,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id, current_streak')
+        .select('id, username, level, xp, alliance_id, current_streak, longest_streak')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -124,12 +126,14 @@ export default function ProfileScreen() {
         setPlayerRow(null);
         setOwnedTerritories([]);
         setCurrentStreak(0);
+        setLongestStreak(0);
         setLoading(false);
         return;
       }
 
       setPlayerRow(player);
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
+      setLongestStreak(Math.max(0, Number(player.longest_streak) || 0));
 
       if (player.alliance_id) {
         const { data: allianceRow } = await supabase
@@ -165,16 +169,27 @@ export default function ProfileScreen() {
     };
   }, [userId]);
 
-  const levelNum = Math.max(1, Math.floor(Number(playerRow?.level) || 1));
   const xp = Math.max(0, Number(playerRow?.xp) || 0);
-  const xpTowardLevel2 = levelNum === 1;
-  const xpNeeded = xpTowardLevel2 ? 150 : 1000;
-  const nextLevel = xpTowardLevel2 ? 'Level 2' : 'Lv 3 Claimer';
-  const xpProgress = xpNeeded > 0 ? xp / xpNeeded : 0;
-  const xpPct = Math.round(clamp(xpProgress, 0, 1) * 100);
+  const { current, next, progress, xpIntoLevel, xpNeeded } = getXpProgress(xp);
+  const xpProgress = progress;
+  const xpPct = Math.round(Math.min(progress, 1) * 100);
 
   const playerName = playerRow?.username ?? '—';
-  const rankBadge = rankLabelForLevel(playerRow?.level ?? 1);
+  const rankBadge = current?.title ?? getLevelForXp(xp).title;
+
+  const unlockText = useMemo(() => {
+    const title = next?.title;
+    if (title === 'Pathfinder') return 'Calorie-burn challenge tier unlocked';
+    if (title === 'Claimer') return 'Contest mechanic unlocked';
+    if (title === 'Defender') return 'Contest enemy solo territories';
+    if (title === 'Commander') return 'Solo phase complete. Alliance eligible at Warlord';
+    if (title === 'Warlord') return 'Found or join an Alliance';
+    if (title === 'Strategist') return 'Alliance Officer rank eligible';
+    if (title === 'Conqueror') return 'Epic territory contests unlocked';
+    if (title === 'Sovereign') return 'Alliance Marshal rank eligible';
+    if (title === 'Dominator') return 'Realm legend. All mechanics unlocked';
+    return 'You have reached the top.';
+  }, [next?.title]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -212,6 +227,8 @@ export default function ProfileScreen() {
               <View style={styles.streakPill}>
                 <Text style={styles.streakValue}>{currentStreak}</Text>
                 <Text style={styles.streakLabel}>day streak</Text>
+                <View style={styles.streakDivider} />
+                <Text style={styles.streakBest}>Best: {longestStreak}</Text>
               </View>
             </View>
 
@@ -222,17 +239,17 @@ export default function ProfileScreen() {
               <Text style={styles.xpPct}>{xpPct}%</Text>
             </View>
             <Text style={styles.xpLine}>
-              <Text style={styles.xpStrong}>{xp}</Text>
+              <Text style={styles.xpStrong}>{xpIntoLevel}</Text>
               <Text style={styles.xpMuted}> / {xpNeeded} XP</Text>
               <Text style={styles.xpMuted}> • next: </Text>
-              <Text style={[styles.xpStrong, { color: ALLIANCE }]}>{nextLevel}</Text>
+              <Text style={[styles.xpStrong, { color: ALLIANCE }]}>{next?.title ?? 'Max level'}</Text>
             </Text>
 
             <ProgressBar progress={xpProgress} tint={ALLIANCE} />
 
             <View style={styles.unlockCard}>
-              <Text style={styles.unlockTitle}>Next level unlock</Text>
-              <Text style={styles.unlockText}>Contest other players territories</Text>
+              <Text style={styles.unlockTitle}>Next: {next?.title ?? 'Dominator'}</Text>
+              <Text style={styles.unlockText}>{unlockText}</Text>
             </View>
           </View>
 
@@ -425,6 +442,18 @@ const styles = StyleSheet.create({
   },
   streakLabel: {
     marginTop: 2,
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  streakDivider: {
+    marginTop: 8,
+    height: 1,
+    alignSelf: 'stretch',
+    backgroundColor: '#C7EADF',
+  },
+  streakBest: {
+    marginTop: 8,
     color: MUTED,
     fontSize: 11,
     fontWeight: '800',

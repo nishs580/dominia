@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 import { updateStreakOnChallengeComplete } from '../lib/streak';
+import { getLevelForXp } from '../lib/level';
 
 const ACCENT = '#1D9E75';
 const BG = '#F6F8F7';
@@ -92,6 +93,7 @@ export default function ActivityScreen() {
   const [territoryCount, setTerritoryCount] = useState(0);
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
   const [isCompleting, setIsCompleting] = useState(() => new Set());
+  const [playerLevel, setPlayerLevel] = useState(getLevelForXp(0));
 
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -127,7 +129,9 @@ export default function ActivityScreen() {
       }
 
       setPlayerId(player.id);
-      setPlayerXp(Math.max(0, Number(player.xp) || 0));
+      const xp = Math.max(0, Number(player.xp) || 0);
+      setPlayerXp(xp);
+      setPlayerLevel(getLevelForXp(xp));
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
 
       const { count } = await supabase
@@ -214,11 +218,13 @@ export default function ActivityScreen() {
 
     setIsCompleting((prev) => new Set([...prev, ch.key]));
     const prevXp = playerXp;
+    const prevLevel = getLevelForXp(prevXp);
     const shouldUpdateStreak = completedKeys.size === 0;
 
     // optimistic UI
     setCompletedKeys((prev) => new Set([...prev, ch.key]));
     setPlayerXp((prev) => Math.max(0, Number(prev) || 0) + ch.xp);
+    setPlayerLevel(getLevelForXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
 
     try {
       await supabase.from('player_challenges').insert({
@@ -231,6 +237,12 @@ export default function ActivityScreen() {
         .from('players')
         .update({ xp: (Math.max(0, Number(prevXp) || 0) + ch.xp) })
         .eq('id', playerId);
+
+      const newXp = Math.max(0, Number(prevXp) || 0) + ch.xp;
+      const newLevel = getLevelForXp(newXp);
+      if (newLevel.level > prevLevel.level) {
+        await supabase.from('players').update({ level: newLevel.level }).eq('id', playerId);
+      }
 
       if (shouldUpdateStreak) {
         await updateStreakOnChallengeComplete(playerId, prevXp);
@@ -249,6 +261,7 @@ export default function ActivityScreen() {
         return next;
       });
       setPlayerXp(prevXp);
+      setPlayerLevel(getLevelForXp(prevXp));
     } finally {
       setIsCompleting((prev) => {
         const next = new Set(prev);
