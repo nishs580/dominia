@@ -173,6 +173,7 @@ export default function ProfileScreen() {
   const { current, next, progress, xpIntoLevel, xpNeeded } = getXpProgress(xp);
   const xpProgress = progress;
   const xpPct = Math.round(Math.min(progress, 1) * 100);
+  const territoryCap = current?.territoryCap ?? 0;
 
   const playerName = playerRow?.username ?? '—';
   const rankBadge = current?.title ?? getLevelForXp(xp).title;
@@ -254,7 +255,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.statsGrid}>
-            <StatCard label="Territories held" value={String(ownedTerritories.length)} />
+            <StatCard label="Territories held" value={`${ownedTerritories.length} / ${territoryCap}`} />
             <StatCard label="Total claimed" value="11" />
             <StatCard label="Distance walked" value="47km" />
             <StatCard label="Contests won" value="0" />
