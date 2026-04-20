@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
+import { updateStreakOnChallengeComplete } from '../lib/streak';
 
 const ACCENT = '#1D9E75';
 const BG = '#F6F8F7';
@@ -87,6 +88,7 @@ export default function ActivityScreen() {
   const { userId } = useAuth();
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
   const [territoryCount, setTerritoryCount] = useState(0);
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
   const [isCompleting, setIsCompleting] = useState(() => new Set());
@@ -101,6 +103,7 @@ export default function ActivityScreen() {
       if (!userId) {
         setPlayerId(null);
         setPlayerXp(0);
+        setCurrentStreak(0);
         setTerritoryCount(0);
         setCompletedKeys(new Set());
         return;
@@ -108,7 +111,7 @@ export default function ActivityScreen() {
 
       const { data: player } = await supabase
         .from('players')
-        .select('id, xp')
+        .select('id, xp, current_streak')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -117,6 +120,7 @@ export default function ActivityScreen() {
       if (!player?.id) {
         setPlayerId(null);
         setPlayerXp(0);
+        setCurrentStreak(0);
         setTerritoryCount(0);
         setCompletedKeys(new Set());
         return;
@@ -124,6 +128,7 @@ export default function ActivityScreen() {
 
       setPlayerId(player.id);
       setPlayerXp(Math.max(0, Number(player.xp) || 0));
+      setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
 
       const { count } = await supabase
         .from('territories')
@@ -209,6 +214,7 @@ export default function ActivityScreen() {
 
     setIsCompleting((prev) => new Set([...prev, ch.key]));
     const prevXp = playerXp;
+    const shouldUpdateStreak = completedKeys.size === 0;
 
     // optimistic UI
     setCompletedKeys((prev) => new Set([...prev, ch.key]));
@@ -225,6 +231,16 @@ export default function ActivityScreen() {
         .from('players')
         .update({ xp: (Math.max(0, Number(prevXp) || 0) + ch.xp) })
         .eq('id', playerId);
+
+      if (shouldUpdateStreak) {
+        await updateStreakOnChallengeComplete(playerId, prevXp);
+        const { data: streakRow } = await supabase
+          .from('players')
+          .select('current_streak')
+          .eq('id', playerId)
+          .maybeSingle();
+        setCurrentStreak(Math.max(0, Number(streakRow?.current_streak) || 0));
+      }
     } catch (e) {
       // revert if something goes wrong
       setCompletedKeys((prev) => {
@@ -332,7 +348,7 @@ export default function ActivityScreen() {
 
       <View style={styles.pillsRow}>
         <StatPill label="Territories" value={String(territoryCount)} />
-        <StatPill label="Day Streak" value="12" />
+        <StatPill label="Day Streak" value={String(currentStreak)} />
         <StatPill label="Siege XP" value={String(playerXp)} />
       </View>
 

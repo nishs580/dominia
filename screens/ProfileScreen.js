@@ -86,6 +86,7 @@ export default function ProfileScreen() {
   const [ownedTerritories, setOwnedTerritories] = useState([]);
   const [profileError, setProfileError] = useState(null);
   const [allianceName, setAllianceName] = useState(null);
+  const [currentStreak, setCurrentStreak] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +105,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id')
+        .select('id, username, level, xp, alliance_id, current_streak')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -122,11 +123,13 @@ export default function ProfileScreen() {
         setProfileError('No player record for this account.');
         setPlayerRow(null);
         setOwnedTerritories([]);
+        setCurrentStreak(0);
         setLoading(false);
         return;
       }
 
       setPlayerRow(player);
+      setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
 
       if (player.alliance_id) {
         const { data: allianceRow } = await supabase
@@ -161,8 +164,6 @@ export default function ProfileScreen() {
       cancelled = true;
     };
   }, [userId]);
-
-  const streakDays = 12;
 
   const levelNum = Math.max(1, Math.floor(Number(playerRow?.level) || 1));
   const xp = Math.max(0, Number(playerRow?.xp) || 0);
@@ -209,7 +210,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <View style={styles.streakPill}>
-                <Text style={styles.streakValue}>{streakDays}</Text>
+                <Text style={styles.streakValue}>{currentStreak}</Text>
                 <Text style={styles.streakLabel}>day streak</Text>
               </View>
             </View>
