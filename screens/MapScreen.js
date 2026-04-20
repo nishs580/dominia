@@ -147,6 +147,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
               territoryName: selectedTerritory.name,
               perimeterDistance: selectedTerritory.perimeter,
               territoryId: territory.id,
+              playerId: myPlayer?.id,
+              mode: 'contest',
             });
           }}
         >

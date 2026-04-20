@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 
 const BG = '#0f0f14';
 const WHITE = '#ffffff';
@@ -69,7 +70,21 @@ export default function ContestResultScreen() {
     myDistance = 0,
     opponentDistance = 0,
     opponentName = 'opponent',
+    territoryId,
+    playerId,
   } = route?.params ?? {};
+
+  useEffect(() => {
+    if (contestState === 'attack_won' && territoryId && playerId) {
+      supabase
+        .from('territories')
+        .update({ owner_id: playerId, alliance_id: null })
+        .eq('id', territoryId)
+        .then(({ error }) => {
+          if (error) console.error('Contest win write failed:', error);
+        });
+    }
+  }, []);
 
   const cfg = STATE_CONFIG[contestState] ?? STATE_CONFIG.attack_won;
   const accent = cfg.accent;

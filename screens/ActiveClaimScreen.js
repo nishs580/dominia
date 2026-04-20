@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Circle } from 'react-native-svg';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { supabase } from '../lib/supabase';
 
 const DEV_MODE = true;
 
@@ -46,7 +47,7 @@ export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId } = route?.params ?? {};
+  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId, mode = 'claim' } = route?.params ?? {};
   const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
 
   const [pct, setPct] = useState(0);
@@ -56,6 +57,7 @@ export default function ActiveClaimScreen() {
   const walkedMetresRef = useRef(0);
   const lastCoordRef = useRef(null);
   const locationWatchRef = useRef(null);
+  const opponentNameRef = useRef('opponent');
 
   useEffect(() => {
     navigation.setOptions?.({
@@ -63,6 +65,18 @@ export default function ActiveClaimScreen() {
       tabBarStyle: { display: 'none' },
     });
   }, [navigation]);
+
+  useEffect(() => {
+    if (mode !== 'contest' || !territoryId) return;
+    supabase
+      .from('territories')
+      .select('players(username)')
+      .eq('id', territoryId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.players?.username) opponentNameRef.current = data.players.username;
+      });
+  }, []);
 
   const ring = useMemo(() => {
     const size = 230;
@@ -114,12 +128,24 @@ export default function ActiveClaimScreen() {
           navigatingRef.current = true;
           if (intervalRef.current) clearInterval(intervalRef.current);
           setTimeout(() => {
-            navigation.navigate('ClaimSuccessScreen', {
-              territoryName,
-              perimeterDistance: perimeterM,
-              territoryId,
-              playerId,
-            });
+            if (mode === 'contest') {
+              navigation.navigate('ContestResultScreen', {
+                contestState: 'attack_won',
+                territoryName,
+                territoryId,
+                playerId,
+                myDistance: perimeterM,
+                opponentDistance: 0,
+                opponentName: opponentNameRef.current,
+              });
+            } else {
+              navigation.navigate('ClaimSuccessScreen', {
+                territoryName,
+                perimeterDistance: perimeterM,
+                territoryId,
+                playerId,
+              });
+            }
           }, 1000);
         }
 
@@ -176,12 +202,24 @@ export default function ActiveClaimScreen() {
               locationWatchRef.current?.remove();
               locationWatchRef.current = null;
               setTimeout(() => {
-                navigation.navigate('ClaimSuccessScreen', {
-                  territoryName,
-                  perimeterDistance: perimeterM,
-                  territoryId,
-                  playerId,
-                });
+                if (mode === 'contest') {
+                  navigation.navigate('ContestResultScreen', {
+                    contestState: 'attack_won',
+                    territoryName,
+                    territoryId,
+                    playerId,
+                    myDistance: Math.round(walkedMetresRef.current),
+                    opponentDistance: 0,
+                    opponentName: opponentNameRef.current,
+                  });
+                } else {
+                  navigation.navigate('ClaimSuccessScreen', {
+                    territoryName,
+                    perimeterDistance: perimeterM,
+                    territoryId,
+                    playerId,
+                  });
+                }
               }, 1000);
             }
           },
@@ -206,7 +244,7 @@ export default function ActiveClaimScreen() {
     <View style={styles.screen}>
       <View style={styles.topRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.claimingLabel}>CLAIMING</Text>
+          <Text style={[styles.claimingLabel, { marginTop: 32 }]}>{mode === 'contest' ? 'CONTESTING' : 'CLAIMING'}</Text>
           <Text style={styles.territoryName}>{territoryName}</Text>
         </View>
         <View style={styles.badge}>
