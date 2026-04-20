@@ -58,6 +58,7 @@ export default function ActiveClaimScreen() {
   const lastCoordRef = useRef(null);
   const locationWatchRef = useRef(null);
   const opponentNameRef = useRef('opponent');
+  const attackerAllianceRef = useRef(null);
 
   useEffect(() => {
     navigation.setOptions?.({
@@ -67,7 +68,9 @@ export default function ActiveClaimScreen() {
   }, [navigation]);
 
   useEffect(() => {
-    if (mode !== 'contest' || !territoryId) return;
+    if (mode !== 'contest' || !territoryId || !playerId) return;
+
+    // fetch opponent name from territory
     supabase
       .from('territories')
       .select('players(username)')
@@ -75,6 +78,16 @@ export default function ActiveClaimScreen() {
       .maybeSingle()
       .then(({ data }) => {
         if (data?.players?.username) opponentNameRef.current = data.players.username;
+      });
+
+    // fetch attacker's alliance_id
+    supabase
+      .from('players')
+      .select('alliance_id')
+      .eq('id', playerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.alliance_id) attackerAllianceRef.current = data.alliance_id;
       });
   }, []);
 
@@ -137,6 +150,7 @@ export default function ActiveClaimScreen() {
                 myDistance: perimeterM,
                 opponentDistance: 0,
                 opponentName: opponentNameRef.current,
+                attackerAlliance: attackerAllianceRef.current,
               });
             } else {
               navigation.navigate('ClaimSuccessScreen', {
@@ -211,6 +225,7 @@ export default function ActiveClaimScreen() {
                     myDistance: Math.round(walkedMetresRef.current),
                     opponentDistance: 0,
                     opponentName: opponentNameRef.current,
+                    attackerAlliance: attackerAllianceRef.current,
                   });
                 } else {
                   navigation.navigate('ClaimSuccessScreen', {

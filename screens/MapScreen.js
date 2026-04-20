@@ -40,7 +40,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
     perimeter: perimeterDistance,
   };
 
-  const isYours = territory.properties?.color === '#1D9E75';
+  const isYours = territory.properties?.color === '#1D9E75' || territory.properties?.color === '#534AB7';
+  const isOwnTerritory = territory.properties?.color === '#1D9E75';
+  const isAllianceTerritory = territory.properties?.color === '#534AB7';
   const isOwned = !isUnclaimed;
 
   const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
@@ -99,7 +101,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
         </Pressable>
       )}
 
-      {isYours && (
+      {isOwnTerritory && !isAllianceTerritory && (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -134,7 +136,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
         </Pressable>
       )}
 
-      {isOwned && !isYours && (
+      {isOwned && !isYours && !isAllianceTerritory && (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [

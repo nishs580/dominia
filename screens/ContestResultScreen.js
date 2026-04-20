@@ -72,13 +72,14 @@ export default function ContestResultScreen() {
     opponentName = 'opponent',
     territoryId,
     playerId,
+    attackerAlliance,
   } = route?.params ?? {};
 
   useEffect(() => {
     if (contestState === 'attack_won' && territoryId && playerId) {
       supabase
         .from('territories')
-        .update({ owner_id: playerId, alliance_id: null })
+        .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
         .eq('id', territoryId)
         .then(({ error }) => {
           if (error) console.error('Contest win write failed:', error);
