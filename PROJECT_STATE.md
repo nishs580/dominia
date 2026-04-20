@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 20, 2026 (evening)
+Last updated: April 20, 2026 (night)
 
 ---
 
@@ -75,11 +75,13 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date
 
 `territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at
 
 `alliances`: id, name, short_name, city, created_at, founder_id
+
+`player_challenges`: id, player_id, challenge_key, completed_at, date — UNIQUE constraint on (player_id, challenge_key, date)
 
 **Test data:**
 - 5 territories: Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Prinsengracht (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m) — Amsterdam, hardcoded bounding box polygons
@@ -102,9 +104,9 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Done | Map, Activity, Alliance, Profile |
-| Map screen | ✓ Done | Colours: green (own), purple (alliance), red (enemy), grey (unclaimed). TerritorySheet: Claim / Contest / Abandon buttons correctly gated by isYours / isOwnTerritory / isAllianceTerritory. Perimeter label context-aware. |
-| Activity screen | ✓ Done | Territory count + XP from Supabase, weekly chart highlights real day, steps hardcoded 0 |
-| Profile screen | ✓ Done | Real Supabase data, real alliance badge, sign out with Alert |
+| Map screen | ✓ Done | Colours: green (own), purple (alliance), red (enemy), grey (unclaimed). TerritorySheet: Claim / Contest / Abandon correctly gated. Perimeter label context-aware. |
+| Activity screen | ✓ Done | Daily challenges card (Easy/Medium/Hard), completion state, XP award, Supabase writes. Stats pills. Weekly chart. Active Claim card removed. |
+| Profile screen | ✓ Done | Real XP, level title (no level number shown), streak pill (current + best), territory cap (held/cap), territory list |
 | Alliance screen | ✓ Done | Member/non-member from Supabase, real roster + territory count, create + join flows working |
 | Active Claim screen | ✓ Done | DEV_MODE=true, mode param (claim/contest), opponent name + attacker alliance_id fetched on load |
 | Claim Success screen | ✓ Done | Uses playerId from nav params, sets owner_id + alliance_id in Supabase |
@@ -116,7 +118,8 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | Create Alliance screen | ✓ Done | 3-step founding flow — writes to alliances, updates players + territories |
 | Alliance Joined screen | ✓ Done | Reads real alliance name, code, city from nav params |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
-| Defender flow | ○ Not started | Defend button on alliance territory sheet, mode: 'defend' in ActiveClaimScreen, compare distances, navigate to ContestResultScreen |
+| Defender flow | ○ Deferred | Needs Ably real-time layer — not worth building a throwaway version. Revisit when backend is started. |
+| Territory cap enforcement | ○ Not started | Player at cap should not be able to claim — map screen needs to check held/cap before allowing Claim. Next session. |
 
 ---
 
@@ -129,6 +132,8 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
+| `lib/level.js` | LEVELS array, getLevelForXp, getNextLevel, getXpProgress, territoryCap per level |
+| `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day, writes current_streak/longest_streak/last_active_date |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, HUD alliance badge, TerritorySheet with isYours/isOwnTerritory/isAllianceTerritory button gating, context-aware perimeter label |
@@ -138,11 +143,11 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `screens/AllianceScreen.js` | NonMemberContent (join flow), MemberContent (real roster + territory count), CreateAlliance nav |
 | `screens/CreateAllianceScreen.js` | 3-step founding flow — writes to alliances, updates players + territories |
 | `screens/AllianceJoinedScreen.js` | Reads real name/code/city from route.params |
-| `screens/ProfileScreen.js` | Real Supabase data, real alliance badge, sign out with Alert |
+| `screens/ProfileScreen.js` | Real XP + level title from lib/level.js, streak pill (current + best) from players table, territory cap (held/cap), territory list, sign out |
 | `screens/ActiveClaimScreen.js` | DEV_MODE=true at top, mode param (claim/contest), opponentNameRef + attackerAllianceRef fetched on screen load |
 | `screens/ClaimSuccessScreen.js` | Uses playerId from nav params, sets owner_id + alliance_id in Supabase |
 | `screens/ContestResultScreen.js` | 4 states via route.params, writes owner_id + alliance_id on attack_won |
-| `screens/ActivityScreen.js` | XP + territory count from Supabase, steps hardcoded 0, weekly chart highlights real day |
+| `screens/ActivityScreen.js` | Daily challenges card (Easy/Medium/Hard), completion state, XP award, Supabase writes to player_challenges, streak trigger, stats pills, weekly chart |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
 | `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26) |
@@ -199,18 +204,19 @@ git push
 |---|---|
 | Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev (was causing status: missing_requirements). Must re-enable before production. |
-| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. `react-native-health-connect` tried and removed — native crash on load. Steps currently hardcoded to 0. Possible fallback: `expo-sensors Pedometer.watchStepCount()` (gives steps since screen open, not daily total). |
-| Defender flow not built | Defend button on alliance territory sheet missing. mode: 'defend' in ActiveClaimScreen not yet implemented. Distance comparison logic and ContestResultScreen defend states not wired. |
+| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. `react-native-health-connect` tried and removed — native crash on load. Steps currently hardcoded to 0. Possible fallback: `expo-sensors Pedometer.watchStepCount()`. DEV_MODE challenges use manual Complete button for now. |
+| Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
+| Territory cap not enforced on map | Player at cap can still initiate claims — map screen needs to check held vs cap before showing Claim button. Next session. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
-| Alliance disband flow not built | Manual Supabase SQL reset needed for testing — must clear players.alliance_id before deleting alliance row. |
 
 ---
 
 ## DEFERRED / OUT OF SCOPE
 
-- Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing
-- Real step tracking — Health Connect failed, possible fallback via expo-sensors, revisit when prioritised
-- Alliance disband flow — manual SQL reset for now
+- Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing, revisit when showing to people
+- Real step tracking — Health Connect failed, expo-sensors fallback not yet tried, deferred due to EAS budget
+- Defender flow — needs Ably real-time layer, deferred to backend phase
+- Alliance disband flow — dropped from backlog, no real gameplay use case, Founder can leave and role auto-transfers
 - Alliance chat — post-MVP
 - Branding and visual polish — after core loop is complete
 - Onboarding home pin 500m verification — deferred
@@ -220,14 +226,14 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Build the defender flow — Defend button on alliance territory sheet when under contest, mode: 'defend' in ActiveClaimScreen, compare attacker vs defender distance, navigate to ContestResultScreen with defend_won or defend_lost.
+**Immediate:** Enforce territory cap on the map screen — player at cap cannot initiate a claim, territory sheet should surface held/cap count clearly and disable the Claim button when at cap.
 
 **Backlog (in rough order):**
-1. Defender flow
-2. Real step tracking — try expo-sensors Pedometer.watchStepCount() as fallback
+1. Territory cap enforcement on map screen
+2. Real step tracking — try expo-sensors Pedometer.watchStepCount() as fallback (needs EAS build budget)
 3. Onboarding home pin 500m verification
-4. Alliance disband flow
-5. Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
+4. Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
+5. Defender flow — revisit once Ably is built
 
 ---
 
@@ -267,6 +273,11 @@ git push
 | Fetch opponent name at screen load not completion | Prevents stale data after ownership write in ContestResultScreen |
 | Fetch attacker alliance_id in ActiveClaimScreen | ContestResultScreen should only write, not fetch — keeps write logic simple |
 | DB cleanup — delete dummy accounts and alliances | Keep DB clean for real mechanic testing with real accounts |
+| Defender flow deferred until Ably is built | Simultaneous race mechanic needs real-time layer — not worth building a throwaway version |
+| Alliance disband dropped from backlog | No real gameplay use case — Founder can leave and role auto-transfers |
+| Level numbers never shown to player | Titles only (Scout, Pathfinder etc) — level integer stays in DB for logic |
+| Daily challenges reset via date-scoped queries | No cron job needed — UNIQUE constraint on (player_id, challenge_key, date) handles idempotency |
+| DEV_MODE challenges use manual Complete button | No real step check until step tracking is solved — avoids blocking challenge testing |
 
 ---
 
