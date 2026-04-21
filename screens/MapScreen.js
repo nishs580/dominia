@@ -4,6 +4,7 @@ import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { getLevelForXp } from '../lib/level.js';
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -15,7 +16,7 @@ const ALLIANCE = '#534AB7';
 const ENEMY = '#993C1D';
 const UNCLAIMED = '#444441';
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, myPlayer }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, myPlayer, allFeatures = [] }) {
   const navigation = useNavigation();
   if (!territory) return null;
 
@@ -46,6 +47,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
   const isOwned = !isUnclaimed;
 
   const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
+
+  const playerXp = myPlayer?.xp ?? 0;
+  const levelData = getLevelForXp(playerXp);
+  const cap = levelData?.territoryCap ?? 1;
+  const heldCount = allFeatures.filter(f => f.properties?.color === '#1D9E75').length;
+  const isAtCap = heldCount >= cap;
 
   return (
     <View style={styles.sheet}>
@@ -84,7 +91,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
         </Pressable>
       </View>
 
-      {isUnclaimed && (
+      {isUnclaimed && !isAtCap && (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
@@ -99,6 +106,13 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
         >
           <Text style={styles.sheetActionText}>Claim</Text>
         </Pressable>
+      )}
+
+      {isUnclaimed && isAtCap && (
+        <View style={styles.sheetActionDisabled}>
+          <Text style={styles.sheetActionDisabledText}>Cap reached</Text>
+          <Text style={styles.sheetActionDisabledSub}>Level up to claim more territories</Text>
+        </View>
       )}
 
       {isOwnTerritory && !isAllianceTerritory && (
@@ -174,7 +188,7 @@ export default function MapScreen() {
   const fetchTerritories = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id')
+      .select('id, alliance_id, xp')
       .eq('clerk_id', userId)
       .maybeSingle();
     setMyPlayer(playerRow);
@@ -291,7 +305,7 @@ export default function MapScreen() {
           shape={territories}
           onPress={(e) => {
             const f = e?.features?.[0];
-            if (f) setSelected(f);
+            if (f) setSelected({ feature: f, allFeatures: territories.features });
           }}
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
@@ -317,7 +331,8 @@ export default function MapScreen() {
       </Pressable>
 
       <TerritorySheet
-        territory={selected}
+        territory={selected?.feature ?? selected}
+        allFeatures={selected?.allFeatures ?? []}
         userId={userId}
         onClose={() => setSelected(null)}
         onTerritoriesRefetched={fetchTerritories}
@@ -507,6 +522,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sheetActionDisabled: {
+    marginTop: 12,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetActionContest: {
     backgroundColor: '#EA580C',
   },
@@ -515,5 +538,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: -0.1,
+  },
+  sheetActionDisabledText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
+  sheetActionDisabledSub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
   },
 });
