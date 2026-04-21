@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 20, 2026 (night)
+Last updated: April 21, 2026
 
 ---
 
@@ -84,10 +84,12 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 `player_challenges`: id, player_id, challenge_key, completed_at, date — UNIQUE constraint on (player_id, challenge_key, date)
 
 **Test data:**
-- 5 territories: Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Prinsengracht (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m) — Amsterdam, hardcoded bounding box polygons
+- 10 territories (Amsterdam, hardcoded bounding box polygons, all unclaimed unless noted):
+  - Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Prinsengracht (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m)
+  - Rembrandtplein · Oosterpark · Westerpark · Plantage · Oud-West (all unclaimed, added this session)
 - Active alliances: Kainetic Allied [KAI] id=6bc19cb1-97ce-4f76-95fa-b645606c2b47 · Gritty Greeks [GGG]
 - Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG — holds Leidseplein + Prinsengracht)
-- Deleted this session: Iron Wolves [INW], Fire Blades [FBM], Alena.S, Erik.W, orphan row nishan.shetty
+- Territory tier values must be **lowercase** in DB (small/medium/large) — check constraint enforces this
 
 **Useful reset SQL:**
 ```sql
@@ -104,7 +106,7 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Done | Map, Activity, Alliance, Profile |
-| Map screen | ✓ Done | Colours: green (own), purple (alliance), red (enemy), grey (unclaimed). TerritorySheet: Claim / Contest / Abandon correctly gated. Perimeter label context-aware. |
+| Map screen | ✓ Done | Colours: green (own), purple (alliance), red (enemy), grey (unclaimed). TerritorySheet gated correctly. Cap enforcement: grey disabled block with message when at cap, Claim button hidden. |
 | Activity screen | ✓ Done | Daily challenges card (Easy/Medium/Hard), completion state, XP award, Supabase writes. Stats pills. Weekly chart. Active Claim card removed. |
 | Profile screen | ✓ Done | Real XP, level title (no level number shown), streak pill (current + best), territory cap (held/cap), territory list |
 | Alliance screen | ✓ Done | Member/non-member from Supabase, real roster + territory count, create + join flows working |
@@ -119,7 +121,7 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | Alliance Joined screen | ✓ Done | Reads real alliance name, code, city from nav params |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
 | Defender flow | ○ Deferred | Needs Ably real-time layer — not worth building a throwaway version. Revisit when backend is started. |
-| Territory cap enforcement | ○ Not started | Player at cap should not be able to claim — map screen needs to check held/cap before allowing Claim. Next session. |
+| Branding + UI polish | ○ Next | Brand guidelines (dominia-brand-guidelines-v1-1) and mockups (dominia-mockups-v4) ready. Starting next session. |
 
 ---
 
@@ -136,7 +138,7 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day, writes current_streak/longest_streak/last_active_date |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, HUD alliance badge, TerritorySheet with isYours/isOwnTerritory/isAllianceTerritory button gating, context-aware perimeter label |
+| `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, HUD alliance badge, TerritorySheet with button gating, cap enforcement (getLevelForXp + allFeatures green count) |
 | `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params |
 | `screens/UsernameScreen.js` | Uses playerId from nav params (not useAuth) |
 | `screens/OnboardingScreen.js` | 5 steps, uses playerId from nav params, home pin Mapbox map, saves to Supabase |
@@ -206,7 +208,6 @@ git push
 | Clerk email verification disabled | Disabled for dev (was causing status: missing_requirements). Must re-enable before production. |
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. `react-native-health-connect` tried and removed — native crash on load. Steps currently hardcoded to 0. Possible fallback: `expo-sensors Pedometer.watchStepCount()`. DEV_MODE challenges use manual Complete button for now. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
-| Territory cap not enforced on map | Player at cap can still initiate claims — map screen needs to check held vs cap before showing Claim button. Next session. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
 
 ---
@@ -216,9 +217,8 @@ git push
 - Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing, revisit when showing to people
 - Real step tracking — Health Connect failed, expo-sensors fallback not yet tried, deferred due to EAS budget
 - Defender flow — needs Ably real-time layer, deferred to backend phase
-- Alliance disband flow — dropped from backlog, no real gameplay use case, Founder can leave and role auto-transfers
+- Alliance disband flow — dropped from backlog, no real gameplay use case
 - Alliance chat — post-MVP
-- Branding and visual polish — after core loop is complete
 - Onboarding home pin 500m verification — deferred
 - Backend (Fastify, PostGIS, BullMQ, Ably, FCM) — not started, separate phase
 
@@ -226,10 +226,10 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Enforce territory cap on the map screen — player at cap cannot initiate a claim, territory sheet should surface held/cap count clearly and disable the Claim button when at cap.
+**Immediate:** Apply Dominia branding — fonts, colours, component styles — starting with design tokens and working screen by screen. Brand guidelines (`dominia-brand-guidelines-v1-1`) and mockups (`dominia-mockups-v4`) are in the project files.
 
 **Backlog (in rough order):**
-1. Territory cap enforcement on map screen
+1. Branding + UI polish
 2. Real step tracking — try expo-sensors Pedometer.watchStepCount() as fallback (needs EAS build budget)
 3. Onboarding home pin 500m verification
 4. Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
@@ -278,6 +278,9 @@ git push
 | Level numbers never shown to player | Titles only (Scout, Pathfinder etc) — level integer stays in DB for logic |
 | Daily challenges reset via date-scoped queries | No cron job needed — UNIQUE constraint on (player_id, challenge_key, date) handles idempotency |
 | DEV_MODE challenges use manual Complete button | No real step check until step tracking is solved — avoids blocking challenge testing |
+| heldCount derived from allFeatures color property | No extra Supabase query needed for cap check — reuses green (#1D9E75) feature count already on screen |
+| Territory tier values must be lowercase in DB | Check constraint enforces small/medium/large — capitalised values fail silently on INSERT |
+| 10 test territories chosen for clean non-overlapping spread | Jordaan + De Pijp replaced with Plantage + Oud-West due to polygon overlap with existing territories |
 
 ---
 
