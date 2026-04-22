@@ -1,11 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 
-const BG = '#0f0f14';
-const ORANGE = '#ED9332';
+const CLAIM = '#D64525';
+const INK = '#0E1014';
+const INK2 = '#1A1D24';
+const INK3 = '#252932';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE2 = '#8B8F98';
+const ALLIANCE_GREEN = '#3F8F4E';
+const HAIRLINE = 'rgba(242,238,230,0.08)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
@@ -36,15 +45,6 @@ function AllianceCard({ dotColor, nameLine, metaLine, members, onPress }) {
   return <View style={styles.allianceCard}>{inner}</View>;
 }
 
-function StatCard({ value, label, valueColor }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={[styles.statValue, valueColor && { color: valueColor }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 function RosterRow({ initials, name, role, steps, showBorder }) {
   return (
     <View style={[styles.rosterRow, showBorder && styles.rosterRowBorder]}>
@@ -66,7 +66,7 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
   const [confirmAlliance, setConfirmAlliance] = useState(null);
   const [joinSaving, setJoinSaving] = useState(false);
 
-  const dotColors = ['#ED9332', '#7F77DD'];
+  const dotColors = [CLAIM, ALLIANCE_GREEN];
 
   const handleConfirmJoin = async () => {
     if (!userId || !confirmAlliance) return;
@@ -130,7 +130,7 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.emptyWrap}>
-        <Text style={styles.emptyEmoji}>🏴</Text>
+        <Text style={styles.emptyEmoji}></Text>
         <Text style={styles.emptyTitle}>Join an alliance</Text>
         <Text style={styles.emptySubtitle}>
           Alliance warfare unlocks at Level 6. Coordinate with others, share resources, and dominate the map together.
@@ -167,13 +167,11 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
   );
 }
 
-function MemberContent({ myAlliance, playerId }) {
-  const [territoryCount, setTerritoryCount] = useState(null);
+function MemberContent({ myAlliance, playerId, territoryCount }) {
   const [roster, setRoster] = useState([]);
 
   useEffect(() => {
     if (!myAlliance?.id) {
-      setTerritoryCount(null);
       setRoster([]);
       return;
     }
@@ -181,24 +179,17 @@ function MemberContent({ myAlliance, playerId }) {
     let cancelled = false;
 
     async function loadMemberData() {
-      const [territoriesRes, playersRes] = await Promise.all([
-        supabase
-          .from('territories')
-          .select('*', { count: 'exact', head: true })
-          .eq('alliance_id', myAlliance.id),
-        supabase.from('players').select('id, username, level').eq('alliance_id', myAlliance.id),
-      ]);
+      const playersRes = await supabase
+        .from('players')
+        .select('id, username, level')
+        .eq('alliance_id', myAlliance.id);
 
-      if (territoriesRes.error) {
-        console.error('AllianceScreen territory count:', territoriesRes.error);
-      }
       if (playersRes.error) {
         console.error('AllianceScreen roster:', playersRes.error);
       }
 
       if (cancelled) return;
 
-      setTerritoryCount(territoriesRes.error ? null : territoriesRes.count ?? 0);
       setRoster(playersRes.error ? [] : playersRes.data ?? []);
     }
 
@@ -211,38 +202,33 @@ function MemberContent({ myAlliance, playerId }) {
 
   return (
     <>
-      <View style={styles.accentBar} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.memberScrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.statRow}>
-          <StatCard value={territoryCount !== null ? String(territoryCount) : '—'} label="Territories" />
-          <StatCard value="340" label="Morale" valueColor={ORANGE} />
-          <StatCard value="#2" label="Realm rank" />
-        </View>
-
-        <View style={styles.warChest}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.warChestLabel}>War Chest</Text>
-            <Text style={styles.warChestValue}>340 Morale</Text>
-            <Text style={styles.warChestDonor}>Top donor: nishs580</Text>
-          </View>
-          <Text style={styles.warChestIcon}>⚔️</Text>
-        </View>
-
-        <Text style={styles.sectionLabel}>ACTIVE MISSION</Text>
         <View style={styles.missionCard}>
-          <Text style={styles.missionTitle}>Collective Fitness — 500,000 steps</Text>
-          <Text style={styles.missionSub}>300,000 / 500,000 steps · 4 days left</Text>
-          <View style={styles.progressTrack}>
-            <View style={styles.progressFill} />
+          <View style={styles.missionTopRow}>
+            <Text style={styles.missionStatusLabel}>MISSION IN PROGRESS</Text>
+            <Text style={styles.missionTimer}>RESETS IN 4D</Text>
           </View>
+          <Text style={styles.missionTitle}>Collective Fitness — 500,000 steps</Text>
+          <Text style={styles.missionDesc}>Every member's daily step count contributes.</Text>
+          <View style={styles.missionProgressRow}>
+            <Text style={styles.missionProgressValue}>300,000 steps</Text>
+            <Text style={styles.missionProgressTotal}>/ 500,000</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: '60%' }]} />
+          </View>
+          <Text style={styles.missionReward}>REWARD — +40 GOLD EACH · +300 XP</Text>
         </View>
 
-        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>ROSTER</Text>
-        <View>
+        <View style={[styles.sectionLabelRow, { marginTop: 18 }]}>
+          <Text style={styles.sectionLabel}>ROSTER</Text>
+          <View style={styles.sectionRule} />
+        </View>
+        <View style={styles.rosterWrap}>
           {roster.map((m, i) => (
             <RosterRow
               key={m.id}
@@ -266,6 +252,7 @@ export default function AllianceScreen() {
   const [playerRow, setPlayerRow] = useState(null);
   const [myAlliance, setMyAlliance] = useState(null);
   const [allianceList, setAllianceList] = useState([]);
+  const [territoryCount, setTerritoryCount] = useState(null);
 
   const fetchPlayerAndContext = useCallback(
     async ({ silent = false } = {}) => {
@@ -273,6 +260,7 @@ export default function AllianceScreen() {
         setPlayerRow(null);
         setMyAlliance(null);
         setAllianceList([]);
+        setTerritoryCount(null);
         if (!silent) setLoading(false);
         return;
       }
@@ -311,15 +299,28 @@ export default function AllianceScreen() {
               console.error('AllianceScreen alliance detail:', allianceError || countError);
             }
             setMyAlliance(null);
+            setTerritoryCount(null);
           } else {
             setMyAlliance({
               ...allianceRow,
               memberCount: count ?? 0,
             });
+
+            const { count: terrCount, error: terrError } = await supabase
+              .from('territories')
+              .select('*', { count: 'exact', head: true })
+              .eq('alliance_id', player.alliance_id);
+            if (terrError) {
+              console.error('AllianceScreen territory count:', terrError);
+              setTerritoryCount(null);
+            } else {
+              setTerritoryCount(terrCount ?? 0);
+            }
           }
           setAllianceList([]);
         } else {
           setMyAlliance(null);
+          setTerritoryCount(null);
           const { data: alliances, error: listError } = await supabase
             .from('alliances')
             .select('id, name, short_name, city');
@@ -357,7 +358,7 @@ export default function AllianceScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator color={ORANGE} />
+        <ActivityIndicator color={SLATE2} />
       </View>
     );
   }
@@ -365,26 +366,47 @@ export default function AllianceScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <HeaderKicker>ALLIANCE</HeaderKicker>
         {isMember ? (
           <>
+            <View style={styles.headerTopRow}>
+              <View style={{ flex: 1 }} />
+              <View style={styles.shortNameBox}>
+                <Text style={styles.shortNameText}>{myAlliance?.short_name ?? '—'}</Text>
+              </View>
+            </View>
+
             <Text style={styles.headerTitle}>{myAlliance?.name ?? 'Alliance'}</Text>
-            <Text style={styles.headerSubtitle}>
-              {myAlliance
-                ? `[${myAlliance.short_name}] · ${myAlliance.city ?? '—'} · ${myAlliance.memberCount} members`
-                : '—'}
+
+            <Text style={styles.headerCity}>
+              {'OF ' + (myAlliance?.city ?? '—').toUpperCase() + ' · REALM 01'}
             </Text>
+
+            <View style={styles.headerDivider} />
+
+            <View style={styles.headerStatsRow}>
+              <Text style={styles.headerStat}>
+                <Text style={styles.headerStatLabel}>ROSTER </Text>
+                <Text style={styles.headerStatValue}>{myAlliance?.memberCount ?? '—'} / 20</Text>
+              </Text>
+              <Text style={styles.headerStat}>
+                <Text style={styles.headerStatLabel}>TERRITORIES </Text>
+                <Text style={styles.headerStatValue}>
+                  {territoryCount !== null ? String(territoryCount) : '—'}
+                </Text>
+              </Text>
+            </View>
           </>
         ) : (
           <>
-            <Text style={styles.headerTitle}>No Alliance</Text>
+            <HeaderKicker>ALLIANCE</HeaderKicker>
+            <Text style={styles.headerTitle}>NO ALLIANCE</Text>
             <Text style={styles.headerSubtitle}>You are unaffiliated</Text>
           </>
         )}
       </View>
 
       {isMember ? (
-        <MemberContent myAlliance={myAlliance} playerId={playerRow?.id} />
+        <MemberContent myAlliance={myAlliance} playerId={playerRow?.id} territoryCount={territoryCount} />
       ) : (
         <NonMemberContent
           alliances={allianceList}
@@ -401,36 +423,85 @@ export default function AllianceScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: INK,
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
     paddingBottom: 12,
   },
   headerKicker: {
-    color: '#555',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    color: SLATE2,
   },
   headerTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 40,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: -0.02,
     marginTop: 8,
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '600',
+    lineHeight: 44,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  shortNameBox: {
+    borderWidth: 1,
+    borderColor: CLAIM,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 0,
+  },
+  shortNameText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: CLAIM,
+    letterSpacing: 1.4,
+  },
+  headerCity: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: SLATE2,
+    letterSpacing: 1.4,
+    marginTop: 6,
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  headerStatsRow: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  headerStat: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
+  },
+  headerStatLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
+    letterSpacing: 1.4,
+  },
+  headerStatValue: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: BONE,
   },
   headerSubtitle: {
     marginTop: 6,
-    color: '#666',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    fontWeight: '600',
-  },
-  accentBar: {
-    height: 4,
-    width: '100%',
-    backgroundColor: ORANGE,
-    borderRadius: 2,
+    color: SLATE2,
   },
   scroll: {
     flex: 1,
@@ -448,173 +519,191 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 12,
+    height: 0,
+    opacity: 0,
   },
   emptyTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Archivo_900Black',
+    fontSize: 28,
+    color: BONE,
+    textTransform: 'uppercase',
     textAlign: 'center',
   },
   emptySubtitle: {
     marginTop: 10,
-    color: '#555',
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
     textAlign: 'center',
-    lineHeight: 16.5,
+    lineHeight: 20,
     paddingHorizontal: 8,
   },
   btnPrimary: {
     marginTop: 18,
     width: '100%',
-    backgroundColor: ORANGE,
-    borderRadius: 12,
+    backgroundColor: CLAIM,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnPrimaryText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 12,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
   btnMuted: {
     marginTop: 10,
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnMutedText: {
-    color: '#aaa',
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
   allianceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
     padding: 10,
     gap: 10,
   },
   allianceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 0,
+    height: 0,
+    opacity: 0,
   },
   allianceCardName: {
-    color: '#ccc',
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: BONE,
   },
   allianceCardMeta: {
     marginTop: 4,
-    color: '#555',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
-    fontWeight: '600',
+    color: SLATE2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
   allianceCardMembers: {
-    color: '#666',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
-    fontWeight: '600',
+    color: SLATE2,
   },
-  statRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-  },
-  statValue: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  statLabel: {
-    marginTop: 6,
-    color: '#555',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  warChest: {
-    marginTop: 14,
+  sectionLabelRow: {
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(237,147,50,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(237,147,50,0.2)',
-    borderRadius: 8,
-    padding: 10,
-  },
-  warChestLabel: {
-    color: '#555',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  warChestValue: {
-    marginTop: 4,
-    color: ORANGE,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  warChestDonor: {
-    marginTop: 4,
-    color: '#555',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  warChestIcon: {
-    fontSize: 20,
   },
   sectionLabel: {
-    marginTop: 16,
-    color: '#555',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+  },
+  sectionRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
+    alignSelf: 'center',
+    marginLeft: 8,
   },
   missionCard: {
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-    padding: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: ORANGE,
+    marginTop: 16,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
+    padding: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: ALLIANCE_GREEN,
+  },
+  missionTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  missionStatusLabel: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    color: ALLIANCE_GREEN,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  missionTimer: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    letterSpacing: 1.4,
   },
   missionTitle: {
-    color: '#ccc',
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: BONE,
+    lineHeight: 22,
   },
-  missionSub: {
-    marginTop: 6,
-    color: '#555',
+  missionDesc: {
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
-    fontWeight: '600',
+    color: SLATE2,
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  missionProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginTop: 12,
+  },
+  missionProgressValue: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    color: BONE,
+  },
+  missionProgressTotal: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
   },
   progressTrack: {
-    marginTop: 10,
-    width: '100%',
-    height: 3,
-    backgroundColor: '#222',
-    borderRadius: 2,
-    overflow: 'hidden',
+    marginTop: 8,
+    height: 2,
+    backgroundColor: HAIRLINE_STRONG,
+    borderRadius: 0,
   },
   progressFill: {
-    width: '60%',
     height: '100%',
-    backgroundColor: ORANGE,
-    borderRadius: 2,
+    backgroundColor: ALLIANCE_GREEN,
+    borderRadius: 0,
+  },
+  missionReward: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    letterSpacing: 1.4,
+    marginTop: 12,
+    textTransform: 'uppercase',
+  },
+  rosterWrap: {
+    marginTop: 10,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    padding: 16,
   },
   rosterRow: {
     flexDirection: 'row',
@@ -624,7 +713,7 @@ const styles = StyleSheet.create({
   },
   rosterRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: HAIRLINE,
   },
   rosterLeft: {
     flexDirection: 'row',
@@ -633,32 +722,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rosterAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(237,147,50,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 0,
+    height: 0,
+    opacity: 0,
   },
   rosterInitials: {
-    color: ORANGE,
-    fontSize: 10,
-    fontWeight: '600',
+    width: 0,
+    height: 0,
+    opacity: 0,
   },
   rosterName: {
-    color: '#ccc',
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: BONE,
   },
   rosterRole: {
     marginTop: 2,
-    color: '#555',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
-    fontWeight: '600',
+    color: SLATE2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
   rosterSteps: {
-    color: '#666',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    fontWeight: '600',
+    color: SLATE2,
   },
 });
