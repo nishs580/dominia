@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 21, 2026
+Last updated: April 22, 2026
 
 ---
 
@@ -35,6 +35,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
 | Animations | react-native-svg | ✓ Installed |
+| Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
 | Backend (future) | Node.js + Fastify + PostGIS | Not started |
 | Real-time (future) | Ably | Not started |
@@ -105,23 +106,23 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 
 | Screen | Status | Notes |
 |---|---|---|
-| Navigation (4 bottom tabs) | ✓ Done | Map, Activity, Alliance, Profile |
-| Map screen | ✓ Done | Colours: green (own), purple (alliance), red (enemy), grey (unclaimed). TerritorySheet gated correctly. Cap enforcement: grey disabled block with message when at cap, Claim button hidden. |
-| Activity screen | ✓ Done | Daily challenges card (Easy/Medium/Hard), completion state, XP award, Supabase writes. Stats pills. Weekly chart. Active Claim card removed. |
-| Profile screen | ✓ Done | Real XP, level title (no level number shown), streak pill (current + best), territory cap (held/cap), territory list |
-| Alliance screen | ✓ Done | Member/non-member from Supabase, real roster + territory count, create + join flows working |
-| Active Claim screen | ✓ Done | DEV_MODE=true, mode param (claim/contest), opponent name + attacker alliance_id fetched on load |
-| Claim Success screen | ✓ Done | Uses playerId from nav params, sets owner_id + alliance_id in Supabase |
-| Contest Result screen | ✓ Done | 4 states via route.params, writes owner_id + alliance_id on attack_won |
-| Sign In screen | ✓ Done | Sign in + sign up, passes playerId through nav params |
+| Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
+| Map screen | ✓ Done | Functional. Not yet branded. |
+| Activity screen | ✓ Done | Functional. Not yet branded. |
+| Profile screen | ✓ Branded | Dark theme, frozen COMMANDER header, 2-col stat grid, XP progress card, territory rows, legacy titles section (hardcoded), settings card. Influence section missing — add next session. |
+| Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, OF CITY · REALM, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
+| War Room screen | ✓ Done | New screen. Attack day countdown, war chest 2-col grid with SVG glyphs, morale abilities list with ACTIVATE buttons. Values hardcoded. |
+| Active Claim screen | ✓ Done | Functional. Not yet branded. |
+| Claim Success screen | ✓ Done | Functional. Not yet branded. |
+| Contest Result screen | ✓ Done | Functional. Not yet branded. |
+| Sign In screen | ✓ Done | Functional. Not yet branded. |
+| Onboarding screen | ✓ Done | Functional. Not yet branded. |
+| Create Alliance screen | ✓ Done | Functional. Not yet branded. |
+| Alliance Joined screen | ✓ Done | Functional. Not yet branded. |
 | Username screen | ✓ Done | Uses playerId from nav params |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
-| Onboarding screen | ✓ Done | 5-step flow, uses playerId from nav params, home pin on real Mapbox map |
-| Create Alliance screen | ✓ Done | 3-step founding flow — writes to alliances, updates players + territories |
-| Alliance Joined screen | ✓ Done | Reads real alliance name, code, city from nav params |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
-| Defender flow | ○ Deferred | Needs Ably real-time layer — not worth building a throwaway version. Revisit when backend is started. |
-| Branding + UI polish | ○ Next | Brand guidelines (dominia-brand-guidelines-v1-1) and mockups (dominia-mockups-v4) ready. Starting next session. |
+| Defender flow | ○ Deferred | Needs Ably real-time layer — revisit when backend is started. |
 
 ---
 
@@ -129,27 +130,30 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 
 | File | Purpose |
 |---|---|
-| `App.js` | Root stack navigator, ClerkProvider (hardcoded publishable key), all screen registrations |
+| `App.js` | Root stack navigator, font loading (useFonts + SplashScreen guard), ClerkProvider, all screen registrations |
 | `components/AuthGate.js` | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
+| `components/ResourceGlyphs.js` | 6 SVG glyph components: Stone, Iron, Gold, Shield, Morale, Influence — rendered at 28px in war chest |
+| `lib/theme.js` | All Dominia design tokens — colours, fonts, fontSize scale, spacing, radius, borders, motion durations |
 | `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
 | `lib/level.js` | LEVELS array, getLevelForXp, getNextLevel, getXpProgress, territoryCap per level |
-| `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day, writes current_streak/longest_streak/last_active_date |
+| `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, HUD alliance badge, TerritorySheet with button gating, cap enforcement (getLevelForXp + allFeatures green count) |
-| `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params |
-| `screens/UsernameScreen.js` | Uses playerId from nav params (not useAuth) |
-| `screens/OnboardingScreen.js` | 5 steps, uses playerId from nav params, home pin Mapbox map, saves to Supabase |
-| `screens/AllianceScreen.js` | NonMemberContent (join flow), MemberContent (real roster + territory count), CreateAlliance nav |
-| `screens/CreateAllianceScreen.js` | 3-step founding flow — writes to alliances, updates players + territories |
-| `screens/AllianceJoinedScreen.js` | Reads real name/code/city from route.params |
-| `screens/ProfileScreen.js` | Real XP + level title from lib/level.js, streak pill (current + best) from players table, territory cap (held/cap), territory list, sign out |
-| `screens/ActiveClaimScreen.js` | DEV_MODE=true at top, mode param (claim/contest), opponentNameRef + attackerAllianceRef fetched on screen load |
-| `screens/ClaimSuccessScreen.js` | Uses playerId from nav params, sets owner_id + alliance_id in Supabase |
-| `screens/ContestResultScreen.js` | 4 states via route.params, writes owner_id + alliance_id on attack_won |
-| `screens/ActivityScreen.js` | Daily challenges card (Easy/Medium/Hard), completion state, XP award, Supabase writes to player_challenges, streak trigger, stats pills, weekly chart |
+| `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, TerritorySheet with button gating + cap enforcement. Not yet branded. |
+| `screens/ActivityScreen.js` | Daily challenges, XP writes, streak trigger, weekly chart. Not yet branded. |
+| `screens/ProfileScreen.js` | Fully branded. Frozen COMMANDER header, stat grid, XP progress, territory rows, legacy titles (hardcoded), settings. Missing Influence. |
+| `screens/AllianceScreen.js` | Fully branded. Member/non-member states, roster, create + join flows, Enter War Room button. |
+| `screens/WarRoomScreen.js` | New screen. Attack day countdown, war chest grid with SVG glyphs, morale abilities. All values hardcoded. |
+| `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params. Not yet branded. |
+| `screens/UsernameScreen.js` | Uses playerId from nav params. Not yet branded. |
+| `screens/OnboardingScreen.js` | 5-step flow, home pin on Mapbox map. Not yet branded. |
+| `screens/CreateAllianceScreen.js` | 3-step founding flow. Not yet branded. |
+| `screens/AllianceJoinedScreen.js` | Reads name/code/city from route.params. Not yet branded. |
+| `screens/ActiveClaimScreen.js` | DEV_MODE=true, mode param (claim/contest). Not yet branded. |
+| `screens/ClaimSuccessScreen.js` | Sets owner_id + alliance_id in Supabase. Not yet branded. |
+| `screens/ContestResultScreen.js` | 4 states, writes on attack_won. Not yet branded. |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
 | `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26) |
@@ -206,9 +210,12 @@ git push
 |---|---|
 | Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev (was causing status: missing_requirements). Must re-enable before production. |
-| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. `react-native-health-connect` tried and removed — native crash on load. Steps currently hardcoded to 0. Possible fallback: `expo-sensors Pedometer.watchStepCount()`. DEV_MODE challenges use manual Complete button for now. |
+| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. Fallback: `expo-sensors Pedometer.watchStepCount()` not yet tried. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
+| Influence missing from Profile screen | Not added to stat grid or XP section — first task next session. |
+| War Room values all hardcoded | War chest resource values, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons (Founder/Marshal only). |
+| player_number hardcoded as #0001 | Sequential player_number column in Supabase not yet added. |
 
 ---
 
@@ -226,14 +233,23 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Apply Dominia branding — fonts, colours, component styles — starting with design tokens and working screen by screen. Brand guidelines (`dominia-brand-guidelines-v1-1`) and mockups (`dominia-mockups-v4`) are in the project files.
+**Immediate:** Add Influence to Profile screen stat grid and XP section, then brand the Activity screen.
 
-**Backlog (in rough order):**
-1. Branding + UI polish
-2. Real step tracking — try expo-sensors Pedometer.watchStepCount() as fallback (needs EAS build budget)
-3. Onboarding home pin 500m verification
-4. Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
-5. Defender flow — revisit once Ably is built
+**Branding order (in progress):**
+1. ✓ Tab bar
+2. ✓ Profile screen
+3. ✓ Alliance screen + War Room
+4. Activity screen — next
+5. Map screen
+6. Active Claim, Claim Success, Contest Result
+7. Sign In, Onboarding, Create Alliance, Alliance Joined
+
+**Other backlog:**
+- Wire War Room to real Supabase data (war chest resources, contributors, role gating for ACTIVATE)
+- Real step tracking — try expo-sensors Pedometer.watchStepCount()
+- Onboarding home pin 500m verification
+- Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
+- Defender flow — revisit once Ably is built
 
 ---
 
@@ -281,6 +297,13 @@ git push
 | heldCount derived from allFeatures color property | No extra Supabase query needed for cap check — reuses green (#1D9E75) feature count already on screen |
 | Territory tier values must be lowercase in DB | Check constraint enforces small/medium/large — capitalised values fail silently on INSERT |
 | 10 test territories chosen for clean non-overlapping spread | Jordaan + De Pijp replaced with Plantage + Oud-West due to polygon overlap with existing territories |
+| Cards used selectively in branded screens | Only status/action elements get INK2 box. Roster, contributors, territory rows sit openly on INK with hairline dividers — avoids monotony |
+| Four tabs kept (not three) | Brand brief's "three tabs" was an early spec — didn't match what was built |
+| War Room as separate screen from Alliance | Alliance = identity and people. War Room = strategy and action |
+| Enter War Room button is a ghost button | Transparent background, Claim border. Claim solid fill reserved for primary join/confirm actions only |
+| Legacy Titles section hardcoded in Profile | Makes player feel they are on a journey — real data wiring deferred |
+| player_number hardcoded as #0001 | player_number auto-increment column in Supabase deferred |
+| COMMANDER header frozen (doesn't scroll) | Identity element should always be visible — not part of scrollable content |
 
 ---
 
