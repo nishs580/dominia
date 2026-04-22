@@ -168,7 +168,13 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
 }
 
 function MemberContent({ myAlliance, playerId, territoryCount }) {
+  const navigation = useNavigation();
   const [roster, setRoster] = useState([]);
+  const TOP_CONTRIBUTORS = [
+    { rank: '1.', name: 'NISH_S', role: 'FOUNDR', streak: 'UNBROKEN 30D', steps: '24,210' },
+    { rank: '2.', name: 'RUBIK', role: 'MEMBER', streak: 'RELIABLE 14D', steps: '18,432' },
+    { rank: '3.', name: 'MAYA-K', role: 'MEMBER', streak: 'COMMITTED 6D', steps: '12,104' },
+  ];
 
   useEffect(() => {
     if (!myAlliance?.id) {
@@ -207,6 +213,11 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
         contentContainerStyle={styles.memberScrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.sectionLabelRow}>
+          <Text style={styles.sectionLabelText}>THIS WEEK</Text>
+          <Text style={styles.sectionLabelAccent}> · COLLECTIVE MISSION</Text>
+          <View style={styles.sectionHairline} />
+        </View>
         <View style={styles.missionCard}>
           <View style={styles.missionTopRow}>
             <Text style={styles.missionStatusLabel}>MISSION IN PROGRESS</Text>
@@ -224,22 +235,51 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
           <Text style={styles.missionReward}>REWARD — +40 GOLD EACH · +300 XP</Text>
         </View>
 
-        <View style={[styles.sectionLabelRow, { marginTop: 18 }]}>
-          <Text style={styles.sectionLabel}>ROSTER</Text>
-          <View style={styles.sectionRule} />
+        <View style={styles.sectionLabelRow}>
+          <Text style={styles.sectionLabelText}>TOP CONTRIBUTORS</Text>
+          <Text style={styles.sectionLabelAccent}> · THIS WEEK</Text>
+          <View style={styles.sectionHairline} />
         </View>
-        <View style={styles.rosterWrap}>
-          {roster.map((m, i) => (
-            <RosterRow
-              key={m.id}
-              initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
-              name={m.username ?? '—'}
-              role={m.id === myAlliance.founder_id ? 'Founder' : 'Member'}
-              steps="—"
-              showBorder={i < roster.length - 1}
-            />
-          ))}
+
+        {TOP_CONTRIBUTORS.map((c, i) => (
+          <React.Fragment key={c.name}>
+            <View style={styles.contributorRow}>
+              <Text style={styles.contributorRank}>{c.rank}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.contributorName}>{c.name}</Text>
+                <Text style={styles.contributorMeta}>
+                  {c.role} · {c.streak}
+                </Text>
+              </View>
+              <Text style={styles.contributorSteps}>{c.steps}</Text>
+            </View>
+            {i < TOP_CONTRIBUTORS.length - 1 && <View style={styles.rowDivider} />}
+          </React.Fragment>
+        ))}
+
+        <View style={styles.sectionLabelRow}>
+          <Text style={styles.sectionLabelText}>ROSTER</Text>
+          <Text style={styles.sectionLabelAccent}> · {roster.length} ACTIVE</Text>
+          <View style={styles.sectionHairline} />
+          <Text style={styles.sectionLabelRight}>RESETS MON 00:00</Text>
         </View>
+        {roster.map((m, i) => (
+          <RosterRow
+            key={m.id}
+            initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
+            name={m.username ?? '—'}
+            role={m.id === myAlliance.founder_id ? 'FOUNDR' : 'MEMBER'}
+            steps="—"
+            showBorder={i < roster.length - 1}
+          />
+        ))}
+
+        <Pressable
+          style={({ pressed }) => [styles.warRoomBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => navigation.navigate('WarRoom')}
+        >
+          <Text style={styles.warRoomBtnText}>ENTER WAR ROOM →</Text>
+        </Pressable>
       </ScrollView>
     </>
   );
@@ -603,22 +643,35 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   sectionLabelRow: {
-    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 24,
   },
-  sectionLabel: {
+  sectionLabelText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
     color: SLATE2,
-    textTransform: 'uppercase',
     letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
-  sectionRule: {
+  sectionLabelAccent: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    color: BONE,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  sectionHairline: {
     flex: 1,
     height: 1,
     backgroundColor: HAIRLINE_STRONG,
-    alignSelf: 'center',
+    marginLeft: 8,
+  },
+  sectionLabelRight: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    letterSpacing: 1.4,
     marginLeft: 8,
   },
   missionCard: {
@@ -698,18 +751,46 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textTransform: 'uppercase',
   },
-  rosterWrap: {
-    marginTop: 10,
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    padding: 16,
+  contributorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 12,
+  },
+  contributorRank: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: CLAIM,
+    width: 20,
+  },
+  contributorName: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  contributorMeta: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginTop: 3,
+  },
+  contributorSteps: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    color: BONE,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: HAIRLINE,
   },
   rosterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 14,
+    gap: 12,
   },
   rosterRowBorder: {
     borderBottomWidth: 1,
@@ -735,18 +816,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     color: BONE,
+    textTransform: 'uppercase',
   },
   rosterRole: {
-    marginTop: 2,
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
-    color: SLATE2,
-    textTransform: 'uppercase',
+    color: CLAIM,
     letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    width: 52,
   },
   rosterSteps: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    color: SLATE2,
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    color: BONE,
+  },
+  warRoomBtn: {
+    marginTop: 32,
+    borderWidth: 1,
+    borderColor: '#D64525',
+    borderRadius: 0,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  warRoomBtnText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 12,
+    color: '#D64525',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
 });

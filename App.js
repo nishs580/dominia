@@ -17,6 +17,7 @@ import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
 import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
+import WarRoomScreen from './screens/WarRoomScreen';
 import AuthGate from './components/AuthGate';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -207,6 +208,11 @@ export default function App() {
           <Stack.Screen name="Username" component={UsernameScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen
+            name="WarRoom"
+            component={WarRoomScreen}
+            options={{ headerShown: false }}
+          />
           <Stack.Screen name="ActiveClaim" component={ActiveClaimScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="ClaimSuccessScreen" component={ClaimSuccessScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="ContestResultScreen" component={ContestResultScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />

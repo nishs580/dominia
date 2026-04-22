@@ -170,7 +170,7 @@ export default function ProfileScreen() {
   }, [next?.title]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
       {!loading && playerRow ? (
         <View style={styles.headerBlock}>
           <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
@@ -188,21 +188,22 @@ export default function ProfileScreen() {
         </View>
       ) : null}
 
-      {loading ? (
-        <View style={styles.loadingBlock}>
-          <ActivityIndicator size="large" color={SLATE2} />
-          <Text style={styles.loadingText}>Loading profile…</Text>
-        </View>
-      ) : null}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        {loading ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="large" color={SLATE2} />
+            <Text style={styles.loadingText}>Loading profile…</Text>
+          </View>
+        ) : null}
 
-      {!loading && profileError ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{profileError}</Text>
-        </View>
-      ) : null}
+        {!loading && profileError ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{profileError}</Text>
+          </View>
+        ) : null}
 
-      {!loading && playerRow ? (
-        <>
+        {!loading && playerRow ? (
+          <>
           <View style={styles.statGrid}>
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>STREAK</Text>
@@ -244,8 +245,10 @@ export default function ProfileScreen() {
             <Text style={styles.unlockText}>{unlockText}</Text>
           </View>
 
-          <View style={styles.card}>
-            <SectionDivider label="YOUR TERRITORIES" />
+          <View>
+            <View style={{ marginTop: 24 }}>
+              <SectionDivider label="YOUR TERRITORIES" />
+            </View>
             <View style={styles.list}>
               {ownedTerritories.length === 0 ? (
                 <Text style={styles.emptyText}>No territories held.</Text>
@@ -259,8 +262,10 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.card}>
-            <SectionDivider label={`LEGACY TITLES · ${FAKE_LEGACY_TITLES.length}`} />
+          <View>
+            <View style={{ marginTop: 24 }}>
+              <SectionDivider label={`LEGACY TITLES · ${FAKE_LEGACY_TITLES.length}`} />
+            </View>
             <View style={styles.legacyList}>
               {FAKE_LEGACY_TITLES.map((t, index) => (
                 <View
@@ -277,7 +282,7 @@ export default function ProfileScreen() {
       ) : null}
 
       {!loading ? (
-        <View style={styles.card}>
+        <View style={[styles.card, { marginTop: 32 }]}>
           <SectionDivider label="SETTINGS" />
           <View style={styles.settingsList}>
             <SettingsRow label="Notification settings" />
@@ -308,7 +313,8 @@ export default function ProfileScreen() {
           </View>
         </View>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -319,12 +325,12 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
     paddingBottom: 28,
   },
   headerBlock: {
-    paddingTop: 0,
-    paddingBottom: 12,
+    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   commanderLabel: {
     fontFamily: 'GeistMono_400Regular',
@@ -499,7 +505,7 @@ const styles = StyleSheet.create({
   },
   legacyEntry: {},
   legacyEntrySpacing: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   legacyTitle: {
     fontFamily: 'Archivo_900Black',
@@ -521,6 +527,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+    paddingVertical: 4,
   },
   territoryName: {
     flex: 1,
@@ -540,7 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 6,
   },
   settingsLabel: {
     fontFamily: 'Inter_400Regular',
