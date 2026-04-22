@@ -18,6 +18,25 @@ import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import AuthGate from './components/AuthGate';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import {
+  Archivo_700Bold,
+  Archivo_800ExtraBold,
+  Archivo_900Black,
+} from '@expo-google-fonts/archivo';
+import {
+  GeistMono_300Light,
+  GeistMono_400Regular,
+  GeistMono_500Medium,
+} from '@expo-google-fonts/geist-mono';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+} from '@expo-google-fonts/inter';
+
+SplashScreen.preventAutoHideAsync();
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -32,25 +51,122 @@ function PlaceholderScreen({ label }) {
 
 const TabNavigator = () => {
   return (
-    <Tab.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
+    <Tab.Navigator
+      screenOptions={{
+        tabBarStyle: {
+          backgroundColor: '#0E1014',
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(242,238,230,0.16)',
+          elevation: 0,
+        },
+        tabBarActiveTintColor: '#F2EEE6',
+        tabBarInactiveTintColor: '#5C6068',
+        tabBarShowIcon: false,
+        tabBarLabelStyle: {
+          fontFamily: 'GeistMono_400Regular',
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: 1.4,
+          includeFontPadding: false,
+          marginTop: -14,
+        },
+        headerShown: false,
+      }}
+    >
       <Tab.Screen
         name="Map"
-        options={{ title: 'Map' }}
+        options={{
+          tabBarLabel: ({ focused, color }) => (
+            <Text
+              style={{
+                fontFamily: focused
+                  ? 'GeistMono_500Medium'
+                  : 'GeistMono_400Regular',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 1.4,
+                includeFontPadding: false,
+                marginTop: -14,
+                color,
+              }}
+            >
+              MAP
+            </Text>
+          ),
+          tabBarIcon: () => null,
+        }}
         component={MapScreen}
       />
       <Tab.Screen
         name="Activity"
-        options={{ title: 'Activity' }}
+        options={{
+          tabBarLabel: ({ focused, color }) => (
+            <Text
+              style={{
+                fontFamily: focused
+                  ? 'GeistMono_500Medium'
+                  : 'GeistMono_400Regular',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 1.4,
+                includeFontPadding: false,
+                marginTop: -14,
+                color,
+              }}
+            >
+              ACTIVITY
+            </Text>
+          ),
+          tabBarIcon: () => null,
+        }}
         component={ActivityScreen}
       />
       <Tab.Screen
         name="Alliance"
-        options={{ title: 'Alliance' }}
+        options={{
+          tabBarLabel: ({ focused, color }) => (
+            <Text
+              style={{
+                fontFamily: focused
+                  ? 'GeistMono_500Medium'
+                  : 'GeistMono_400Regular',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 1.4,
+                includeFontPadding: false,
+                marginTop: -14,
+                color,
+              }}
+            >
+              ALLIANCE
+            </Text>
+          ),
+          tabBarIcon: () => null,
+        }}
         component={AllianceScreen}
       />
       <Tab.Screen
         name="Profile"
-        options={{ title: 'Profile' }}
+        options={{
+          tabBarLabel: ({ focused, color }) => (
+            <Text
+              style={{
+                fontFamily: focused
+                  ? 'GeistMono_500Medium'
+                  : 'GeistMono_400Regular',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 1.4,
+                includeFontPadding: false,
+                marginTop: -14,
+                color,
+              }}
+            >
+              PROFILE
+            </Text>
+          ),
+          tabBarIcon: () => null,
+        }}
         component={ProfileScreen}
       />
     </Tab.Navigator>
@@ -58,6 +174,27 @@ const TabNavigator = () => {
 };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Archivo_700Bold,
+    Archivo_800ExtraBold,
+    Archivo_900Black,
+    GeistMono_300Light,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
+    Inter_400Regular,
+    Inter_500Medium,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <ClerkProvider
       publishableKey="pk_test_bGVuaWVudC1nb29zZS01My5jbGVyay5hY2NvdW50cy5kZXYk"

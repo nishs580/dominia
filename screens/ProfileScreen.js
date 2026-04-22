@@ -1,48 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getLevelForXp, getXpProgress } from '../lib/level';
+import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 
-const ACCENT = '#1D9E75';
-const ALLIANCE = '#534AB7';
-const BG = '#F6F8F7';
-const CARD = '#FFFFFF';
-const TEXT = '#0F172A';
-const MUTED = '#64748B';
-const BORDER = '#E5E7EB';
+const CLAIM = '#D64525';
+const INK = '#0E1014';
+const INK2 = '#1A1D24';
+const INK3 = '#252932';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE2 = '#8B8F98';
+const HAIRLINE = 'rgba(242,238,230,0.08)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function ProgressBar({ progress, tint = ACCENT }) {
-  const pct = clamp(progress, 0, 1) * 100;
+function SectionDivider({ label }) {
   return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: tint }]} />
-    </View>
-  );
-}
-
-function Badge({ text, variant }) {
-  const isAlliance = variant === 'alliance';
-  const bg = isAlliance ? '#F0EFFF' : '#E8F6F1';
-  const border = isAlliance ? '#DAD7FF' : '#C7EADF';
-  const color = isAlliance ? ALLIANCE : ACCENT;
-  return (
-    <View style={[styles.badge, { backgroundColor: bg, borderColor: border }]}>
-      <Text style={[styles.badgeText, { color }]}>{text}</Text>
-    </View>
-  );
-}
-
-function StatCard({ label, value }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.sectionDivider}>
+      <View style={styles.sectionDividerLine} />
+      <Text style={styles.sectionDividerLabel}>{label}</Text>
+      <View style={styles.sectionDividerLine} />
     </View>
   );
 }
@@ -51,12 +34,8 @@ function OwnedTerritoryRow({ name, tier }) {
   const tierLabel = tier ?? '—';
   return (
     <View style={styles.territoryRow}>
-      <View style={styles.territoryLeft}>
-        <Text style={styles.territoryName}>{name}</Text>
-      </View>
-      <View style={[styles.statusPill, { backgroundColor: '#E8F6F1', borderColor: '#C7EADF' }]}>
-        <Text style={[styles.statusText, { color: ACCENT }]}>{tierLabel}</Text>
-      </View>
+      <Text style={styles.territoryName}>{name}</Text>
+      <Text style={styles.territoryTier}>{tierLabel}</Text>
     </View>
   );
 }
@@ -68,13 +47,6 @@ function SettingsRow({ label }) {
       <Text style={styles.settingsChevron}>›</Text>
     </View>
   );
-}
-
-function rankLabelForLevel(level) {
-  const n = Math.max(1, Math.floor(Number(level) || 1));
-  if (n === 1) return 'Scout';
-  if (n === 2) return 'Lv 2 Pathfinder';
-  return `Lv ${n}`;
 }
 
 export default function ProfileScreen() {
@@ -177,6 +149,11 @@ export default function ProfileScreen() {
 
   const playerName = playerRow?.username ?? '—';
   const rankBadge = current?.title ?? getLevelForXp(xp).title;
+  const FAKE_LEGACY_TITLES = [
+    { title: 'GROUNDBREAKER', descriptor: 'DAY 32 · 2.3.2026 · 30 TERRITORY-DAYS' },
+    { title: 'THE IRON WEEK', descriptor: 'DAY 21 · 21.2.2026 · 21-DAY STREAK' },
+    { title: 'FIRST BLOOD', descriptor: 'DAY 1 · 1.2.2026 · FIRST CLAIM IN THE REALM' },
+  ];
 
   const unlockText = useMemo(() => {
     const title = next?.title;
@@ -194,16 +171,26 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <Text style={styles.headerSubtitle}>
-          {today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-        </Text>
-      </View>
+      {!loading && playerRow ? (
+        <View style={styles.headerBlock}>
+          <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
+          <Text style={styles.commanderName}>{playerName}</Text>
+          <Text style={styles.rankLine}>
+            <Text style={styles.rankTitle}>{rankBadge}</Text>
+            <Text style={styles.rankSeparator}> · </Text>
+            {allianceName ? (
+              <Text style={styles.rankAllianceClaim}>{allianceName}</Text>
+            ) : (
+              <Text style={styles.rankAlliance}>UNAFFILIATED</Text>
+            )}
+          </Text>
+          <View style={styles.hairlineStrong} />
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.loadingBlock}>
-          <ActivityIndicator size="large" color={ALLIANCE} />
+          <ActivityIndicator size="large" color={SLATE2} />
           <Text style={styles.loadingText}>Loading profile…</Text>
         </View>
       ) : null}
@@ -216,60 +203,52 @@ export default function ProfileScreen() {
 
       {!loading && playerRow ? (
         <>
+          <View style={styles.statGrid}>
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>STREAK</Text>
+              <Text style={styles.statValue}>{currentStreak} days</Text>
+            </View>
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>BEST STREAK</Text>
+              <Text style={styles.statValue}>{longestStreak} days</Text>
+            </View>
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>TERRITORIES</Text>
+              <Text style={styles.statValue}>
+                {ownedTerritories.length} / {territoryCap}
+              </Text>
+            </View>
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>SIEGE XP</Text>
+              <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
+            </View>
+          </View>
+
           <View style={styles.card}>
-            <View style={styles.identityTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.playerName}>{playerName}</Text>
-                <View style={styles.identitySubRow}>
-                  {allianceName ? <Badge text={allianceName} variant="alliance" /> : null}
-                  <Badge text={rankBadge} />
-                </View>
-              </View>
-              <View style={styles.streakPill}>
-                <Text style={styles.streakValue}>{currentStreak}</Text>
-                <Text style={styles.streakLabel}>day streak</Text>
-                <View style={styles.streakDivider} />
-                <Text style={styles.streakBest}>Best: {longestStreak}</Text>
-              </View>
-            </View>
-
-            <View style={styles.identityDivider} />
-
-            <View style={styles.xpTopRow}>
-              <Text style={styles.cardTitle}>XP progress</Text>
-              <Text style={styles.xpPct}>{xpPct}%</Text>
-            </View>
-            <Text style={styles.xpLine}>
-              <Text style={styles.xpStrong}>{xpIntoLevel}</Text>
-              <Text style={styles.xpMuted}> / {xpNeeded} XP</Text>
-              <Text style={styles.xpMuted}> • next: </Text>
-              <Text style={[styles.xpStrong, { color: ALLIANCE }]}>{next?.title ?? 'Max level'}</Text>
+            <SectionDivider label="XP PROGRESS" />
+            <Text style={styles.xpNumbers}>
+              {xpIntoLevel} / {xpNeeded} XP
             </Text>
-
-            <ProgressBar progress={xpProgress} tint={ALLIANCE} />
-
-            <View style={styles.unlockCard}>
-              <Text style={styles.unlockTitle}>Next: {next?.title ?? 'Dominator'}</Text>
-              <Text style={styles.unlockText}>{unlockText}</Text>
+            <Text style={styles.nextLine}>
+              <Text style={styles.nextPrefix}>NEXT · </Text>
+              <Text style={styles.nextTitle}>{next?.title ?? 'Max level'}</Text>
+            </Text>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${clamp(xpProgress, 0, 1) * 100}%` },
+                ]}
+              />
             </View>
-          </View>
-
-          <View style={styles.statsGrid}>
-            <StatCard label="Territories held" value={`${ownedTerritories.length} / ${territoryCap}`} />
-            <StatCard label="Total claimed" value="11" />
-            <StatCard label="Distance walked" value="47km" />
-            <StatCard label="Contests won" value="0" />
+            <Text style={styles.unlockText}>{unlockText}</Text>
           </View>
 
           <View style={styles.card}>
-            <View style={styles.cardTopRow}>
-              <Text style={styles.cardTitle}>Your territories</Text>
-              <Text style={styles.cardHint}>Tier</Text>
-            </View>
-
+            <SectionDivider label="YOUR TERRITORIES" />
             <View style={styles.list}>
               {ownedTerritories.length === 0 ? (
-                <Text style={styles.emptyTerritories}>No territories yet. Claim one on the map.</Text>
+                <Text style={styles.emptyText}>No territories held.</Text>
               ) : null}
               {ownedTerritories.map((t, index) => (
                 <React.Fragment key={t.id ?? `${t.territory_name}-${index}`}>
@@ -279,39 +258,56 @@ export default function ProfileScreen() {
               ))}
             </View>
           </View>
+
+          <View style={styles.card}>
+            <SectionDivider label={`LEGACY TITLES · ${FAKE_LEGACY_TITLES.length}`} />
+            <View style={styles.legacyList}>
+              {FAKE_LEGACY_TITLES.map((t, index) => (
+                <View
+                  key={`${t.title}-${index}`}
+                  style={[styles.legacyEntry, index < FAKE_LEGACY_TITLES.length - 1 ? styles.legacyEntrySpacing : null]}
+                >
+                  <Text style={styles.legacyTitle}>{t.title}</Text>
+                  <Text style={styles.legacyDescriptor}>{t.descriptor}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Settings</Text>
-        <View style={styles.settingsList}>
-          <SettingsRow label="Notification settings" />
-          <View style={styles.listDivider} />
-          <Pressable
-            onPress={() => {
-              Alert.alert(
-                'Sign out',
-                'Are you sure you want to sign out?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Sign out',
-                    style: 'destructive',
-                    onPress: async () => {
-                      await signOut();
-                      navigation.replace('SignIn');
+      {!loading ? (
+        <View style={styles.card}>
+          <SectionDivider label="SETTINGS" />
+          <View style={styles.settingsList}>
+            <SettingsRow label="Notification settings" />
+            <View style={styles.listDivider} />
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  'Sign out',
+                  'Are you sure you want to sign out?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Sign out',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await signOut();
+                        navigation.replace('SignIn');
+                      },
                     },
-                  },
-                ]
-              );
-            }}
-            style={styles.settingsRow}
-          >
-            <Text style={[styles.settingsLabel, { color: '#E84040' }]}>Sign out</Text>
-            <Text style={styles.settingsChevron}>›</Text>
-          </Pressable>
+                  ]
+                );
+              }}
+              style={styles.settingsRow}
+            >
+              <Text style={styles.settingsSignOut}>Sign out</Text>
+              <Text style={styles.settingsChevron}>›</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -319,28 +315,61 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: INK,
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
     paddingBottom: 28,
   },
-  header: {
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    marginBottom: 10,
+  headerBlock: {
+    paddingTop: 0,
+    paddingBottom: 12,
   },
-  headerTitle: {
-    color: TEXT,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+  commanderLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    color: SLATE2,
   },
-  headerSubtitle: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '600',
+  commanderName: {
+    marginTop: 0,
+    fontFamily: 'Archivo_900Black',
+    fontSize: 36,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: -0.02,
+  },
+  rankLine: {
+    marginTop: 6,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+  },
+  rankTitle: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: CLAIM,
+  },
+  rankSeparator: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
+  },
+  rankAlliance: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
+  },
+  rankAllianceClaim: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: CLAIM,
+  },
+  hairlineStrong: {
+    marginTop: 14,
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
   },
   loadingBlock: {
     alignItems: 'center',
@@ -349,211 +378,143 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
   },
   errorBanner: {
     marginTop: 8,
     padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: INK2,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    color: '#B91C1C',
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    fontWeight: '700',
-  },
-  emptyTerritories: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '700',
+    color: SLATE2,
   },
   card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
     marginTop: 12,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    padding: 16,
   },
-  cardTopRow: {
+  progressTrack: {
+    marginTop: 12,
+    height: 2,
+    backgroundColor: HAIRLINE_STRONG,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: CLAIM,
+  },
+  unlockText: {
+    marginTop: 8,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
+  },
+  sectionDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
-  cardTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+  sectionDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: HAIRLINE,
   },
-  cardHint: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
+  sectionDividerLabel: {
+    paddingHorizontal: 8,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.16,
+    color: SLATE2,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
+  xpNumbers: {
+    marginTop: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
   },
-  badgeText: {
-    fontWeight: '900',
-    fontSize: 12,
+  nextLine: {
+    marginTop: 8,
   },
-  identityTop: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  nextPrefix: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
   },
-  playerName: {
-    color: TEXT,
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.4,
+  nextTitle: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: BONE,
   },
-  identitySubRow: {
-    marginTop: 10,
+  statGrid: {
+    marginTop: 16,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  streakPill: {
-    borderRadius: 14,
+  statCell: {
+    width: '48.5%',
+    backgroundColor: INK2,
     borderWidth: 1,
-    borderColor: '#C7EADF',
-    backgroundColor: '#E8F6F1',
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    alignItems: 'center',
-    minWidth: 88,
-  },
-  streakValue: {
-    color: ACCENT,
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  streakLabel: {
-    marginTop: 2,
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  streakDivider: {
-    marginTop: 8,
-    height: 1,
-    alignSelf: 'stretch',
-    backgroundColor: '#C7EADF',
-  },
-  streakBest: {
-    marginTop: 8,
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  identityDivider: {
-    marginTop: 14,
-    height: 1,
-    backgroundColor: BORDER,
-  },
-  xpTopRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  xpPct: {
-    color: ALLIANCE,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  xpLine: {
-    marginTop: 8,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  xpStrong: {
-    color: TEXT,
-    fontWeight: '900',
-  },
-  xpMuted: {
-    color: MUTED,
-    fontWeight: '700',
-  },
-  progressTrack: {
-    marginTop: 12,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#E9EEF0',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  unlockCard: {
-    marginTop: 12,
-    backgroundColor: '#F6F5FF',
-    borderWidth: 1,
-    borderColor: '#DAD7FF',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  unlockTitle: {
-    color: ALLIANCE,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  unlockText: {
-    marginTop: 6,
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  statsGrid: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  statCard: {
-    width: '48.5%',
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-  },
-  statValue: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.2,
   },
   statLabel: {
-    marginTop: 6,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.16,
+    color: SLATE2,
+  },
+  statValue: {
+    marginTop: 8,
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 20,
+    color: BONE,
+    letterSpacing: -0.02,
   },
   list: {
     marginTop: 12,
   },
   listDivider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: HAIRLINE,
     marginVertical: 10,
+  },
+  emptyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
+  },
+  legacyList: {
+    marginTop: 12,
+  },
+  legacyEntry: {},
+  legacyEntrySpacing: {
+    marginBottom: 16,
+  },
+  legacyTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 24,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: -0.01,
+  },
+  legacyDescriptor: {
+    marginTop: 4,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
   territoryRow: {
     flexDirection: 'row',
@@ -561,30 +522,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  territoryLeft: {
-    flex: 1,
-  },
   territoryName: {
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: BONE,
   },
-  territoryMeta: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statusPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '900',
+  territoryTier: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE2,
   },
   settingsList: {
     marginTop: 12,
@@ -593,18 +540,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   settingsLabel: {
-    color: TEXT,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    fontWeight: '800',
+    color: BONE,
   },
   settingsChevron: {
-    color: MUTED,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: -2,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 18,
+    color: SLATE2,
+  },
+  settingsSignOut: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: CLAIM,
   },
 });
 
