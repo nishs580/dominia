@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 22, 2026
+Last updated: April 23, 2026
 
 ---
 
@@ -108,18 +108,18 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
 | Map screen | ✓ Done | Functional. Not yet branded. |
-| Activity screen | ✓ Done | Functional. Not yet branded. |
-| Profile screen | ✓ Branded | Dark theme, frozen COMMANDER header, 2-col stat grid, XP progress card, territory rows, legacy titles section (hardcoded), settings card. Influence section missing — add next session. |
-| Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, OF CITY · REALM, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
-| War Room screen | ✓ Done | New screen. Attack day countdown, war chest 2-col grid with SVG glyphs, morale abilities list with ACTIVATE buttons. Values hardcoded. |
+| Activity screen | ✓ Branded | Frozen COMMANDER-style header (live username/level/streak from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
+| Profile screen | ✓ Branded | Frozen header, 2-col stat grid, XP progress, Influence hero block, territory rows, legacy titles (hardcoded), settings |
+| Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
+| War Room screen | ✓ Branded | All theme tokens, Influence hero block above countdown, Morale full-width row, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All values hardcoded. |
 | Active Claim screen | ✓ Done | Functional. Not yet branded. |
 | Claim Success screen | ✓ Done | Functional. Not yet branded. |
 | Contest Result screen | ✓ Done | Functional. Not yet branded. |
 | Sign In screen | ✓ Done | Functional. Not yet branded. |
-| Onboarding screen | ✓ Done | Functional. Not yet branded. |
+| Onboarding screen | ✓ Done | Functional. Not yet branded. Next to brand. |
 | Create Alliance screen | ✓ Done | Functional. Not yet branded. |
 | Alliance Joined screen | ✓ Done | Functional. Not yet branded. |
-| Username screen | ✓ Done | Uses playerId from nav params |
+| Username screen | ✓ Done | Functional. Not yet branded. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
 | Defender flow | ○ Deferred | Needs Ably real-time layer — revisit when backend is started. |
@@ -142,10 +142,10 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, TerritorySheet with button gating + cap enforcement. Not yet branded. |
-| `screens/ActivityScreen.js` | Daily challenges, XP writes, streak trigger, weekly chart. Not yet branded. |
-| `screens/ProfileScreen.js` | Fully branded. Frozen COMMANDER header, stat grid, XP progress, territory rows, legacy titles (hardcoded), settings. Missing Influence. |
+| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header (live username/level/streak from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
+| `screens/ProfileScreen.js` | Fully branded. Frozen header, stat grid, XP progress, Influence hero block (hardcoded 1,247), territory rows, legacy titles (hardcoded), settings |
 | `screens/AllianceScreen.js` | Fully branded. Member/non-member states, roster, create + join flows, Enter War Room button. |
-| `screens/WarRoomScreen.js` | New screen. Attack day countdown, war chest grid with SVG glyphs, morale abilities. All values hardcoded. |
+| `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block above countdown, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
 | `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params. Not yet branded. |
 | `screens/UsernameScreen.js` | Uses playerId from nav params. Not yet branded. |
 | `screens/OnboardingScreen.js` | 5-step flow, home pin on Mapbox map. Not yet branded. |
@@ -213,8 +213,10 @@ git push
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. Fallback: `expo-sensors Pedometer.watchStepCount()` not yet tried. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
-| Influence missing from Profile screen | Not added to stat grid or XP section — first task next session. |
-| War Room values all hardcoded | War chest resource values, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons (Founder/Marshal only). |
+| War Room + Profile values hardcoded | War chest resources, Influence, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons (Founder/Marshal only). |
+| Achievements table hardcoded | Distance, Calories Burnt, Active Minutes need HealthKit/Health Connect before real data possible. |
+| Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
+| ProfileScreen colour constants not on theme tokens | Still uses hardcoded local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js same as WarRoomScreen. |
 | player_number hardcoded as #0001 | Sequential player_number column in Supabase not yet added. |
 
 ---
@@ -233,20 +235,23 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Add Influence to Profile screen stat grid and XP section, then brand the Activity screen.
+**Immediate:** Brand the Onboarding screens — paste all onboarding screen files into chat before starting.
 
 **Branding order (in progress):**
 1. ✓ Tab bar
-2. ✓ Profile screen
+2. ✓ Profile screen (+ Influence hero block)
 3. ✓ Alliance screen + War Room
-4. Activity screen — next
-5. Map screen
-6. Active Claim, Claim Success, Contest Result
-7. Sign In, Onboarding, Create Alliance, Alliance Joined
+4. ✓ Activity screen
+5. Onboarding screens — next
+6. Map screen
+7. Active Claim, Claim Success, Contest Result
+8. Sign In, Create Alliance, Alliance Joined, Username
 
 **Other backlog:**
-- Wire War Room to real Supabase data (war chest resources, contributors, role gating for ACTIVATE)
+- Refactor ProfileScreen colour constants to lib/theme.js tokens
+- Wire War Room + Profile Influence/war chest to real Supabase data
 - Real step tracking — try expo-sensors Pedometer.watchStepCount()
+- Achievements table — wire once HealthKit/Health Connect solved
 - Onboarding home pin 500m verification
 - Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
 - Defender flow — revisit once Ably is built
@@ -304,6 +309,14 @@ git push
 | Legacy Titles section hardcoded in Profile | Makes player feel they are on a journey — real data wiring deferred |
 | player_number hardcoded as #0001 | player_number auto-increment column in Supabase deferred |
 | COMMANDER header frozen (doesn't scroll) | Identity element should always be visible — not part of scrollable content |
+| Influence placed as hero block (Profile + War Room) | It is the empire resource — deserves highest prominence below the header |
+| Influence context line differs per screen | "From 8 held territories" (personal) vs "Earned daily from alliance-held territories" (collective) |
+| War chest Morale given full-width row | Command resource that powers all 4 morale abilities directly below it |
+| Claim red NOT used for Influence readout | Claim locked to territories/CTAs/contests per brand brief |
+| Today bar in weekly chart uses Bone not Claim | Claim is locked to territory/CTA signal — bar chart is performance data |
+| Achievements section has no card background | Rows sit directly on Ink — achievementsCard style kept in StyleSheet for reuse elsewhere |
+| Stats pills removed from Activity screen | Streak already in header, XP is lifetime not activity metric, Territories belongs on Profile |
+| Achievements table uses fake data | Distance/Calories/Active Minutes need HealthKit/Health Connect — deferred |
 
 ---
 
