@@ -9,24 +9,14 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StoneGlyph, IronGlyph, GoldGlyph, ShieldGlyph, MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
-
-const CLAIM = '#D64525';
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const ALLIANCE_GREEN = '#3F8F4E';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+import { colors, fonts, fontSize, spacing } from '../lib/theme';
 
 const WAR_CHEST = [
-  { label: 'MORALE', value: '340', color: '#3F8F4E', Glyph: MoraleGlyph },
-  { label: 'GOLD', value: '120', color: '#F2EEE6', Glyph: GoldGlyph },
-  { label: 'IRON', value: '85', color: '#F2EEE6', Glyph: IronGlyph },
-  { label: 'SHIELD', value: '210', color: '#F2EEE6', Glyph: ShieldGlyph },
-  { label: 'STONE', value: '160', color: '#F2EEE6', Glyph: StoneGlyph },
-  { label: 'INFLUENCE', value: '94', color: '#F2EEE6', Glyph: InfluenceGlyph },
+  { label: 'MORALE', value: '340', color: colors.alliance, Glyph: MoraleGlyph },
+  { label: 'IRON', value: '85', color: colors.bone, Glyph: IronGlyph },
+  { label: 'GOLD', value: '120', color: colors.bone, Glyph: GoldGlyph },
+  { label: 'STONE', value: '160', color: colors.bone, Glyph: StoneGlyph },
+  { label: 'SHIELD', value: '210', color: colors.bone, Glyph: ShieldGlyph },
 ];
 
 const ABILITIES = [
@@ -87,6 +77,21 @@ export default function WarRoomScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.influenceBlock}>
+          <View style={styles.influenceHeader}>
+            <Text style={styles.influenceLabel}>INFLUENCE</Text>
+            <View style={styles.influenceHairline} />
+          </View>
+          <View style={styles.influenceRow}>
+            <InfluenceGlyph size={32} color={colors.bone} />
+            <View style={styles.influenceTextStack}>
+              <Text style={styles.influenceValue}>127,683</Text>
+              <Text style={styles.influenceSublabel}>ALLIANCE INFLUENCE</Text>
+              <Text style={styles.influenceContext}>Earned daily from alliance-held territories</Text>
+            </View>
+          </View>
+        </View>
+
         {/* ATTACK DAY COUNTDOWN */}
         <SectionLabel left="NEXT ATTACK DAY" />
         <View style={styles.countdownCard}>
@@ -96,16 +101,39 @@ export default function WarRoomScreen() {
 
         {/* WAR CHEST */}
         <SectionLabel left="WAR CHEST" accent="ALLIANCE RESERVES" />
-        <View style={styles.warChestGrid}>
-          {WAR_CHEST.map((r) => (
-            <View key={r.label} style={styles.warChestCell}>
-              <View style={styles.warChestCellLeft}>
-                <Text style={styles.warChestLabel}>{r.label}</Text>
-                <Text style={[styles.warChestValue, { color: r.color }]}>{r.value}</Text>
-              </View>
-              <r.Glyph size={28} color={r.color} />
+        <View style={styles.warChestContainer}>
+          {/* MORALE — full width */}
+          <View style={styles.warChestMoraleCell}>
+            <View style={styles.warChestMoraleLeft}>
+              <Text style={[styles.warChestValue, { color: colors.alliance, fontSize: 32 }]}>
+                340
+              </Text>
+              <Text style={styles.warChestLabel}>MORALE</Text>
             </View>
-          ))}
+            <MoraleGlyph size={28} color={colors.alliance} />
+          </View>
+
+          {/* 2x2 GRID — Iron, Gold, Stone, Shield */}
+          <View style={styles.warChestGrid}>
+            {[
+              { label: 'IRON', value: '85', color: colors.bone, Glyph: IronGlyph },
+              { label: 'GOLD', value: '120', color: colors.bone, Glyph: GoldGlyph },
+              { label: 'STONE', value: '160', color: colors.bone, Glyph: StoneGlyph },
+              { label: 'SHIELD', value: '210', color: colors.bone, Glyph: ShieldGlyph },
+            ].map((r) => (
+              <View key={r.label} style={styles.warChestCell}>
+                <View style={styles.warChestCellInner}>
+                  <View style={styles.warChestCellLeft}>
+                    <Text style={[styles.warChestValue, { color: r.color, fontSize: 24 }]}>
+                      {r.value}
+                    </Text>
+                    <Text style={styles.warChestLabel}>{r.label}</Text>
+                  </View>
+                  <r.Glyph size={28} color={r.color} />
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
         {/* MORALE ABILITIES */}
@@ -134,141 +162,211 @@ export default function WarRoomScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: INK,
+    backgroundColor: colors.ink,
   },
   header: {
-    paddingTop: StatusBar.currentHeight + 12,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingTop: StatusBar.currentHeight + spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   backBtn: {
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   backBtnText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 11,
-    color: CLAIM,
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.md,
+    color: colors.claim,
     letterSpacing: 1.4,
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: fonts.display,
     fontSize: 40,
-    color: BONE,
+    color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
     lineHeight: 44,
   },
   headerSub: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: fonts.mono,
     fontSize: 10,
-    color: SLATE2,
+    color: colors.slate2,
     letterSpacing: 1.4,
     marginTop: 6,
   },
   headerDivider: {
     height: 1,
-    backgroundColor: HAIRLINE_STRONG,
+    backgroundColor: colors.hairlineStrong,
     marginTop: 14,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 40,
+  },
+  influenceBlock: {
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  influenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  influenceLabel: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.md,
+    letterSpacing: fontSize.md * 0.16,
+    color: colors.slate2,
+    textTransform: 'uppercase',
+  },
+  influenceHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  influenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  influenceTextStack: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
+  influenceValue: {
+    fontFamily: fonts.displayMedium,
+    fontSize: fontSize.xl4,
+    letterSpacing: fontSize.xl4 * -0.02,
+    color: colors.bone,
+  },
+  influenceSublabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 10 * 0.16,
+    color: colors.slate2,
+    textTransform: 'uppercase',
+  },
+  influenceContext: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.slate2,
   },
   sectionLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
   },
   sectionLabelText: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sectionLabelAccent: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
-    color: BONE,
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.sm,
+    color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sectionHairline: {
     flex: 1,
     height: 1,
-    backgroundColor: HAIRLINE_STRONG,
-    marginLeft: 8,
+    backgroundColor: colors.hairlineStrong,
+    marginLeft: spacing.sm,
   },
   sectionLabelRight: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
     letterSpacing: 1.4,
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
 
   // COUNTDOWN
   countdownCard: {
-    backgroundColor: INK2,
+    backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
     borderLeftWidth: 2,
-    borderLeftColor: CLAIM,
-    padding: 16,
+    borderLeftColor: colors.claim,
+    padding: spacing.lg,
   },
   countdownValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: fonts.displayMedium,
     fontSize: 40,
-    color: BONE,
+    color: colors.bone,
     letterSpacing: -0.02,
   },
   countdownDay: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: fonts.mono,
     fontSize: 10,
-    color: SLATE2,
+    color: colors.slate2,
     letterSpacing: 1.4,
     marginTop: 6,
     textTransform: 'uppercase',
   },
 
   // WAR CHEST
+  warChestContainer: {
+    gap: spacing.sm,
+  },
+  warChestMoraleCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    borderRadius: 0,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  warChestMoraleLeft: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
   warChestGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
   },
   warChestCell: {
     width: '48.5%',
-    backgroundColor: INK2,
+    backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    padding: spacing.md,
+  },
+  warChestCellInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   warChestCellLeft: {
-    flex: 1,
-  },
-  warChestLabel: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    flexDirection: 'column',
+    gap: spacing.xs,
   },
   warChestValue: {
-    fontFamily: 'Archivo_700Bold',
-    fontSize: 20,
+    fontFamily: fonts.displayMedium,
     letterSpacing: -0.02,
-    marginTop: 4,
+  },
+  warChestLabel: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginTop: spacing.xs,
   },
 
   // ABILITIES
@@ -276,51 +374,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    gap: 12,
+    gap: spacing.md,
   },
   abilityLeft: {
     flex: 1,
   },
   abilityName: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: fonts.monoMedium,
     fontSize: 12,
-    color: BONE,
+    color: colors.bone,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   abilityCost: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
     letterSpacing: 1.2,
     marginTop: 3,
     textTransform: 'uppercase',
   },
   abilityEffect: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: fonts.body,
     fontSize: 12,
-    color: SLATE2,
-    marginTop: 4,
+    color: colors.slate2,
+    marginTop: spacing.xs,
     lineHeight: 18,
   },
   activateBtn: {
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activateBtnText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
-    color: SLATE2,
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   rowDivider: {
     height: 1,
-    backgroundColor: HAIRLINE,
+    backgroundColor: colors.hairline,
   },
 });

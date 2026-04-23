@@ -1,18 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 import { updateStreakOnChallengeComplete } from '../lib/streak';
 import { getLevelForXp } from '../lib/level';
-
-const ACCENT = '#1D9E75';
-const BG = '#F6F8F7';
-const CARD = '#FFFFFF';
-const TEXT = '#0F172A';
-const MUTED = '#64748B';
-const BORDER = '#E5E7EB';
-const MISSION_HEADER = '#0F172A';
-const ORANGE = '#FF6B35';
+import { colors, fonts, spacing } from '../lib/theme';
 
 function formatToday(d) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -46,15 +38,6 @@ function ProgressBar({ progress }) {
   );
 }
 
-function StatPill({ label, value }) {
-  return (
-    <View style={styles.pill}>
-      <Text style={styles.pillValue}>{value}</Text>
-      <Text style={styles.pillLabel}>{label}</Text>
-    </View>
-  );
-}
-
 function WeeklyBarChart({ data, highlightIndex }) {
   const max = Math.max(...data.map((d) => d.steps), 1);
   return (
@@ -62,7 +45,7 @@ function WeeklyBarChart({ data, highlightIndex }) {
       <View style={styles.chartRow}>
         {data.map((d, idx) => {
           const isToday = idx === highlightIndex;
-          const h = clamp(d.steps / max, 0, 1) * 84;
+          const h = clamp(d.steps / max, 0, 1) * 80;
           return (
             <View key={d.day} style={styles.chartCol}>
               <View style={styles.chartBarTrack}>
@@ -71,7 +54,7 @@ function WeeklyBarChart({ data, highlightIndex }) {
                     styles.chartBar,
                     {
                       height: h,
-                      backgroundColor: isToday ? ACCENT : '#D1FAE5',
+                      backgroundColor: isToday ? colors.bone : 'rgba(242,238,230,0.16)',
                     },
                   ]}
                 />
@@ -90,6 +73,7 @@ export default function ActivityScreen() {
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [username, setUsername] = useState('');
   const [territoryCount, setTerritoryCount] = useState(0);
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
   const [isCompleting, setIsCompleting] = useState(() => new Set());
@@ -113,7 +97,7 @@ export default function ActivityScreen() {
 
       const { data: player } = await supabase
         .from('players')
-        .select('id, xp, current_streak')
+        .select('id, xp, current_streak, username')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -133,6 +117,7 @@ export default function ActivityScreen() {
       setPlayerXp(xp);
       setPlayerLevel(getLevelForXp(xp));
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
+      setUsername(player.username ?? '');
 
       const { count } = await supabase
         .from('territories')
@@ -170,10 +155,6 @@ export default function ActivityScreen() {
         xp: 50,
         resourceLabel: 'Stone',
         resourceAmount: 8,
-        badgeText: '#3B6D11',
-        badgeBg: '#EAF3DE',
-        iconBg: '#EAF3DE',
-        iconTint: '#3B6D11',
       },
       {
         key: 'medium',
@@ -182,10 +163,6 @@ export default function ActivityScreen() {
         xp: 120,
         resourceLabel: 'Stone',
         resourceAmount: 20,
-        badgeText: '#854F0B',
-        badgeBg: '#FAEEDA',
-        iconBg: '#FAEEDA',
-        iconTint: '#854F0B',
       },
       {
         key: 'hard',
@@ -194,10 +171,6 @@ export default function ActivityScreen() {
         xp: 250,
         resourceLabel: 'Stone',
         resourceAmount: 40,
-        badgeText: '#993C1D',
-        badgeBg: '#FAECE7',
-        iconBg: '#FAECE7',
-        iconTint: '#993C1D',
       },
     ],
     [],
@@ -282,156 +255,201 @@ export default function ActivityScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Activity</Text>
-        <Text style={styles.headerSubtitle}>{formatToday(today)}</Text>
+    <View style={styles.screen}>
+      <View style={styles.headerBlock}>
+        <Text style={styles.commanderLabel}>{formatToday(today)}</Text>
+        <Text style={styles.commanderName}>ACTIVITY</Text>
+        <Text style={styles.rankLine}>
+          <Text style={styles.rankTitle}>{username || '—'} · {playerLevel.title.toUpperCase()}</Text>
+          <Text style={styles.rankSeparator}> · </Text>
+          <Text style={styles.rankStreak}>{currentStreak} DAY STREAK</Text>
+        </Text>
+        <View style={styles.hairlineStrong} />
       </View>
 
-      <View style={styles.missionCard}>
-        <View style={styles.missionHeader}>
-          <View style={styles.missionHeaderTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.missionLabel}>Today’s mission</Text>
-              <Text style={styles.missionTitle}>Daily Challenges</Text>
-            </View>
-            <View style={styles.missionPill}>
-              <Text style={styles.missionPillText}>{completedCount} / 3 done</Text>
-            </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.challengeBlock}>
+          <View style={styles.challengeHeaderRow}>
+            <Text style={styles.challengeSectionLabel}>DAILY CHALLENGES</Text>
+            <View style={styles.challengeHairline} />
+            <Text style={styles.challengeCount}>{completedCount} / 3 DONE</Text>
           </View>
-          <View style={styles.missionProgressTrack}>
-            <View style={[styles.missionProgressFill, { width: `${clamp(missionProgress, 0, 1) * 100}%` }]} />
+
+          <View style={styles.challengeProgressTrack}>
+            <View style={[styles.challengeProgressFill, { width: `${clamp(missionProgress, 0, 1) * 100}%` }]} />
           </View>
-        </View>
 
-        <View style={styles.missionBody}>
-          {challenges.map((ch, idx) => {
-            const isDone = completedKeys.has(ch.key);
-            const isBusy = isCompleting.has(ch.key);
-            return (
-              <View key={ch.key} style={[styles.challengeRow, idx > 0 && styles.challengeRowBorder]}>
-                <View
-                  style={[
-                    styles.challengeIconBox,
-                    { backgroundColor: isDone ? '#E7F6EF' : ch.iconBg, borderColor: isDone ? '#BFE9D5' : BORDER },
-                  ]}
-                >
-                  <View style={[styles.challengeDot, { backgroundColor: isDone ? '#1D9E75' : ch.iconTint }]} />
-                </View>
-
-                <View style={styles.challengeMain}>
-                  <View style={styles.challengeTopLine}>
-                    <View style={[styles.difficultyBadge, { backgroundColor: ch.badgeBg }]}>
-                      <Text style={[styles.difficultyBadgeText, { color: ch.badgeText }]}>{ch.difficulty}</Text>
+          <View style={styles.challengeCard}>
+            {challenges.map((ch, idx) => {
+              const isDone = completedKeys.has(ch.key);
+              const isBusy = isCompleting.has(ch.key);
+              return (
+                <React.Fragment key={ch.key}>
+                  {idx > 0 && <View style={styles.challengeDivider} />}
+                  <View style={styles.challengeRow}>
+                    <View style={styles.challengeMain}>
+                      <Text style={styles.challengeDifficulty}>{ch.difficulty.toUpperCase()}</Text>
+                      <Text style={styles.challengeTask}>{ch.task}</Text>
+                      <Text style={styles.challengeReward}>
+                        +{ch.xp} XP · +{ch.resourceAmount} {ch.resourceLabel}
+                      </Text>
                     </View>
-                    <Text style={styles.challengeTask}>{ch.task}</Text>
+                    <View style={styles.challengeAction}>
+                      {isDone ? (
+                        <Text style={styles.challengeDone}>DONE</Text>
+                      ) : (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Complete ${ch.difficulty} challenge`}
+                          onPress={() => onCompleteChallenge(ch)}
+                          disabled={!playerId || isBusy}
+                          style={({ pressed }) => [
+                            styles.completeBtn,
+                            (!playerId || isBusy) && { opacity: 0.45 },
+                            pressed && { opacity: 0.75 },
+                          ]}
+                        >
+                          <Text style={styles.completeBtnText}>COMPLETE</Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
-
-                  <Text style={styles.challengeReward} numberOfLines={1}>
-                    +{ch.xp} XP · +{ch.resourceAmount} {ch.resourceLabel}
-                  </Text>
-                </View>
-
-                <View style={styles.challengeRight}>
-                  {isDone ? (
-                    <View style={styles.doneCircle}>
-                      <Text style={styles.doneCheck}>✓</Text>
-                    </View>
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Complete ${ch.difficulty} challenge`}
-                      onPress={() => onCompleteChallenge(ch)}
-                      disabled={!playerId || isBusy}
-                      style={({ pressed }) => [
-                        styles.completeBtn,
-                        (!playerId || isBusy) && { opacity: 0.55 },
-                        pressed && { opacity: 0.85 },
-                      ]}
-                    >
-                      <Text style={styles.completeBtnText}>Complete</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+                </React.Fragment>
+              );
+            })}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.pillsRow}>
-        <StatPill label="Territories" value={String(territoryCount)} />
-        <StatPill label="Day Streak" value={String(currentStreak)} />
-        <StatPill label="Siege XP" value={String(playerXp)} />
-      </View>
+        <View style={styles.achievementsBlock}>
+          <View style={styles.achievementsSectionRow}>
+            <Text style={styles.achievementsSectionLabel}>DAILY ACHIEVEMENTS</Text>
+            <View style={styles.achievementsHairline} />
+          </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.cardTitle}>Weekly steps</Text>
-          <Text style={styles.cardHint}>Today highlighted</Text>
+          <View style={styles.achievementsHeaderRow}>
+            <Text style={styles.achievementsColLeft} />
+            <Text style={styles.achievementsColToday}>TODAY</Text>
+            <Text style={styles.achievementsColBest}>BEST</Text>
+          </View>
+
+          <View style={styles.achievementsHeaderDivider} />
+
+          <View style={styles.achievementsRow}>
+            <Text style={styles.achievementsLabel}>DISTANCE</Text>
+            <Text style={styles.achievementsToday}>6.2 km</Text>
+            <Text style={styles.achievementsBest}>12.4 km</Text>
+          </View>
+
+          <View style={styles.achievementsDivider} />
+
+          <View style={styles.achievementsRow}>
+            <Text style={styles.achievementsLabel}>CALORIES BURNT</Text>
+            <Text style={styles.achievementsToday}>340 kcal</Text>
+            <Text style={styles.achievementsBest}>820 kcal</Text>
+          </View>
+
+          <View style={styles.achievementsDivider} />
+
+          <View style={styles.achievementsRow}>
+            <Text style={styles.achievementsLabel}>ACTIVE MINUTES</Text>
+            <Text style={styles.achievementsToday}>47 min</Text>
+            <Text style={styles.achievementsBest}>94 min</Text>
+          </View>
         </View>
-        <WeeklyBarChart data={weekly} highlightIndex={chartHighlightIndex} />
-      </View>
-    </ScrollView>
+
+        <View style={styles.weeklyBlock}>
+          <View style={styles.weeklySectionRow}>
+            <Text style={styles.weeklySectionLabel}>WEEKLY STEPS</Text>
+            <View style={styles.weeklyHairline} />
+          </View>
+          <WeeklyBarChart data={weekly} highlightIndex={chartHighlightIndex} />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.ink,
   },
-  content: {
-    padding: 16,
-    paddingBottom: 28,
+  headerBlock: {
+    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  header: {
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    marginBottom: 10,
+  commanderLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    color: colors.slate2,
   },
-  headerTitle: {
-    color: TEXT,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+  commanderName: {
+    marginTop: 0,
+    fontFamily: 'Archivo_900Black',
+    fontSize: 36,
+    color: colors.bone,
+    textTransform: 'uppercase',
+    letterSpacing: -0.02,
   },
-  headerSubtitle: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '600',
+  rankLine: {
+    marginTop: 6,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
   },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginTop: 12,
+  rankTitle: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: colors.claim,
   },
-  cardTopRow: {
+  rankSeparator: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: colors.slate2,
+  },
+  rankStreak: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: colors.slate2,
+  },
+  hairlineStrong: {
+    marginTop: 14,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl3,
+  },
+  weeklyBlock: {
+    marginTop: spacing.lg,
+  },
+  weeklySectionRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  cardTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+  weeklySectionLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
-  cardSubtitle: {
-    marginTop: 3,
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  cardHint: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
+  weeklyHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
   },
   badge: {
     backgroundColor: '#E8F6F1',
@@ -442,7 +460,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: {
-    color: ACCENT,
+    color: colors.alliance,
     fontWeight: '900',
     fontSize: 12,
   },
@@ -456,7 +474,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: ACCENT,
+    backgroundColor: colors.alliance,
   },
   progressFooter: {
     marginTop: 10,
@@ -465,229 +483,245 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLeft: {
-    color: MUTED,
+    color: colors.slate2,
     fontSize: 12,
     fontWeight: '700',
   },
   progressRight: {
-    color: TEXT,
+    color: colors.bone,
     fontSize: 12,
     fontWeight: '800',
   },
-  missionCard: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginTop: 12,
-    overflow: 'hidden',
+  challengeBlock: {
+    marginTop: spacing.lg,
   },
-  missionHeader: {
-    backgroundColor: MISSION_HEADER,
-    padding: 14,
-    paddingRight: 14,
-  },
-  missionHeaderTop: {
+  challengeHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  missionLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  challengeSectionLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
-  missionTitle: {
-    marginTop: 4,
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+  challengeHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
   },
-  missionPill: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  challengeCount: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
-  missionPillText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+  challengeProgressTrack: {
+    height: 2,
+    backgroundColor: colors.hairlineStrong,
+    marginBottom: spacing.sm,
   },
-  missionProgressTrack: {
-    marginTop: 12,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
-  },
-  missionProgressFill: {
+  challengeProgressFill: {
     height: '100%',
-    borderRadius: 999,
-    backgroundColor: ORANGE,
+    backgroundColor: colors.claim,
   },
-  missionBody: {
-    paddingVertical: 6,
+  challengeCard: {
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    borderRadius: 0,
   },
   challengeRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
   },
-  challengeRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  challengeIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  challengeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
+  challengeDivider: {
+    height: 1,
+    backgroundColor: colors.hairline,
   },
   challengeMain: {
     flex: 1,
-    minWidth: 0,
-    gap: 6,
+    gap: spacing.xs,
   },
-  challengeTopLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  difficultyBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  difficultyBadgeText: {
-    fontSize: 12,
-    fontWeight: '900',
+  challengeDifficulty: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   challengeTask: {
-    flex: 1,
-    minWidth: 0,
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.bone,
   },
   challengeReward: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '800',
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.2,
   },
-  challengeRight: {
-    width: 90,
-    flexShrink: 0,
+  challengeAction: {
     alignItems: 'flex-end',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   completeBtn: {
-    backgroundColor: ORANGE,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    width: 90,
-    flexShrink: 0,
-    alignItems: 'center',
-  },
-  completeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-  doneCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: '#22C55E',
+    backgroundColor: colors.claim,
+    borderRadius: 0,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneCheck: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    marginTop: -1,
+  completeBtnText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.bone,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
-  pillsRow: {
-    marginTop: 12,
+  challengeDone: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.alliance,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  achievementsBlock: {
+    marginTop: spacing.lg,
+  },
+  achievementsSectionRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  pill: {
+  achievementsSectionLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  achievementsHairline: {
     flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 14,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  achievementsCard: {
+    backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderColor: colors.hairlineStrong,
+    borderRadius: 0,
   },
-  pillValue: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+  achievementsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.sm,
   },
-  pillLabel: {
-    marginTop: 4,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
+  achievementsColLeft: {
+    flex: 1,
+  },
+  achievementsColToday: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    width: 72,
+    textAlign: 'right',
+  },
+  achievementsColBest: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    width: 72,
+    textAlign: 'right',
+  },
+  achievementsHeaderDivider: {
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  achievementsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.md,
+  },
+  achievementsDivider: {
+    height: 1,
+    backgroundColor: colors.hairline,
+  },
+  achievementsLabel: {
+    flex: 1,
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  achievementsToday: {
+    fontFamily: fonts.displayMedium,
+    fontSize: 16,
+    color: colors.bone,
+    letterSpacing: 16 * -0.02,
+    width: 72,
+    textAlign: 'right',
+  },
+  achievementsBest: {
+    fontFamily: fonts.displayMedium,
+    fontSize: 16,
+    color: colors.slate2,
+    letterSpacing: 16 * -0.02,
+    width: 72,
+    textAlign: 'right',
   },
   chartWrap: {
-    marginTop: 12,
+    marginTop: spacing.sm,
   },
   chartRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    gap: 10,
-    paddingVertical: 6,
+    gap: spacing.sm,
   },
   chartCol: {
     flex: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.xs,
   },
   chartBarTrack: {
-    height: 92,
+    height: 88,
     width: '100%',
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: BORDER,
+    borderRadius: 0,
+    backgroundColor: colors.ink3,
     justifyContent: 'flex-end',
-    overflow: 'hidden',
   },
   chartBar: {
     width: '100%',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
   },
   chartDay: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '800',
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   chartDayToday: {
-    color: ACCENT,
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
   },
 });
 

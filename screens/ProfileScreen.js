@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getLevelForXp, getXpProgress } from '../lib/level';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
+import { InfluenceGlyph } from '../components/ResourceGlyphs';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -204,6 +205,21 @@ export default function ProfileScreen() {
 
         {!loading && playerRow ? (
           <>
+          <View style={styles.influenceBlock}>
+            <View style={styles.influenceHeader}>
+              <Text style={styles.influenceLabel}>INFLUENCE</Text>
+              <View style={styles.influenceHairline} />
+            </View>
+            <View style={styles.influenceRow}>
+              <InfluenceGlyph size={32} color={colors.bone} />
+              <View style={styles.influenceTextStack}>
+                <Text style={styles.influenceValue}>1,247</Text>
+                <Text style={styles.influenceSublabel}>INFLUENCE EARNED</Text>
+                <Text style={styles.influenceContext}>From 8 held territories</Text>
+              </View>
+            </View>
+          </View>
+
           <View style={styles.statGrid}>
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>STREAK</Text>
@@ -326,6 +342,56 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 28,
+  },
+  influenceBlock: {
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  influenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  influenceLabel: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    letterSpacing: 1.6,
+    color: colors.slate2,
+    textTransform: 'uppercase',
+  },
+  influenceHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+    marginLeft: spacing.sm,
+  },
+  influenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  influenceTextStack: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
+  influenceValue: {
+    fontFamily: fonts.displayMedium,
+    fontSize: fontSize.xl4,
+    letterSpacing: fontSize.xl4 * -0.02,
+    color: colors.bone,
+  },
+  influenceSublabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.slate2,
+    textTransform: 'uppercase',
+  },
+  influenceContext: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.slate2,
   },
   headerBlock: {
     paddingTop: (StatusBar.currentHeight ?? 0) + 12,
