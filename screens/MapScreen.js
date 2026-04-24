@@ -141,7 +141,11 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
                   text: 'Abandon',
                   style: 'destructive',
                   onPress: async () => {
-                    const { error } = await supabase.from('territories').update({ owner_id: null }).eq('id', territory.id);
+                    const { error } = await supabase
+                      .from('territories')
+                      .update({ owner_id: null, alliance_id: null })
+                      .eq('id', territory.id)
+                      .select();
                     if (error) {
                       console.error('Abandon territory failed:', error);
                       return;
