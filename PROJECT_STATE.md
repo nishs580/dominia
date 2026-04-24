@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 23, 2026
+Last updated: April 24, 2026
 
 ---
 
@@ -96,8 +96,10 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 ```sql
 -- Reset a territory
 UPDATE territories SET owner_id = null, alliance_id = null WHERE territory_name = 'X';
--- Reset player alliance (run before deleting alliance row — foreign key constraint)
+-- Reset player alliance
 UPDATE players SET alliance_id = NULL WHERE username = 'X';
+-- Reset onboarding for dev testing
+UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 ```
 
 ---
@@ -107,19 +109,19 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Done | Functional. Not yet branded. |
-| Activity screen | ✓ Branded | Frozen COMMANDER-style header (live username/level/streak from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
-| Profile screen | ✓ Branded | Frozen header, 2-col stat grid, XP progress, Influence hero block, territory rows, legacy titles (hardcoded), settings |
+| Map screen | ~ Not yet branded | Functional. Mapbox map, territory colours, TerritorySheet, cap enforcement. Brand next session. |
+| Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak), daily challenges, achievements table (hardcoded), weekly chart |
+| Profile screen | ✓ Branded | Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
 | Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
-| War Room screen | ✓ Branded | All theme tokens, Influence hero block above countdown, Morale full-width row, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All values hardcoded. |
-| Active Claim screen | ✓ Done | Functional. Not yet branded. |
-| Claim Success screen | ✓ Done | Functional. Not yet branded. |
-| Contest Result screen | ✓ Done | Functional. Not yet branded. |
-| Sign In screen | ✓ Done | Functional. Not yet branded. |
-| Onboarding screen | ✓ Done | Functional. Not yet branded. Next to brand. |
-| Create Alliance screen | ✓ Done | Functional. Not yet branded. |
-| Alliance Joined screen | ✓ Done | Functional. Not yet branded. |
-| Username screen | ✓ Done | Functional. Not yet branded. |
+| War Room screen | ✓ Branded | All theme tokens. Influence hero block, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
+| Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
+| Active Claim screen | ~ Not yet branded | Functional. DEV_MODE=true, mode param (claim/contest). |
+| Claim Success screen | ~ Not yet branded | Functional. Sets owner_id + alliance_id in Supabase. |
+| Contest Result screen | ~ Not yet branded | Functional. 4 states, writes on attack_won. |
+| Sign In screen | ○ Not yet branded | Functional. Sign in + sign up, passes playerId through nav params. |
+| Create Alliance screen | ○ Not yet branded | Functional. 3-step founding flow. |
+| Alliance Joined screen | ○ Not yet branded | Functional. Reads name/code/city from nav params. |
+| Username screen | ○ Not yet branded | Functional. Uses playerId from nav params. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
 | Defender flow | ○ Deferred | Needs Ably real-time layer — revisit when backend is started. |
@@ -133,6 +135,10 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `App.js` | Root stack navigator, font loading (useFonts + SplashScreen guard), ClerkProvider, all screen registrations |
 | `components/AuthGate.js` | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
 | `components/ResourceGlyphs.js` | 6 SVG glyph components: Stone, Iron, Gold, Shield, Morale, Influence — rendered at 28px in war chest |
+| `components/ProgressBar.js` | 5 horizontal segments (28×2px), 0px radius, Bone active / HAIRLINE_STRONG inactive — used in onboarding |
+| `components/PrimaryButton.js` | Claim red, 0px radius, two-line format (step label above, action label below), Geist Mono |
+| `components/SectionLabel.js` | Geist Mono 9px uppercase + hairline rule extending right |
+| `components/NumberedRow.js` | Geist Mono number column + Inter title/subtitle, hairline dividers |
 | `lib/theme.js` | All Dominia design tokens — colours, fonts, fontSize scale, spacing, radius, borders, motion durations |
 | `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
@@ -148,7 +154,7 @@ UPDATE players SET alliance_id = NULL WHERE username = 'X';
 | `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block above countdown, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
 | `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params. Not yet branded. |
 | `screens/UsernameScreen.js` | Uses playerId from nav params. Not yet branded. |
-| `screens/OnboardingScreen.js` | 5-step flow, home pin on Mapbox map. Not yet branded. |
+| `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation (Step 0), numbered rows (Steps 1+2), Mapbox dark-v11 home pin map (Step 3), resolvedPlayerId fallback, live username (Step 4) |
 | `screens/CreateAllianceScreen.js` | 3-step founding flow. Not yet branded. |
 | `screens/AllianceJoinedScreen.js` | Reads name/code/city from route.params. Not yet branded. |
 | `screens/ActiveClaimScreen.js` | DEV_MODE=true, mode param (claim/contest). Not yet branded. |
@@ -208,16 +214,17 @@ git push
 
 | Bug | Detail |
 |---|---|
-| Client Trust disabled in Clerk | Disabled during dev to unblock sign-in. Needs proper 2FA or email OTP re-enabled before production. |
-| Clerk email verification disabled | Disabled for dev (was causing status: missing_requirements). Must re-enable before production. |
+| Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
+| Clerk email verification disabled | Disabled for dev. Must re-enable before production. |
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. Fallback: `expo-sensors Pedometer.watchStepCount()` not yet tried. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
-| War Room + Profile values hardcoded | War chest resources, Influence, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons (Founder/Marshal only). |
-| Achievements table hardcoded | Distance, Calories Burnt, Active Minutes need HealthKit/Health Connect before real data possible. |
+| Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred until after branding complete. |
+| War Room + Profile values hardcoded | War chest resources, Influence, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons. |
+| Achievements table hardcoded | Distance, Calories, Active Minutes need HealthKit/Health Connect before real data possible. |
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
-| ProfileScreen colour constants not on theme tokens | Still uses hardcoded local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js same as WarRoomScreen. |
-| player_number hardcoded as #0001 | Sequential player_number column in Supabase not yet added. |
+| ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
+| player_number hardcoded as #0004 | Sequential player_number column in Supabase not yet added. |
 
 ---
 
@@ -235,21 +242,22 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Brand the Onboarding screens — paste all onboarding screen files into chat before starting.
+**Immediate:** Brand the Map screen — replace StyleURL.Street with dark style, replace white HUD cards and rounded corners with brand tokens, apply Geist Mono to all labels. Start by pasting MapScreen.js into chat before touching anything.
 
 **Branding order (in progress):**
 1. ✓ Tab bar
 2. ✓ Profile screen (+ Influence hero block)
 3. ✓ Alliance screen + War Room
 4. ✓ Activity screen
-5. Onboarding screens — next
-6. Map screen
+5. ✓ Onboarding screen
+6. Map screen — next
 7. Active Claim, Claim Success, Contest Result
 8. Sign In, Create Alliance, Alliance Joined, Username
 
 **Other backlog:**
 - Refactor ProfileScreen colour constants to lib/theme.js tokens
 - Wire War Room + Profile Influence/war chest to real Supabase data
+- Fix auth flow order (new users should see Steps 0+1 before sign-up)
 - Real step tracking — try expo-sensors Pedometer.watchStepCount()
 - Achievements table — wire once HealthKit/Health Connect solved
 - Onboarding home pin 500m verification
@@ -317,6 +325,14 @@ git push
 | Achievements section has no card background | Rows sit directly on Ink — achievementsCard style kept in StyleSheet for reuse elsewhere |
 | Stats pills removed from Activity screen | Streak already in header, XP is lifetime not activity metric, Territories belongs on Profile |
 | Achievements table uses fake data | Distance/Calories/Active Minutes need HealthKit/Health Connect — deferred |
+| Claim square removed from step headings | Inline nested Text wraps unpredictably on real device widths — square on wordmark and CTA button is sufficient |
+| Bone pin with Claim centre for home pin map | Dark-v11 map makes Bone readable; Claim outer was used before dark map was added |
+| Pure RN teardrop pin instead of SVG | react-native-svg not installed for this shape — avoids EAS build |
+| Map style dark-v11 via styleURL directly | lightPreset prop not reliable across rnmapbox versions |
+| resolvedPlayerId fallback pattern | If playerId missing from nav params, fetch from Supabase using clerkUserId — prevents session error when nav param is dropped |
+| Auth flow order deferred | New users should see Steps 0+1 before sign-up — fix after branding complete |
+| has_onboarded reset via Supabase SQL | No DEV_SKIP_INTRO flag needed — direct SQL simpler for dev testing |
+| Handle one screen or one fix at a time | Never batch unrelated changes — added to working style |
 
 ---
 
@@ -327,6 +343,7 @@ Do not start coding immediately. Work conversationally:
 - Show a wireframe or mockup when introducing a new screen
 - Ask for confirmation before writing any code
 - Wait for the user to say "yes" or "let's build it" before touching any files
-- Once confirmed, provide the exact prompt to paste into Cursor's agent chat
+- Once confirmed, provide the exact prompt to paste into Cursor's agent chat as a single copyable code block
 - After Cursor builds it, wait for the user to check their phone and report back
 - Give the user time to ask questions at every step
+- Handle one screen or one fix at a time — never batch unrelated changes
