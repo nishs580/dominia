@@ -11,10 +11,18 @@ MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 const AMSTERDAM_CENTER = [4.9041, 52.3676];
 const INITIAL_ZOOM = 14;
 
-const ACCENT = '#1D9E75';
-const ALLIANCE = '#534AB7';
-const ENEMY = '#993C1D';
-const UNCLAIMED = '#444441';
+const INK = '#0E1014';
+const INK2 = '#1A1D24';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE2 = '#8B8F98';
+const CLAIM = '#D64525';
+const ALLIANCE = '#3F8F4E';
+const ENEMY = '#4A6B8A';
+const UNCLAIMED = 'transparent';
+const HAIRLINE = 'rgba(242,238,230,0.08)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 
 function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, myPlayer, allFeatures = [] }) {
   const navigation = useNavigation();
@@ -41,9 +49,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
     perimeter: perimeterDistance,
   };
 
-  const isYours = territory.properties?.color === '#1D9E75' || territory.properties?.color === '#534AB7';
-  const isOwnTerritory = territory.properties?.color === '#1D9E75';
-  const isAllianceTerritory = territory.properties?.color === '#534AB7';
+  const isYours = territory.properties?.color === '#D64525' || territory.properties?.color === '#3F8F4E';
+  const isOwnTerritory = territory.properties?.color === '#D64525';
+  const isAllianceTerritory = territory.properties?.color === '#3F8F4E';
   const isOwned = !isUnclaimed;
 
   const ownerTone = isUnclaimed ? UNCLAIMED : (territory.properties?.color ?? ENEMY);
@@ -51,7 +59,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
   const playerXp = myPlayer?.xp ?? 0;
   const levelData = getLevelForXp(playerXp);
   const cap = levelData?.territoryCap ?? 1;
-  const heldCount = allFeatures.filter(f => f.properties?.color === '#1D9E75').length;
+  const heldCount = allFeatures.filter(f => f.properties?.color === '#D64525').length;
   const isAtCap = heldCount >= cap;
 
   return (
@@ -120,7 +128,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.sheetAction,
-            { backgroundColor: '#E24B4A' },
+            { backgroundColor: CLAIM, opacity: 0.7 },
             pressed && { opacity: 0.92 },
           ]}
           onPress={() => {
@@ -155,7 +163,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.sheetAction,
-            { backgroundColor: '#E24B4A' },
+            { backgroundColor: ENEMY },
             pressed && { opacity: 0.92 },
           ]}
           onPress={() => {
@@ -222,9 +230,9 @@ export default function MapScreen() {
           tier: t.tier ?? 'Medium',
           level: `D${t.development_level ?? 0}`,
           perimeter: t.perimeter_distance,
-          color: t.players?.clerk_id === userId ? '#1D9E75' :
-            (playerRow?.alliance_id && t.alliance_id === playerRow.alliance_id) ? '#534AB7' :
-            t.owner_id != null ? '#993C1D' : '#444441',
+          color: t.players?.clerk_id === userId ? '#D64525' :
+            (playerRow?.alliance_id && t.alliance_id === playerRow.alliance_id) ? '#3F8F4E' :
+            t.owner_id != null ? '#4A6B8A' : 'transparent',
         },
         geometry: {
           type: 'Polygon',
@@ -255,9 +263,9 @@ export default function MapScreen() {
 
   const lineStyle = useMemo(
     () => ({
-      lineColor: ['get', 'color'],
-      lineWidth: 2,
-      lineOpacity: 0.95,
+      lineColor: ['case', ['==', ['get', 'color'], UNCLAIMED], SLATE, ['get', 'color']],
+      lineWidth: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.6, 1],
+      lineOpacity: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.5, 0.9],
     }),
     [],
   );
@@ -265,12 +273,13 @@ export default function MapScreen() {
   const labelStyle = useMemo(
     () => ({
       textField: ['get', 'name'],
-      textSize: 12,
-      textColor: '#0F172A',
-      textHaloColor: '#FFFFFF',
-      textHaloWidth: 1.25,
+      textSize: 11,
+      textColor: '#F2EEE6',
+      textHaloColor: 'rgba(14,16,20,0.85)',
+      textHaloWidth: 1.5,
       textAllowOverlap: false,
-      textAnchor: 'top',
+      textAnchor: 'center',
+      textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
     }),
     [],
   );
@@ -287,7 +296,7 @@ export default function MapScreen() {
 
   return (
     <View style={styles.screen}>
-      <MapboxGL.MapView style={styles.map} styleURL={MapboxGL.StyleURL.Street}>
+      <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/mapbox/dark-v11">
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
         <MapboxGL.UserLocation
@@ -321,7 +330,9 @@ export default function MapScreen() {
 
       <View style={styles.hudRight}>
         <View style={styles.allianceBadge}>
-          <Text style={styles.allianceBadgeText}>{myAllianceName ?? 'No Alliance'}</Text>
+          <Text style={styles.allianceBadgeText} numberOfLines={1} ellipsizeMode="tail">
+            {myAllianceName ?? 'No Alliance'}
+          </Text>
         </View>
       </View>
 
@@ -345,7 +356,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F6F8F7',
+    backgroundColor: '#0E1014',
   },
   map: {
     flex: 1,
@@ -353,47 +364,50 @@ const styles = StyleSheet.create({
 
   hudLeft: {
     position: 'absolute',
-    top: 16,
+    top: 52,
     left: 16,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    backgroundColor: '#1A1D24',
+    borderRadius: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.9)',
+    borderColor: 'rgba(242,238,230,0.16)',
   },
   hudValue: {
-    color: '#0F172A',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    color: '#F2EEE6',
+    letterSpacing: 0.5,
   },
   hudLabel: {
     marginTop: 2,
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: '#8B8F98',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
 
   hudRight: {
     position: 'absolute',
-    top: 16,
+    top: 52,
     right: 16,
     alignItems: 'flex-end',
   },
   allianceBadge: {
-    backgroundColor: 'rgba(83,74,183,0.12)',
-    borderColor: 'rgba(83,74,183,0.28)',
+    backgroundColor: 'rgba(63,143,78,0.14)',
+    borderColor: 'rgba(242,238,230,0.16)',
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   allianceBadgeText: {
-    color: ALLIANCE,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    color: '#3F8F4E',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
 
   locateButton: {
@@ -403,24 +417,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 16,
-    paddingVertical: 10,
+    backgroundColor: '#1A1D24',
+    borderRadius: 0,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(229,231,235,0.95)',
+    borderColor: 'rgba(242,238,230,0.16)',
   },
   locateIcon: {
-    color: ACCENT,
-    fontSize: 16,
-    fontWeight: '900',
-    marginTop: -1,
+    color: '#F2EEE6',
+    fontSize: 14,
   },
   locateText: {
-    color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: '#8B8F98',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
 
   sheet: {
@@ -428,22 +441,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    backgroundColor: '#1A1D24',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
     borderTopWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(242,238,230,0.16)',
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   sheetHandle: {
     alignSelf: 'center',
-    width: 46,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#E2E8F0',
-    marginBottom: 10,
+    width: 32,
+    height: 1,
+    borderRadius: 0,
+    backgroundColor: 'rgba(242,238,230,0.16)',
+    marginBottom: 14,
   },
   sheetTopRow: {
     flexDirection: 'row',
@@ -452,10 +465,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetTitle: {
-    color: '#0F172A',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 20,
+    color: '#F2EEE6',
+    letterSpacing: -0.015,
   },
   sheetTitleRow: {
     flexDirection: 'row',
@@ -463,70 +476,75 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetTierBadge: {
-    borderRadius: 10,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: 'rgba(242,238,230,0.16)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     marginTop: 1,
   },
   sheetTierBadgeText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: '#8B8F98',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   sheetSubtitle: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: '#8B8F98',
     marginTop: 6,
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   sheetSubtitleStrong: {
-    fontWeight: '900',
+    fontFamily: 'GeistMono_500Medium',
+    color: '#F2EEE6',
   },
   sheetOwnerUnclaimed: {
-    color: '#64748B',
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    color: '#5C6068',
   },
   sheetAllianceTag: {
-    color: '#64748B',
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    color: '#8B8F98',
   },
   sheetPerimeter: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: '#8B8F98',
     marginTop: 6,
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   sheetClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(242,238,230,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetCloseText: {
-    color: '#0F172A',
-    fontSize: 22,
-    fontWeight: '700',
+    color: '#F2EEE6',
+    fontSize: 20,
     marginTop: -2,
   },
   sheetAction: {
-    marginTop: 12,
-    backgroundColor: ACCENT,
-    borderRadius: 16,
-    paddingVertical: 12,
+    marginTop: 16,
+    backgroundColor: '#D64525',
+    borderRadius: 0,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetActionDisabled: {
-    marginTop: 12,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingVertical: 12,
+    marginTop: 16,
+    backgroundColor: '#1A1D24',
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(242,238,230,0.16)',
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -534,21 +552,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#EA580C',
   },
   sheetActionText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_500Medium',
+    color: '#F2EEE6',
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   sheetActionDisabledText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    color: '#5C6068',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   sheetActionDisabledSub: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: '#5C6068',
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
 });
