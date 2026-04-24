@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 24, 2026
+Last updated: April 24, 2026 (evening)
 
 ---
 
@@ -109,19 +109,19 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ~ Not yet branded | Functional. Mapbox map, territory colours, TerritorySheet, cap enforcement. Brand next session. |
+| Map screen | ✓ Branded | Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout, More/Less expandable section |
 | Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak), daily challenges, achievements table (hardcoded), weekly chart |
 | Profile screen | ✓ Branded | Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
 | Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
 | War Room screen | ✓ Branded | All theme tokens. Influence hero block, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
-| Active Claim screen | ~ Not yet branded | Functional. DEV_MODE=true, mode param (claim/contest). |
-| Claim Success screen | ~ Not yet branded | Functional. Sets owner_id + alliance_id in Supabase. |
-| Contest Result screen | ~ Not yet branded | Functional. 4 states, writes on attack_won. |
-| Sign In screen | ○ Not yet branded | Functional. Sign in + sign up, passes playerId through nav params. |
-| Create Alliance screen | ○ Not yet branded | Functional. 3-step founding flow. |
+| Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
+| Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
+| Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
+| Claim Success screen | ✓ Branded | Solid Claim red square, "TERRITORY / is yours." typographic treatment, sharp cards |
+| Contest Result screen | ✓ Branded | 4 states, animated solid/outline square per outcome, consequence line block, two-button CTA stack |
+| Create Alliance screen | ○ Not yet branded | Functional. 3-step founding flow. Next to brand. |
 | Alliance Joined screen | ○ Not yet branded | Functional. Reads name/code/city from nav params. |
-| Username screen | ○ Not yet branded | Functional. Uses playerId from nav params. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
 | Defender flow | ○ Deferred | Needs Ably real-time layer — revisit when backend is started. |
@@ -145,21 +145,23 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
 | `lib/level.js` | LEVELS array, getLevelForXp, getNextLevel, getXpProgress, territoryCap per level |
 | `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day |
+| `lib/territory.js` | Pure territory calculation helpers: streakTier, influencePerDay, contestWalkDistance, streakReductionPercent, developmentMultiplier, legacyRankMultiplier, etc. |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Mapbox map, territory fetch + colour logic, TerritorySheet with button gating + cap enforcement. Not yet branded. |
-| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header (live username/level/streak from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
-| `screens/ProfileScreen.js` | Fully branded. Frozen header, stat grid, XP progress, Influence hero block (hardcoded 1,247), territory rows, legacy titles (hardcoded), settings |
+| `screens/MapScreen.js` | Fully branded. Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout + More/Less expandable section |
+| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header (live data from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
+| `screens/ProfileScreen.js` | Fully branded. Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
 | `screens/AllianceScreen.js` | Fully branded. Member/non-member states, roster, create + join flows, Enter War Room button. |
-| `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block above countdown, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
-| `screens/SignInScreen.js` | Sign in + sign up, passes playerId through nav params. Not yet branded. |
-| `screens/UsernameScreen.js` | Uses playerId from nav params. Not yet branded. |
-| `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation (Step 0), numbered rows (Steps 1+2), Mapbox dark-v11 home pin map (Step 3), resolvedPlayerId fallback, live username (Step 4) |
+| `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block, Morale full-width, 2×2 resource grid, morale abilities. All hardcoded. |
+| `screens/SignInScreen.js` | Fully branded. DOMINIA wordmark + ▪ claim mark, Geist Mono tagline, sharp inputs + Claim button. |
+| `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
+| `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 map, resolvedPlayerId fallback, live username |
+| `screens/ActiveClaimScreen.js` | Fully branded. Claim red ring (butt cap), sharp cards, Geist Mono labels. DEV_MODE=true — flip to false for real GPS. |
+| `screens/ClaimSuccessScreen.js` | Fully branded. Solid Claim red square, typographic treatment. Writes owner_id + alliance_id to Supabase. |
+| `screens/ContestResultScreen.js` | Fully branded. 4 states, animated square, consequence block, two-button CTA stack. Writes on attack_won. |
 | `screens/CreateAllianceScreen.js` | 3-step founding flow. Not yet branded. |
 | `screens/AllianceJoinedScreen.js` | Reads name/code/city from route.params. Not yet branded. |
-| `screens/ActiveClaimScreen.js` | DEV_MODE=true, mode param (claim/contest). Not yet branded. |
-| `screens/ClaimSuccessScreen.js` | Sets owner_id + alliance_id in Supabase. Not yet branded. |
-| `screens/ContestResultScreen.js` | 4 states, writes on attack_won. Not yet branded. |
+| `lib/territory.js` | Pure territory calculation helpers: streakTier(), developmentName(), developmentMultiplier(), legacyRankName(), legacyRankMultiplier(), baseInfluencePerDay(), influencePerDay(), streakCapForTier(), cappedStreakMultiplier(), contestWalkDistance(), streakReductionPercent() |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
 | `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26) |
@@ -216,7 +218,7 @@ git push
 |---|---|
 | Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev. Must re-enable before production. |
-| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. Fallback: `expo-sensors Pedometer.watchStepCount()` not yet tried. |
+| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. DEV_MODE=true on ActiveClaimScreen. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
 | Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred until after branding complete. |
@@ -225,6 +227,9 @@ git push
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
 | player_number hardcoded as #0004 | Sequential player_number column in Supabase not yet added. |
+| Territory sheet history data hardcoded | Held for X days (14), changed hands count (6), Hall of Holders count (12) all hardcoded. No history table in DB yet. |
+| Legacy Rank hardcoded R1 | No legacy_rank column in DB yet — influencePerDay() defaults to Rank 1 (Unproven). |
+| Draggable bottom sheet deferred | More/Less toggle on territory sheet is a workaround — gorhom/bottom-sheet deferred until it can be batched into an EAS build. |
 
 ---
 
@@ -242,7 +247,7 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Brand the Map screen — replace StyleURL.Street with dark style, replace white HUD cards and rounded corners with brand tokens, apply Geist Mono to all labels. Start by pasting MapScreen.js into chat before touching anything.
+**Immediate:** Brand the Create Alliance screen — paste CreateAllianceScreen.js into chat before touching anything.
 
 **Branding order (in progress):**
 1. ✓ Tab bar
@@ -250,16 +255,20 @@ git push
 3. ✓ Alliance screen + War Room
 4. ✓ Activity screen
 5. ✓ Onboarding screen
-6. Map screen — next
-7. Active Claim, Claim Success, Contest Result
-8. Sign In, Create Alliance, Alliance Joined, Username
+6. ✓ Map screen
+7. ✓ Sign In, Username
+8. ✓ Active Claim, Claim Success, Contest Result
+9. Create Alliance — next
+10. Alliance Joined
 
 **Other backlog:**
 - Refactor ProfileScreen colour constants to lib/theme.js tokens
 - Wire War Room + Profile Influence/war chest to real Supabase data
 - Fix auth flow order (new users should see Steps 0+1 before sign-up)
+- Add territory history table (held days, changed hands count, Hall of Holders)
+- Add legacy_rank column to territories table
 - Real step tracking — try expo-sensors Pedometer.watchStepCount()
-- Achievements table — wire once HealthKit/Health Connect solved
+- Draggable bottom sheet — gorhom/bottom-sheet when batching EAS build
 - Onboarding home pin 500m verification
 - Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
 - Defender flow — revisit once Ably is built
@@ -333,6 +342,15 @@ git push
 | Auth flow order deferred | New users should see Steps 0+1 before sign-up — fix after branding complete |
 | has_onboarded reset via Supabase SQL | No DEV_SKIP_INTRO flag needed — direct SQL simpler for dev testing |
 | Handle one screen or one fix at a time | Never batch unrelated changes — added to working style |
+| ▪ claim mark sized at fontSize 9 at 32px wordmark | 20% of cap-height per brand brief, one character-space gap from A |
+| useFonts() must NOT be added to MapScreen or ActiveClaimScreen | Hooks order violation because of early returns — fonts already loaded by App.js |
+| Territory sheet top border = state colour at 1px | 1px not 2px — brand hairline rule |
+| Influence per day defaults to legacyRank=1 | Placeholder until legacy_rank column added to DB |
+| Abandon handler needs .select() after null write | Without .select(), Supabase silently ignores null value writes for alliance_id |
+| Solid Claim red square for success/milestone moments | No tick, no illustration — typographic hierarchy principle per brand brief |
+| ContestResultScreen built from brand director mockup | Not derived from existing functional code — clean rebuild |
+| More/Less toggle kept on territory sheet | Draggable bottom sheet (gorhom) deferred — would require EAS build, applies across multiple screens |
+| Cancel button on ActiveClaimScreen uses Slate2 not Claim | Claim reserved for territory/CTA signal only |
 
 ---
 
