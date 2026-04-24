@@ -1,3 +1,6 @@
+import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
+import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
+import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -8,13 +11,16 @@ export default function UsernameScreen({ navigation, route }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, Inter_400Regular });
+  if (!fontsLoaded) return null;
+
   const handleConfirm = async () => {
     if (!username.trim()) {
       setError('Please enter a username.');
       return;
     }
-    if (username.length < 3) {
-      setError('Username must be at least 3 characters.');
+    if (username.length < 2) {
+      setError('Username must be at least 2 characters.');
       return;
     }
     if (username.length > 20) {
@@ -46,30 +52,51 @@ export default function UsernameScreen({ navigation, route }) {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Text style={styles.title}>Choose your name</Text>
-      <Text style={styles.subtitle}>This is how other Commanders will know you.</Text>
+      <View style={styles.content}>
+        <Text style={styles.title}>Choose your name</Text>
+        <Text style={styles.subtitle}>This is how other Commanders will know you.</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Commander name"
-        placeholderTextColor="#64748B"
-        autoCapitalize="none"
-        value={username}
-        onChangeText={setUsername}
-        maxLength={20}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Commander name"
+          placeholderTextColor="#5C6068"
+          autoCapitalize="none"
+          value={username}
+          onChangeText={setUsername}
+          maxLength={20}
+        />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+      </View>
 
-      <Pressable
-        style={[styles.button, loading && { opacity: 0.7 }]}
-        onPress={handleConfirm}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? 'Please wait...' : 'Enter the map'}
-        </Text>
-      </Pressable>
+      <View style={styles.buttonContainer}>
+        <Pressable
+          onPress={handleConfirm}
+          disabled={loading || username.trim().length < 2}
+          style={({ pressed }) => [
+            {
+              backgroundColor: '#D64525',
+              paddingVertical: 14,
+              width: '100%',
+              alignItems: 'center',
+            },
+            (loading || username.trim().length < 2) && { opacity: 0.5 },
+            pressed && username.trim().length >= 2 && !loading && { opacity: 0.9 },
+          ]}
+        >
+          <Text
+            style={{
+              fontFamily: 'GeistMono_500Medium',
+              fontSize: 14,
+              letterSpacing: 2.4,
+              color: '#F2EEE6',
+              textTransform: 'uppercase',
+            }}
+          >
+            Next →
+          </Text>
+        </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -77,57 +104,51 @@ export default function UsernameScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0D0D0D',
-    alignItems: 'center',
+    backgroundColor: '#0E1014',
+    paddingHorizontal: 18,
+    paddingTop: 48,
+    paddingBottom: 24,
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
-    padding: 24,
+  },
+  buttonContainer: {
   },
   title: {
-    color: '#F2F0EB',
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -1,
+    fontFamily: 'Archivo_900Black',
+    color: '#F2EEE6',
+    fontSize: 24,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   subtitle: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 48,
-    textAlign: 'center',
-    lineHeight: 22,
+    fontFamily: 'Inter_400Regular',
+    color: '#8B8F98',
+    fontSize: 13,
+    marginBottom: 32,
+    textAlign: 'left',
+    lineHeight: 20,
   },
   input: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
+    backgroundColor: '#1A1D24',
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#2E2E2E',
-    color: '#F2F0EB',
+    borderColor: 'rgba(242,238,230,0.16)',
+    color: '#F2EEE6',
     fontSize: 15,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
   },
   error: {
-    color: '#E84040',
+    fontFamily: 'Inter_400Regular',
+    color: '#D64525',
     fontSize: 13,
     marginBottom: 12,
-    textAlign: 'center',
-  },
-  button: {
-    width: '100%',
-    backgroundColor: '#FF6B35',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+    textAlign: 'left',
   },
 });

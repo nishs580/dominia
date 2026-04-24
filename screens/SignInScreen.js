@@ -1,4 +1,6 @@
 import { useSignIn, useSignUp } from '@clerk/clerk-expo';
+import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
+import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { ensurePlayer } from '../lib/auth';
@@ -11,6 +13,9 @@ export default function SignInScreen({ navigation }) {
   const [error, setError] = useState('');
   const [mode, setMode] = useState('signin');
   const [loading, setLoading] = useState(false);
+
+  const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular });
+  if (!fontsLoaded) return null;
 
   const handleSignIn = async () => {
     if (!signInLoaded) return;
@@ -52,13 +57,13 @@ export default function SignInScreen({ navigation }) {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Text style={styles.title}>Dominia</Text>
+      <Text style={styles.title}>DOMINIA <Text style={styles.claimMark}>■</Text></Text>
       <Text style={styles.subtitle}>Walk. Claim. Conquer. Defend.</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#64748B"
+        placeholderTextColor="#6B7280"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -67,7 +72,7 @@ export default function SignInScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#64748B"
+        placeholderTextColor="#6B7280"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -107,25 +112,31 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   title: {
+    fontFamily: 'Archivo_900Black',
     color: '#F2F0EB',
-    fontSize: 48,
-    fontWeight: '900',
+    fontSize: 32,
     letterSpacing: -1,
     marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  claimMark: {
+    color: '#E83B3B',
+    fontSize: 9,
   },
   subtitle: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    color: '#6B7280',
+    fontSize: 11,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
     marginBottom: 48,
-    letterSpacing: 0.5,
   },
   input: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#2E2E2E',
+    borderColor: '#2A2A2A',
     color: '#F2F0EB',
     fontSize: 15,
     paddingHorizontal: 16,
@@ -133,34 +144,34 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   error: {
-    color: '#E84040',
+    color: '#E83B3B',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   button: {
     width: '100%',
-    backgroundColor: '#FF6B35',
-    borderRadius: 12,
+    backgroundColor: '#E83B3B',
+    borderRadius: 0,
     paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
   },
   buttonText: {
-    color: '#FFFFFF',
+    fontFamily: 'Archivo_900Black',
+    color: '#F2F0EB',
     fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
   toggleButton: {
     marginTop: 24,
   },
   toggleText: {
-    color: '#64748B',
+    color: '#6B7280',
     fontSize: 13,
   },
   toggleLink: {
-    color: '#FF6B35',
-    fontWeight: '900',
+    color: '#E83B3B',
+    fontFamily: 'Archivo_900Black',
   },
 });
