@@ -3,12 +3,14 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
-const BG = '#0f0f14';
-const CARD = '#1a1a24';
-const ORANGE = '#ff6e3c';
-const WHITE = '#ffffff';
-const MUTED = '#8b8b9a';
-const GREEN = '#4ade80';
+const INK = '#0E1014';
+const INK2 = '#1A1D24';
+const BONE = '#F2EEE6';
+const SLATE2 = '#8B8F98';
+const CLAIM = '#D64525';
+const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
+const ALLIANCE = '#3F8F4E';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 function formatMeters(m) {
   const v = Math.max(0, Math.round(Number(m) || 0));
@@ -83,14 +85,11 @@ export default function ClaimSuccessScreen() {
       <View style={{ flex: 1 }} />
 
       <Animated.View style={[styles.center, animatedStyle]}>
-        <View style={styles.iconCircle}>
-          <View style={styles.tickLong} />
-          <View style={styles.tickShort} />
-        </View>
+        <View style={styles.iconSquare} />
 
-        <Text style={styles.title}>Territory Claimed!</Text>
         <Text style={styles.territory}>{territoryName}</Text>
-        <Text style={styles.message}>You now control this territory. Defend it well.</Text>
+        <Text style={styles.territoryCaption}>is yours.</Text>
+        <Text style={styles.message}>Defend it.</Text>
 
         <View style={styles.cardsRow}>
           <View style={styles.card}>
@@ -99,7 +98,7 @@ export default function ClaimSuccessScreen() {
           </View>
           <View style={styles.card}>
             <Text style={styles.cardLabel}>STATUS</Text>
-            <Text style={[styles.cardValue, { color: GREEN }]}>Owned</Text>
+            <Text style={[styles.cardValue, { color: ALLIANCE }]}>Owned</Text>
           </View>
         </View>
       </Animated.View>
@@ -190,144 +189,145 @@ export default function ClaimSuccessScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: INK,
     paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 18,
+    paddingTop: 48,
+    paddingBottom: 24,
   },
+
   center: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 999,
-    borderWidth: 6,
-    borderColor: ORANGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
+
+  iconSquare: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#D64525',
+    marginBottom: 24,
   },
-  tickLong: {
-    position: 'absolute',
-    width: 12,
-    height: 70,
-    borderRadius: 10,
-    backgroundColor: ORANGE,
-    transform: [{ rotate: '45deg' }],
-    left: 82,
-    top: 40,
-  },
-  tickShort: {
-    position: 'absolute',
-    width: 12,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: ORANGE,
-    transform: [{ rotate: '-45deg' }],
-    left: 58,
-    top: 66,
-  },
-  title: {
-    color: WHITE,
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
+
   territory: {
-    marginTop: 10,
-    color: ORANGE,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'Archivo_900Black',
+    color: BONE,
+    fontSize: 28,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
     textAlign: 'center',
+    lineHeight: 32,
   },
+
+  territoryCaption: {
+    fontFamily: 'GeistMono_400Regular',
+    color: CLAIM,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+
   message: {
-    marginTop: 12,
-    color: MUTED,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 8,
+    color: SLATE2,
     fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
+    lineHeight: 20,
     textAlign: 'center',
     paddingHorizontal: 18,
   },
+
   cardsRow: {
-    marginTop: 22,
+    marginTop: 24,
     flexDirection: 'row',
     gap: 12,
     width: '100%',
   },
+
   card: {
     flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 16,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
+
   cardLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.1,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
+
   cardValue: {
-    marginTop: 10,
-    color: WHITE,
+    fontFamily: 'GeistMono_500Medium',
+    color: BONE,
     fontSize: 20,
-    fontWeight: '900',
     letterSpacing: -0.2,
+    marginTop: 8,
   },
+
   cta: {
-    backgroundColor: ORANGE,
-    borderRadius: 18,
-    paddingVertical: 15,
+    backgroundColor: CLAIM,
+    borderRadius: 0,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   ctaText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-  testSection: {
-    marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  testTitle: {
-    color: 'rgba(255,255,255,0.65)',
+    fontFamily: 'GeistMono_500Medium',
+    color: BONE,
     fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.0,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+
+  testSection: {
+    marginBottom: 12,
+    backgroundColor: INK2,
+    borderRadius: 0,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+  },
+
+  testTitle: {
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+
   testButtonsRow: {
     marginTop: 10,
     flexDirection: 'row',
     gap: 10,
   },
+
   testBtn: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
+    backgroundColor: INK,
+    borderRadius: 0,
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: HAIRLINE_STRONG,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   testBtnText: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
 });
 

@@ -7,12 +7,15 @@ import { supabase } from '../lib/supabase';
 
 const DEV_MODE = true;
 
-const BG = '#0f0f14';
-const CARD = '#1a1a24';
-const RING_BG = '#1e1e2a';
-const ORANGE = '#ff6e3c';
-const WHITE = '#ffffff';
-const MUTED = '#8b8b9a';
+const INK = '#0E1014';
+const INK2 = '#1A1D24';
+const INK3 = '#252932';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE2 = '#8B8F98';
+const CLAIM = '#D64525';
+const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -274,7 +277,7 @@ export default function ActiveClaimScreen() {
               cx={ring.cx}
               cy={ring.cy}
               r={ring.radius}
-              stroke={RING_BG}
+              stroke={INK3}
               strokeWidth={ring.strokeWidth}
               fill="none"
             />
@@ -282,10 +285,10 @@ export default function ActiveClaimScreen() {
               cx={ring.cx}
               cy={ring.cy}
               r={ring.radius}
-              stroke={ORANGE}
+              stroke={CLAIM}
               strokeWidth={ring.strokeWidth}
               fill="none"
-              strokeLinecap="round"
+              strokeLinecap="butt"
               strokeDasharray={`${ring.circumference} ${ring.circumference}`}
               strokeDashoffset={strokeDashoffset}
               rotation="-90"
@@ -333,126 +336,154 @@ export default function ActiveClaimScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: INK,
     paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 18,
+    paddingTop: 48,
+    paddingBottom: 24,
   },
+
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
   },
+
   claimingLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginBottom: 6,
   },
+
   territoryName: {
-    marginTop: 6,
-    color: WHITE,
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.3,
+    fontFamily: 'Archivo_900Black',
+    color: BONE,
+    fontSize: 24,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    lineHeight: 28,
   },
+
   badge: {
-    marginTop: 2,
-    backgroundColor: 'rgba(255,110,60,0.14)',
-    borderColor: 'rgba(255,110,60,0.35)',
+    marginTop: 4,
+    backgroundColor: CLAIM_SOFT,
+    borderColor: HAIRLINE_STRONG,
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    borderRadius: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
+
   badgeText: {
-    color: ORANGE,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_500Medium',
+    color: CLAIM,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
+
   ringWrap: {
-    marginTop: 26,
+    marginTop: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   ringStack: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   ringCenter: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   pctText: {
-    color: WHITE,
-    fontSize: 44,
-    fontWeight: '900',
-    letterSpacing: -0.6,
+    fontFamily: 'Archivo_700Bold',
+    color: BONE,
+    fontSize: 48,
+    letterSpacing: -1,
   },
+
   completeText: {
-    marginTop: 6,
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginTop: 4,
   },
+
   cardsRow: {
-    marginTop: 24,
+    marginTop: 28,
     flexDirection: 'row',
     gap: 12,
   },
+
   card: {
     flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 16,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
+
   cardLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.1,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
+
   cardValue: {
-    marginTop: 10,
-    color: WHITE,
+    fontFamily: 'GeistMono_500Medium',
+    color: BONE,
     fontSize: 22,
-    fontWeight: '900',
     letterSpacing: -0.2,
+    marginTop: 8,
   },
+
   cardSub: {
-    marginTop: 6,
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    marginTop: 4,
   },
+
   helper: {
-    marginTop: 18,
-    color: MUTED,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 20,
+    color: SLATE2,
     fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
+    lineHeight: 20,
     textAlign: 'center',
     paddingHorizontal: 16,
   },
+
   cancelBtn: {
-    backgroundColor: CARD,
-    borderRadius: 16,
+    backgroundColor: INK2,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   cancelText: {
-    color: '#ff4d4d',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: -0.1,
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
 });
 

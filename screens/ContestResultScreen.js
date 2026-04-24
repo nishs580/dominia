@@ -1,63 +1,76 @@
-import React, { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
-const BG = '#0f0f14';
-const WHITE = '#ffffff';
-const MUTED = '#666';
-
 const STATE_CONFIG = {
   attack_won: {
-    icon: '🏆',
-    accent: '#ED9332',
-    label: 'Territory captured',
-    title: 'You won!',
-    opponentRoleLabel: 'Defender',
-    footnote: '+120 XP earned',
-    isWin: true,
-    showContext: false,
+    role: 'attacker',
+    outcome: 'won',
+    eyebrow: '▪ TERRITORY TAKEN',
+    headline: 'Yours.',
+    opponentRoleLabel: 'DEFENDER',
+    primaryCta: 'CLAIM & DEFEND',
   },
   attack_lost: {
-    icon: '⚔️',
-    accent: '#E24B4A',
-    label: 'Attack failed',
-    title: 'You lost',
-    opponentRoleLabel: 'Defender',
-    footnote: 'Better luck next time',
-    isWin: false,
-    showContext: false,
-  },
-  defend_lost: {
-    icon: '💔',
-    accent: '#E24B4A',
-    label: 'Territory lost',
-    title: 'Taken!',
-    opponentRoleLabel: 'Attacker',
-    footnote: 'Territory removed from your profile',
-    isWin: false,
-    showContext: true,
+    role: 'attacker',
+    outcome: 'lost',
+    eyebrow: '▪ ATTACK FAILED',
+    headline: 'Held.',
+    opponentRoleLabel: 'DEFENDER',
+    primaryCta: 'RECONTEST WHEN READY',
   },
   defend_won: {
-    icon: '🛡️',
-    accent: '#61C459',
-    label: 'Territory defended',
-    title: 'You held!',
-    opponentRoleLabel: 'Attacker',
-    footnote: '+60 XP for defending',
-    isWin: true,
-    showContext: true,
+    role: 'defender',
+    outcome: 'won',
+    eyebrow: '▪ TERRITORY HELD',
+    headline: 'Yours, still.',
+    opponentRoleLabel: 'ATTACKER',
+    primaryCta: 'FORTIFY FOR 24H',
+  },
+  defend_lost: {
+    role: 'defender',
+    outcome: 'lost',
+    eyebrow: '▪ TERRITORY LOST',
+    headline: 'Taken.',
+    opponentRoleLabel: 'ATTACKER',
+    primaryCta: 'RECONQUER',
   },
 };
+
+const INK = '#0E1014';
+const INK_2 = '#1A1D24';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE_2 = '#8B8F98';
+const CLAIM = '#D64525';
+const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
+const ALLIANCE = '#3F8F4E';
+const ALLIANCE_SOFT = 'rgba(63,143,78,0.14)';
+const HAIRLINE = 'rgba(242,238,230,0.08)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 function clampNumber(n, fallback = 0) {
   const v = Number(n);
   return Number.isFinite(v) ? v : fallback;
 }
 
-function formatMetersNumber(m) {
-  const v = Math.max(0, Math.round(clampNumber(m, 0)));
-  return v.toLocaleString();
+function formatMetres(m) {
+  return Math.max(0, Math.round(clampNumber(m, 0))).toLocaleString();
+}
+
+function consequenceLine(cfg, myM, oppM, opponentName) {
+  const diff = Math.abs(myM - oppM);
+  if (cfg.outcome === 'won' && cfg.role === 'attacker') {
+    return `${opponentName.toUpperCase()} HELD THIS GROUND.\nYOU ARE NOW IN THE HALL OF HOLDERS.`;
+  }
+  if (cfg.outcome === 'lost' && cfg.role === 'attacker') {
+    return `${diff} METRES SHORT.\nSTREAK INTACT. RECONTEST WHEN READY.`;
+  }
+  if (cfg.outcome === 'won' && cfg.role === 'defender') {
+    return `+60 XP · +12 SHIELD.\nYOUR HOLD CONTINUES.`;
+  }
+  return `RECONQUEST WINDOW OPEN: 72H.\nYOUR DEFENCE IS RECORDED.`;
 }
 
 export default function ContestResultScreen() {
@@ -67,6 +80,7 @@ export default function ContestResultScreen() {
   const {
     contestState = 'attack_won',
     territoryName = 'Territory',
+    territoryPerimeter,
     myDistance = 0,
     opponentDistance = 0,
     opponentName = 'opponent',
@@ -88,83 +102,117 @@ export default function ContestResultScreen() {
   }, []);
 
   const cfg = STATE_CONFIG[contestState] ?? STATE_CONFIG.attack_won;
-  const accent = cfg.accent;
+  const markColor = cfg.role === 'attacker' ? CLAIM : ALLIANCE;
+  const markSoftColor = cfg.role === 'attacker' ? CLAIM_SOFT : ALLIANCE_SOFT;
 
   const myM = clampNumber(myDistance, 0);
   const oppM = clampNumber(opponentDistance, 0);
 
   const winner = useMemo(() => {
-    if (myM === oppM) return 'tie';
+    if (myM === oppM) return cfg.outcome === 'won' ? 'me' : 'opponent';
     return myM > oppM ? 'me' : 'opponent';
-  }, [myM, oppM]);
+  }, [myM, oppM, cfg.outcome]);
 
-  const myIsWinner = winner === 'me' || (winner === 'tie' && cfg.isWin);
+  const myIsWinner = winner === 'me';
   const oppIsWinner = winner === 'opponent';
+
+  const fillOpacity = useRef(new Animated.Value(0)).current;
+  const borderAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (cfg.outcome === 'won') {
+      Animated.timing(fillOpacity, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(borderAnim, {
+        toValue: 3,
+        duration: 280,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [cfg.outcome]);
 
   return (
     <View style={styles.screen}>
-      <View style={styles.content}>
-        <View style={[styles.iconWrap, { borderColor: accent, backgroundColor: `${accent}14` }]}>
-          <Text style={styles.icon}>{cfg.icon}</Text>
-        </View>
+      <View style={styles.statusSpacer} />
 
-        <Text style={[styles.label, { color: accent }]}>{cfg.label}</Text>
-        <Text style={styles.title}>{cfg.title}</Text>
-        <Text style={styles.territory}>{territoryName}</Text>
+      <Text style={[styles.eyebrow, { color: markColor }]}>{cfg.eyebrow}</Text>
 
-        {cfg.showContext && (
-          <View style={styles.contextPill}>
-            <Text style={styles.contextText}>{`${opponentName} challenged you`}</Text>
-          </View>
+      <View style={styles.markWrap}>
+        {cfg.outcome === 'won' ? (
+          <Animated.View
+            style={{
+              width: 72,
+              height: 72,
+              backgroundColor: markColor,
+              opacity: fillOpacity,
+            }}
+          />
+        ) : (
+          <Animated.View
+            style={{
+              width: 72,
+              height: 72,
+              borderColor: markColor,
+              borderWidth: borderAnim,
+              backgroundColor: 'transparent',
+            }}
+          />
         )}
+      </View>
 
-        <View style={styles.cardsRow}>
-          <View
-            style={[
-              styles.playerCard,
-              myIsWinner && { backgroundColor: `${accent}10`, borderColor: `${accent}35` },
-            ]}
-          >
-            <Text style={styles.playerTopLabel}>You</Text>
-            <Text style={styles.playerName}>You</Text>
-            <Text style={[styles.distanceNumber, myIsWinner ? { color: accent } : styles.distanceMuted]}>
-              {formatMetersNumber(myM)}
-            </Text>
-            <Text style={styles.distanceUnit}>metres</Text>
-          </View>
+      <Text style={styles.territoryName}>{territoryName.toUpperCase()}</Text>
+      <Text style={styles.headline}>{cfg.headline}</Text>
 
-          <View
-            style={[
-              styles.playerCard,
-              oppIsWinner && { backgroundColor: `${accent}10`, borderColor: `${accent}35` },
-            ]}
-          >
-            <Text style={styles.playerTopLabel}>{cfg.opponentRoleLabel}</Text>
-            <Text style={styles.playerName}>{opponentName}</Text>
-            <Text style={[styles.distanceNumber, oppIsWinner ? { color: accent } : styles.distanceMuted]}>
-              {formatMetersNumber(oppM)}
-            </Text>
-            <Text style={styles.distanceUnit}>metres</Text>
-          </View>
+      {territoryPerimeter ? <Text style={styles.perimeter}>{`${territoryPerimeter} KM PERIMETER`}</Text> : null}
+
+      <View style={styles.statsRow}>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>YOU</Text>
+          <Text style={styles.statName}>You</Text>
+          <Text style={[styles.statValue, myIsWinner ? { color: markColor } : { color: SLATE }]}>
+            {formatMetres(myM)}
+          </Text>
+          <Text style={styles.statUnit}>METRES WALKED</Text>
         </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>{cfg.opponentRoleLabel}</Text>
+          <Text style={styles.statName}>{opponentName}</Text>
+          <Text style={[styles.statValue, oppIsWinner ? { color: markColor } : { color: SLATE }]}>
+            {formatMetres(oppM)}
+          </Text>
+          <Text style={styles.statUnit}>METRES WALKED</Text>
+        </View>
+      </View>
+
+      <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
+        <Text style={styles.consequenceText}>{consequenceLine(cfg, myM, oppM, opponentName)}</Text>
+      </View>
+
+      <View style={styles.ctaStack}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={cfg.primaryCta}
+          onPress={() => navigation.navigate('MainTabs')}
+          style={({ pressed }) => [styles.ctaPrimary, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.ctaPrimaryText}>{cfg.primaryCta}</Text>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to map"
           onPress={() => navigation.navigate('MainTabs')}
-          style={({ pressed }) => [
-            styles.cta,
-            cfg.isWin ? styles.ctaWin : styles.ctaLose,
-            pressed && { opacity: 0.9 },
-          ]}
+          style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.7 }]}
         >
-          <Text style={[styles.ctaText, cfg.isWin ? styles.ctaTextWin : styles.ctaTextLose]}>
-            Back to map
-          </Text>
+          <Text style={styles.ctaSecondaryText}>BACK TO MAP</Text>
         </Pressable>
       </View>
-
-      <Text style={styles.footnote}>{cfg.footnote}</Text>
     </View>
   );
 }
@@ -172,143 +220,131 @@ export default function ContestResultScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 18,
-    justifyContent: 'space-between',
+    backgroundColor: INK,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
-  content: {
-    flex: 1,
+  statusSpacer: {
+    height: 60,
+  },
+  eyebrow: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.8,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  markWrap: {
+    height: 96,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 28,
   },
-  iconWrap: {
-    width: 92,
-    height: 92,
-    borderRadius: 999,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  icon: {
-    fontSize: 38,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
-    marginTop: 6,
-  },
-  title: {
-    marginTop: 10,
-    color: WHITE,
-    fontSize: 34,
-    fontWeight: '600',
-    letterSpacing: -0.3,
+  territoryName: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 36,
+    color: BONE,
+    letterSpacing: -1,
     textAlign: 'center',
+    lineHeight: 38,
+    marginBottom: 6,
   },
-  territory: {
-    marginTop: 10,
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '700',
+  headline: {
+    fontFamily: 'Archivo_800ExtraBold',
+    fontSize: 22,
+    color: BONE,
+    letterSpacing: -0.5,
     textAlign: 'center',
+    marginBottom: 8,
   },
-  contextPill: {
-    marginTop: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+  perimeter: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: SLATE_2,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 28,
   },
-  contextText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: -0.1,
-  },
-  cardsRow: {
-    marginTop: 18,
+  statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  playerCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    backgroundColor: HAIRLINE_STRONG,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: HAIRLINE_STRONG,
+    marginBottom: 16,
   },
-  playerTopLabel: {
-    color: 'rgba(255,255,255,0.55)',
+  statCell: {
+    flex: 1,
+    backgroundColor: INK,
+    padding: 16,
+    margin: 0.5,
+  },
+  statLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE_2,
+    letterSpacing: 1.4,
+    marginBottom: 8,
+  },
+  statName: {
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+    color: BONE,
+    marginBottom: 12,
   },
-  playerName: {
-    marginTop: 10,
-    color: WHITE,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+  statValue: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 26,
+    letterSpacing: -1,
+    lineHeight: 26,
   },
-  distanceNumber: {
-    marginTop: 10,
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-  },
-  distanceMuted: {
-    color: '#555',
-  },
-  distanceUnit: {
+  statUnit: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE_2,
+    letterSpacing: 0.6,
     marginTop: 6,
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
-    fontWeight: '800',
   },
-  cta: {
-    marginTop: 18,
-    width: '100%',
-    borderRadius: 18,
-    paddingVertical: 15,
+  consequence: {
+    borderLeftWidth: 2,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  consequenceText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: BONE,
+    lineHeight: 17,
+    letterSpacing: 0.4,
+  },
+  ctaStack: {
+    marginTop: 'auto',
+    gap: 8,
+  },
+  ctaPrimary: {
+    backgroundColor: CLAIM,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaWin: {
-    backgroundColor: '#ED9332',
-  },
-  ctaLose: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.1,
-  },
-  ctaTextWin: {
-    color: WHITE,
-  },
-  ctaTextLose: {
-    color: 'rgba(255,255,255,0.70)',
-  },
-  footnote: {
-    color: 'rgba(255,255,255,0.40)',
+  ctaPrimaryText: {
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-    paddingTop: 10,
+    color: BONE,
+    letterSpacing: 1.8,
+  },
+  ctaSecondary: {
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaSecondaryText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: BONE,
+    letterSpacing: 1.6,
   },
 });
 
