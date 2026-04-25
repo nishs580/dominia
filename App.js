@@ -24,6 +24,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import {
   Archivo_700Bold,
+  Archivo_700Bold_Italic,
   Archivo_800ExtraBold,
   Archivo_900Black,
 } from '@expo-google-fonts/archivo';
@@ -177,6 +178,7 @@ const TabNavigator = () => {
 export default function App() {
   const [fontsLoaded] = useFonts({
     Archivo_700Bold,
+    Archivo_700Bold_Italic,
     Archivo_800ExtraBold,
     Archivo_900Black,
     GeistMono_300Light,

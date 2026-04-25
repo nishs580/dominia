@@ -3,16 +3,27 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
+const INK = '#0E1014';
+const BONE = '#F2EEE6';
+const SLATE = '#5C6068';
+const SLATE_2 = '#8B8F98';
+const CLAIM = '#D64525';
+const ALLIANCE = '#3F8F4E';
+const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
+const HAIRLINE = 'rgba(242,238,230,0.08)';
+const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+
 const BENEFITS = [
-  { icon: '🛡️', title: 'Collective defence', sub: 'Alliance members defend your territories together' },
-  { icon: '⚔️', title: 'Shared war chest', sub: 'Pool resources for powerful alliance abilities' },
-  { icon: '🗺️', title: 'Alliance colours', sub: 'Your territories show in alliance colour on the map' },
-  { icon: '🎯', title: 'Alliance missions', sub: 'Weekly shared goals for bonus rewards' },
+  { title: 'Collective defence', sub: 'Alliance members can defend your territories.' },
+  { title: 'Shared War Chest', sub: 'Pool resources to fund alliance abilities.' },
+  { title: 'Alliance colour', sub: 'Alliance-held territories now display in Alliance green.' },
+  { title: 'Alliance missions', sub: 'Weekly shared goals. Complete together for resources.' },
+  { title: 'Recruit up to 19 Commanders', sub: "Invite by username. Bring in players who haven't joined yet." },
 ];
 
 export default function AllianceJoinedScreen() {
@@ -21,59 +32,248 @@ export default function AllianceJoinedScreen() {
   const { allianceName, shortName, city, memberCount } = route.params ?? {};
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.accentBar} />
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.accent} />
 
       <View style={styles.body}>
-        <Text style={styles.youreIn}>YOU'RE IN</Text>
-        <Text style={styles.headline}>
-          Welcome to {allianceName ?? 'Your Alliance'} [{shortName ?? '???'}]
-        </Text>
-        <Text style={styles.subtitle}>{allianceName ?? 'Your Alliance'} is ready for war.</Text>
-        <Text style={styles.meta}>
-          {city ?? '—'} · {memberCount ?? 1} member{(memberCount ?? 1) === 1 ? '' : 's'}
-        </Text>
 
-        <Text style={styles.sectionLabel}>WHAT THIS MEANS</Text>
-        {BENEFITS.map((b, i) => (
-          <View key={i} style={styles.benefitCard}>
-            <Text style={styles.benefitIcon}>{b.icon}</Text>
-            <View style={styles.benefitText}>
-              <Text style={styles.benefitTitle}>{b.title}</Text>
-              <Text style={styles.benefitSub}>{b.sub}</Text>
-            </View>
+        {/* Kicker */}
+        <View style={styles.kickerRow}>
+          <Text style={styles.kickerText}>Alliance founded</Text>
+          <View style={styles.kickerRule} />
+        </View>
+
+        {/* Hero alliance name */}
+        <Text style={styles.allianceName}>{allianceName ?? 'Your Alliance'}</Text>
+        <Text style={styles.tag}>[{shortName ?? 'XXX'}]</Text>
+
+        {/* Milestone subtitle */}
+        <Text style={styles.subtitle}>Ready for war.</Text>
+
+        {/* Meta grid: city + commanders */}
+        <View style={styles.metaGrid}>
+          <View style={styles.metaCell}>
+            <Text style={styles.metaLabel}>City</Text>
+            <Text style={styles.metaValue}>{city ?? '—'}</Text>
           </View>
-        ))}
+          <View style={[styles.metaCell, styles.metaCellLast]}>
+            <Text style={styles.metaLabel}>Commanders</Text>
+            <Text style={styles.metaValue}>{memberCount ?? 1} / 20</Text>
+          </View>
+        </View>
 
-        <TouchableOpacity style={styles.btn} onPress={() => navigation.navigate('MainTabs', { screen: 'Alliance' })}>
-          <Text style={styles.btnText}>Go to Alliance</Text>
-        </TouchableOpacity>
+        {/* Section header */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabel}>What you've unlocked</Text>
+          <View style={styles.sectionRule} />
+        </View>
+
+        {/* Benefit rows */}
+        <View style={styles.bList}>
+          {BENEFITS.map((b, i) => (
+            <View key={i} style={[styles.bRow, i === 0 && styles.bRowFirst]}>
+              <Text style={styles.bNum}>{String(i + 1).padStart(2, '0')}</Text>
+              <View style={styles.bText}>
+                <Text style={styles.bTitle}>{b.title}</Text>
+                <Text style={styles.bSub}>{b.sub}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* CTA */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Alliance' })}
+          style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.ctaStep}>Take command</Text>
+          <Text style={styles.ctaAction}>Enter alliance →</Text>
+        </Pressable>
+
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f14' },
-  content: { backgroundColor: '#0f0f14', flexGrow: 1},
-  accentBar: { height: 5, backgroundColor: '#ED9332', width: '100%' },
-  body: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
-  youreIn: { fontSize: 10, color: '#ED9332', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 },
-  headline: { fontSize: 22, fontWeight: '600', color: '#fff', marginBottom: 4 },
-  subtitle: { fontSize: 12, color: '#888', lineHeight: 18, marginBottom: 8 },
-  meta: { fontSize: 11, color: '#555', marginBottom: 18 },
-  sectionLabel: { fontSize: 10, color: '#555', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 },
-  benefitCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, marginBottom: 6, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  benefitIcon: { fontSize: 16, marginTop: 1 },
-  benefitText: { flex: 1 },
-  benefitTitle: { fontSize: 12, color: '#ccc', fontWeight: '500' },
-  benefitSub: { fontSize: 10, color: '#555', lineHeight: 14, marginTop: 2 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  memberLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(237,147,50,0.2)', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 10, color: '#ED9332', fontWeight: '600' },
-  memberName: { fontSize: 12, color: '#ccc' },
-  memberRole: { fontSize: 9, color: '#555' },
-  btn: { backgroundColor: '#ED9332', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 18 },
-  btnText: { fontSize: 13, fontWeight: '500', color: '#fff' },
+  screen: {
+    flex: 1,
+    backgroundColor: INK,
+  },
+  content: {
+    flexGrow: 1,
+    backgroundColor: INK,
+  },
+  accent: {
+    height: 4,
+    backgroundColor: ALLIANCE,
+    width: '100%',
+  },
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 32,
+  },
+
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  kickerText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    letterSpacing: 1.8,
+    color: ALLIANCE,
+    textTransform: 'uppercase',
+  },
+  kickerRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: ALLIANCE_RULE,
+  },
+
+  allianceName: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 36,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+    lineHeight: 38,
+    marginBottom: 8,
+  },
+  tag: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 16,
+    letterSpacing: 3,
+    color: ALLIANCE,
+    textTransform: 'uppercase',
+    marginBottom: 28,
+  },
+
+  subtitle: {
+    fontFamily: 'Archivo_700Bold_Italic',
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: BONE,
+    lineHeight: 21,
+    marginBottom: 28,
+  },
+
+  metaGrid: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    marginBottom: 32,
+  },
+  metaCell: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRightWidth: 1,
+    borderRightColor: HAIRLINE,
+  },
+  metaCellLast: {
+    borderRightWidth: 0,
+    paddingLeft: 16,
+  },
+  metaLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  metaValue: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 16,
+    color: BONE,
+  },
+
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  sectionLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.8,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+  },
+  sectionRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
+  },
+
+  bList: {
+    marginBottom: 32,
+  },
+  bRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    gap: 12,
+  },
+  bRowFirst: {
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+  },
+  bNum: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE,
+    textTransform: 'uppercase',
+    width: 24,
+    paddingTop: 2,
+  },
+  bText: {
+    flex: 1,
+  },
+  bTitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: BONE,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  bSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: SLATE_2,
+    lineHeight: 18,
+  },
+
+  cta: {
+    backgroundColor: CLAIM,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'flex-start',
+  },
+  ctaStep: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: BONE,
+    opacity: 0.75,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  ctaAction: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 16,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
 });

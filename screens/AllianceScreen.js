@@ -20,31 +20,6 @@ function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
 }
 
-function AllianceCard({ dotColor, nameLine, metaLine, members, onPress }) {
-  const inner = (
-    <>
-      <View style={[styles.allianceDot, { backgroundColor: dotColor }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.allianceCardName}>{nameLine}</Text>
-        <Text style={styles.allianceCardMeta}>{metaLine}</Text>
-      </View>
-      <Text style={styles.allianceCardMembers}>{members}</Text>
-    </>
-  );
-  if (onPress) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        style={({ pressed }) => [styles.allianceCard, pressed && { opacity: 0.92 }]}
-      >
-        {inner}
-      </Pressable>
-    );
-  }
-  return <View style={styles.allianceCard}>{inner}</View>;
-}
-
 function RosterRow({ initials, name, role, steps, showBorder }) {
   return (
     <View style={[styles.rosterRow, showBorder && styles.rosterRowBorder]}>
@@ -62,11 +37,17 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
   );
 }
 
-function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, playerRow }) {
-  const [confirmAlliance, setConfirmAlliance] = useState(null);
-  const [joinSaving, setJoinSaving] = useState(false);
-
-  const dotColors = [CLAIM, ALLIANCE_GREEN];
+function NonMemberContent({
+  alliances,
+  userId,
+  onRefreshAfterJoin,
+  navigation,
+  playerRow,
+  confirmAlliance,
+  setConfirmAlliance,
+  joinSaving,
+  setJoinSaving,
+}) {
 
   const handleConfirmJoin = async () => {
     if (!userId || !confirmAlliance) return;
@@ -93,6 +74,7 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
     }
   };
 
+  // Confirm-join view (unchanged behaviour, restyled)
   if (confirmAlliance) {
     return (
       <ScrollView
@@ -100,70 +82,129 @@ function NonMemberContent({ alliances, userId, onRefreshAfterJoin, navigation, p
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>{confirmAlliance.name}</Text>
+        <View style={styles.confirmWrap}>
+          <Text style={styles.confirmKicker}>Join alliance</Text>
+          <Text style={styles.confirmTitle}>{confirmAlliance.name}</Text>
+          <Text style={styles.confirmTag}>[{confirmAlliance.short_name}]</Text>
+          <Text style={styles.confirmBody}>
+            Your Alliance territories will display in Alliance green. This decision is permanent until you leave the alliance.
+          </Text>
+
           <Pressable
             accessibilityRole="button"
             disabled={joinSaving}
             onPress={handleConfirmJoin}
-            style={({ pressed }) => [styles.btnPrimary, pressed && !joinSaving && { opacity: 0.9 }, joinSaving && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.cta,
+              joinSaving && styles.ctaDisabled,
+              pressed && !joinSaving && { opacity: 0.9 },
+            ]}
           >
-            <Text style={styles.btnPrimaryText}>Join {confirmAlliance.name}</Text>
+            {joinSaving ? (
+              <ActivityIndicator color={BONE} />
+            ) : (
+              <>
+                <Text style={styles.ctaStep}>Confirm</Text>
+                <Text style={styles.ctaAction}>Join {confirmAlliance.name} →</Text>
+              </>
+            )}
           </Pressable>
+
           <Pressable
             accessibilityRole="button"
             disabled={joinSaving}
             onPress={() => setConfirmAlliance(null)}
-            style={({ pressed }) => [styles.btnMuted, pressed && !joinSaving && { opacity: 0.9 }]}
+            style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.btnMutedText}>Cancel</Text>
+            <Text style={styles.cancelLinkText}>← Back to list</Text>
           </Pressable>
         </View>
       </ScrollView>
     );
   }
 
+  // Empty list state
+  if (!alliances?.length) {
+    return (
+      <View style={styles.scroll}>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabelText}>Alliances in</Text>
+          <Text style={styles.sectionLabelAccent}> Amsterdam</Text>
+          <View style={styles.sectionHairline} />
+        </View>
+        <View style={styles.emptyListWrap}>
+          <Text style={styles.emptyListText}>No alliances in your city yet.</Text>
+        </View>
+        <View style={styles.footerRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => navigation.navigate('CreateAlliance')}
+            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.createLink}>
+              Found the first one — <Text style={styles.createLinkStrong}>create alliance →</Text>
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // Default — list view
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.emptyWrap}>
-        <Text style={styles.emptyEmoji}></Text>
-        <Text style={styles.emptyTitle}>Join an alliance</Text>
-        <Text style={styles.emptySubtitle}>
-          Alliance warfare unlocks at Level 6. Coordinate with others, share resources, and dominate the map together.
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }]}
-        >
-          <Text style={styles.btnPrimaryText}>Find an alliance</Text>
-        </Pressable>
+    <View style={styles.scroll}>
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabelText}>Alliances in</Text>
+        <Text style={styles.sectionLabelAccent}> Amsterdam</Text>
+        <View style={styles.sectionHairline} />
+      </View>
+
+      <Text style={styles.directiveText}>Tap to join</Text>
+
+      <ScrollView
+        style={styles.allianceListScroll}
+        contentContainerStyle={styles.allianceListContent}
+        showsVerticalScrollIndicator={true}
+      >
+        {alliances.map((a, i) => (
+          <Pressable
+            key={a.id}
+            accessibilityRole="button"
+            onPress={() => setConfirmAlliance(a)}
+            style={({ pressed }) => [
+              styles.aRow,
+              i === 0 && styles.aRowFirst,
+              pressed && styles.aRowPressed,
+            ]}
+          >
+            <View style={styles.aInfo}>
+              <Text style={styles.aNameLine}>
+                <Text style={styles.aName}>{a.name}</Text>
+                <Text style={styles.aTag}>  [{a.short_name}]</Text>
+              </Text>
+              <Text style={styles.aMeta}>
+                {(a.city ?? '—')}
+                {a.founder_username ? ` · Founded by ${a.founder_username.toUpperCase()}` : ''}
+              </Text>
+            </View>
+            <Text style={styles.aMembers}>{a.memberCount} / 20</Text>
+            <Text style={styles.aChev}>→</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <View style={styles.footerRow}>
         <Pressable
           accessibilityRole="button"
           onPress={() => navigation.navigate('CreateAlliance')}
-          style={({ pressed }) => [styles.btnMuted, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.btnMutedText}>Create your alliance</Text>
+          <Text style={styles.createLink}>
+            Or <Text style={styles.createLinkStrong}>create your own alliance →</Text>
+          </Text>
         </Pressable>
       </View>
-
-      <HeaderKicker>ALLIANCES IN YOUR CITY</HeaderKicker>
-      <View style={{ marginTop: 10, gap: 10 }}>
-        {alliances.map((a, index) => (
-          <AllianceCard
-            key={a.id}
-            dotColor={dotColors[index % dotColors.length]}
-            nameLine={`${a.name} [${a.short_name}]`}
-            metaLine={a.city ?? '—'}
-            members={`${a.memberCount}/20`}
-            onPress={() => setConfirmAlliance(a)}
-          />
-        ))}
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -293,6 +334,8 @@ export default function AllianceScreen() {
   const [myAlliance, setMyAlliance] = useState(null);
   const [allianceList, setAllianceList] = useState([]);
   const [territoryCount, setTerritoryCount] = useState(null);
+  const [confirmAlliance, setConfirmAlliance] = useState(null);
+  const [joinSaving, setJoinSaving] = useState(false);
 
   const fetchPlayerAndContext = useCallback(
     async ({ silent = false } = {}) => {
@@ -361,9 +404,42 @@ export default function AllianceScreen() {
         } else {
           setMyAlliance(null);
           setTerritoryCount(null);
-          const { data: alliances, error: listError } = await supabase
+          let alliances = null;
+          let listError = null;
+
+          const relRes = await supabase
             .from('alliances')
-            .select('id, name, short_name, city');
+            .select('id, name, short_name, city, founder_id, founder:founder_id(username)');
+          alliances = relRes.data;
+          listError = relRes.error;
+
+          // If relation select fails (FK name mismatch), fall back to a batch founders query.
+          if (listError) {
+            const baseRes = await supabase
+              .from('alliances')
+              .select('id, name, short_name, city, founder_id');
+            alliances = baseRes.data;
+            listError = baseRes.error;
+
+            if (!listError && alliances?.length) {
+              const founderIds = Array.from(
+                new Set((alliances ?? []).map((a) => a.founder_id).filter(Boolean)),
+              );
+              if (founderIds.length) {
+                const foundersRes = await supabase
+                  .from('players')
+                  .select('id, username')
+                  .in('id', founderIds);
+                if (!foundersRes.error && foundersRes.data?.length) {
+                  const founderById = new Map(foundersRes.data.map((f) => [f.id, f.username]));
+                  alliances = (alliances ?? []).map((a) => ({
+                    ...a,
+                    founder: { username: founderById.get(a.founder_id) ?? null },
+                  }));
+                }
+              }
+            }
+          }
 
           if (listError || !alliances?.length) {
             if (listError) console.error('AllianceScreen alliances list:', listError);
@@ -377,7 +453,11 @@ export default function AllianceScreen() {
                 .from('players')
                 .select('*', { count: 'exact', head: true })
                 .eq('alliance_id', a.id);
-              return { ...a, memberCount: count ?? 0 };
+              return {
+                ...a,
+                memberCount: count ?? 0,
+                founder_username: a.founder?.username ?? null,
+              };
             }),
           );
           setAllianceList(withCounts);
@@ -405,45 +485,44 @@ export default function AllianceScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        {isMember ? (
-          <>
-            <View style={styles.headerTopRow}>
-              <View style={{ flex: 1 }} />
-              <View style={styles.shortNameBox}>
-                <Text style={styles.shortNameText}>{myAlliance?.short_name ?? '—'}</Text>
-              </View>
+      {isMember && (
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View style={{ flex: 1 }} />
+            <View style={styles.shortNameBox}>
+              <Text style={styles.shortNameText}>{myAlliance?.short_name ?? '—'}</Text>
             </View>
+          </View>
 
-            <Text style={styles.headerTitle}>{myAlliance?.name ?? 'Alliance'}</Text>
+          <Text style={styles.headerTitle}>{myAlliance?.name ?? 'Alliance'}</Text>
 
-            <Text style={styles.headerCity}>
-              {'OF ' + (myAlliance?.city ?? '—').toUpperCase() + ' · REALM 01'}
+          <Text style={styles.headerCity}>
+            {'OF ' + (myAlliance?.city ?? '—').toUpperCase() + ' · REALM 01'}
+          </Text>
+
+          <View style={styles.headerDivider} />
+
+          <View style={styles.headerStatsRow}>
+            <Text style={styles.headerStat}>
+              <Text style={styles.headerStatLabel}>ROSTER </Text>
+              <Text style={styles.headerStatValue}>{myAlliance?.memberCount ?? '—'} / 20</Text>
             </Text>
-
-            <View style={styles.headerDivider} />
-
-            <View style={styles.headerStatsRow}>
-              <Text style={styles.headerStat}>
-                <Text style={styles.headerStatLabel}>ROSTER </Text>
-                <Text style={styles.headerStatValue}>{myAlliance?.memberCount ?? '—'} / 20</Text>
+            <Text style={styles.headerStat}>
+              <Text style={styles.headerStatLabel}>TERRITORIES </Text>
+              <Text style={styles.headerStatValue}>
+                {territoryCount !== null ? String(territoryCount) : '—'}
               </Text>
-              <Text style={styles.headerStat}>
-                <Text style={styles.headerStatLabel}>TERRITORIES </Text>
-                <Text style={styles.headerStatValue}>
-                  {territoryCount !== null ? String(territoryCount) : '—'}
-                </Text>
-              </Text>
-            </View>
-          </>
-        ) : (
-          <>
-            <HeaderKicker>ALLIANCE</HeaderKicker>
-            <Text style={styles.headerTitle}>NO ALLIANCE</Text>
-            <Text style={styles.headerSubtitle}>You are unaffiliated</Text>
-          </>
-        )}
-      </View>
+            </Text>
+          </View>
+        </View>
+      )}
+      {!isMember && !confirmAlliance && (
+        <View style={styles.header}>
+          <HeaderKicker>ALLIANCE</HeaderKicker>
+          <Text style={styles.headerTitle}>NO ALLIANCE</Text>
+          <Text style={styles.headerSubtitle}>You are unaffiliated</Text>
+        </View>
+      )}
 
       {isMember ? (
         <MemberContent myAlliance={myAlliance} playerId={playerRow?.id} territoryCount={territoryCount} />
@@ -454,6 +533,10 @@ export default function AllianceScreen() {
           onRefreshAfterJoin={() => fetchPlayerAndContext({ silent: true })}
           navigation={navigation}
           playerRow={playerRow}
+          confirmAlliance={confirmAlliance}
+          setConfirmAlliance={setConfirmAlliance}
+          joinSaving={joinSaving}
+          setJoinSaving={setJoinSaving}
         />
       )}
     </View>
@@ -554,93 +637,210 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
-  emptyWrap: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  emptyEmoji: {
-    height: 0,
-    opacity: 0,
-  },
-  emptyTitle: {
-    fontFamily: 'Archivo_900Black',
-    fontSize: 28,
-    color: BONE,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    marginTop: 10,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: SLATE2,
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 8,
-  },
-  btnPrimary: {
-    marginTop: 18,
-    width: '100%',
-    backgroundColor: CLAIM,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimaryText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 12,
-    color: BONE,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-  },
-  btnMuted: {
-    marginTop: 10,
-    width: '100%',
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnMutedText: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 12,
-    color: SLATE2,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-  },
-  allianceCard: {
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    padding: 10,
-    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
   },
-  allianceDot: {
-    width: 0,
-    height: 0,
-    opacity: 0,
-  },
-  allianceCardName: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: BONE,
-  },
-  allianceCardMeta: {
-    marginTop: 4,
+  sectionLabelText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
+    letterSpacing: 1.6,
     color: SLATE2,
     textTransform: 'uppercase',
-    letterSpacing: 1.4,
   },
-  allianceCardMembers: {
+  sectionLabelAccent: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  sectionHairline: {
+    flex: 1,
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
+    marginLeft: 8,
+  },
+  directiveText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
+    letterSpacing: 1.6,
+    color: SLATE,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+
+  allianceListScroll: {
+    maxHeight: 320,
+    marginHorizontal: 16,
+  },
+  allianceListContent: {
+    paddingBottom: 8,
+  },
+
+  aRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+  },
+  aRowFirst: {
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+  },
+  aRowPressed: {
+    backgroundColor: 'rgba(242,238,230,0.03)',
+  },
+  aInfo: {
+    flex: 1,
+  },
+  aNameLine: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: BONE,
+  },
+  aName: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: BONE,
+  },
+  aTag: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
     color: SLATE2,
+    letterSpacing: 1,
+  },
+  aMeta: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  aMembers: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    color: BONE,
+    marginRight: 8,
+  },
+  aChev: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 13,
+    color: SLATE,
+  },
+
+  footerRow: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+    marginTop: 4,
+  },
+  createLink: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: SLATE2,
+    textTransform: 'uppercase',
+  },
+  createLinkStrong: {
+    fontFamily: 'GeistMono_500Medium',
+    color: BONE,
+  },
+
+  emptyListWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  emptyListText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: SLATE,
+    textTransform: 'uppercase',
+  },
+
+  confirmWrap: {
+    paddingTop: (StatusBar.currentHeight ?? 0) + 24,
+  },
+  confirmKicker: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.8,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 32,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: -0.3,
+    lineHeight: 34,
+    marginBottom: 6,
+  },
+  confirmTag: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 14,
+    letterSpacing: 2,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    marginBottom: 24,
+  },
+  confirmBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: SLATE2,
+    lineHeight: 21,
+    marginBottom: 32,
+  },
+
+  cta: {
+    backgroundColor: CLAIM,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'flex-start',
+  },
+  ctaDisabled: {
+    opacity: 0.7,
+  },
+  ctaStep: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: BONE,
+    opacity: 0.75,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  ctaAction: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 16,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+
+  cancelLink: {
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  cancelLinkText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: SLATE,
+    textTransform: 'uppercase',
   },
   sectionLabelRow: {
     flexDirection: 'row',

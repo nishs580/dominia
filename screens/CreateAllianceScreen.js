@@ -12,9 +12,17 @@ import {
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import THEME from '../lib/theme';
 
-const BG = '#0f0f14';
-const ORANGE = '#ED9332';
+const INK = THEME.colors.ink;
+const INK_2 = THEME.colors.ink2;
+const BONE = THEME.colors.bone;
+const BONE_2 = THEME.colors.bone2;
+const SLATE = THEME.colors.slate;
+const SLATE_2 = THEME.colors.slate2;
+const CLAIM = THEME.colors.claim;
+const HAIRLINE = THEME.colors.hairline;
+const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
 export default function CreateAllianceScreen() {
   const navigation = useNavigation();
@@ -192,10 +200,16 @@ export default function CreateAllianceScreen() {
         hitSlop={12}
         style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.75 }]}
       >
-        <Text style={styles.backBtnText}>‹ Back</Text>
+        <Text style={styles.backBtnText}>← BACK</Text>
       </Pressable>
     </View>
   );
+
+  const formatTierLabel = (tier) => {
+    if (tier === null || tier === undefined || tier === '') return '—';
+    if (typeof tier === 'string') return tier.charAt(0).toUpperCase() + tier.slice(1);
+    return `Tier ${tier}`;
+  };
 
   return (
     <View style={styles.screen}>
@@ -208,10 +222,21 @@ export default function CreateAllianceScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.headerKicker}>CREATE ALLIANCE</Text>
-          <Text style={styles.stepTitle}>Alliance identity</Text>
+          <View style={styles.kickerRow}>
+            <Text style={styles.kickerText}>Create Alliance · 01 / 03</Text>
+            <View style={styles.kickerRule} />
+          </View>
 
-          <Text style={styles.label}>Alliance name</Text>
+          <Text style={styles.stepTitle}>Name{'\n'}your alliance</Text>
+          <Text style={styles.bodyText}>
+            Both names are permanent. The short name cannot be changed after founding.
+          </Text>
+
+          <View style={styles.labelRow}>
+            <Text style={styles.labelText}>Full name</Text>
+            <Text style={styles.labelHint}>3–24 characters</Text>
+          </View>
+          {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
           <TextInput
             style={styles.input}
             placeholder="Alliance name"
@@ -224,11 +249,16 @@ export default function CreateAllianceScreen() {
             autoCapitalize="words"
             autoCorrect
           />
-          {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
 
-          <Text style={[styles.label, { marginTop: 14 }]}>3-letter code</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.labelText}>Short name</Text>
+            <Text style={styles.labelHint}>3 letters · used in [TAG]</Text>
+          </View>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { fontFamily: 'GeistMono_500Medium', letterSpacing: 4, fontSize: 18 },
+            ]}
             placeholder="e.g. SNW"
             placeholderTextColor="#555"
             value={code}
@@ -240,26 +270,42 @@ export default function CreateAllianceScreen() {
             autoCorrect={false}
             maxLength={3}
           />
-          {codeError ? <Text style={styles.fieldError}>{codeError}</Text> : null}
+          {codeError ? (
+            <Text style={styles.fieldError}>{codeError}</Text>
+          ) : (
+            <Text style={styles.micro}>Displayed in brackets — [{code || 'XXX'}]</Text>
+          )}
 
           <Pressable
             accessibilityRole="button"
             onPress={handleStep1Next}
-            style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }]}
+            disabled={false}
+            style={({ pressed }) => [
+              styles.cta,
+              pressed && { opacity: 0.9 },
+            ]}
           >
-            <Text style={styles.btnPrimaryText}>Next</Text>
+            <Text style={styles.ctaStep}>Step 01 of 03</Text>
+            <Text style={styles.ctaAction}>Continue →</Text>
           </Pressable>
         </ScrollView>
       )}
 
       {step === 2 && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.headerKicker}>CREATE ALLIANCE</Text>
-          <Text style={styles.stepTitle}>HQ territory</Text>
+          <View style={styles.kickerRow}>
+            <Text style={styles.kickerText}>Create Alliance · 02 / 03</Text>
+            <View style={styles.kickerRule} />
+          </View>
+
+          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>Choose your{'\n'}HQ territory</Text>
+          <Text style={styles.bodyText}>
+            Your HQ anchors the alliance on the map. Choose a territory you already hold.
+          </Text>
 
           {playerLoading ? (
             <View style={styles.centered}>
-              <ActivityIndicator color={ORANGE} />
+              <ActivityIndicator color={CLAIM} />
             </View>
           ) : !playerId ? (
             <View style={styles.emptyWrap}>
@@ -267,39 +313,47 @@ export default function CreateAllianceScreen() {
             </View>
           ) : territoriesLoading ? (
             <View style={styles.centered}>
-              <ActivityIndicator color={ORANGE} />
+              <ActivityIndicator color={CLAIM} />
             </View>
           ) : territories.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptySubtitle}>
-                You need to own at least one territory to place your HQ. Claim one from the map first.
-              </Text>
+              <Text style={styles.emptySubtitle}>You hold no territories yet. Claim one from the map before founding an alliance.</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setStep(1)}
-                style={({ pressed }) => [styles.btnMuted, pressed && { opacity: 0.9 }]}
+                style={({ pressed }) => [
+                  styles.cta,
+                  styles.ctaDisabled,
+                  pressed && { opacity: 0.9 },
+                ]}
               >
-                <Text style={styles.btnMutedText}>Back</Text>
+                <Text style={[styles.ctaStep, styles.ctaStepDisabled]}>No territories</Text>
+                <Text style={[styles.ctaAction, styles.ctaActionDisabled]}>← Back</Text>
               </Pressable>
             </View>
           ) : (
             <>
-              <View style={{ marginTop: 8, gap: 10 }}>
+              <View style={styles.tList}>
                 {territories.map((t) => {
                   const selected = t.id === selectedTerritoryId;
+                  const tierLabel = formatTierLabel(t.tier);
+                  const perimeter = t?.perimeter_distance;
+                  const meta =
+                    perimeter === null || perimeter === undefined || perimeter === ''
+                      ? tierLabel
+                      : `${tierLabel} · ${perimeter} m perimeter`;
                   return (
                     <Pressable
                       key={t.id}
                       accessibilityRole="button"
                       onPress={() => setSelectedTerritoryId(t.id)}
-                      style={({ pressed }) => [
-                        styles.territoryCard,
-                        selected && styles.territoryCardSelected,
-                        pressed && { opacity: 0.92 },
-                      ]}
+                      style={({ pressed }) => [styles.tRow, selected && styles.tRowSelected, pressed && { opacity: 0.92 }]}
                     >
-                      <Text style={styles.territoryName}>{t.territory_name ?? '—'}</Text>
-                      <Text style={styles.territoryMeta}>Tier {t.tier ?? '—'}</Text>
+                      <View style={styles.tInfo}>
+                        <Text style={styles.tName}>{t.territory_name ?? '—'}</Text>
+                        <Text style={styles.tMeta}>{meta}</Text>
+                      </View>
+                      {selected ? <Text style={styles.tTag}>Selected</Text> : null}
                     </Pressable>
                   );
                 })}
@@ -309,12 +363,13 @@ export default function CreateAllianceScreen() {
                 disabled={!selectedTerritoryId}
                 onPress={() => setStep(3)}
                 style={({ pressed }) => [
-                  styles.btnPrimary,
-                  !selectedTerritoryId && { opacity: 0.5 },
+                  styles.cta,
+                  !selectedTerritoryId && styles.ctaDisabled,
                   pressed && selectedTerritoryId && { opacity: 0.9 },
                 ]}
               >
-                <Text style={styles.btnPrimaryText}>Next</Text>
+                <Text style={[styles.ctaStep, !selectedTerritoryId && styles.ctaStepDisabled]}>Step 02 of 03</Text>
+                <Text style={[styles.ctaAction, !selectedTerritoryId && styles.ctaActionDisabled]}>Continue →</Text>
               </Pressable>
             </>
           )}
@@ -323,16 +378,34 @@ export default function CreateAllianceScreen() {
 
       {step === 3 && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.headerKicker}>CREATE ALLIANCE</Text>
-          <Text style={styles.stepTitle}>Confirm</Text>
+          <View style={styles.kickerRow}>
+            <Text style={styles.kickerText}>Create Alliance · 03 / 03</Text>
+            <View style={styles.kickerRule} />
+          </View>
 
-          <View style={styles.summaryBlock}>
-            <Text style={styles.summaryLabel}>Alliance</Text>
-            <Text style={styles.summaryValue}>{allianceName.trim()}</Text>
-            <Text style={[styles.summaryLabel, { marginTop: 12 }]}>Code</Text>
-            <Text style={styles.summaryValue}>[{code.trim().toUpperCase()}]</Text>
-            <Text style={[styles.summaryLabel, { marginTop: 12 }]}>HQ territory</Text>
-            <Text style={styles.summaryValue}>{selectedTerritory?.territory_name ?? '—'}</Text>
+          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>Confirm.{'\n'}Then create.</Text>
+          <Text style={styles.bodyText}>Founding is permanent. The short name cannot be changed.</Text>
+
+          <View style={styles.sumList}>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Alliance</Text>
+              <Text style={styles.sumValue}>{allianceName.trim()}</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Tag</Text>
+              <Text style={[styles.sumValue, styles.sumValueMono]}>[{code.trim().toUpperCase()}]</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>HQ</Text>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Text style={styles.sumValue}>{selectedTerritory?.territory_name ?? '—'}</Text>
+                <Text style={styles.sumHomeTag}>Home</Text>
+              </View>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>City</Text>
+              <Text style={styles.sumValue}>Amsterdam</Text>
+            </View>
           </View>
 
           <Pressable
@@ -340,15 +413,20 @@ export default function CreateAllianceScreen() {
             disabled={createSaving}
             onPress={handleCreate}
             style={({ pressed }) => [
-              styles.btnPrimary,
-              createSaving && { opacity: 0.7 },
+              styles.cta,
+              createSaving && styles.ctaDisabled,
               pressed && !createSaving && { opacity: 0.9 },
             ]}
           >
             {createSaving ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color={BONE} />
             ) : (
-              <Text style={styles.btnPrimaryText}>Create {allianceName.trim()}</Text>
+              <>
+                <Text style={[styles.ctaStep, createSaving && styles.ctaStepDisabled]}>Final step · permanent</Text>
+                <Text style={[styles.ctaAction, createSaving && styles.ctaActionDisabled]}>
+                  Create {allianceName.trim()} →
+                </Text>
+              </>
             )}
           </Pressable>
         </ScrollView>
@@ -360,147 +438,256 @@ export default function CreateAllianceScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: INK,
   },
   backRow: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 52,
-    paddingBottom: 4,
+    paddingBottom: 0,
     alignItems: 'flex-start',
   },
   backBtn: {
     paddingVertical: 4,
+    marginBottom: 24,
   },
   backBtnText: {
-    color: ORANGE,
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: SLATE,
+    textTransform: 'uppercase',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
   },
-  headerKicker: {
-    color: '#555',
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  kickerText: {
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 1.8,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+  },
+  kickerRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
   },
   stepTitle: {
-    marginTop: 8,
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 16,
+    fontFamily: 'Archivo_900Black',
+    fontSize: 28,
+    color: BONE,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    lineHeight: 30,
+    marginTop: 0,
+    marginBottom: 24,
   },
-  label: {
-    color: '#666',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 6,
+  stepTitleSmall: {
+    fontSize: 24,
+  },
+  bodyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE_2,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  labelText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.8,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+  },
+  labelHint: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
+    backgroundColor: INK_2,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
+    borderColor: HAIRLINE,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    color: BONE,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    marginBottom: 18,
   },
   fieldError: {
-    marginTop: 6,
-    color: '#c96',
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+    marginTop: -10,
+    marginBottom: 18,
   },
-  btnPrimary: {
-    marginTop: 22,
-    width: '100%',
-    backgroundColor: ORANGE,
-    borderRadius: 12,
+  micro: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE,
+    textTransform: 'uppercase',
+    marginTop: -10,
+    marginBottom: 18,
+    lineHeight: 14,
+  },
+  cta: {
+    backgroundColor: CLAIM,
+    borderRadius: 0,
     paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
+    paddingHorizontal: 20,
+    marginTop: 32,
+    alignItems: 'flex-start',
   },
-  btnPrimaryText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
+  ctaDisabled: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
   },
-  btnMuted: {
-    marginTop: 18,
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  ctaStep: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: BONE,
+    opacity: 0.75,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  btnMutedText: {
-    color: '#aaa',
-    fontSize: 15,
-    fontWeight: '700',
+  ctaStepDisabled: {
+    color: SLATE,
+    opacity: 1,
+  },
+  ctaAction: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 16,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  ctaActionDisabled: {
+    color: SLATE,
   },
   centered: {
-    paddingVertical: 40,
+    paddingVertical: 48,
     alignItems: 'center',
   },
   emptyWrap: {
-    alignItems: 'center',
-    marginTop: 12,
+    marginTop: 16,
   },
   emptySubtitle: {
-    color: '#555',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 16.5,
-    paddingHorizontal: 8,
+    letterSpacing: 1.2,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+    lineHeight: 16,
+    textAlign: 'left',
+    marginBottom: 20,
   },
-  territoryCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  territoryCardSelected: {
-    borderColor: ORANGE,
-  },
-  territoryName: {
-    color: '#ccc',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  territoryMeta: {
+  tList: {
     marginTop: 4,
-    color: '#555',
-    fontSize: 10,
-    fontWeight: '600',
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
   },
-  summaryBlock: {
-    marginTop: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-    padding: 14,
+  tRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
   },
-  summaryLabel: {
-    color: '#555',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+  tRowSelected: {
+    backgroundColor: 'rgba(242,238,230,0.04)',
+    borderLeftWidth: 1,
+    borderLeftColor: BONE_2,
+    paddingLeft: 11,
   },
-  summaryValue: {
-    marginTop: 4,
-    color: '#ffffff',
+  tInfo: {
+    flex: 1,
+  },
+  tName: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 15,
-    fontWeight: '600',
+    color: BONE,
+  },
+  tMeta: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+    marginTop: 3,
+  },
+  tTag: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    letterSpacing: 1.4,
+    color: BONE,
+    textTransform: 'uppercase',
+    marginLeft: 12,
+  },
+  sumList: {
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+  },
+  sumRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+  },
+  sumLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: SLATE_2,
+    textTransform: 'uppercase',
+    width: 100,
+  },
+  sumValue: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: BONE,
+  },
+  sumValueMono: {
+    fontFamily: 'GeistMono_500Medium',
+    letterSpacing: 2,
+  },
+  sumHomeTag: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: BONE,
+    textTransform: 'uppercase',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(242,238,230,0.06)',
+    marginLeft: 8,
   },
 });
