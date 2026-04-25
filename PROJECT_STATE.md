@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 24, 2026 (evening)
+Last updated: April 25, 2026
 
 ---
 
@@ -112,7 +112,7 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Map screen | ✓ Branded | Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout, More/Less expandable section |
 | Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak), daily challenges, achievements table (hardcoded), weekly chart |
 | Profile screen | ✓ Branded | Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
-| Alliance screen | ✓ Branded | Archivo 900 alliance name, [KAI] box, mission card, top 3 contributors (hardcoded), roster rows, Enter War Room ghost button |
+| Alliance screen | ✓ Branded | Member: mission card, top 3 contributors, roster, War Room button. Non-member: bounded scrollable alliance list (tap-to-join rows with founder username), confirm view, header hides during confirm, "create" footer link. |
 | War Room screen | ✓ Branded | All theme tokens. Influence hero block, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
@@ -120,8 +120,8 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
 | Claim Success screen | ✓ Branded | Solid Claim red square, "TERRITORY / is yours." typographic treatment, sharp cards |
 | Contest Result screen | ✓ Branded | 4 states, animated solid/outline square per outcome, consequence line block, two-button CTA stack |
-| Create Alliance screen | ○ Not yet branded | Functional. 3-step founding flow. Next to brand. |
-| Alliance Joined screen | ○ Not yet branded | Functional. Reads name/code/city from nav params. |
+| Create Alliance screen | ✓ Branded | 3-step founding flow (identity → HQ territory → confirm). Archivo 900 titles, live [CODE] preview, hairline territory list, summary block, Claim two-line CTA. |
+| Alliance Joined screen | ✓ Branded | Alliance green accent bar, Archivo 900 alliance name, [TAG], Italic subtitle, 2-col meta grid, 5 numbered benefit rows, Claim CTA. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
 | Permissions | ~ Partial | Requested inline in onboarding step 2 — not a standalone screen |
 | Defender flow | ○ Deferred | Needs Ably real-time layer — revisit when backend is started. |
@@ -151,7 +151,7 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `screens/MapScreen.js` | Fully branded. Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout + More/Less expandable section |
 | `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header (live data from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
 | `screens/ProfileScreen.js` | Fully branded. Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
-| `screens/AllianceScreen.js` | Fully branded. Member/non-member states, roster, create + join flows, Enter War Room button. |
+| `screens/AllianceScreen.js` | Fully branded. Member: mission card, contributors, roster, War Room button. Non-member: bounded ScrollView alliance list (maxHeight 320), tap-to-join rows with founder username, confirm view with branded Archivo 900 name + body copy, confirmAlliance state at screen level so header hides during confirm. |
 | `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block, Morale full-width, 2×2 resource grid, morale abilities. All hardcoded. |
 | `screens/SignInScreen.js` | Fully branded. DOMINIA wordmark + ▪ claim mark, Geist Mono tagline, sharp inputs + Claim button. |
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
@@ -159,8 +159,8 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `screens/ActiveClaimScreen.js` | Fully branded. Claim red ring (butt cap), sharp cards, Geist Mono labels. DEV_MODE=true — flip to false for real GPS. |
 | `screens/ClaimSuccessScreen.js` | Fully branded. Solid Claim red square, typographic treatment. Writes owner_id + alliance_id to Supabase. |
 | `screens/ContestResultScreen.js` | Fully branded. 4 states, animated square, consequence block, two-button CTA stack. Writes on attack_won. |
-| `screens/CreateAllianceScreen.js` | 3-step founding flow. Not yet branded. |
-| `screens/AllianceJoinedScreen.js` | Reads name/code/city from route.params. Not yet branded. |
+| `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow (identity → HQ territory → confirm). HQ picked from player-owned territories (Home District mechanic deferred). |
+| `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. Reads allianceName/shortName/city/memberCount from route.params. |
 | `lib/territory.js` | Pure territory calculation helpers: streakTier(), developmentName(), developmentMultiplier(), legacyRankName(), legacyRankMultiplier(), baseInfluencePerDay(), influencePerDay(), streakCapForTier(), cappedStreakMultiplier(), contestWalkDistance(), streakReductionPercent() |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
@@ -230,6 +230,8 @@ git push
 | Territory sheet history data hardcoded | Held for X days (14), changed hands count (6), Hall of Holders count (12) all hardcoded. No history table in DB yet. |
 | Legacy Rank hardcoded R1 | No legacy_rank column in DB yet — influencePerDay() defaults to Rank 1 (Unproven). |
 | Draggable bottom sheet deferred | More/Less toggle on territory sheet is a workaround — gorhom/bottom-sheet deferred until it can be batched into an EAS build. |
+| Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec says should show 5 nearest OSM territories. Deferred. |
+| Invite non-player flow missing | AllianceJoined copy references inviting by username, but no share/invite link flow exists yet. Needs building before launch. |
 
 ---
 
@@ -247,28 +249,31 @@ git push
 
 ## WHAT'S NEXT
 
-**Immediate:** Brand the Create Alliance screen — paste CreateAllianceScreen.js into chat before touching anything.
+**ALL MVP SCREENS ARE FULLY BRANDED. ✓**
 
-**Branding order (in progress):**
+**Immediate:** Wire up first real data to War Room or Profile — decide which resource (Influence, War Chest, or roster stats) to pull from Supabase first, build the query, remove the hardcoded placeholder. Start by pasting WarRoomScreen.js into chat.
+
+**Branding order — COMPLETE:**
 1. ✓ Tab bar
-2. ✓ Profile screen (+ Influence hero block)
+2. ✓ Profile screen
 3. ✓ Alliance screen + War Room
 4. ✓ Activity screen
 5. ✓ Onboarding screen
 6. ✓ Map screen
 7. ✓ Sign In, Username
 8. ✓ Active Claim, Claim Success, Contest Result
-9. Create Alliance — next
-10. Alliance Joined
+9. ✓ Create Alliance, Alliance Joined
 
-**Other backlog:**
-- Refactor ProfileScreen colour constants to lib/theme.js tokens
+**Data / mechanics backlog:**
 - Wire War Room + Profile Influence/war chest to real Supabase data
+- Refactor ProfileScreen colour constants to lib/theme.js tokens
 - Fix auth flow order (new users should see Steps 0+1 before sign-up)
-- Add territory history table (held days, changed hands count, Hall of Holders)
+- Add territory history table (held days, changed hands, Hall of Holders)
 - Add legacy_rank column to territories table
 - Real step tracking — try expo-sensors Pedometer.watchStepCount()
 - Draggable bottom sheet — gorhom/bottom-sheet when batching EAS build
+- Invite non-player flow (share/invite link before launch)
+- Home District mechanic — 5 nearest OSM territories for HQ picker
 - Onboarding home pin 500m verification
 - Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
 - Defender flow — revisit once Ably is built
@@ -351,6 +356,16 @@ git push
 | ContestResultScreen built from brand director mockup | Not derived from existing functional code — clean rebuild |
 | More/Less toggle kept on territory sheet | Draggable bottom sheet (gorhom) deferred — would require EAS build, applies across multiple screens |
 | Cancel button on ActiveClaimScreen uses Slate2 not Claim | Claim reserved for territory/CTA signal only |
+| "Found" → "Create" for alliance creation | "found" reads as past tense of "find" on quick scan |
+| Claim red NOT used in non-member alliance list | Monochrome kept — no decorative use of Claim |
+| "Find an alliance" CTA removed | The list IS the discovery surface — button was redundant |
+| Create alliance demoted to small footer link | Joining existing alliances is the priority path |
+| confirmAlliance state lifted to AllianceScreen level | Needed so screen-level header could conditionally hide when confirm view is active |
+| Alliance Joined benefit list: 5 items (not 4) | Alliance missions is a real shipped feature — kept in |
+| Alliance Joined: emoji removed entirely | Brand brief: no emoji in any product copy |
+| Alliance Joined: benefit cards removed | Hairline-divided numbered rows replace card walls |
+| Alliance Joined: Recruit copy changed to invite by username | Players have no short name — invite-by-short-name was incorrect |
+| Bounded scroll list (maxHeight 320) for alliance list | Keeps header + footer always visible — better for discovery when list grows |
 
 ---
 
