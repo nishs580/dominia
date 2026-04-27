@@ -3,7 +3,20 @@ import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { getLevelForXp, getXpProgress } from '../lib/level';
+import {
+  calcLevel,
+  calcLevelProgress,
+  getLevelTitle,
+  LEVEL_XP_FLOORS,
+} from '../lib/formulas';
+
+// Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
+const TERRITORY_CAP_BY_LEVEL = [3, 6, 10, 15, 20, 28, 38, 50, 65, 75];
+
+function territoryCapForLevel(level) {
+  const lv = Math.min(10, Math.max(1, level | 0));
+  return TERRITORY_CAP_BY_LEVEL[lv - 1] ?? 1;
+}
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
 
@@ -108,31 +121,21 @@ export default function ProfileScreen() {
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
       setLongestStreak(Math.max(0, Number(player.longest_streak) || 0));
 
-      if (player.alliance_id) {
-        const { data: allianceRow } = await supabase
-          .from('alliances')
-          .select('name')
-          .eq('id', player.alliance_id)
-          .maybeSingle();
-        if (!cancelled) setAllianceName(allianceRow?.name ?? null);
-      } else {
-        if (!cancelled) setAllianceName(null);
-      }
-
-      const { data: territories, error: terrError } = await supabase
-        .from('territories')
-        .select('id, territory_name, tier')
-        .eq('owner_id', player.id);
+      const [allianceResult, territoriesResult] = await Promise.all([
+        player.alliance_id
+          ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from('territories').select('id, territory_name, tier').eq('owner_id', player.id),
+      ]);
 
       if (cancelled) return;
-
-      if (terrError) {
-        setProfileError(terrError.message ?? 'Could not load territories');
+      setAllianceName(allianceResult.data?.name ?? null);
+      if (territoriesResult.error) {
+        setProfileError(territoriesResult.error.message ?? 'Could not load territories');
         setOwnedTerritories([]);
       } else {
-        setOwnedTerritories(territories ?? []);
+        setOwnedTerritories(territoriesResult.data ?? []);
       }
-
       setLoading(false);
     }
 
@@ -143,13 +146,19 @@ export default function ProfileScreen() {
   }, [userId]);
 
   const xp = Math.max(0, Number(playerRow?.xp) || 0);
-  const { current, next, progress, xpIntoLevel, xpNeeded } = getXpProgress(xp);
+  const xpInt = Math.floor(xp);
+  const level = calcLevel(xpInt);
+  const progress = calcLevelProgress(xpInt);
+  const xpFloor = LEVEL_XP_FLOORS[level - 1] ?? 0;
+  const xpIntoLevel = level >= 10 ? xpInt - (LEVEL_XP_FLOORS[9] ?? 0) : xpInt - xpFloor;
+  const xpNeeded = level >= 10 ? 0 : (LEVEL_XP_FLOORS[level] ?? 0) - xpFloor;
   const xpProgress = progress;
   const xpPct = Math.round(Math.min(progress, 1) * 100);
-  const territoryCap = current?.territoryCap ?? 0;
+  const territoryCap = territoryCapForLevel(level);
 
   const playerName = playerRow?.username ?? '—';
-  const rankBadge = current?.title ?? getLevelForXp(xp).title;
+  const rankBadge = getLevelTitle(level);
+  const next = level < 10 ? { title: getLevelTitle(level + 1) } : null;
   const FAKE_LEGACY_TITLES = [
     { title: 'GROUNDBREAKER', descriptor: 'DAY 32 · 2.3.2026 · 30 TERRITORY-DAYS' },
     { title: 'THE IRON WEEK', descriptor: 'DAY 21 · 21.2.2026 · 21-DAY STREAK' },

@@ -3,7 +3,13 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 import { updateStreakOnChallengeComplete } from '../lib/streak';
-import { getLevelForXp } from '../lib/level';
+import { calcLevel, getLevelTitle } from '../lib/formulas';
+
+function levelFromXp(xp) {
+  const xpInt = Math.max(0, Math.floor(Number(xp) || 0));
+  const level = calcLevel(xpInt);
+  return { level, title: getLevelTitle(level) };
+}
 import { colors, fonts, spacing } from '../lib/theme';
 
 function formatToday(d) {
@@ -77,7 +83,7 @@ export default function ActivityScreen() {
   const [territoryCount, setTerritoryCount] = useState(0);
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
   const [isCompleting, setIsCompleting] = useState(() => new Set());
-  const [playerLevel, setPlayerLevel] = useState(getLevelForXp(0));
+  const [playerLevel, setPlayerLevel] = useState(() => levelFromXp(0));
 
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -115,26 +121,17 @@ export default function ActivityScreen() {
       setPlayerId(player.id);
       const xp = Math.max(0, Number(player.xp) || 0);
       setPlayerXp(xp);
-      setPlayerLevel(getLevelForXp(xp));
+      setPlayerLevel(levelFromXp(xp));
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
       setUsername(player.username ?? '');
 
-      const { count } = await supabase
-        .from('territories')
-        .select('id', { count: 'exact', head: true })
-        .eq('owner_id', player.id);
-
+      const [terrResult, challengeResult] = await Promise.all([
+        supabase.from('territories').select('id', { count: 'exact', head: true }).eq('owner_id', player.id),
+        supabase.from('player_challenges').select('challenge_key').eq('player_id', player.id).eq('date', todayStr),
+      ]);
       if (cancelled) return;
-      setTerritoryCount(count ?? 0);
-
-      const { data: challenges } = await supabase
-        .from('player_challenges')
-        .select('challenge_key')
-        .eq('player_id', player.id)
-        .eq('date', todayStr);
-
-      if (cancelled) return;
-      const next = new Set((challenges ?? []).map((r) => r.challenge_key).filter(Boolean));
+      setTerritoryCount(terrResult.count ?? 0);
+      const next = new Set((challengeResult.data ?? []).map((r) => r.challenge_key).filter(Boolean));
       setCompletedKeys(next);
     }
 
@@ -191,13 +188,13 @@ export default function ActivityScreen() {
 
     setIsCompleting((prev) => new Set([...prev, ch.key]));
     const prevXp = playerXp;
-    const prevLevel = getLevelForXp(prevXp);
+    const prevLevel = levelFromXp(prevXp);
     const shouldUpdateStreak = completedKeys.size === 0;
 
     // optimistic UI
     setCompletedKeys((prev) => new Set([...prev, ch.key]));
     setPlayerXp((prev) => Math.max(0, Number(prev) || 0) + ch.xp);
-    setPlayerLevel(getLevelForXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
+    setPlayerLevel(levelFromXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
 
     try {
       await supabase.from('player_challenges').insert({
@@ -212,7 +209,7 @@ export default function ActivityScreen() {
         .eq('id', playerId);
 
       const newXp = Math.max(0, Number(prevXp) || 0) + ch.xp;
-      const newLevel = getLevelForXp(newXp);
+      const newLevel = levelFromXp(newXp);
       if (newLevel.level > prevLevel.level) {
         await supabase.from('players').update({ level: newLevel.level }).eq('id', playerId);
       }
@@ -234,7 +231,7 @@ export default function ActivityScreen() {
         return next;
       });
       setPlayerXp(prevXp);
-      setPlayerLevel(getLevelForXp(prevXp));
+      setPlayerLevel(levelFromXp(prevXp));
     } finally {
       setIsCompleting((prev) => {
         const next = new Set(prev);

@@ -4,15 +4,28 @@ import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { getLevelForXp } from '../lib/level.js';
 import {
-  streakTier,
+  calcLevel,
+  calcDailyInfluence,
+  calcRequiredContestWalk,
+  getStreakTier,
+} from '../lib/formulas';
+import {
   developmentName,
   legacyRankName,
-  influencePerDay,
-  contestWalkDistance,
   streakReductionPercent,
+  streakTierName,
 } from '../lib/territory';
+
+const normaliseTier = t => t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
+
+// Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
+const TERRITORY_CAP_BY_LEVEL = [3, 6, 10, 15, 20, 28, 38, 50, 65, 75];
+
+function territoryCapForLevel(level) {
+  const lv = Math.min(10, Math.max(1, level | 0));
+  return TERRITORY_CAP_BY_LEVEL[lv - 1] ?? 1;
+}
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -76,29 +89,41 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
   else if (isAllianceTerritory) stateLabel = 'Alliance territory';
   else if (isOwned) stateLabel = 'Enemy territory';
 
-  const playerXp = myPlayer?.xp ?? 0;
-  const levelData = getLevelForXp(playerXp);
-  const cap = levelData?.territoryCap ?? 1;
+  const playerXp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
+  const cap = territoryCapForLevel(calcLevel(playerXp));
   const heldCount = allFeatures.filter(f => f.properties?.color === '#D64525').length;
   const isAtCap = heldCount >= cap;
 
   // Owner's streak tier (deterrent signal)
-  const ownerTier = streakTier(ownerStreakDays);
+  const ownerStreakTier = getStreakTier(ownerStreakDays);
 
   // Your streak
   const myStreak = myPlayer?.current_streak ?? 0;
 
-  // Influence per day
-  const influence = influencePerDay({ tier, developmentLevel, legacyRank, upkeepActive: true });
+  // Influence per day (upkeepOverdue: false === former upkeepActive: true)
+  const influence = Math.round(
+    calcDailyInfluence({
+      tier: normaliseTier(tier),
+      developmentLevel,
+      legacyRank,
+      upkeepOverdue: false,
+    })
+  );
 
   // Walk distance for contest
   const walkDistance = isOwned
-    ? contestWalkDistance({
-        perimeter: perimeterDistance,
-        attackerStreakDays: myStreak,
-        defenderStreakDays: ownerStreakDays,
-        tier,
-        developmentLevel,
+    ? calcRequiredContestWalk({
+        territory: {
+          tier: normaliseTier(tier),
+          perimeterMeters: perimeterDistance,
+          developmentLevel,
+        },
+        attacker: {
+          streakDays: myStreak,
+          usedSiegeBoost: false,
+          allianceBuffs: [],
+        },
+        defender: { streakDays: ownerStreakDays },
       })
     : Math.round(perimeterDistance);
 
@@ -148,7 +173,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
           <View style={styles.sheetRow}>
             <Text style={styles.sheetRowLabel}>Streak</Text>
             <Text style={[styles.sheetRowValue, ownerStreakDays >= 30 && { color: '#D64525' }]}>
-              {ownerTier.name}
+              {streakTierName(ownerStreakTier.tier)}
             </Text>
           </View>
         )}

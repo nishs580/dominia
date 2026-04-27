@@ -366,39 +366,29 @@ export default function AllianceScreen() {
         setPlayerRow(player);
 
         if (player?.alliance_id) {
-          const { data: allianceRow, error: allianceError } = await supabase
-            .from('alliances')
-            .select('id, name, short_name, city, founder_id')
-            .eq('id', player.alliance_id)
-            .maybeSingle();
+          const [allianceResult, memberCountResult] = await Promise.all([
+            supabase
+              .from('alliances')
+              .select('id, name, short_name, city, founder_id')
+              .eq('id', player.alliance_id)
+              .maybeSingle(),
+            supabase
+              .from('players')
+              .select('*', { count: 'exact', head: true })
+              .eq('alliance_id', player.alliance_id),
+          ]);
 
-          const { count, error: countError } = await supabase
-            .from('players')
-            .select('*', { count: 'exact', head: true })
-            .eq('alliance_id', player.alliance_id);
-
-          if (allianceError || countError || !allianceRow) {
-            if (allianceError || countError) {
-              console.error('AllianceScreen alliance detail:', allianceError || countError);
-            }
+          if (allianceResult.error || !allianceResult.data) {
             setMyAlliance(null);
             setTerritoryCount(null);
           } else {
-            setMyAlliance({
-              ...allianceRow,
-              memberCount: count ?? 0,
-            });
+            setMyAlliance({ ...allianceResult.data, memberCount: memberCountResult.count ?? 0 });
 
             const { count: terrCount, error: terrError } = await supabase
               .from('territories')
               .select('*', { count: 'exact', head: true })
               .eq('alliance_id', player.alliance_id);
-            if (terrError) {
-              console.error('AllianceScreen territory count:', terrError);
-              setTerritoryCount(null);
-            } else {
-              setTerritoryCount(terrCount ?? 0);
-            }
+            setTerritoryCount(terrError ? null : terrCount ?? 0);
           }
           setAllianceList([]);
         } else {
@@ -447,19 +437,22 @@ export default function AllianceScreen() {
             return;
           }
 
-          const withCounts = await Promise.all(
-            alliances.map(async (a) => {
-              const { count } = await supabase
-                .from('players')
-                .select('*', { count: 'exact', head: true })
-                .eq('alliance_id', a.id);
-              return {
-                ...a,
-                memberCount: count ?? 0,
-                founder_username: a.founder?.username ?? null,
-              };
-            }),
-          );
+          const allianceIds = alliances.map((a) => a.id);
+          const { data: allMembers } = await supabase
+            .from('players')
+            .select('alliance_id')
+            .in('alliance_id', allianceIds);
+
+          const countById = {};
+          for (const m of allMembers ?? []) {
+            countById[m.alliance_id] = (countById[m.alliance_id] ?? 0) + 1;
+          }
+
+          const withCounts = alliances.map((a) => ({
+            ...a,
+            memberCount: countById[a.id] ?? 0,
+            founder_username: a.founder?.username ?? null,
+          }));
           setAllianceList(withCounts);
         }
       } finally {
