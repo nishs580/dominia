@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 25, 2026
+Last updated: April 28, 2026
 
 ---
 
@@ -92,7 +92,13 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 - Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG — holds Leidseplein + Prinsengracht)
 - Territory tier values must be **lowercase** in DB (small/medium/large) — check constraint enforces this
 
-**Useful reset SQL:**
+**Indexes added (this phase):**
+- `idx_territories_owner_id` ON territories(owner_id)
+- `idx_territories_alliance_id` ON territories(alliance_id)
+- `idx_players_clerk_id` ON players(clerk_id)
+- `idx_players_alliance_id` ON players(alliance_id)
+
+Note: territories.owner_id index alone took Profile load from minutes → ~425ms warm. Cold-start free-tier DB wake-up takes 30–120s (Supabase free tier pausing) — not a code issue.
 ```sql
 -- Reset a territory
 UPDATE territories SET owner_id = null, alliance_id = null WHERE territory_name = 'X';
@@ -109,10 +115,10 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Branded | Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout, More/Less expandable section |
-| Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak), daily challenges, achievements table (hardcoded), weekly chart |
-| Profile screen | ✓ Branded | Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
-| Alliance screen | ✓ Branded | Member: mission card, top 3 contributors, roster, War Room button. Non-member: bounded scrollable alliance list (tap-to-join rows with founder username), confirm view, header hides during confirm, "create" footer link. |
+| Map screen | ✓ Branded | Dark-v11 Mapbox style, brand territory colours, TerritorySheet with real Influence readout + contest distance via formulas.js, More/Less expandable section |
+| Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak via formulas.js), daily challenges, achievements table (hardcoded), weekly chart |
+| Profile screen | ✓ Branded | Frozen header, stat grid, XP progress via formulas.js, Influence hero block (hardcoded "1,247" — next to wire), territory rows, legacy titles (hardcoded), settings |
+| Alliance screen | ✓ Branded | Member: mission card, top 3 contributors (hardcoded), roster, War Room button. Non-member: bounded scrollable list (tap-to-join with founder username), confirm view, header hides during confirm, "create" footer link. Parallel queries throughout. |
 | War Room screen | ✓ Branded | All theme tokens. Influence hero block, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
@@ -143,15 +149,15 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
-| `lib/level.js` | LEVELS array, getLevelForXp, getNextLevel, getXpProgress, territoryCap per level |
-| `lib/streak.js` | updateStreakOnChallengeComplete — fires on first challenge completion of the day |
-| `lib/territory.js` | Pure territory calculation helpers: streakTier, influencePerDay, contestWalkDistance, streakReductionPercent, developmentMultiplier, legacyRankMultiplier, etc. |
+| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank. Aligned to v6.10 mechanics. Replaces lib/level.js. |
+| `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O for streak update on challenge complete |
+| `lib/territory.js` | Display helpers only: developmentName(), legacyRankName(), streakTierName(), streakReductionPercent(). Numeric calc functions removed (moved to formulas.js). |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Fully branded. Dark-v11 Mapbox style, brand territory colours, sharp HUD pills, richer TerritorySheet with Influence readout + More/Less expandable section |
-| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header (live data from Supabase), daily challenges, achievements table (hardcoded), weekly chart |
-| `screens/ProfileScreen.js` | Fully branded. Frozen header, stat grid, XP progress, Influence hero block (hardcoded), territory rows, legacy titles (hardcoded), settings |
-| `screens/AllianceScreen.js` | Fully branded. Member: mission card, contributors, roster, War Room button. Non-member: bounded ScrollView alliance list (maxHeight 320), tap-to-join rows with founder username, confirm view with branded Archivo 900 name + body copy, confirmAlliance state at screen level so header hides during confirm. |
+| `screens/MapScreen.js` | Fully branded. Dark-v11 Mapbox style, brand territory colours, TerritorySheet with Influence readout + contest distance via formulas.js. Tier normaliser at call sites. |
+| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header, daily challenges, weekly chart. Level/XP via formulas.js. Parallel Supabase queries. |
+| `screens/ProfileScreen.js` | Fully branded. XP progress via formulas.js. Parallel Supabase queries. Influence still hardcoded "1,247". Has local hex constants (CLAIM, INK etc) not yet on theme tokens. |
+| `screens/AllianceScreen.js` | Fully branded. Parallel queries. Single .in() query for alliance list. confirmAlliance state at screen level. |
 | `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block, Morale full-width, 2×2 resource grid, morale abilities. All hardcoded. |
 | `screens/SignInScreen.js` | Fully branded. DOMINIA wordmark + ▪ claim mark, Geist Mono tagline, sharp inputs + Claim button. |
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
@@ -159,9 +165,9 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `screens/ActiveClaimScreen.js` | Fully branded. Claim red ring (butt cap), sharp cards, Geist Mono labels. DEV_MODE=true — flip to false for real GPS. |
 | `screens/ClaimSuccessScreen.js` | Fully branded. Solid Claim red square, typographic treatment. Writes owner_id + alliance_id to Supabase. |
 | `screens/ContestResultScreen.js` | Fully branded. 4 states, animated square, consequence block, two-button CTA stack. Writes on attack_won. |
-| `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow (identity → HQ territory → confirm). HQ picked from player-owned territories (Home District mechanic deferred). |
-| `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. Reads allianceName/shortName/city/memberCount from route.params. |
-| `lib/territory.js` | Pure territory calculation helpers: streakTier(), developmentName(), developmentMultiplier(), legacyRankName(), legacyRankMultiplier(), baseInfluencePerDay(), influencePerDay(), streakCapForTier(), cappedStreakMultiplier(), contestWalkDistance(), streakReductionPercent() |
+| `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. HQ picked from player-owned territories (Home District mechanic deferred). |
+| `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. |
+| `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
 | `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26) |
@@ -221,17 +227,20 @@ git push
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. DEV_MODE=true on ActiveClaimScreen. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
-| Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred until after branding complete. |
-| War Room + Profile values hardcoded | War chest resources, Influence, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons. |
+| Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred. |
+| Profile Influence hardcoded | ProfileScreen still shows "1,247 INFLUENCE / From 8 held territories". Wire via calcDailyInfluence() across owned territories — next priority. |
+| War Room values hardcoded | War chest resources, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons. |
 | Achievements table hardcoded | Distance, Calories, Active Minutes need HealthKit/Health Connect before real data possible. |
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
+| TERRITORY_CAP_BY_LEVEL duplicated | Inlined in both MapScreen.js and ProfileScreen.js — should move into formulas.js as calcTerritoryCapForLevel(). |
+| formulas.js has no unit tests | High priority before backend phase — pure functions make this straightforward. |
 | player_number hardcoded as #0004 | Sequential player_number column in Supabase not yet added. |
-| Territory sheet history data hardcoded | Held for X days (14), changed hands count (6), Hall of Holders count (12) all hardcoded. No history table in DB yet. |
-| Legacy Rank hardcoded R1 | No legacy_rank column in DB yet — influencePerDay() defaults to Rank 1 (Unproven). |
-| Draggable bottom sheet deferred | More/Less toggle on territory sheet is a workaround — gorhom/bottom-sheet deferred until it can be batched into an EAS build. |
-| Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec says should show 5 nearest OSM territories. Deferred. |
-| Invite non-player flow missing | AllianceJoined copy references inviting by username, but no share/invite link flow exists yet. Needs building before launch. |
+| Territory sheet history data hardcoded | Held for X days (14), changed hands (6), Hall of Holders (12) — no history table in DB yet. |
+| Legacy Rank hardcoded R1 | No legacy_rank column in DB yet — Influence calc defaults to Rank 1 (Unproven). |
+| Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
+| Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
+| Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
 
 ---
 
@@ -250,22 +259,15 @@ git push
 ## WHAT'S NEXT
 
 **ALL MVP SCREENS ARE FULLY BRANDED. ✓**
+**GAME MATH ENGINE (formulas.js) COMPLETE. ✓**
 
-**Immediate:** Wire up first real data to War Room or Profile — decide which resource (Influence, War Chest, or roster stats) to pull from Supabase first, build the query, remove the hardcoded placeholder. Start by pasting WarRoomScreen.js into chat.
-
-**Branding order — COMPLETE:**
-1. ✓ Tab bar
-2. ✓ Profile screen
-3. ✓ Alliance screen + War Room
-4. ✓ Activity screen
-5. ✓ Onboarding screen
-6. ✓ Map screen
-7. ✓ Sign In, Username
-8. ✓ Active Claim, Claim Success, Contest Result
-9. ✓ Create Alliance, Alliance Joined
+**Immediate:** Wire real Influence to ProfileScreen — replace hardcoded "1,247" with sum of calcDailyInfluence() across owned territories. Fetch each territory's tier, developmentLevel, legacyRank, and upkeepOverdue status. Decide: compute on render or store accumulated balance in a new players.influence_balance column.
 
 **Data / mechanics backlog:**
-- Wire War Room + Profile Influence/war chest to real Supabase data
+- Wire Profile Influence to real Supabase data (immediate)
+- Wire War Room war chest resources + contributors to Supabase
+- Move TERRITORY_CAP_BY_LEVEL into formulas.js as calcTerritoryCapForLevel()
+- Write unit tests for formulas.js (high priority before backend)
 - Refactor ProfileScreen colour constants to lib/theme.js tokens
 - Fix auth flow order (new users should see Steps 0+1 before sign-up)
 - Add territory history table (held days, changed hands, Hall of Holders)
@@ -366,6 +368,12 @@ git push
 | Alliance Joined: benefit cards removed | Hairline-divided numbered rows replace card walls |
 | Alliance Joined: Recruit copy changed to invite by username | Players have no short name — invite-by-short-name was incorrect |
 | Bounded scroll list (maxHeight 320) for alliance list | Keeps header + footer always visible — better for discovery when list grows |
+| formulas.js stays CommonJS (module.exports) | Works in both React Native and the future Fastify backend with no changes |
+| lib/streak.js kept separate from formulas.js | streak.js does Supabase I/O — not pure math, no overlap with formulas.js |
+| Tier casing handled at call site (normaliser) | DB stays lowercase (check constraint enforces it), formulas.js stays strict title-case — normaliser at MapScreen call sites |
+| Adopted v6.10 XP thresholds over lib/level.js values | Level 2 is now 600 XP (was 150 XP). Test users may show a lower level — expected. |
+| Parallelised Supabase queries with Promise.all | Sequential queries were causing multi-minute load times. Promise.all + DB indexes fixed it. |
+| Single .in() query for alliance list | Replaced N-query loop — one query for all members of listed alliances |
 
 ---
 
