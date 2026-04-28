@@ -343,6 +343,8 @@ export default function AllianceScreen() {
 
   const fetchPlayerAndContext = useCallback(
     async ({ silent = false } = {}) => {
+      console.log('[Alliance] effect fired, userId:', userId, 'at', Date.now());
+      const __allianceT0 = Date.now();
       if (!userId) {
         setPlayerRow(null);
         setMyAlliance(null);
@@ -368,6 +370,8 @@ export default function AllianceScreen() {
         }
 
         setPlayerRow(player);
+        console.log('[Alliance] player query done in', Date.now() - __allianceT0, 'ms');
+        const __allianceT1 = Date.now();
 
         if (player?.alliance_id) {
           const [allianceResult, memberCountResult] = await Promise.all([
@@ -382,6 +386,8 @@ export default function AllianceScreen() {
               .eq('alliance_id', player.alliance_id),
           ]);
 
+          console.log('[Alliance] alliance+memberCount done in', Date.now() - __allianceT1, 'ms');
+          const __allianceT2 = Date.now();
           if (allianceResult.error || !allianceResult.data) {
             setMyAlliance(null);
             setTerritoryCount(null);
@@ -393,6 +399,8 @@ export default function AllianceScreen() {
               .select('*', { count: 'exact', head: true })
               .eq('alliance_id', player.alliance_id);
             setTerritoryCount(terrError ? null : terrCount ?? 0);
+            console.log('[Alliance] territory count done in', Date.now() - __allianceT2, 'ms');
+            console.log('[Alliance] total (member path):', Date.now() - __allianceT0, 'ms');
           }
           setAllianceList([]);
         } else {
@@ -458,6 +466,7 @@ export default function AllianceScreen() {
             founder_username: a.founder?.username ?? null,
           }));
           setAllianceList(withCounts);
+          console.log('[Alliance] total (non-member path):', Date.now() - __allianceT0, 'ms');
         }
       } finally {
         if (!silent) setLoading(false);

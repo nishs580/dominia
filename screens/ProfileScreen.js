@@ -83,6 +83,8 @@ export default function ProfileScreen() {
     let cancelled = false;
 
     async function loadProfile() {
+      console.log('[Profile] effect fired, userId:', userId, 'at', Date.now());
+      const __profileT0 = Date.now();
       if (!userId) {
         setPlayerRow(null);
         setOwnedTerritories([]);
@@ -101,6 +103,8 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (cancelled) return;
+      console.log('[Profile] player query done in', Date.now() - __profileT0, 'ms');
+      const __profileT1 = Date.now();
 
       if (playerError) {
         setProfileError(playerError.message ?? 'Could not load profile');
@@ -132,6 +136,8 @@ export default function ProfileScreen() {
       ]);
 
       if (cancelled) return;
+      console.log('[Profile] alliance+territories done in', Date.now() - __profileT1, 'ms');
+      console.log('[Profile] total time:', Date.now() - __profileT0, 'ms');
       setAllianceName(allianceResult.data?.name ?? null);
       if (territoriesResult.error) {
         setProfileError(territoriesResult.error.message ?? 'Could not load territories');
