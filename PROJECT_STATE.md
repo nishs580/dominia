@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 28, 2026
+Last updated: April 28, 2026 (evening)
 
 ---
 
@@ -76,11 +76,11 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale
 
-`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at
+`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue
 
-`alliances`: id, name, short_name, city, created_at, founder_id
+`alliances`: id, name, short_name, city, created_at, founder_id, morale
 
 `player_challenges`: id, player_id, challenge_key, completed_at, date — UNIQUE constraint on (player_id, challenge_key, date)
 
@@ -115,11 +115,12 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Branded | Dark-v11 Mapbox style, brand territory colours, TerritorySheet with real Influence readout + contest distance via formulas.js, More/Less expandable section |
-| Activity screen | ✓ Branded | Frozen COMMANDER header (live username/level/streak via formulas.js), daily challenges, achievements table (hardcoded), weekly chart |
-| Profile screen | ✓ Branded | Frozen header, stat grid, XP progress via formulas.js, Influence hero block (hardcoded "1,247" — next to wire), territory rows, legacy titles (hardcoded), settings |
-| Alliance screen | ✓ Branded | Member: mission card, top 3 contributors (hardcoded), roster, War Room button. Non-member: bounded scrollable list (tap-to-join with founder username), confirm view, header hides during confirm, "create" footer link. Parallel queries throughout. |
-| War Room screen | ✓ Branded | All theme tokens. Influence hero block, Morale full-width, Iron/Gold/Stone/Shield 2×2 grid, morale abilities. All hardcoded. |
+| Map screen | ✓ Live data | Resource banner (4 glyphs + live balances) in document flow below status bar. Territory bottom sheet with Influence readout + contest distance via formulas.js. Steps HUD and alliance badge removed. |
+| Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
+| Profile screen | ✓ Live data | Live Influence/day (calcDailyInfluence() summed across owned territories). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. |
+| Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
+| War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only (Iron/Gold/Stone removed — personal wallet, not alliance). All 6 abilities with correct costs. Header wired from nav params. |
+| Wallet screen | ✓ New | Live resource fetch on open. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. Accessible from Profile. |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
@@ -154,11 +155,12 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `lib/territory.js` | Display helpers only: developmentName(), legacyRankName(), streakTierName(), streakReductionPercent(). Numeric calc functions removed (moved to formulas.js). |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Fully branded. Dark-v11 Mapbox style, brand territory colours, TerritorySheet with Influence readout + contest distance via formulas.js. Tier normaliser at call sites. |
-| `screens/ActivityScreen.js` | Fully branded. Frozen COMMANDER header, daily challenges, weekly chart. Level/XP via formulas.js. Parallel Supabase queries. |
-| `screens/ProfileScreen.js` | Fully branded. XP progress via formulas.js. Parallel Supabase queries. Influence still hardcoded "1,247". Has local hex constants (CLAIM, INK etc) not yet on theme tokens. |
-| `screens/AllianceScreen.js` | Fully branded. Parallel queries. Single .in() query for alliance list. confirmAlliance state at screen level. |
-| `screens/WarRoomScreen.js` | Fully branded. All theme tokens. Influence hero block, Morale full-width, 2×2 resource grid, morale abilities. All hardcoded. |
+| `screens/MapScreen.js` | Resource banner (4 glyphs + live balances, document flow). Dark-v11 Mapbox. TerritorySheet with Influence + contest distance via formulas.js. Steps HUD and alliance badge removed. |
+| `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
+| `screens/ProfileScreen.js` | Live Influence/day (calcDailyInfluence()). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. XP via formulas.js. |
+| `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
+| `screens/WarRoomScreen.js` | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. Header wired from nav params. |
+| `screens/WalletScreen.js` | **New.** Live resource fetch on mount. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. |
 | `screens/SignInScreen.js` | Fully branded. DOMINIA wordmark + ▪ claim mark, Geist Mono tagline, sharp inputs + Claim button. |
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 map, resolvedPlayerId fallback, live username |
@@ -222,22 +224,23 @@ git push
 
 | Bug | Detail |
 |---|---|
+| **⚠️ Slow screen load — investigate first next session** | Profile and Alliance screens hang for up to 10 minutes on app start/reload. Partially Supabase free-tier cold start but may be deeper (sequential queries, missing index). ACTION: Disable Supabase auto-pause (Settings → General → Auto Pause) and audit ProfileScreen + AllianceScreen query patterns. |
 | Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev. Must re-enable before production. |
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. DEV_MODE=true on ActiveClaimScreen. |
 | Defender flow deferred | Needs Ably real-time layer — not worth building a throwaway version. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
 | Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred. |
-| Profile Influence hardcoded | ProfileScreen still shows "1,247 INFLUENCE / From 8 held territories". Wire via calcDailyInfluence() across owned territories — next priority. |
-| War Room values hardcoded | War chest resources, top 3 contributors, morale ability costs all hardcoded. Needs Supabase schema + queries + role gating for ACTIVATE buttons. |
+| War Room ACTIVATE buttons not wired | Role gating for Founder/Marshal not built. Morale deduction on activate not wired. |
 | Achievements table hardcoded | Distance, Calories, Active Minutes need HealthKit/Health Connect before real data possible. |
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
-| TERRITORY_CAP_BY_LEVEL duplicated | Inlined in both MapScreen.js and ProfileScreen.js — should move into formulas.js as calcTerritoryCapForLevel(). |
-| formulas.js has no unit tests | High priority before backend phase — pure functions make this straightforward. |
+| TERRITORY_CAP_BY_LEVEL duplicated | Inlined in MapScreen.js and ProfileScreen.js — should move to formulas.js as calcTerritoryCapForLevel(). |
+| formulas.js has no unit tests | High priority before backend phase. |
 | player_number hardcoded as #0004 | Sequential player_number column in Supabase not yet added. |
 | Territory sheet history data hardcoded | Held for X days (14), changed hands (6), Hall of Holders (12) — no history table in DB yet. |
-| Legacy Rank hardcoded R1 | No legacy_rank column in DB yet — Influence calc defaults to Rank 1 (Unproven). |
+| Legacy Rank auto-calc not built | legacy_rank column added to territories (default R1). Auto-calc needs territory_history table (Phase 4). |
+| Phase 3 resource spending incomplete | Gold deducted on claim, Iron deducted on contest initiation, claim/contest win resource earn — all still to build. |
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
@@ -258,24 +261,29 @@ git push
 
 ## WHAT'S NEXT
 
-**ALL MVP SCREENS ARE FULLY BRANDED. ✓**
-**GAME MATH ENGINE (formulas.js) COMPLETE. ✓**
+**ALL MVP SCREENS FULLY BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓**
 
-**Immediate:** Wire real Influence to ProfileScreen — replace hardcoded "1,247" with sum of calcDailyInfluence() across owned territories. Fetch each territory's tier, developmentLevel, legacyRank, and upkeepOverdue status. Decide: compute on render or store accumulated balance in a new players.influence_balance column.
+**Immediate — investigate slow load first:**
+Audit ProfileScreen and AllianceScreen query patterns. Check for sequential fetches that should be parallel. Add missing DB indexes if needed. Disable Supabase auto-pause (Settings → General → Auto Pause). Only proceed to Phase 3 spending once load times are acceptable.
 
-**Data / mechanics backlog:**
-- Wire Profile Influence to real Supabase data (immediate)
-- Wire War Room war chest resources + contributors to Supabase
-- Move TERRITORY_CAP_BY_LEVEL into formulas.js as calcTerritoryCapForLevel()
-- Write unit tests for formulas.js (high priority before backend)
-- Refactor ProfileScreen colour constants to lib/theme.js tokens
-- Fix auth flow order (new users should see Steps 0+1 before sign-up)
-- Add territory history table (held days, changed hands, Hall of Holders)
-- Add legacy_rank column to territories table
+**Formula Build Phases:**
+- Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
+- Phase 2 ✓ — Influence/day + Territory Power wired to ProfileScreen
+- Phase 3 (in progress) — Resource wallet schema done, challenge earning done. Still to do: Gold deducted on claim, Iron deducted on contest, claim/contest win earns resources
+- Phase 4 — Territory history + Legacy Rank auto-calc (needs territory_history table)
+- Phase 5 — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron)
+
+**Other backlog:**
+- Move TERRITORY_CAP_BY_LEVEL into formulas.js
+- Write unit tests for formulas.js
+- Wire War Room ACTIVATE buttons (role gating + Morale deduction)
+- Refactor ProfileScreen colour constants to lib/theme.js
+- Fix auth flow order
+- Add territory history table
 - Real step tracking — try expo-sensors Pedometer.watchStepCount()
-- Draggable bottom sheet — gorhom/bottom-sheet when batching EAS build
-- Invite non-player flow (share/invite link before launch)
-- Home District mechanic — 5 nearest OSM territories for HQ picker
+- Draggable bottom sheet — batch into EAS build
+- Invite non-player flow
+- Home District mechanic
 - Onboarding home pin 500m verification
 - Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
 - Defender flow — revisit once Ably is built
@@ -374,6 +382,12 @@ git push
 | Adopted v6.10 XP thresholds over lib/level.js values | Level 2 is now 600 XP (was 150 XP). Test users may show a lower level — expected. |
 | Parallelised Supabase queries with Promise.all | Sequential queries were causing multi-minute load times. Promise.all + DB indexes fixed it. |
 | Single .in() query for alliance list | Replaced N-query loop — one query for all members of listed alliances |
+| Influence on Profile shows daily earn RATE not balance | Balance needs influence_balance column + backend cron (Phase 4/5) |
+| Territory Power gets its own block below stat grid | It's the defining metric — deserves more prominence than a stat pill |
+| War chest holds Morale only | Iron/Gold/Stone are personal wallet resources, not alliance collective |
+| WalletScreen fetches live from DB on every open | Avoids stale nav param problem — fast enough since DB is warm during session |
+| Resource banner uses document flow not absolute | Mapbox zoom control sits below it naturally, no overlap |
+| Legacy Rank defaulted to R1 for all territories | Auto-calculation needs territory_history table — deferred to Phase 4 |
 
 ---
 
