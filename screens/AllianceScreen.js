@@ -317,7 +317,11 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
 
         <Pressable
           style={({ pressed }) => [styles.warRoomBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => navigation.navigate('WarRoom')}
+          onPress={() => navigation.navigate('WarRoom', {
+            allianceId: myAlliance?.id,
+            allianceName: myAlliance?.name,
+            shortName: myAlliance?.short_name,
+          })}
         >
           <Text style={styles.warRoomBtnText}>ENTER WAR ROOM →</Text>
         </Pressable>

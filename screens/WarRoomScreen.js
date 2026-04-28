@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,153 +9,225 @@ import {
   StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StoneGlyph, IronGlyph, GoldGlyph, ShieldGlyph, MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
+import { MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
+import { supabase } from '../lib/supabase';
+import { calcDailyInfluence } from '../lib/formulas';
 
-const WAR_CHEST = [
-  { label: 'MORALE', value: '340', color: colors.alliance, Glyph: MoraleGlyph },
-  { label: 'IRON', value: '85', color: colors.bone, Glyph: IronGlyph },
-  { label: 'GOLD', value: '120', color: colors.bone, Glyph: GoldGlyph },
-  { label: 'STONE', value: '160', color: colors.bone, Glyph: StoneGlyph },
-  { label: 'SHIELD', value: '210', color: colors.bone, Glyph: ShieldGlyph },
-];
+const normaliseTier = t =>
+  t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
 
 const ABILITIES = [
   {
     name: 'WAR SURGE',
-    cost: '100 MORALE',
+    cost: '80 MORALE',
     duration: '6 HOURS',
-    effect: 'Attacker Iron costs −50% for all contests opened during window.',
+    effect: 'Attacker Iron costs −40% for all contests opened during window.',
+  },
+  {
+    name: 'IRON BULWARK',
+    cost: '80 MORALE',
+    duration: '6 HOURS',
+    effect: 'Contesting any alliance territory costs 40% more Iron.',
   },
   {
     name: 'RALLY CRY',
     cost: '60 MORALE',
     duration: '12 HOURS',
-    effect: 'Attackers at 1.25:1 advantage for all contests opened during window.',
-  },
-  {
-    name: 'IRON BULWARK',
-    cost: '100 MORALE',
-    duration: '6 HOURS',
-    effect: 'Contesting any alliance territory costs 50% more Iron.',
+    effect: 'Attackers walk 80% of the normal contest distance.',
   },
   {
     name: 'STEADFAST',
     cost: '60 MORALE',
     duration: '12 HOURS',
-    effect: 'Defenders only need to log 80% of attacker distance.',
+    effect: 'Defenders only need to walk 80% of attacker distance.',
+  },
+  {
+    name: 'SUPPLY LINE',
+    cost: '40 MORALE',
+    duration: '24 HOURS',
+    effect: 'All resource earn events give +20% for all members.',
+  },
+  {
+    name: 'UNIFIED FRONT',
+    cost: '100 MORALE',
+    duration: '48 HOURS',
+    effect: 'No member can have their streak broken during this window.',
   },
 ];
 
-function SectionLabel({ left, accent, right }) {
+function SectionLabel({ left, accent }) {
   return (
     <View style={styles.sectionLabelRow}>
       <Text style={styles.sectionLabelText}>{left}</Text>
       {accent ? <Text style={styles.sectionLabelAccent}> · {accent}</Text> : null}
       <View style={styles.sectionHairline} />
-      {right ? <Text style={styles.sectionLabelRight}>{right}</Text> : null}
     </View>
   );
 }
 
-export default function WarRoomScreen() {
+export default function WarRoomScreen({ route }) {
   const navigation = useNavigation();
+  const {
+    allianceId = null,
+    allianceName = 'Alliance',
+    shortName = '—',
+  } = route?.params ?? {};
+
+  const [loading, setLoading] = useState(true);
+  const [warChestMorale, setWarChestMorale] = useState(0);
+  const [allianceInfluence, setAllianceInfluence] = useState(0);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWarRoom() {
+      if (!allianceId) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const [allianceResult, territoriesResult] = await Promise.all([
+        supabase
+          .from('alliances')
+          .select('morale')
+          .eq('id', allianceId)
+          .maybeSingle(),
+        supabase
+          .from('territories')
+          .select('tier, development_level, legacy_rank, upkeep_overdue')
+          .eq('alliance_id', allianceId),
+      ]);
+
+      if (cancelled) return;
+
+      if (allianceResult.error) {
+        setError(allianceResult.error.message ?? 'Could not load war room');
+        setLoading(false);
+        return;
+      }
+
+      setWarChestMorale(allianceResult.data?.morale ?? 0);
+
+      const territories = territoriesResult.data ?? [];
+      const totalInfluence = territories.reduce((sum, t) => {
+        try {
+          return sum + calcDailyInfluence({
+            tier: normaliseTier(t.tier),
+            developmentLevel: t.development_level ?? 0,
+            legacyRank: t.legacy_rank ?? 1,
+            upkeepOverdue: t.upkeep_overdue ?? false,
+          });
+        } catch {
+          return sum;
+        }
+      }, 0);
+
+      setAllianceInfluence(totalInfluence);
+      setLoading(false);
+    }
+
+    loadWarRoom();
+    return () => { cancelled = true; };
+  }, [allianceId]);
 
   return (
     <View style={styles.screen}>
-      {/* HEADER */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>← ALLIANCE</Text>
         </Pressable>
         <Text style={styles.headerTitle}>WAR ROOM</Text>
-        <Text style={styles.headerSub}>[KAI] · KAINETIC ALLIED</Text>
+        <Text style={styles.headerSub}>[{shortName}] · {allianceName.toUpperCase()}</Text>
         <View style={styles.headerDivider} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.influenceBlock}>
-          <View style={styles.influenceHeader}>
-            <Text style={styles.influenceLabel}>INFLUENCE</Text>
-            <View style={styles.influenceHairline} />
-          </View>
-          <View style={styles.influenceRow}>
-            <InfluenceGlyph size={32} color={colors.bone} />
-            <View style={styles.influenceTextStack}>
-              <Text style={styles.influenceValue}>127,683</Text>
-              <Text style={styles.influenceSublabel}>ALLIANCE INFLUENCE</Text>
-              <Text style={styles.influenceContext}>Earned daily from alliance-held territories</Text>
+      {loading ? (
+        <View style={styles.loadingBlock}>
+          <ActivityIndicator size="large" color={colors.slate2} />
+          <Text style={styles.loadingText}>Loading war room…</Text>
+        </View>
+      ) : null}
+
+      {!loading && error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      {!loading && !error ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ALLIANCE INFLUENCE */}
+          <View style={styles.influenceBlock}>
+            <View style={styles.influenceHeader}>
+              <Text style={styles.influenceLabel}>INFLUENCE</Text>
+              <View style={styles.influenceHairline} />
+            </View>
+            <View style={styles.influenceRow}>
+              <InfluenceGlyph size={32} color={colors.bone} />
+              <View style={styles.influenceTextStack}>
+                <Text style={styles.influenceValue}>
+                  {allianceInfluence % 1 === 0
+                    ? allianceInfluence.toLocaleString()
+                    : allianceInfluence.toFixed(1)}
+                </Text>
+                <Text style={styles.influenceSublabel}>ALLIANCE INFLUENCE / DAY</Text>
+                <Text style={styles.influenceContext}>
+                  Earned daily from alliance-held territories
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* ATTACK DAY COUNTDOWN */}
-        <SectionLabel left="NEXT ATTACK DAY" />
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownValue}>2D 14H</Text>
-          <Text style={styles.countdownDay}>SATURDAY · 05:00 – 23:00</Text>
-        </View>
+          {/* ATTACK DAY COUNTDOWN */}
+          <SectionLabel left="NEXT ATTACK DAY" />
+          <View style={styles.countdownCard}>
+            <Text style={styles.countdownValue}>2D 14H</Text>
+            <Text style={styles.countdownDay}>SATURDAY · 05:00 – 23:00</Text>
+          </View>
 
-        {/* WAR CHEST */}
-        <SectionLabel left="WAR CHEST" accent="ALLIANCE RESERVES" />
-        <View style={styles.warChestContainer}>
-          {/* MORALE — full width */}
+          {/* WAR CHEST — MORALE ONLY */}
+          <SectionLabel left="WAR CHEST" accent="ALLIANCE MORALE" />
           <View style={styles.warChestMoraleCell}>
             <View style={styles.warChestMoraleLeft}>
-              <Text style={[styles.warChestValue, { color: colors.alliance, fontSize: 32 }]}>
-                340
+              <Text style={styles.warChestMoraleValue}>
+                {warChestMorale.toLocaleString()}
               </Text>
               <Text style={styles.warChestLabel}>MORALE</Text>
+              <Text style={styles.warChestSub}>
+                Pooled from member donations · powers all abilities
+              </Text>
             </View>
-            <MoraleGlyph size={28} color={colors.alliance} />
+            <MoraleGlyph size={32} color={colors.alliance} />
           </View>
 
-          {/* 2x2 GRID — Iron, Gold, Stone, Shield */}
-          <View style={styles.warChestGrid}>
-            {[
-              { label: 'IRON', value: '85', color: colors.bone, Glyph: IronGlyph },
-              { label: 'GOLD', value: '120', color: colors.bone, Glyph: GoldGlyph },
-              { label: 'STONE', value: '160', color: colors.bone, Glyph: StoneGlyph },
-              { label: 'SHIELD', value: '210', color: colors.bone, Glyph: ShieldGlyph },
-            ].map((r) => (
-              <View key={r.label} style={styles.warChestCell}>
-                <View style={styles.warChestCellInner}>
-                  <View style={styles.warChestCellLeft}>
-                    <Text style={[styles.warChestValue, { color: r.color, fontSize: 24 }]}>
-                      {r.value}
-                    </Text>
-                    <Text style={styles.warChestLabel}>{r.label}</Text>
-                  </View>
-                  <r.Glyph size={28} color={r.color} />
+          {/* MORALE ABILITIES */}
+          <SectionLabel left="MORALE ABILITIES" accent="FOUNDER · MARSHAL ONLY" />
+          {ABILITIES.map((a, i) => (
+            <React.Fragment key={a.name}>
+              <View style={styles.abilityRow}>
+                <View style={styles.abilityLeft}>
+                  <Text style={styles.abilityName}>{a.name}</Text>
+                  <Text style={styles.abilityCost}>{a.cost} · {a.duration}</Text>
+                  <Text style={styles.abilityEffect}>{a.effect}</Text>
                 </View>
+                <Pressable style={styles.activateBtn}>
+                  <Text style={styles.activateBtnText}>ACTIVATE</Text>
+                </Pressable>
               </View>
-            ))}
-          </View>
-        </View>
-
-        {/* MORALE ABILITIES */}
-        <SectionLabel left="MORALE ABILITIES" accent="FOUNDER · MARSHAL ONLY" />
-        {ABILITIES.map((a, i) => (
-          <React.Fragment key={a.name}>
-            <View style={styles.abilityRow}>
-              <View style={styles.abilityLeft}>
-                <Text style={styles.abilityName}>{a.name}</Text>
-                <Text style={styles.abilityCost}>{a.cost} · {a.duration}</Text>
-                <Text style={styles.abilityEffect}>{a.effect}</Text>
-              </View>
-              <Pressable style={styles.activateBtn}>
-                <Text style={styles.activateBtnText}>ACTIVATE</Text>
-              </Pressable>
-            </View>
-            {i < ABILITIES.length - 1 && <View style={styles.rowDivider} />}
-          </React.Fragment>
-        ))}
-
-      </ScrollView>
+              {i < ABILITIES.length - 1 && <View style={styles.rowDivider} />}
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -165,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   header: {
-    paddingTop: StatusBar.currentHeight + spacing.md,
+    paddingTop: (StatusBar.currentHeight ?? 0) + spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
   },
@@ -197,6 +270,29 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.hairlineStrong,
     marginTop: 14,
+  },
+  loadingBlock: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.md,
+    color: colors.slate2,
+  },
+  errorBanner: {
+    margin: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  errorText: {
+    fontFamily: fonts.body,
+    fontSize: fontSize.md,
+    color: colors.slate2,
   },
   scroll: {
     flex: 1,
@@ -281,15 +377,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.hairlineStrong,
     marginLeft: spacing.sm,
   },
-  sectionLabelRight: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    color: colors.slate2,
-    letterSpacing: 1.4,
-    marginLeft: spacing.sm,
-  },
-
-  // COUNTDOWN
   countdownCard: {
     backgroundColor: colors.ink2,
     borderWidth: 1,
@@ -313,11 +400,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textTransform: 'uppercase',
   },
-
-  // WAR CHEST
-  warChestContainer: {
-    gap: spacing.sm,
-  },
   warChestMoraleCell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -334,30 +416,10 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: spacing.xs,
   },
-  warChestGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  warChestCell: {
-    width: '48.5%',
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
-    padding: spacing.md,
-  },
-  warChestCellInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  warChestCellLeft: {
-    flexDirection: 'column',
-    gap: spacing.xs,
-  },
-  warChestValue: {
+  warChestMoraleValue: {
     fontFamily: fonts.displayMedium,
+    fontSize: 40,
+    color: colors.alliance,
     letterSpacing: -0.02,
   },
   warChestLabel: {
@@ -366,10 +428,13 @@ const styles = StyleSheet.create({
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginTop: spacing.xs,
   },
-
-  // ABILITIES
+  warChestSub: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.slate2,
+    marginTop: 4,
+  },
   abilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
