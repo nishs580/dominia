@@ -8,6 +8,9 @@ import {
   calcLevelProgress,
   getLevelTitle,
   LEVEL_XP_FLOORS,
+  calcDailyInfluence,
+  calcTerritoryPower,
+  calcFullValueCap,
 } from '../lib/formulas';
 
 // Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
@@ -125,7 +128,7 @@ export default function ProfileScreen() {
         player.alliance_id
           ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from('territories').select('id, territory_name, tier').eq('owner_id', player.id),
+        supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank, upkeep_overdue').eq('owner_id', player.id),
       ]);
 
       if (cancelled) return;
@@ -155,6 +158,22 @@ export default function ProfileScreen() {
   const xpProgress = progress;
   const xpPct = Math.round(Math.min(progress, 1) * 100);
   const territoryCap = territoryCapForLevel(level);
+  const fullValueCap = calcFullValueCap({
+    level,
+    isUnbrokenStreak: currentStreak >= 30 && currentStreak < 60,
+    isLegendaryStreak: currentStreak >= 60,
+    isAllianceChampion: false,
+    isUnbrokenTogetherTier: false,
+  });
+
+  const territoryPower = calcTerritoryPower(
+    ownedTerritories.map(t => ({
+      tier: t.tier ? t.tier.charAt(0).toUpperCase() + t.tier.slice(1) : 'Small',
+      developmentLevel: t.development_level ?? 0,
+      legacyRank: t.legacy_rank ?? 1,
+    })),
+    fullValueCap
+  );
 
   const playerName = playerRow?.username ?? '—';
   const rankBadge = getLevelTitle(level);
@@ -222,9 +241,32 @@ export default function ProfileScreen() {
             <View style={styles.influenceRow}>
               <InfluenceGlyph size={32} color={colors.bone} />
               <View style={styles.influenceTextStack}>
-                <Text style={styles.influenceValue}>1,247</Text>
-                <Text style={styles.influenceSublabel}>INFLUENCE EARNED</Text>
-                <Text style={styles.influenceContext}>From 8 held territories</Text>
+                <Text style={styles.influenceValue}>
+                  {(() => {
+                    const total = ownedTerritories.reduce((sum, t) => {
+                      const tier = t.tier
+                        ? t.tier.charAt(0).toUpperCase() + t.tier.slice(1)
+                        : 'Small';
+                      try {
+                        return sum + calcDailyInfluence({
+                          tier,
+                          developmentLevel: t.development_level ?? 0,
+                          legacyRank: t.legacy_rank ?? 1,
+                          upkeepOverdue: t.upkeep_overdue ?? false,
+                        });
+                      } catch {
+                        return sum;
+                      }
+                    }, 0);
+                    return total % 1 === 0
+                      ? total.toLocaleString()
+                      : total.toFixed(1);
+                  })()}
+                </Text>
+                <Text style={styles.influenceSublabel}>INFLUENCE / DAY</Text>
+                <Text style={styles.influenceContext}>
+                  {`From ${ownedTerritories.length} held ${ownedTerritories.length === 1 ? 'territory' : 'territories'}`}
+                </Text>
               </View>
             </View>
           </View>
@@ -248,6 +290,17 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>SIEGE XP</Text>
               <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
             </View>
+          </View>
+
+          <View style={styles.powerBlock}>
+            <View style={styles.influenceHeader}>
+              <Text style={styles.influenceLabel}>TERRITORY POWER</Text>
+              <View style={styles.influenceHairline} />
+            </View>
+            <Text style={styles.powerValue}>{territoryPower.toLocaleString()}</Text>
+            <Text style={styles.influenceContext}>
+              {`${ownedTerritories.length} ${ownedTerritories.length === 1 ? 'territory' : 'territories'} · ${fullValueCap} full-value cap`}
+            </Text>
           </View>
 
           <View style={styles.card}>
@@ -614,6 +667,17 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     color: SLATE2,
+  },
+  powerBlock: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  powerValue: {
+    fontFamily: fonts.displayMedium,
+    fontSize: fontSize.xl4,
+    letterSpacing: fontSize.xl4 * -0.02,
+    color: colors.bone,
+    marginBottom: spacing.xs,
   },
   settingsList: {
     marginTop: 12,
