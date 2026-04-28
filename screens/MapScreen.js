@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +16,12 @@ import {
   streakReductionPercent,
   streakTierName,
 } from '../lib/territory';
+import {
+  IronGlyph,
+  StoneGlyph,
+  GoldGlyph,
+  MoraleGlyph,
+} from '../components/ResourceGlyphs';
 
 const normaliseTier = t => t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
 
@@ -340,7 +346,7 @@ export default function MapScreen() {
   const fetchTerritories = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak')
+      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale')
       .eq('clerk_id', userId)
       .maybeSingle();
     setMyPlayer(playerRow);
@@ -442,6 +448,27 @@ export default function MapScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.resourceBanner}>
+        <View style={styles.resourceBannerItem}>
+          <IronGlyph size={12} color="#F2EEE6" />
+          <Text style={styles.resourceBannerValue}>{myPlayer?.iron ?? 0}</Text>
+        </View>
+        <View style={styles.resourceBannerDivider} />
+        <View style={styles.resourceBannerItem}>
+          <StoneGlyph size={12} color="#F2EEE6" />
+          <Text style={styles.resourceBannerValue}>{myPlayer?.stone ?? 0}</Text>
+        </View>
+        <View style={styles.resourceBannerDivider} />
+        <View style={styles.resourceBannerItem}>
+          <GoldGlyph size={12} color="#F2EEE6" />
+          <Text style={styles.resourceBannerValue}>{myPlayer?.gold ?? 0}</Text>
+        </View>
+        <View style={styles.resourceBannerDivider} />
+        <View style={styles.resourceBannerItem}>
+          <MoraleGlyph size={12} color="#F2EEE6" />
+          <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
+        </View>
+      </View>
       <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/mapbox/dark-v11">
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
@@ -469,19 +496,6 @@ export default function MapScreen() {
         </MapboxGL.ShapeSource>
       </MapboxGL.MapView>
 
-      <View style={styles.hudLeft}>
-        <Text style={styles.hudValue}>6,240 steps</Text>
-        <Text style={styles.hudLabel}>today</Text>
-      </View>
-
-      <View style={styles.hudRight}>
-        <View style={styles.allianceBadge}>
-          <Text style={styles.allianceBadgeText} numberOfLines={1} ellipsizeMode="tail">
-            {myAllianceName ?? 'No Alliance'}
-          </Text>
-        </View>
-      </View>
-
       <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
         <Text style={styles.locateIcon}>⌖</Text>
         <Text style={styles.locateText}>Locate me</Text>
@@ -502,15 +516,44 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    flexDirection: 'column',
     backgroundColor: '#0E1014',
+    paddingTop: StatusBar.currentHeight ?? 0,
   },
   map: {
     flex: 1,
   },
 
+  resourceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0E1014',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(242,238,230,0.16)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  resourceBannerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 16,
+  },
+  resourceBannerDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: 'rgba(242,238,230,0.12)',
+  },
+  resourceBannerValue: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    color: '#F2EEE6',
+    letterSpacing: 0.5,
+  },
   hudLeft: {
     position: 'absolute',
-    top: 52,
+    top: 104,
     left: 16,
     backgroundColor: '#1A1D24',
     borderRadius: 0,
@@ -536,7 +579,7 @@ const styles = StyleSheet.create({
 
   hudRight: {
     position: 'absolute',
-    top: 52,
+    top: 104,
     right: 16,
     alignItems: 'flex-end',
   },
