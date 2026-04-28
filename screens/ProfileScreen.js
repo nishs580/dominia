@@ -96,7 +96,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id, current_streak, longest_streak')
+        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -360,36 +360,56 @@ export default function ProfileScreen() {
       ) : null}
 
       {!loading ? (
-        <View style={[styles.card, { marginTop: 32 }]}>
-          <SectionDivider label="SETTINGS" />
-          <View style={styles.settingsList}>
-            <SettingsRow label="Notification settings" />
-            <View style={styles.listDivider} />
+        <>
+          <View style={styles.walletSection}>
+            <SectionDivider label="RESOURCES" />
             <Pressable
-              onPress={() => {
-                Alert.alert(
-                  'Sign out',
-                  'Are you sure you want to sign out?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Sign out',
-                      style: 'destructive',
-                      onPress: async () => {
-                        await signOut();
-                        navigation.replace('SignIn');
-                      },
-                    },
-                  ]
-                );
-              }}
-              style={styles.settingsRow}
+              style={styles.walletButton}
+              onPress={() => navigation.navigate('Wallet', {
+                playerId: playerRow?.id,
+                username: playerRow?.username ?? '',
+                iron: playerRow?.iron ?? 0,
+                stone: playerRow?.stone ?? 0,
+                gold: playerRow?.gold ?? 0,
+                morale: playerRow?.morale ?? 0,
+              })}
             >
-              <Text style={styles.settingsSignOut}>Sign out</Text>
-              <Text style={styles.settingsChevron}>›</Text>
+              <Text style={styles.walletButtonText}>MY RESOURCES</Text>
             </Pressable>
+            <Text style={styles.walletTapHint}>tap to enter</Text>
           </View>
-        </View>
+
+          <View style={[styles.card, { marginTop: 32 }]}>
+            <SectionDivider label="SETTINGS" />
+            <View style={styles.settingsList}>
+              <SettingsRow label="Notification settings" />
+              <View style={styles.listDivider} />
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    'Sign out',
+                    'Are you sure you want to sign out?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Sign out',
+                        style: 'destructive',
+                        onPress: async () => {
+                          await signOut();
+                          navigation.replace('SignIn');
+                        },
+                      },
+                    ]
+                  );
+                }}
+                style={styles.settingsRow}
+              >
+                <Text style={styles.settingsSignOut}>Sign out</Text>
+                <Text style={styles.settingsChevron}>›</Text>
+              </Pressable>
+            </View>
+          </View>
+        </>
       ) : null}
       </ScrollView>
     </View>
@@ -678,6 +698,33 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
     marginBottom: spacing.xs,
+  },
+  walletSection: {
+    marginTop: 32,
+  },
+  walletButton: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#D64525',
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletButtonText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: '#D64525',
+  },
+  walletTapHint: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: '#5C6068',
   },
   settingsList: {
     marginTop: 12,
