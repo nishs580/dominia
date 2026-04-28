@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
 import { updateStreakOnChallengeComplete } from '../lib/streak';
-import { calcLevel, getLevelTitle } from '../lib/formulas';
+import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
 
 function levelFromXp(xp) {
   const xpInt = Math.max(0, Math.floor(Number(xp) || 0));
@@ -150,24 +150,21 @@ export default function ActivityScreen() {
         difficulty: 'Easy',
         task: 'Walk 5,000 steps',
         xp: 50,
-        resourceLabel: 'Stone',
-        resourceAmount: 8,
+        earnKey: 'easy_step_challenge',
       },
       {
         key: 'medium',
         difficulty: 'Medium',
         task: 'Walk 10,000 steps',
-        xp: 120,
-        resourceLabel: 'Stone',
-        resourceAmount: 20,
+        xp: 150,
+        earnKey: 'medium_step_challenge',
       },
       {
         key: 'hard',
         difficulty: 'Hard',
         task: 'Walk 15,000 steps',
-        xp: 250,
-        resourceLabel: 'Stone',
-        resourceAmount: 40,
+        xp: 400,
+        earnKey: 'hard_step_challenge',
       },
     ],
     [],
@@ -214,6 +211,27 @@ export default function ActivityScreen() {
         await supabase.from('players').update({ level: newLevel.level }).eq('id', playerId);
       }
 
+      const earned = calcResourceEarn(ch.earnKey);
+      console.log('Earned resources:', earned);
+      const { data: currentResources, error: resourceFetchError } = await supabase
+        .from('players')
+        .select('iron, stone, gold, morale')
+        .eq('id', playerId)
+        .maybeSingle();
+      console.log('Current resources:', currentResources, 'Fetch error:', resourceFetchError);
+      if (currentResources) {
+        const { error: resourceUpdateError } = await supabase
+          .from('players')
+          .update({
+            iron: (currentResources.iron ?? 0) + (earned.iron ?? 0),
+            stone: (currentResources.stone ?? 0) + (earned.stone ?? 0),
+            gold: (currentResources.gold ?? 0) + (earned.gold ?? 0),
+            morale: (currentResources.morale ?? 0) + (earned.morale ?? 0),
+          })
+          .eq('id', playerId);
+        console.log('Resource update error:', resourceUpdateError);
+      }
+
       if (shouldUpdateStreak) {
         await updateStreakOnChallengeComplete(playerId, prevXp);
         const { data: streakRow } = await supabase
@@ -224,6 +242,7 @@ export default function ActivityScreen() {
         setCurrentStreak(Math.max(0, Number(streakRow?.current_streak) || 0));
       }
     } catch (e) {
+      console.error('onCompleteChallenge failed:', e?.message ?? e);
       // revert if something goes wrong
       setCompletedKeys((prev) => {
         const next = new Set(prev);
@@ -292,7 +311,16 @@ export default function ActivityScreen() {
                       <Text style={styles.challengeDifficulty}>{ch.difficulty.toUpperCase()}</Text>
                       <Text style={styles.challengeTask}>{ch.task}</Text>
                       <Text style={styles.challengeReward}>
-                        +{ch.xp} XP · +{ch.resourceAmount} {ch.resourceLabel}
+                        {(() => {
+                          const r = calcResourceEarn(ch.earnKey);
+                          const parts = [];
+                          parts.push(`+${ch.xp} XP`);
+                          if (r.stone > 0) parts.push(`+${r.stone} Stone`);
+                          if (r.iron > 0) parts.push(`+${r.iron} Iron`);
+                          if (r.gold > 0) parts.push(`+${r.gold} Gold`);
+                          if (r.morale > 0) parts.push(`+${r.morale} Morale`);
+                          return parts.join(' · ');
+                        })()}
                       </Text>
                     </View>
                     <View style={styles.challengeAction}>

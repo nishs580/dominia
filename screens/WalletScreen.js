@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { spacing } from '../lib/theme';
 import {
   IronGlyph,
@@ -66,15 +68,50 @@ function SectionDivider({ label }) {
 }
 
 export default function WalletScreen({ route }) {
-  const {
-    username = '',
-    iron = 0,
-    stone = 0,
-    gold = 0,
-    morale = 0,
-  } = route?.params ?? {};
+  const { playerId = null, username = '' } = route?.params ?? {};
 
-  const wallet = { iron, stone, gold, morale };
+  const [loading, setLoading] = useState(true);
+  const [wallet, setWallet] = useState({ iron: 0, stone: 0, gold: 0, morale: 0 });
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWallet() {
+      if (!playerId) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('players')
+        .select('iron, stone, gold, morale')
+        .eq('id', playerId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (fetchError) {
+        setError(fetchError.message ?? 'Could not load wallet');
+        setLoading(false);
+        return;
+      }
+
+      setWallet({
+        iron: data?.iron ?? 0,
+        stone: data?.stone ?? 0,
+        gold: data?.gold ?? 0,
+        morale: data?.morale ?? 0,
+      });
+      setLoading(false);
+    }
+
+    loadWallet();
+    return () => { cancelled = true; };
+  }, [playerId]);
 
   return (
     <View style={styles.screen}>
@@ -85,29 +122,44 @@ export default function WalletScreen({ route }) {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <View style={styles.walletBlock}>
-          <SectionDivider label="WALLET" />
-          {RESOURCES.map((r, index) => (
-            <View key={r.key}>
-              <View style={styles.resourceRow}>
-                <View style={styles.glyphWrap}>
-                  <r.Glyph size={28} color={r.glyphColor} />
+        {loading ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="large" color={SLATE2} />
+            <Text style={styles.loadingText}>Loading wallet…</Text>
+          </View>
+        ) : null}
+
+        {!loading && error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {!loading && !error ? (
+          <View style={styles.walletBlock}>
+            <SectionDivider label="WALLET" />
+            {RESOURCES.map((r, index) => (
+              <View key={r.key}>
+                <View style={styles.resourceRow}>
+                  <View style={styles.glyphWrap}>
+                    <r.Glyph size={28} color={r.glyphColor} />
+                  </View>
+                  <View style={styles.resourceInfo}>
+                    <Text style={styles.resourceLabel}>{r.label}</Text>
+                    <Text style={styles.resourceSpend}>{r.spend}</Text>
+                    <Text style={styles.resourceEarn}>{r.earn}</Text>
+                  </View>
+                  <Text style={styles.resourceBalance}>
+                    {wallet[r.key].toLocaleString()}
+                  </Text>
                 </View>
-                <View style={styles.resourceInfo}>
-                  <Text style={styles.resourceLabel}>{r.label}</Text>
-                  <Text style={styles.resourceSpend}>{r.spend}</Text>
-                  <Text style={styles.resourceEarn}>{r.earn}</Text>
-                </View>
-                <Text style={styles.resourceBalance}>
-                  {wallet[r.key].toLocaleString()}
-                </Text>
+                {index < RESOURCES.length - 1 ? (
+                  <View style={styles.rowDivider} />
+                ) : null}
               </View>
-              {index < RESOURCES.length - 1 ? (
-                <View style={styles.rowDivider} />
-              ) : null}
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -146,6 +198,29 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 28,
+  },
+  loadingBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
+  },
+  errorBanner: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#1A1D24',
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+  },
+  errorText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: SLATE2,
   },
   walletBlock: {
     paddingTop: spacing.xl,

@@ -368,10 +368,6 @@ export default function ProfileScreen() {
               onPress={() => navigation.navigate('Wallet', {
                 playerId: playerRow?.id,
                 username: playerRow?.username ?? '',
-                iron: playerRow?.iron ?? 0,
-                stone: playerRow?.stone ?? 0,
-                gold: playerRow?.gold ?? 0,
-                morale: playerRow?.morale ?? 0,
               })}
             >
               <Text style={styles.walletButtonText}>MY RESOURCES</Text>
