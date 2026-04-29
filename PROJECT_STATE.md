@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 29, 2026
+Last updated: April 29, 2026 (evening)
 
 ---
 
@@ -120,7 +120,7 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Live data | Resource banner (4 glyphs + live balances) in document flow below status bar. Territory bottom sheet with Influence readout + contest distance via formulas.js. Steps HUD and alliance badge removed. |
+| Map screen | ✓ Live data | Resource banner (4 glyphs + live balances) refetches via useFocusEffect. TerritorySheet has state machine: 'info' → 'confirm' (sufficient or insufficient branch) → exit. Gold deducted on accept before walk. Inline Claim red error on failure. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | Live Influence/day (calcDailyInfluence() summed across owned territories). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
@@ -155,12 +155,12 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `lib/supabase.js` | Supabase client with **fetch wrapper that forces `Connection: close` header** (CRITICAL — do not remove without re-testing on Android, the dead-pool bug will return). Includes [supabase fetch] timing logs. URL/key hardcoded. |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
-| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank. Aligned to v6.10 mechanics. Replaces lib/level.js. |
+| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank. Includes TIER_NORMALISER + normaliseTier(), CLAIM_GOLD_REWARD, CLAIM_GOLD_COST, calcResourceEarn() (incl. contest_win). Aligned to v6.10. |
 | `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O for streak update on challenge complete |
 | `lib/territory.js` | Display helpers only: developmentName(), legacyRankName(), streakTierName(), streakReductionPercent(). Numeric calc functions removed (moved to formulas.js). |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Resource banner (4 glyphs + live balances, document flow). Dark-v11 Mapbox. TerritorySheet with Influence + contest distance via formulas.js. Steps HUD and alliance badge removed. |
+| `screens/MapScreen.js` | Resource banner refetches via useFocusEffect (named `fetchResourceBanner` useCallback). Dark-v11 Mapbox. TerritorySheet state machine (info/confirm) handles Slice D Gold deduction on accept. Tier normalisers migrated to F.normaliseTier(). |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
 | `screens/ProfileScreen.js` | Live Influence/day (calcDailyInfluence()). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. XP via formulas.js. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
@@ -170,8 +170,8 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 map, resolvedPlayerId fallback, live username |
 | `screens/ActiveClaimScreen.js` | Fully branded. Claim red ring (butt cap), sharp cards, Geist Mono labels. DEV_MODE=true — flip to false for real GPS. |
-| `screens/ClaimSuccessScreen.js` | Fully branded. Solid Claim red square, typographic treatment. Writes owner_id + alliance_id to Supabase. |
-| `screens/ContestResultScreen.js` | Fully branded. 4 states, animated square, consequence block, two-button CTA stack. Writes on attack_won. |
+| `screens/ClaimSuccessScreen.js` | Solid Claim red square, typographic treatment. Writes owner_id + alliance_id. Slice A: writes Gold reward to players.gold using F.CLAIM_GOLD_REWARD[tier], shows "+X GOLD EARNED" beat. ⚠️ **Has unresolved reward-not-landing-in-DB bug.** |
+| `screens/ContestResultScreen.js` | 4 states, animated square, consequence block, two-button CTA. Slice B: writes contest win resource earn on attack_won via F.calcResourceEarn('contest_win') = {iron:15, gold:25, morale:8}. |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. HQ picked from player-owned territories (Home District mechanic deferred). |
 | `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. |
 | `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
@@ -252,6 +252,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Spreading a `Headers` object into a plain object literal (`{...init.headers}`) gives an empty object — `Headers` instances don't spread.
 - **Fix:** Detect `Headers` via `typeof incoming.forEach === 'function'` and copy entries with `.forEach`. See `loggingFetch` in `lib/supabase.js`.
 
+**4. Hooks order violation after early return (recurring pattern)**
+- **Signature:** "Rendered more hooks than during the previous render" error.
+- **Cause:** Adding a new `useEffect` / `useCallback` / `useState` *below* an early return like `if (!territory) return null`. On renders where the early return fires, the hook count is lower than on renders where it doesn't — React detects the mismatch and crashes.
+- **Fix:** All hooks must be declared above any conditional early returns. Same family as the `useFonts()` decision in MapScreen — fonts loaded at App.js level so screens with early returns don't add useFonts(). When adding hooks to a component with early returns, scan for the early return first.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
@@ -265,6 +270,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 | Bug | Detail |
 |---|---|
+| **⚠️ CRITICAL — Gold reward not landing in DB after claim** | ClaimSuccessScreen writes Gold reward but DB only reflects post-deduction value. Wallet shows post-deduction-only number. Local setGoldEarned(10) fires, no console errors. **Diagnostic NOT YET RUN:** while on ClaimSuccess (before Back to Map), query `SELECT gold FROM players WHERE username='nish_s'` to confirm whether reward write committed (50=yes, 40=no, 30=duplicate deduction firing). **Get evidence FIRST in next session before changing any code.** |
 | RLS missing on players table | Disabled to fix slow load. Needs proper Clerk-JWT-based RLS before production launch. |
 | Diagnostic logs in code | `[Profile]`, `[Alliance]`, `[supabase fetch]` console.logs left in. Strip once app has been stable for a few sessions. |
 | Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
@@ -282,7 +288,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | player_number hardcoded as #0004 | Sequential player_number column in Supabase not yet added. |
 | Territory sheet history data hardcoded | Held for X days (14), changed hands (6), Hall of Holders (12) — no history table in DB yet. |
 | Legacy Rank auto-calc not built | legacy_rank column added to territories (default R1). Auto-calc needs territory_history table (Phase 4). |
-| Phase 3 resource spending incomplete | Gold deducted on claim, Iron deducted on contest initiation, claim/contest win resource earn — all still to build. |
+| Phase 3 incomplete | Slice D done (claim Gold deduction). Still to do: Slice E (Iron deduction on contest initiation). Then Phase 3 closes. |
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
@@ -305,12 +311,21 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 **MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓**
 
-**Immediate:** Resume Phase 3 — wire Gold deduction on territory claim and Iron deduction on contest initiation. Use `calcResourceSpend()` in formulas.js. Update DB on confirm. Show new balances on the resource banner immediately.
+**Immediate (next session — strict order):**
+1. **Get evidence on the Gold reward bug.** Run `SELECT gold FROM players WHERE username='nish_s'` on ClaimSuccess screen BEFORE tapping Back to Map, with a clean known starting Gold value. Single SELECT tells us whether reward write is failing silently, never firing, or being overwritten by duplicate deduction. **Do not theorise across hypotheses again.**
+2. Once root cause confirmed, write a fix prompt.
+3. Complete Slice D testing (insufficient balance branch, cancel, network failure simulation).
+4. Move to Slice E: Iron deduction on contest initiation in TerritorySheet — same state machine pattern, contest button instead of claim, Iron not Gold.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
-- Phase 2 ✓ — Influence/day + Territory Power wired to ProfileScreen
-- Phase 3 (in progress) — Resource wallet schema done, challenge earning done. **Still to do: Gold deducted on claim, Iron deducted on contest, claim/contest win earns resources.**
+- Phase 2 ✓ — Influence/day + Territory Power on Profile
+- Phase 3 (in progress):
+  - Slice A ✓ — Gold reward on claim (✓ written, ⚠️ DB landing bug)
+  - Slice B ✓ — Contest win resource earn (attack_won)
+  - Slice C ✓ — Resource banner refetch on focus
+  - Slice D ✓ — Claim affordability gate + Gold deduction on accept
+  - Slice E ○ — Iron deduction on contest initiation (next)
 - Phase 4 — Territory history + Legacy Rank auto-calc (needs territory_history table)
 - Phase 5 — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron)
 
@@ -319,7 +334,9 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Strip diagnostic console.logs once stable
 - Move TERRITORY_CAP_BY_LEVEL into formulas.js
 - Write unit tests for formulas.js
+- Refactor static-table earn to calcCanonicalEarn once Supply Line + streak resource bonus globally wired
 - Wire War Room ACTIVATE buttons (role gating + Morale deduction)
+- Build calcFastestEarnPath() for dynamic insufficient-balance recommendations
 - Refactor ProfileScreen colour constants to lib/theme.js
 - Fix auth flow order
 - Add territory history table
@@ -435,6 +452,14 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Keep AsyncStorage and persistSession ON in supabase client | Removing them broke MapScreen territory rendering during diagnosis |
 | Keep timing logs in code for now | `[Profile]`, `[Alliance]`, `[supabase fetch]` — strip once app has been stable for several sessions |
 | RLS disabled on players table (temporary) | Old policies referenced `auth.uid()` but project uses Clerk — caused 19-min hangs. Must implement Clerk-JWT-based RLS before production. |
+| TIER_NORMALISER lives in formulas.js (not lib/territory.js) | formulas.js is the strict title-case island and owns the conversion contract — ports unchanged to future Fastify backend |
+| Static-table earn (not calcCanonicalEarn) | Match Slice A pattern. Refactor to canonical when Supply Line + streak resource bonus globally wired. |
+| Slice D affordability check uses cached myPlayer.gold | Performance — fresh read happens at deduction itself |
+| TerritorySheet state machine inline | No new modal component, no gorhom — keeps complexity contained |
+| Deduct on accept (before walk), not on success | Player explicitly consents to spend at moment of friction. Matches "Iron is what you spent, not a hidden tax" philosophy. |
+| Claim red used for inline error message | Operational signal, not decoration — "this action failed, retry it" |
+| Insufficient-balance copy generic for now | Defer dynamic recommendation per v6.10 §5.1 until challenge rotation pool ships and calcFastestEarnPath() is built |
+| "Confirm" state label reuses existing sheetStateLabel style | Same slot, different content — no new style needed |
 
 ---
 
