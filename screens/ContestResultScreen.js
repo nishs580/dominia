@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import * as F from '../lib/formulas';
 
 const STATE_CONFIG = {
   attack_won: {
@@ -88,6 +89,7 @@ export default function ContestResultScreen() {
     playerId,
     attackerAlliance,
   } = route?.params ?? {};
+  const [earned, setEarned] = useState(null);
 
   useEffect(() => {
     if (contestState === 'attack_won' && territoryId && playerId) {
@@ -95,8 +97,40 @@ export default function ContestResultScreen() {
         .from('territories')
         .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
         .eq('id', territoryId)
-        .then(({ error }) => {
-          if (error) console.error('Contest win write failed:', error);
+        .then(async ({ error }) => {
+          if (error) {
+            console.error('Contest win write failed:', error);
+            return;
+          }
+
+          try {
+            const contestEarned = F.calcResourceEarn('contest_win');
+            const { data: playerResources, error: playerResourcesError } = await supabase
+              .from('players')
+              .select('iron, gold, morale')
+              .eq('id', playerId)
+              .single();
+            if (playerResourcesError) throw playerResourcesError;
+
+            const currentIron = Number(playerResources?.iron) || 0;
+            const currentGold = Number(playerResources?.gold) || 0;
+            const currentMorale = Number(playerResources?.morale) || 0;
+
+            const { error: writeResourcesError } = await supabase
+              .from('players')
+              .update({
+                iron: currentIron + contestEarned.iron,
+                gold: currentGold + contestEarned.gold,
+                morale: currentMorale + contestEarned.morale,
+              })
+              .eq('id', playerId);
+            if (writeResourcesError) throw writeResourcesError;
+
+            setEarned(contestEarned);
+          } catch (resourceError) {
+            // TODO: make ownership + reward writes transactional in phase 4.
+            console.error('[ContestResult] contest win resource update failed:', resourceError);
+          }
         });
     }
   }, []);
@@ -193,6 +227,11 @@ export default function ContestResultScreen() {
       <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
         <Text style={styles.consequenceText}>{consequenceLine(cfg, myM, oppM, opponentName)}</Text>
       </View>
+      {contestState === 'attack_won' && earned ? (
+        <Text style={styles.earnedBeat}>
+          +{earned.iron} IRON · +{earned.gold} GOLD · +{earned.morale} MORALE
+        </Text>
+      ) : null}
 
       <View style={styles.ctaStack}>
         <Pressable
@@ -316,6 +355,15 @@ const styles = StyleSheet.create({
     color: BONE,
     lineHeight: 17,
     letterSpacing: 0.4,
+  },
+  earnedBeat: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: BONE,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginTop: -8,
+    marginBottom: 12,
   },
   ctaStack: {
     marginTop: 'auto',

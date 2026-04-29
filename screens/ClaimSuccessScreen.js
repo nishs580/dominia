@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import * as F from '../lib/formulas';
 
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
@@ -25,19 +26,45 @@ export default function ClaimSuccessScreen() {
 
   const fade = useRef(new Animated.Value(0)).current;
   const pop = useRef(new Animated.Value(0.96)).current;
+  const [goldEarned, setGoldEarned] = useState(null);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
 
     (async () => {
-      const { error: updateError } = await supabase
+      const { data: updatedTerritory, error: updateError } = await supabase
         .from('territories')
         .update({ owner_id: playerId })
-        .eq('id', territoryId);
+        .eq('id', territoryId)
+        .select('tier')
+        .single();
 
       if (updateError) {
         console.error('ClaimSuccess territory update:', updateError);
         return;
+      }
+
+      try {
+        const tier = F.normaliseTier(updatedTerritory?.tier);
+        const earned = F.CLAIM_GOLD_REWARD[tier];
+        const { data: playerGoldRow, error: playerGoldError } = await supabase
+          .from('players')
+          .select('gold')
+          .eq('id', playerId)
+          .single();
+        if (playerGoldError) throw playerGoldError;
+
+        const currentGold = Number(playerGoldRow?.gold) || 0;
+        const { error: writeGoldError } = await supabase
+          .from('players')
+          .update({ gold: currentGold + earned })
+          .eq('id', playerId);
+        if (writeGoldError) throw writeGoldError;
+
+        setGoldEarned(earned);
+      } catch (goldError) {
+        // TODO: make ownership + reward writes transactional in phase 4.
+        console.error('[ClaimSuccess] gold reward update failed:', goldError);
       }
 
       const { data: playerFull } = await supabase
@@ -89,6 +116,9 @@ export default function ClaimSuccessScreen() {
 
         <Text style={styles.territory}>{territoryName}</Text>
         <Text style={styles.territoryCaption}>is yours.</Text>
+        {goldEarned != null ? (
+          <Text style={styles.goldEarnedBeat}>+{goldEarned} GOLD EARNED</Text>
+        ) : null}
         <Text style={styles.message}>Defend it.</Text>
 
         <View style={styles.cardsRow}>
@@ -237,6 +267,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 18,
   },
+  goldEarnedBeat: {
+    fontFamily: 'GeistMono_400Regular',
+    color: BONE,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 12,
+  },
 
   cardsRow: {
     marginTop: 24,
@@ -270,7 +310,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     marginTop: 8,
   },
-
   cta: {
     backgroundColor: CLAIM,
     borderRadius: 0,

@@ -2,14 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import {
-  calcLevel,
-  calcDailyInfluence,
-  calcRequiredContestWalk,
-  getStreakTier,
-} from '../lib/formulas';
+import * as F from '../lib/formulas';
 import {
   developmentName,
   legacyRankName,
@@ -22,8 +17,6 @@ import {
   GoldGlyph,
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
-
-const normaliseTier = t => t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
 
 // Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
 const TERRITORY_CAP_BY_LEVEL = [3, 6, 10, 15, 20, 28, 38, 50, 65, 75];
@@ -51,9 +44,19 @@ const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, myPlayer, allFeatures = [] }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, allFeatures = [] }) {
   const navigation = useNavigation();
   const [expanded, setExpanded] = useState(false);
+  const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
+  const [deductionError, setDeductionError] = useState(false);
+  const [isDeducting, setIsDeducting] = useState(false);
+
+  useEffect(() => {
+    setSheetState('info');
+    setDeductionError(false);
+    setIsDeducting(false);
+  }, [territory?.id]);
+
   if (!territory) return null;
 
   const name = territory.properties?.name ?? 'Territory';
@@ -96,20 +99,20 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
   else if (isOwned) stateLabel = 'Enemy territory';
 
   const playerXp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
-  const cap = territoryCapForLevel(calcLevel(playerXp));
+  const cap = territoryCapForLevel(F.calcLevel(playerXp));
   const heldCount = allFeatures.filter(f => f.properties?.color === '#D64525').length;
   const isAtCap = heldCount >= cap;
 
   // Owner's streak tier (deterrent signal)
-  const ownerStreakTier = getStreakTier(ownerStreakDays);
+  const ownerStreakTier = F.getStreakTier(ownerStreakDays);
 
   // Your streak
   const myStreak = myPlayer?.current_streak ?? 0;
 
   // Influence per day (upkeepOverdue: false === former upkeepActive: true)
   const influence = Math.round(
-    calcDailyInfluence({
-      tier: normaliseTier(tier),
+    F.calcDailyInfluence({
+      tier: F.normaliseTier(tier),
       developmentLevel,
       legacyRank,
       upkeepOverdue: false,
@@ -118,9 +121,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
 
   // Walk distance for contest
   const walkDistance = isOwned
-    ? calcRequiredContestWalk({
+    ? F.calcRequiredContestWalk({
         territory: {
-          tier: normaliseTier(tier),
+          tier: F.normaliseTier(tier),
           perimeterMeters: perimeterDistance,
           developmentLevel,
         },
@@ -145,13 +148,51 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
     perimeter: perimeterDistance,
   };
 
+  const goldCost = isUnclaimed ? F.CLAIM_GOLD_COST[F.normaliseTier(tier)] : 0;
+  const currentGold = myPlayer?.gold ?? 0;
+  const balanceAfter = currentGold - goldCost;
+  const canAfford = currentGold >= goldCost;
+
+  const handleAcceptClaim = async () => {
+    setIsDeducting(true);
+    setDeductionError(false);
+    try {
+      const newGold = currentGold - goldCost;
+      const { error } = await supabase
+        .from('players')
+        .update({ gold: newGold })
+        .eq('id', myPlayer.id)
+        .select();
+      if (error) throw error;
+
+      // Refresh banner immediately (don't wait for useFocusEffect)
+      onResourceBannerRefresh?.();
+
+      // Close sheet and navigate to claim flow
+      onClose();
+      navigation.navigate('ActiveClaim', {
+        territoryName: selectedTerritory.name,
+        perimeterDistance: selectedTerritory.perimeter,
+        territoryId: territory.id,
+        playerId: myPlayer?.id,
+      });
+    } catch (err) {
+      console.error('[ClaimDeduct]', err);
+      setDeductionError(true);
+      // TODO: Phase 4 will add proper transactional integrity.
+      // For now, if deduction fails the player stays on confirm screen and can retry.
+    } finally {
+      setIsDeducting(false);
+    }
+  };
+
   return (
     <View style={[styles.sheet, { borderTopColor: topBorderColour, borderTopWidth: 1 }]}>
       <View style={styles.sheetHandle} />
 
       <View style={styles.sheetTopRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sheetStateLabel}>{stateLabel}</Text>
+          <Text style={styles.sheetStateLabel}>{sheetState === 'confirm' ? 'Claim' : stateLabel}</Text>
           <View style={styles.sheetTitleRow}>
             <Text style={styles.sheetTitle}>{name}</Text>
             <View style={styles.sheetTierBadge}>
@@ -164,170 +205,244 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, my
         </Pressable>
       </View>
 
-      {/* Primary intel rows */}
-      <View style={styles.sheetIntelBlock}>
-        {!isUnclaimed && (
-          <View style={styles.sheetRow}>
-            <Text style={styles.sheetRowLabel}>Owner</Text>
-            <Text style={styles.sheetRowValue}>
-              {owner}
-              {alliance ? <Text style={styles.sheetAllianceTag}> [{alliance}]</Text> : null}
-            </Text>
-          </View>
-        )}
-        {!isUnclaimed && (
-          <View style={styles.sheetRow}>
-            <Text style={styles.sheetRowLabel}>Streak</Text>
-            <Text style={[styles.sheetRowValue, ownerStreakDays >= 30 && { color: '#D64525' }]}>
-              {streakTierName(ownerStreakTier.tier)}
-            </Text>
-          </View>
-        )}
-        <View style={styles.sheetRow}>
-          <Text style={styles.sheetRowLabel}>{walkLabel}</Text>
-          <Text style={styles.sheetRowValue}>{walkDistance.toLocaleString()}m</Text>
-        </View>
-      </View>
-
-      {/* Influence hero row */}
-      <View style={styles.sheetInfluenceRow}>
-        <View>
-          <Text style={styles.sheetInfluenceLabel}>Generates</Text>
-          <Text style={styles.sheetInfluenceSub}>Influence per day</Text>
-        </View>
-        <Text style={styles.sheetInfluenceValue}>+{influence}</Text>
-      </View>
-
-      {/* Expanded detail */}
-      {expanded && (
-        <View style={styles.sheetExpandedBlock}>
-          <View style={styles.sheetRow}>
-            <Text style={styles.sheetRowLabel}>Development</Text>
-            <Text style={styles.sheetRowValue}>
-              D{developmentLevel} · {developmentName(developmentLevel)}
-            </Text>
-          </View>
-          <View style={styles.sheetRow}>
-            <Text style={styles.sheetRowLabel}>Legacy</Text>
-            <Text style={styles.sheetRowValue}>
-              R{legacyRank} · {legacyRankName(legacyRank)}
-            </Text>
-          </View>
-          {!isUnclaimed && (
-            <>
+      {sheetState === 'info' && (
+        <>
+          {/* Primary intel rows */}
+          <View style={styles.sheetIntelBlock}>
+            {!isUnclaimed && (
               <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Held</Text>
-                <Text style={styles.sheetRowValue}>{heldDays} days</Text>
-              </View>
-              <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Changed hands</Text>
-                <Text style={styles.sheetRowValue}>{changedHands} times</Text>
-              </View>
-            </>
-          )}
-          <View style={styles.sheetRow}>
-            <Text style={styles.sheetRowLabel}>Hall of Holders</Text>
-            <Text style={styles.sheetRowValue}>{hallOfHoldersCount} commanders</Text>
-          </View>
-
-          {/* Your walk block — only when it's an attackable territory */}
-          {isOwned && !isYours && (
-            <View style={styles.sheetYourWalk}>
-              <Text style={styles.sheetYourWalkLabel}>Your walk</Text>
-              <Text style={styles.sheetYourWalkValue}>
-                {walkDistance.toLocaleString()}m · {ironCost} Iron
-              </Text>
-              {reductionPct > 0 && (
-                <Text style={styles.sheetYourWalkSub}>
-                  Your {myStreak}-day streak reduces this by {reductionPct}%.
+                <Text style={styles.sheetRowLabel}>Owner</Text>
+                <Text style={styles.sheetRowValue}>
+                  {owner}
+                  {alliance ? <Text style={styles.sheetAllianceTag}> [{alliance}]</Text> : null}
                 </Text>
+              </View>
+            )}
+            {!isUnclaimed && (
+              <View style={styles.sheetRow}>
+                <Text style={styles.sheetRowLabel}>Streak</Text>
+                <Text style={[styles.sheetRowValue, ownerStreakDays >= 30 && { color: '#D64525' }]}>
+                  {streakTierName(ownerStreakTier.tier)}
+                </Text>
+              </View>
+            )}
+            <View style={styles.sheetRow}>
+              <Text style={styles.sheetRowLabel}>{walkLabel}</Text>
+              <Text style={styles.sheetRowValue}>{walkDistance.toLocaleString()}m</Text>
+            </View>
+          </View>
+
+          {/* Influence hero row */}
+          <View style={styles.sheetInfluenceRow}>
+            <View>
+              <Text style={styles.sheetInfluenceLabel}>Generates</Text>
+              <Text style={styles.sheetInfluenceSub}>Influence per day</Text>
+            </View>
+            <Text style={styles.sheetInfluenceValue}>+{influence}</Text>
+          </View>
+
+          {/* Expanded detail */}
+          {expanded && (
+            <View style={styles.sheetExpandedBlock}>
+              <View style={styles.sheetRow}>
+                <Text style={styles.sheetRowLabel}>Development</Text>
+                <Text style={styles.sheetRowValue}>
+                  D{developmentLevel} · {developmentName(developmentLevel)}
+                </Text>
+              </View>
+              <View style={styles.sheetRow}>
+                <Text style={styles.sheetRowLabel}>Legacy</Text>
+                <Text style={styles.sheetRowValue}>
+                  R{legacyRank} · {legacyRankName(legacyRank)}
+                </Text>
+              </View>
+              {!isUnclaimed && (
+                <>
+                  <View style={styles.sheetRow}>
+                    <Text style={styles.sheetRowLabel}>Held</Text>
+                    <Text style={styles.sheetRowValue}>{heldDays} days</Text>
+                  </View>
+                  <View style={styles.sheetRow}>
+                    <Text style={styles.sheetRowLabel}>Changed hands</Text>
+                    <Text style={styles.sheetRowValue}>{changedHands} times</Text>
+                  </View>
+                </>
+              )}
+              <View style={styles.sheetRow}>
+                <Text style={styles.sheetRowLabel}>Hall of Holders</Text>
+                <Text style={styles.sheetRowValue}>{hallOfHoldersCount} commanders</Text>
+              </View>
+
+              {/* Your walk block — only when it's an attackable territory */}
+              {isOwned && !isYours && (
+                <View style={styles.sheetYourWalk}>
+                  <Text style={styles.sheetYourWalkLabel}>Your walk</Text>
+                  <Text style={styles.sheetYourWalkValue}>
+                    {walkDistance.toLocaleString()}m · {ironCost} Iron
+                  </Text>
+                  {reductionPct > 0 && (
+                    <Text style={styles.sheetYourWalkSub}>
+                      Your {myStreak}-day streak reduces this by {reductionPct}%.
+                    </Text>
+                  )}
+                </View>
               )}
             </View>
           )}
-        </View>
+
+          {/* Expand toggle — text only per brand rules */}
+          <Pressable accessibilityRole="button" onPress={() => setExpanded(e => !e)} style={styles.sheetToggle}>
+            <Text style={styles.sheetToggleText}>{expanded ? 'Less' : 'More'}</Text>
+          </Pressable>
+
+          {/* Action buttons — kept from original logic */}
+          {isUnclaimed && !isAtCap && (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
+              onPress={() => setSheetState('confirm')}
+            >
+              <Text style={styles.sheetActionText}>Claim</Text>
+            </Pressable>
+          )}
+
+          {isUnclaimed && isAtCap && (
+            <View style={styles.sheetActionDisabled}>
+              <Text style={styles.sheetActionDisabledText}>Cap reached</Text>
+              <Text style={styles.sheetActionDisabledSub}>Level up to claim more territories</Text>
+            </View>
+          )}
+
+          {isOwnTerritory && !isAllianceTerritory && (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.sheetAction,
+                { backgroundColor: '#D64525', opacity: 0.7 },
+                pressed && { opacity: 0.92 },
+              ]}
+              onPress={() => {
+                Alert.alert(`Abandon ${name}?`, 'You will lose control of this territory. This cannot be undone.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Abandon',
+                    style: 'destructive',
+                    onPress: async () => {
+                      const { error } = await supabase
+                        .from('territories')
+                        .update({ owner_id: null, alliance_id: null })
+                        .eq('id', territory.id)
+                        .select();
+                      if (error) {
+                        console.error('Abandon territory failed:', error);
+                        return;
+                      }
+                      onClose();
+                      onTerritoriesRefetched?.();
+                    },
+                  },
+                ]);
+              }}
+            >
+              <Text style={styles.sheetActionText}>Abandon</Text>
+            </Pressable>
+          )}
+
+          {isOwned && !isYours && !isAllianceTerritory && (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.sheetAction, { backgroundColor: '#4A6B8A' }, pressed && { opacity: 0.92 }]}
+              onPress={() => {
+                navigation.navigate('ActiveClaim', {
+                  territoryName: selectedTerritory.name,
+                  perimeterDistance: selectedTerritory.perimeter,
+                  territoryId: territory.id,
+                  playerId: myPlayer?.id,
+                  mode: 'contest',
+                });
+              }}
+            >
+              <Text style={styles.sheetActionText}>Contest</Text>
+            </Pressable>
+          )}
+        </>
       )}
 
-      {/* Expand toggle — text only per brand rules */}
-      <Pressable accessibilityRole="button" onPress={() => setExpanded(e => !e)} style={styles.sheetToggle}>
-        <Text style={styles.sheetToggleText}>{expanded ? 'Less' : 'More'}</Text>
-      </Pressable>
+      {sheetState === 'confirm' && (
+        <>
+          {canAfford ? (
+            <>
+              <View style={styles.sheetConfirmDataBlock}>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>Cost</Text>
+                  <Text style={styles.sheetConfirmValue}>{goldCost} Gold</Text>
+                </View>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>Balance after</Text>
+                  <Text style={styles.sheetConfirmValue}>{balanceAfter} Gold</Text>
+                </View>
+              </View>
 
-      {/* Action buttons — kept from original logic */}
-      {isUnclaimed && !isAtCap && (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
-          onPress={() => {
-            navigation.navigate('ActiveClaim', {
-              territoryName: selectedTerritory.name,
-              perimeterDistance: selectedTerritory.perimeter,
-              territoryId: territory.id,
-              playerId: myPlayer?.id,
-            });
-          }}
-        >
-          <Text style={styles.sheetActionText}>Claim</Text>
-        </Pressable>
-      )}
+              {deductionError && (
+                <Text style={styles.sheetConfirmError}>Couldn't process. Try again.</Text>
+              )}
 
-      {isUnclaimed && isAtCap && (
-        <View style={styles.sheetActionDisabled}>
-          <Text style={styles.sheetActionDisabledText}>Cap reached</Text>
-          <Text style={styles.sheetActionDisabledSub}>Level up to claim more territories</Text>
-        </View>
-      )}
+              <Pressable
+                accessibilityRole="button"
+                disabled={isDeducting}
+                style={({ pressed }) => [
+                  styles.sheetAction,
+                  pressed && { opacity: 0.92 },
+                  isDeducting && { opacity: 0.6 },
+                ]}
+                onPress={handleAcceptClaim}
+              >
+                <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Accept and continue'}</Text>
+              </Pressable>
 
-      {isOwnTerritory && !isAllianceTerritory && (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.sheetAction,
-            { backgroundColor: '#D64525', opacity: 0.7 },
-            pressed && { opacity: 0.92 },
-          ]}
-          onPress={() => {
-            Alert.alert(`Abandon ${name}?`, 'You will lose control of this territory. This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Abandon',
-                style: 'destructive',
-                onPress: async () => {
-                  const { error } = await supabase
-                    .from('territories')
-                    .update({ owner_id: null, alliance_id: null })
-                    .eq('id', territory.id)
-                    .select();
-                  if (error) {
-                    console.error('Abandon territory failed:', error);
-                    return;
-                  }
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
+                onPress={() => {
+                  setSheetState('info');
+                  setDeductionError(false);
+                }}
+              >
+                <Text style={styles.sheetCancelText}>Cancel</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <View style={styles.sheetConfirmDataBlock}>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>Short by</Text>
+                  <Text style={styles.sheetConfirmValue}>{goldCost - currentGold} Gold</Text>
+                </View>
+                <Text style={styles.sheetConfirmHelpText}>Earn Gold by completing daily challenges.</Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
+                onPress={() => {
+                  setSheetState('info');
                   onClose();
-                  onTerritoriesRefetched?.();
-                },
-              },
-            ]);
-          }}
-        >
-          <Text style={styles.sheetActionText}>Abandon</Text>
-        </Pressable>
-      )}
+                  navigation.navigate('Activity');
+                }}
+              >
+                <Text style={styles.sheetActionText}>Go to Activity</Text>
+              </Pressable>
 
-      {isOwned && !isYours && !isAllianceTerritory && (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.sheetAction, { backgroundColor: '#4A6B8A' }, pressed && { opacity: 0.92 }]}
-          onPress={() => {
-            navigation.navigate('ActiveClaim', {
-              territoryName: selectedTerritory.name,
-              perimeterDistance: selectedTerritory.perimeter,
-              territoryId: territory.id,
-              playerId: myPlayer?.id,
-              mode: 'contest',
-            });
-          }}
-        >
-          <Text style={styles.sheetActionText}>Contest</Text>
-        </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
+                onPress={() => setSheetState('info')}
+              >
+                <Text style={styles.sheetCancelText}>Cancel</Text>
+              </Pressable>
+            </>
+          )}
+        </>
       )}
     </View>
   );
@@ -342,6 +457,20 @@ export default function MapScreen() {
   const [myAllianceName, setMyAllianceName] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
   const { userId } = useAuth();
+  const resourcePlayerId = myPlayer?.id;
+
+  const fetchResourceBanner = useCallback(async () => {
+    if (!resourcePlayerId) return;
+    const { data, error } = await supabase
+      .from('players')
+      .select('iron, stone, gold, morale')
+      .eq('id', resourcePlayerId)
+      .single();
+    if (error) {
+      return;
+    }
+    setMyPlayer(prev => (prev ? { ...prev, ...data } : prev));
+  }, [resourcePlayerId]);
 
   const fetchTerritories = useCallback(async () => {
     const { data: playerRow } = await supabase
@@ -404,6 +533,12 @@ export default function MapScreen() {
   useEffect(() => {
     fetchTerritories();
   }, [fetchTerritories]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchResourceBanner();
+    }, [fetchResourceBanner])
+  );
 
   const fillStyle = useMemo(
     () => ({
@@ -507,6 +642,7 @@ export default function MapScreen() {
         userId={userId}
         onClose={() => setSelected(null)}
         onTerritoriesRefetched={fetchTerritories}
+        onResourceBannerRefresh={fetchResourceBanner}
         myPlayer={myPlayer}
       />
     </View>
@@ -866,5 +1002,62 @@ const styles = StyleSheet.create({
     color: '#5C6068',
     marginTop: 4,
     letterSpacing: 0.5,
+  },
+  sheetConfirmDataBlock: {
+    marginTop: 12,
+    paddingTop: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(242,238,230,0.08)',
+  },
+  sheetConfirmDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 10,
+  },
+  sheetConfirmLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: '#8B8F98',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  sheetConfirmValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: '#F2EEE6',
+  },
+  sheetConfirmHelpText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: 'rgba(242,238,230,0.7)',
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  sheetConfirmError: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    color: '#D64525',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  sheetCancel: {
+    marginTop: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(242,238,230,0.16)',
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCancelText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 12,
+    color: 'rgba(242,238,230,0.6)',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
 });
