@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: April 28, 2026 (evening)
+Last updated: April 29, 2026
 
 ---
 
@@ -92,11 +92,16 @@ Clerk publishable key and Supabase URL/key are **hardcoded** in `App.js` and `li
 - Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG — holds Leidseplein + Prinsengracht)
 - Territory tier values must be **lowercase** in DB (small/medium/large) — check constraint enforces this
 
-**Indexes added (this phase):**
+**Indexes added:**
 - `idx_territories_owner_id` ON territories(owner_id)
 - `idx_territories_alliance_id` ON territories(alliance_id)
 - `idx_players_clerk_id` ON players(clerk_id)
 - `idx_players_alliance_id` ON players(alliance_id)
+
+**Row Level Security (RLS):**
+- `players` table: **DISABLED** (manually via dashboard). Was causing 19-minute hangs because old policies referenced `auth.uid()` but project uses Clerk, not Supabase Auth.
+- All other tables (`territories`, `alliances`, `player_challenges`): RLS off.
+- ⚠️ **Re-enabling RLS on players without proper Clerk JWT integration will reintroduce the 19-min hang.** Implement Clerk-JWT-based RLS before production launch.
 
 Note: territories.owner_id index alone took Profile load from minutes → ~425ms warm. Cold-start free-tier DB wake-up takes 30–120s (Supabase free tier pausing) — not a code issue.
 ```sql
@@ -147,7 +152,7 @@ UPDATE players SET has_onboarded = false WHERE username = 'nish_s';
 | `components/SectionLabel.js` | Geist Mono 9px uppercase + hairline rule extending right |
 | `components/NumberedRow.js` | Geist Mono number column + Inter title/subtitle, hairline dividers |
 | `lib/theme.js` | All Dominia design tokens — colours, fonts, fontSize scale, spacing, radius, borders, motion durations |
-| `lib/supabase.js` | Supabase client with AsyncStorage (URL/key hardcoded — env vars unreliable in RN) |
+| `lib/supabase.js` | Supabase client with **fetch wrapper that forces `Connection: close` header** (CRITICAL — do not remove without re-testing on Android, the dead-pool bug will return). Includes [supabase fetch] timing logs. URL/key hardcoded. |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
 | `lib/formulas.js` | **Single source of truth for all game math** (CommonJS). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank. Aligned to v6.10 mechanics. Replaces lib/level.js. |
@@ -208,6 +213,14 @@ Get-ChildItem -Path "C:\Users\nisha\AppData\Local\Temp\eas-cli-nodejs\eas-build-
 # Mirror phone to PC
 scrcpy
 
+# Force-stop app on phone (required after lib/supabase.js changes — fully resets client singleton)
+# Long-press app icon → App info → Force stop
+
+# Diagnose "is the server slow or the phone slow" — run from PowerShell:
+$headers = @{ "apikey"="<key>"; "Authorization"="Bearer <key>" }
+Measure-Command { Invoke-RestMethod -Uri "<full-url>" -Headers $headers }
+# If fast on PC + slow on phone → it's the dead-connection-pool bug.
+
 # Save to GitHub
 git add .
 git commit -m "message"
@@ -220,11 +233,40 @@ git push
 
 ---
 
+## KNOWN PITFALLS — RECOGNISE & RESPOND
+
+These are bugs that have already cost significant debugging time. Learn the signatures.
+
+**1. Dead TCP connection pool hang (Android, RN fetch / OkHttp)**
+- **Signature:** Logs show `[supabase fetch] ERR ... after 1500000 ms — Network request failed` followed by an immediate retry that succeeds in ~1s. Backgrounding/foregrounding the app makes the screen suddenly load. First fetches in session are fast, fetches after idle are slow. Same query is fast from PowerShell on PC but slow from phone.
+- **Cause:** OkHttp caches dead TCP connections in its pool. After app sits idle ~30s, intermediaries (router NAT, carrier) silently kill the connections. OkHttp tries to reuse corpse connections and hangs until RN's ~25-min internal timeout.
+- **Fix:** Force `Connection: close` header on every Supabase request. Already implemented in `lib/supabase.js` fetch wrapper. **Do not remove the wrapper or the header without re-testing on Android.**
+
+**2. RLS auth.uid() stall with Clerk projects**
+- **Signature:** Profile/Alliance slow but Map fast. Disabling RLS on `players` collapses load times by ~7x.
+- **Cause:** RLS policies referencing `auth.uid()` stall because project uses Clerk (not Supabase Auth) — `auth.uid()` returns null and the policy evaluator hangs.
+- **Fix:** RLS currently DISABLED on `players`. Permanent fix: implement Clerk-JWT-based RLS before production.
+
+**3. Headers spread silently drops apikey**
+- **Signature:** 401 "No apikey" errors after wrapping fetch.
+- **Cause:** Spreading a `Headers` object into a plain object literal (`{...init.headers}`) gives an empty object — `Headers` instances don't spread.
+- **Fix:** Detect `Headers` via `typeof incoming.forEach === 'function'` and copy entries with `.forEach`. See `loggingFetch` in `lib/supabase.js`.
+
+**Debugging playbook — when something is slow or broken:**
+1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
+2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
+3. **EXPLAIN ANALYZE in SQL editor** — tells you if the database query is slow
+4. **Force-stop the app** after `lib/supabase.js` changes — long-press app icon → App info → Force stop. Required to fully reset the client singleton.
+5. **Get evidence before theorising.**
+
+---
+
 ## OPEN BUGS
 
 | Bug | Detail |
 |---|---|
-| **⚠️ Slow screen load — investigate first next session** | Profile and Alliance screens hang for up to 10 minutes on app start/reload. Partially Supabase free-tier cold start but may be deeper (sequential queries, missing index). ACTION: Disable Supabase auto-pause (Settings → General → Auto Pause) and audit ProfileScreen + AllianceScreen query patterns. |
+| RLS missing on players table | Disabled to fix slow load. Needs proper Clerk-JWT-based RLS before production launch. |
+| Diagnostic logs in code | `[Profile]`, `[Alliance]`, `[supabase fetch]` console.logs left in. Strip once app has been stable for a few sessions. |
 | Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev. Must re-enable before production. |
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. DEV_MODE=true on ActiveClaimScreen. |
@@ -261,19 +303,20 @@ git push
 
 ## WHAT'S NEXT
 
-**ALL MVP SCREENS FULLY BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓**
 
-**Immediate — investigate slow load first:**
-Audit ProfileScreen and AllianceScreen query patterns. Check for sequential fetches that should be parallel. Add missing DB indexes if needed. Disable Supabase auto-pause (Settings → General → Auto Pause). Only proceed to Phase 3 spending once load times are acceptable.
+**Immediate:** Resume Phase 3 — wire Gold deduction on territory claim and Iron deduction on contest initiation. Use `calcResourceSpend()` in formulas.js. Update DB on confirm. Show new balances on the resource banner immediately.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
 - Phase 2 ✓ — Influence/day + Territory Power wired to ProfileScreen
-- Phase 3 (in progress) — Resource wallet schema done, challenge earning done. Still to do: Gold deducted on claim, Iron deducted on contest, claim/contest win earns resources
+- Phase 3 (in progress) — Resource wallet schema done, challenge earning done. **Still to do: Gold deducted on claim, Iron deducted on contest, claim/contest win earns resources.**
 - Phase 4 — Territory history + Legacy Rank auto-calc (needs territory_history table)
 - Phase 5 — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron)
 
 **Other backlog:**
+- Implement Clerk-JWT-based RLS on players table (before production)
+- Strip diagnostic console.logs once stable
 - Move TERRITORY_CAP_BY_LEVEL into formulas.js
 - Write unit tests for formulas.js
 - Wire War Room ACTIVATE buttons (role gating + Morale deduction)
@@ -388,6 +431,10 @@ Audit ProfileScreen and AllianceScreen query patterns. Check for sequential fetc
 | WalletScreen fetches live from DB on every open | Avoids stale nav param problem — fast enough since DB is warm during session |
 | Resource banner uses document flow not absolute | Mapbox zoom control sits below it naturally, no overlap |
 | Legacy Rank defaulted to R1 for all territories | Auto-calculation needs territory_history table — deferred to Phase 4 |
+| Force `Connection: close` on every Supabase fetch | Adds ~20-50ms TLS handshake overhead but eliminates dead-pool hang. Invisible at dev scale. Revisit at production scale. |
+| Keep AsyncStorage and persistSession ON in supabase client | Removing them broke MapScreen territory rendering during diagnosis |
+| Keep timing logs in code for now | `[Profile]`, `[Alliance]`, `[supabase fetch]` — strip once app has been stable for several sessions |
+| RLS disabled on players table (temporary) | Old policies referenced `auth.uid()` but project uses Clerk — caused 19-min hangs. Must implement Clerk-JWT-based RLS before production. |
 
 ---
 
@@ -402,3 +449,4 @@ Do not start coding immediately. Work conversationally:
 - After Cursor builds it, wait for the user to check their phone and report back
 - Give the user time to ask questions at every step
 - Handle one screen or one fix at a time — never batch unrelated changes
+- **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, and EXPLAIN ANALYZE in SQL editor are the three fastest diagnostics for "is it server, client, or network".
