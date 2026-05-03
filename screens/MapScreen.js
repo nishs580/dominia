@@ -7,7 +7,11 @@ import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
   developmentName,
+  formatChangedHands,
+  formatHeldDays,
+  formatHolderCount,
   getLegacyRankForTerritory,
+  getTerritoryHistoryStats,
   streakReductionPercent,
   streakTierName,
 } from '../lib/territory';
@@ -52,6 +56,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const [deductionError, setDeductionError] = useState(false);
   const [isDeducting, setIsDeducting] = useState(false);
   const [legacyRank, setLegacyRank] = useState(null);
+  const [historyStats, setHistoryStats] = useState({
+    heldDays: null,
+    changedHands: 0,
+    currentClaimedAt: null,
+    holderCount: 0,
+  });
 
   useEffect(() => {
     setSheetState('info');
@@ -63,11 +73,18 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   useEffect(() => {
     if (!territory?.id) {
       setLegacyRank(null);
+      setHistoryStats({ heldDays: null, changedHands: 0, currentClaimedAt: null, holderCount: 0 });
       return;
     }
     let cancelled = false;
-    getLegacyRankForTerritory(territory.id).then((rank) => {
-      if (!cancelled) setLegacyRank(rank);
+    Promise.all([
+      getLegacyRankForTerritory(territory.id),
+      getTerritoryHistoryStats(territory.id),
+    ]).then(([legacyRankResult, historyStatsResult]) => {
+      if (!cancelled) {
+        setLegacyRank(legacyRankResult);
+        setHistoryStats(historyStatsResult);
+      }
     });
     return () => {
       cancelled = true;
@@ -85,11 +102,6 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const developmentLevel = territory.properties?.developmentLevel ?? 0;
   const alliance = territory.properties?.alliance ?? null;
   const ownerStreakDays = territory.properties?.ownerStreak ?? 0;
-
-  // Placeholder values for data not yet in DB
-  const heldDays = 14; // Placeholder
-  const changedHands = 6; // Placeholder
-  const hallOfHoldersCount = 12; // Placeholder
 
   const perimeterDistanceRaw = territory.properties?.perimeterDistance ?? territory.properties?.perimeter ?? 0;
   const perimeterDistance =
@@ -310,20 +322,22 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               </View>
               {!isUnclaimed && (
                 <>
-                  <View style={styles.sheetRow}>
-                    <Text style={styles.sheetRowLabel}>Held</Text>
-                    <Text style={styles.sheetRowValue}>{heldDays} days</Text>
-                  </View>
+                  {formatHeldDays(historyStats.heldDays) !== null && (
+                    <View style={styles.sheetRow}>
+                      <Text style={styles.sheetRowLabel}>Held</Text>
+                      <Text style={styles.sheetRowValue}>{formatHeldDays(historyStats.heldDays)}</Text>
+                    </View>
+                  )}
                   <View style={styles.sheetRow}>
                     <Text style={styles.sheetRowLabel}>Changed hands</Text>
-                    <Text style={styles.sheetRowValue}>{changedHands} times</Text>
+                    <Text style={styles.sheetRowValue}>{formatChangedHands(historyStats.changedHands)}</Text>
+                  </View>
+                  <View style={styles.sheetRow}>
+                    <Text style={styles.sheetRowLabel}>Hall of Holders</Text>
+                    <Text style={styles.sheetRowValue}>{formatHolderCount(historyStats.holderCount)}</Text>
                   </View>
                 </>
               )}
-              <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Hall of Holders</Text>
-                <Text style={styles.sheetRowValue}>{hallOfHoldersCount} commanders</Text>
-              </View>
 
               {/* Your walk block — only when it's an attackable territory */}
               {isOwned && !isYours && (
