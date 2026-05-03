@@ -44,6 +44,27 @@ export default function ClaimSuccessScreen() {
         return;
       }
 
+      const { data: playerForHistory } = await supabase
+        .from('players')
+        .select('alliance_id')
+        .eq('id', playerId)
+        .maybeSingle();
+
+      const { error: historyInsertError } = await supabase
+        .from('territory_history')
+        .insert([
+          {
+            territory_id: territoryId,
+            owner_id: playerId,
+            alliance_id: playerForHistory?.alliance_id ?? null,
+          },
+        ])
+        .select();
+
+      if (historyInsertError) {
+        console.warn('[territory_history] claim insert failed:', historyInsertError);
+      }
+
       try {
         const tier = F.normaliseTier(updatedTerritory?.tier);
         const earned = F.CLAIM_GOLD_REWARD[tier];
@@ -58,7 +79,8 @@ export default function ClaimSuccessScreen() {
         const { error: writeGoldError } = await supabase
           .from('players')
           .update({ gold: currentGold + earned })
-          .eq('id', playerId);
+          .eq('id', playerId)
+          .select();
         if (writeGoldError) throw writeGoldError;
 
         setGoldEarned(earned);

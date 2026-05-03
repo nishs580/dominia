@@ -93,45 +93,73 @@ export default function ContestResultScreen() {
 
   useEffect(() => {
     if (contestState === 'attack_won' && territoryId && playerId) {
-      supabase
-        .from('territories')
-        .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
-        .eq('id', territoryId)
-        .then(async ({ error }) => {
-          if (error) {
-            console.error('Contest win write failed:', error);
-            return;
-          }
+      (async () => {
+        const { error: historyCloseOutError } = await supabase
+          .from('territory_history')
+          .update({ lost_at: new Date().toISOString() })
+          .eq('territory_id', territoryId)
+          .is('lost_at', null)
+          .select();
 
-          try {
-            const contestEarned = F.calcResourceEarn('contest_win');
-            const { data: playerResources, error: playerResourcesError } = await supabase
-              .from('players')
-              .select('iron, gold, morale')
-              .eq('id', playerId)
-              .single();
-            if (playerResourcesError) throw playerResourcesError;
+        if (historyCloseOutError) {
+          console.warn('[territory_history] contest close-out failed:', historyCloseOutError);
+        }
 
-            const currentIron = Number(playerResources?.iron) || 0;
-            const currentGold = Number(playerResources?.gold) || 0;
-            const currentMorale = Number(playerResources?.morale) || 0;
+        supabase
+          .from('territories')
+          .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
+          .eq('id', territoryId)
+          .then(async ({ error }) => {
+            if (error) {
+              console.error('Contest win write failed:', error);
+              return;
+            }
 
-            const { error: writeResourcesError } = await supabase
-              .from('players')
-              .update({
-                iron: currentIron + contestEarned.iron,
-                gold: currentGold + contestEarned.gold,
-                morale: currentMorale + contestEarned.morale,
-              })
-              .eq('id', playerId);
-            if (writeResourcesError) throw writeResourcesError;
+            const { error: historyInsertError } = await supabase
+              .from('territory_history')
+              .insert([
+                {
+                  territory_id: territoryId,
+                  owner_id: playerId,
+                  alliance_id: attackerAlliance ?? null,
+                },
+              ])
+              .select();
 
-            setEarned(contestEarned);
-          } catch (resourceError) {
-            // TODO: make ownership + reward writes transactional in phase 4.
-            console.error('[ContestResult] contest win resource update failed:', resourceError);
-          }
-        });
+            if (historyInsertError) {
+              console.warn('[territory_history] contest insert failed:', historyInsertError);
+            }
+
+            try {
+              const contestEarned = F.calcResourceEarn('contest_win');
+              const { data: playerResources, error: playerResourcesError } = await supabase
+                .from('players')
+                .select('iron, gold, morale')
+                .eq('id', playerId)
+                .single();
+              if (playerResourcesError) throw playerResourcesError;
+
+              const currentIron = Number(playerResources?.iron) || 0;
+              const currentGold = Number(playerResources?.gold) || 0;
+              const currentMorale = Number(playerResources?.morale) || 0;
+
+              const { error: writeResourcesError } = await supabase
+                .from('players')
+                .update({
+                  iron: currentIron + contestEarned.iron,
+                  gold: currentGold + contestEarned.gold,
+                  morale: currentMorale + contestEarned.morale,
+                })
+                .eq('id', playerId);
+              if (writeResourcesError) throw writeResourcesError;
+
+              setEarned(contestEarned);
+            } catch (resourceError) {
+              // TODO: make ownership + reward writes transactional in phase 4.
+              console.error('[ContestResult] contest win resource update failed:', resourceError);
+            }
+          });
+      })();
     }
   }, []);
 

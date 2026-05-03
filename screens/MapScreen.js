@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
   developmentName,
-  legacyRankName,
+  getLegacyRankForTerritory,
   streakReductionPercent,
   streakTierName,
 } from '../lib/territory';
@@ -48,13 +48,30 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const navigation = useNavigation();
   const [expanded, setExpanded] = useState(false);
   const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
+  const [contestMode, setContestMode] = useState(false);
   const [deductionError, setDeductionError] = useState(false);
   const [isDeducting, setIsDeducting] = useState(false);
+  const [legacyRank, setLegacyRank] = useState(null);
 
   useEffect(() => {
     setSheetState('info');
+    setContestMode(false);
     setDeductionError(false);
     setIsDeducting(false);
+  }, [territory?.id]);
+
+  useEffect(() => {
+    if (!territory?.id) {
+      setLegacyRank(null);
+      return;
+    }
+    let cancelled = false;
+    getLegacyRankForTerritory(territory.id).then((rank) => {
+      if (!cancelled) setLegacyRank(rank);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [territory?.id]);
 
   if (!territory) return null;
@@ -70,7 +87,6 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const ownerStreakDays = territory.properties?.ownerStreak ?? 0;
 
   // Placeholder values for data not yet in DB
-  const legacyRank = 1; // Unproven — no column yet
   const heldDays = 14; // Placeholder
   const changedHands = 6; // Placeholder
   const hallOfHoldersCount = 12; // Placeholder
@@ -114,7 +130,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     F.calcDailyInfluence({
       tier: F.normaliseTier(tier),
       developmentLevel,
-      legacyRank,
+      legacyRank: legacyRank ?? 1,
       upkeepOverdue: false,
     })
   );
@@ -153,6 +169,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const balanceAfter = currentGold - goldCost;
   const canAfford = currentGold >= goldCost;
 
+  const currentIron = myPlayer?.iron ?? 0;
+  const ironBalanceAfter = currentIron - ironCost;
+  const canAffordContest = currentIron >= ironCost;
+
   const handleAcceptClaim = async () => {
     setIsDeducting(true);
     setDeductionError(false);
@@ -186,13 +206,45 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     }
   };
 
+  const handleAcceptContest = async () => {
+    setIsDeducting(true);
+    setDeductionError(false);
+    try {
+      const newIron = currentIron - ironCost;
+      const { error } = await supabase
+        .from('players')
+        .update({ iron: newIron })
+        .eq('id', myPlayer.id)
+        .select();
+      if (error) throw error;
+
+      onResourceBannerRefresh?.();
+
+      onClose();
+      navigation.navigate('ActiveClaim', {
+        mode: 'contest',
+        territoryName: selectedTerritory.name,
+        perimeterDistance: selectedTerritory.perimeter,
+        territoryId: territory.id,
+        playerId: myPlayer?.id,
+      });
+    } catch (err) {
+      console.error('[ContestDeduct]', err);
+      setDeductionError(true);
+    } finally {
+      setIsDeducting(false);
+    }
+  };
+
   return (
     <View style={[styles.sheet, { borderTopColor: topBorderColour, borderTopWidth: 1 }]}>
       <View style={styles.sheetHandle} />
 
       <View style={styles.sheetTopRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sheetStateLabel}>{sheetState === 'confirm' ? 'Claim' : stateLabel}</Text>
+          <Text style={styles.sheetStateLabel}>
+            {sheetState === 'confirm' ? (contestMode ? 'Contest' : 'Claim') : stateLabel}
+          </Text>
           <View style={styles.sheetTitleRow}>
             <Text style={styles.sheetTitle}>{name}</Text>
             <View style={styles.sheetTierBadge}>
@@ -253,7 +305,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>Legacy</Text>
                 <Text style={styles.sheetRowValue}>
-                  R{legacyRank} · {legacyRankName(legacyRank)}
+                  {legacyRank == null ? '—' : `R${legacyRank} · ${F.legacyRankName(legacyRank)}`}
                 </Text>
               </View>
               {!isUnclaimed && (
@@ -353,13 +405,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               accessibilityRole="button"
               style={({ pressed }) => [styles.sheetAction, { backgroundColor: '#4A6B8A' }, pressed && { opacity: 0.92 }]}
               onPress={() => {
-                navigation.navigate('ActiveClaim', {
-                  territoryName: selectedTerritory.name,
-                  perimeterDistance: selectedTerritory.perimeter,
-                  territoryId: territory.id,
-                  playerId: myPlayer?.id,
-                  mode: 'contest',
-                });
+                setContestMode(true);
+                setSheetState('confirm');
               }}
             >
               <Text style={styles.sheetActionText}>Contest</Text>
@@ -370,16 +417,20 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
       {sheetState === 'confirm' && (
         <>
-          {canAfford ? (
+          {(contestMode ? canAffordContest : canAfford) ? (
             <>
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>Cost</Text>
-                  <Text style={styles.sheetConfirmValue}>{goldCost} Gold</Text>
+                  <Text style={styles.sheetConfirmValue}>
+                    {contestMode ? `${ironCost} Iron` : `${goldCost} Gold`}
+                  </Text>
                 </View>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>Balance after</Text>
-                  <Text style={styles.sheetConfirmValue}>{balanceAfter} Gold</Text>
+                  <Text style={styles.sheetConfirmValue}>
+                    {contestMode ? `${ironBalanceAfter} Iron` : `${balanceAfter} Gold`}
+                  </Text>
                 </View>
               </View>
 
@@ -395,7 +446,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   pressed && { opacity: 0.92 },
                   isDeducting && { opacity: 0.6 },
                 ]}
-                onPress={handleAcceptClaim}
+                onPress={contestMode ? handleAcceptContest : handleAcceptClaim}
               >
                 <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Accept and continue'}</Text>
               </Pressable>
@@ -416,9 +467,15 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>Short by</Text>
-                  <Text style={styles.sheetConfirmValue}>{goldCost - currentGold} Gold</Text>
+                  <Text style={styles.sheetConfirmValue}>
+                    {contestMode ? `${ironCost - currentIron} Iron` : `${goldCost - currentGold} Gold`}
+                  </Text>
                 </View>
-                <Text style={styles.sheetConfirmHelpText}>Earn Gold by completing daily challenges.</Text>
+                <Text style={styles.sheetConfirmHelpText}>
+                  {contestMode
+                    ? 'Earn Iron by completing daily challenges.'
+                    : 'Earn Gold by completing daily challenges.'}
+                </Text>
               </View>
 
               <Pressable
