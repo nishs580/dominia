@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 3, 2026 (evening)
+Last updated: May 4, 2026
 
 ---
 
@@ -37,6 +37,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Animations | react-native-svg | ✓ Installed |
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
+| Test runner | Jest 30 (plain `testEnvironment: node`, NOT jest-expo preset) | ✓ 337 tests passing |
 | Backend (future) | Node.js + Fastify + PostGIS | Not started |
 | Real-time (future) | Ably | Not started |
 | Push (future) | Firebase Cloud Messaging | Not started |
@@ -131,7 +132,7 @@ ORDER BY th.claimed_at ASC;
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Live data | Resource banner refetches via useFocusEffect. TerritorySheet state machine: 'info' → 'confirm' (claim or contest branch via contestMode) → exit. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Both insufficient balance branches working. |
+| Map screen | ✓ Live data | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept, Iron deducted on contest accept. Live Legacy Rank, Held days, Changed hands, Hall of Holders all wired from territory_history. All suppressed on unclaimed via shared !isUnclaimed wrapper. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | Live Influence/day (calcDailyInfluence() summed across owned territories). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
@@ -167,9 +168,10 @@ ORDER BY th.claimed_at ASC;
 | `lib/supabase.js` | Supabase client with **fetch wrapper that forces `Connection: close` header** (CRITICAL — do not remove without re-testing on Android, the dead-pool bug will return). Includes [supabase fetch] timing logs. URL/key hardcoded. |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
-| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank. TIER_NORMALISER + normaliseTier(), CLAIM_GOLD_REWARD, CLAIM_GOLD_COST, CONTEST_IRON_COST, calcResourceEarn() (incl. contest_win). Aligned to v6.10. |
-| `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O for streak update on challenge complete |
-| `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + `getLegacyRankForTerritory(territoryId)` async — fetches territory_history + development_level, computes 5 inputs, pipes into F.calcLegacyRank(). |
+| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS, ~1500 lines, ~50 exports). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank, TIER_NORMALISER + normaliseTier(), CLAIM_GOLD_REWARD, CLAIM_GOLD_COST, CONTEST_IRON_COST, calcResourceEarn(). Aligned to v6.10. **FULLY UNIT TESTED — 337 tests, all passing.** |
+| `lib/__tests__/formulas.test.js` | 337 Jest tests covering all of formulas.js. Session 1 (simple/medium) + Session 2 (hairy: calcLegacyRank, all 5 power functions, mission helpers). Run with `npm test`. Must stay green before any commit touching formulas.js. |
+| `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O for streak update on challenge complete. **No tests yet.** |
+| `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + getLegacyRankForTerritory(territoryId) + getTerritoryHistoryStats(territoryId). **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `screens/MapScreen.js` | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Live Legacy Rank fetched on territory change via getLegacyRankForTerritory(). |
@@ -221,6 +223,12 @@ Get-ChildItem -Path "C:\Users\nisha\AppData\Local\Temp\eas-cli-nodejs\eas-build-
 
 # Install APK
 & "C:\platform-tools-latest-windows\platform-tools\adb.exe" install -r "<path-to-apk>"
+
+# Run unit tests (must stay green before any commit touching formulas.js)
+npm test
+
+# Verify project file vs live file (check for drift)
+Get-FileHash lib\formulas.js -Algorithm SHA256
 
 # Mirror phone to PC
 scrcpy
@@ -274,6 +282,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Without `.select()`, Supabase `.update()` does not force execution in certain cases and silently no-ops.
 - **Fix:** Always chain `.select()` on every `.update()` call. This is now standard practice for all Supabase write operations in this codebase.
 
+**6. Cursor agent proposes shell commands instead of file edits**
+- **Signature:** Cursor suggests `node -e "..."` or PowerShell commands to append/modify file content instead of using its file edit tools.
+- **Cause:** Cursor defaulting to shell execution path for large file modifications.
+- **Fix:** Skip the shell command proposal. Redirect with explicit instruction: "use file tools only, no shell commands." Don't allowlist — shell commands for file edits are always the wrong path.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
@@ -301,10 +314,10 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
 | TERRITORY_CAP_BY_LEVEL duplicated | Inlined in MapScreen.js and ProfileScreen.js — should move to formulas.js as calcTerritoryCapForLevel(). |
-| formulas.js has no unit tests | High priority before backend phase. |
+| lib/streak.js has no unit tests | Has Supabase I/O so needs mocking strategy. ~60-min session. |
+| lib/territory.js has no unit tests | Has Supabase I/O so needs mocking strategy. ~60-min session. |
 | player_number hardcoded as #0001 | Sequential player_number column in Supabase not yet added. |
-| TerritorySheet "held days" and "changed hands" hardcoded | Both now derivable from territory_history — cheap follow-up. |
-| Hall of Holders UI hardcoded | territory_history table ready but TerritorySheet display not wired. Cheap follow-up after Phase 5. |
+| Hall of Holders UI hardcoded | territory_history table ready but TerritorySheet display not wired. Cheap follow-up. |
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
@@ -325,26 +338,25 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (337 tests) ✓**
 
-**Immediate:** Start Phase 5 design conversation — activity_log table schema + cron infrastructure (Supabase Edge Functions vs external scheduler). Answer before touching code: what activity events get logged, retention period, how often Activity Power recomputes, and where the cron lives.
+**Immediate:** Phase 5 design conversation — activity_log table schema + cron infrastructure. Answer before touching code: what events get logged, retention period, how often Activity Power recomputes, where the cron lives. Goal: written spec that any future session can implement against, plus clear ordering (probably activity_log writes from existing code paths first, cron second).
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
 - Phase 2 ✓ — Influence/day + Territory Power on Profile
 - Phase 3 ✓ — Resource economy: claim/contest earn + deductions, banner refetch
-- Phase 4 ✓ — territory_history table + live Legacy Rank auto-calc on TerritorySheet
-- Phase 5 ○ — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron). First phase to cross into actual backend territory — begin with design conversation.
+- Phase 4 ✓ — territory_history table + live Legacy Rank + held days + changed hands wired
+- Phase 5 ○ — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron). First phase to cross into real backend territory — design conversation first.
 
 **Quick wins to pick up any time:**
-- Wire TerritorySheet "held days" and "changed hands" from territory_history (data is ready)
 - Wire Hall of Holders UI in TerritorySheet (data is ready)
+- Tests for lib/streak.js and lib/territory.js (~60-min session each, need mocking strategy for Supabase I/O)
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
 - Strip diagnostic console.logs once stable
 - Move TERRITORY_CAP_BY_LEVEL into formulas.js
-- Write unit tests for formulas.js
 - Wire War Room ACTIVATE buttons (role gating + Morale deduction)
 - Refactor ProfileScreen colour constants to lib/theme.js
 - Fix auth flow order
@@ -475,6 +487,12 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | History writes use console.warn-only error handling | A history bug must never cause a player to lose XP, resources, or ownership. Never throw, never block user flow. |
 | Currently-held rows count toward hold duration metrics | Player holding 30 days hits Rank 2 even before losing it — Date.now() as end time for open rows. Mechanics doc supports this. |
 | Backfilled open rows excluded from ownershipChanges | Only completed holds (lost_at set) count toward change tally. |
+| Plain Jest config (testEnvironment: node), NOT jest-expo preset | formulas.js is pure CommonJS — jest-expo loads full Expo winter-runtime which crashes on non-RN test files. jest-expo left in devDependencies for future component tests; not in active global config. |
+| Single test file sectioned with describe blocks | Easier to grep than multiple files — all 337 tests run in one command. |
+| No snapshot tests | Decision held — not needed for pure math functions. |
+| legacyRankName lookup uses object not array | Array with empty-string at index 0 caused `??` operator to skip fallback (empty string isn't nullish). Object keyed by valid ranks with `||` fallback is correct. |
+| When Cursor proposes shell commands for file edits: skip, redirect | Cursor twice proposed `node -e` / PowerShell instead of direct file edits during test session. Skip-then-redirect worked. Added to working style. |
+| Project knowledge sync habit established | Re-upload lib/formulas.js (and other core libs) whenever they change meaningfully. SHA256 hash check confirms sync. A 2-version drift caused 10 mins of confusion today. |
 | "Confirm" state label reuses existing sheetStateLabel style | Same slot, different content — no new style needed |
 
 ---
@@ -491,3 +509,4 @@ Do not start coding immediately. Work conversationally:
 - Give the user time to ask questions at every step
 - Handle one screen or one fix at a time — never batch unrelated changes
 - **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, and EXPLAIN ANALYZE in SQL editor are the three fastest diagnostics for "is it server, client, or network".
+- **When Cursor proposes shell commands (node -e, PowerShell) for tasks that are file edits:** SKIP, don't allowlist, redirect to use file tools only.
