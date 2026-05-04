@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 4, 2026
+Last updated: May 4, 2026 (Siege XP wired session)
 
 ---
 
@@ -37,7 +37,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Animations | react-native-svg | ✓ Installed |
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
-| Test runner | Jest 30 (plain `testEnvironment: node`, NOT jest-expo preset) | ✓ 337 tests passing |
+| Test runner | Jest 30 (plain `testEnvironment: node`, NOT jest-expo preset) | ✓ 348 tests passing |
 | Backend (future) | Node.js + Fastify + PostGIS | Not started |
 | Real-time (future) | Ably | Not started |
 | Push (future) | Firebase Cloud Messaging | Not started |
@@ -73,7 +73,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins
 
 `territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue
 
@@ -134,7 +134,7 @@ ORDER BY th.claimed_at ASC;
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
 | Map screen | ✓ Live data | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept, Iron deducted on contest accept. Live Legacy Rank, Held days, Changed hands, Hall of Holders all wired from territory_history. All suppressed on unclaimed via shared !isUnclaimed wrapper. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
-| Profile screen | ✓ Live data | Live Influence/day (calcDailyInfluence() summed across owned territories). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. |
+| Profile screen | ✓ Live data | POWER section above Influence (Power is §10 canonical metric, Influence demoted to resource). Total Power hero + 3 breakdown rows: Activity (inactive — em-dash + "Step tracking required"), Territory (live, calcTerritoryPower), Legacy (live, calcLegacyPower with lifetime_contest_wins + longest_streak inputs, reason "X contest wins · best streak Y days"). Hairline-divided rows. Live Influence/day below. My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
 | War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only (Iron/Gold/Stone removed — personal wallet, not alliance). All 6 abilities with correct costs. Header wired from nav params. |
 | Wallet screen | ✓ New | Live resource fetch on open. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. Accessible from Profile. |
@@ -142,8 +142,8 @@ ORDER BY th.claimed_at ASC;
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
 | Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
-| Claim Success screen | ✓ Live data | Solid Claim red square, typographic treatment. Writes owner_id + alliance_id, inserts territory_history row, writes Gold reward. |
-| Contest Result screen | ✓ Live data | 4 states, animated square, consequence block. attack_won: closes out previous holder's territory_history row, updates territories, inserts new history row (correct order), writes contest win resource earn. |
+| Claim Success screen | ✓ Live data | Solid Claim red square, typographic treatment. Writes owner_id + alliance_id, inserts territory_history row, atomic write of Gold reward + Siege XP via single .update().select() (calcClaimXp by tier). Tier fetched via .select('tier').single(). |
+| Contest Result screen | ✓ Live data | 4 states, animated square, consequence block. attack_won: closes out previous holder's territory_history row, updates territories, inserts new history row (correct order), atomic write of iron/gold/morale + Siege XP (calcContestWinXp by tier) + lifetime_contest_wins increment via single .update().select(). SIEGE XP shown first in earned beat line. |
 | Create Alliance screen | ✓ Branded | 3-step founding flow (identity → HQ territory → confirm). Archivo 900 titles, live [CODE] preview, hairline territory list, summary block, Claim two-line CTA. |
 | Alliance Joined screen | ✓ Branded | Alliance green accent bar, Archivo 900 alliance name, [TAG], Italic subtitle, 2-col meta grid, 5 numbered benefit rows, Claim CTA. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
@@ -168,15 +168,15 @@ ORDER BY th.claimed_at ASC;
 | `lib/supabase.js` | Supabase client with **fetch wrapper that forces `Connection: close` header** (CRITICAL — do not remove without re-testing on Android, the dead-pool bug will return). Includes [supabase fetch] timing logs. URL/key hardcoded. |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |
 | `lib/auth.js` | ensurePlayer(clerkUserId, email) — uses maybeSingle() to find or create player row |
-| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS, ~1500 lines, ~50 exports). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank, TIER_NORMALISER + normaliseTier(), CLAIM_GOLD_REWARD, CLAIM_GOLD_COST, CONTEST_IRON_COST, calcResourceEarn(). Aligned to v6.10. **FULLY UNIT TESTED — 337 tests, all passing.** |
-| `lib/__tests__/formulas.test.js` | 337 Jest tests covering all of formulas.js. Session 1 (simple/medium) + Session 2 (hairy: calcLegacyRank, all 5 power functions, mission helpers). Run with `npm test`. Must stay green before any commit touching formulas.js. |
+| `lib/formulas.js` | **Single source of truth for all game math** (CommonJS, ~1500 lines, ~50+ exports). XP thresholds, level titles, territory cap, Influence calc, contest walk distance, alliance missions, power, legacy rank, TIER_NORMALISER + normaliseTier(), CLAIM_GOLD_REWARD, CLAIM_GOLD_COST, CONTEST_IRON_COST, calcResourceEarn(). Siege XP layer: XP_PER_CLAIM, XP_PER_CONTEST_WIN, XP_PER_DEFENCE_WIN, XP_RECONQUEST, XP_PER_DEV_TIER_REACHED, XP_ALLIANCE_MISSION, XP_STREAK_MILESTONE constants + calcClaimXp(tier), calcContestWinXp(tier), calcDefenceWinXp(tier) helpers. Aligned to v6.10. **FULLY UNIT TESTED — 348 tests, all passing.** |
+| `lib/__tests__/formulas.test.js` | 348 Jest tests covering all of formulas.js. Includes Siege XP coverage: all 4 tiers for each of calcClaimXp/calcContestWinXp/calcDefenceWinXp, invalid tier rejection, frozen constants check. Run with `npm test`. Must stay green before any commit touching formulas.js. |
 | `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O for streak update on challenge complete. **No tests yet.** |
 | `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + getLegacyRankForTerritory(territoryId) + getTerritoryHistoryStats(territoryId). **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `screens/MapScreen.js` | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Live Legacy Rank fetched on territory change via getLegacyRankForTerritory(). |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
-| `screens/ProfileScreen.js` | Live Influence/day (calcDailyInfluence()). Live Territory Power (calcTerritoryPower()). My Resources ghost button → WalletScreen. XP via formulas.js. |
+| `screens/ProfileScreen.js` | POWER section above Influence (Total Power hero + 3 rows: Activity inactive / Territory live / Legacy live). Fetches lifetime_contest_wins + lifetime_defence_wins. calcLegacyPower called with real inputs (titlesEarned + championshipWins still hardcoded to 0). Live Influence/day (calcDailyInfluence()). My Resources ghost button → WalletScreen. XP via formulas.js. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
 | `screens/WarRoomScreen.js` | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. Header wired from nav params. |
 | `screens/WalletScreen.js` | Live resource fetch on mount. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. |
@@ -184,8 +184,8 @@ ORDER BY th.claimed_at ASC;
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 map, resolvedPlayerId fallback, live username |
 | `screens/ActiveClaimScreen.js` | Fully branded. Claim red ring (butt cap), sharp cards, Geist Mono labels. DEV_MODE=true — flip to false for real GPS. |
-| `screens/ClaimSuccessScreen.js` | Writes owner_id + alliance_id to territories. Inserts territory_history row. Slice A: writes Gold reward via F.CLAIM_GOLD_REWARD[tier] (.select() fix applied). |
-| `screens/ContestResultScreen.js` | 4 states, animated square, consequence block. Slice B: writes contest win resource earn on attack_won. Phase 4: close-out UPDATE (lost_at = now()) → territories UPDATE → INSERT new row. Order is critical — preserves single-open-row invariant. |
+| `screens/ClaimSuccessScreen.js` | Writes owner_id + alliance_id to territories. Inserts territory_history row. Atomic write of Gold reward (F.CLAIM_GOLD_REWARD[tier]) + Siege XP (calcClaimXp(tier)) via single .update().select(). Tier fetched from territories.update().select('tier').single(). |
+| `screens/ContestResultScreen.js` | 4 states, animated square, consequence block. attack_won: close-out UPDATE (lost_at = now()) → territories UPDATE (with .select('tier').single()) → INSERT new row → atomic player UPDATE writing iron/gold/morale + Siege XP (calcContestWinXp(tier)) + lifetime_contest_wins increment in single .update().select(). Order is critical — preserves single-open-row invariant. SIEGE XP shown first in earned beat line. |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. HQ picked from player-owned territories (Home District mechanic deferred). |
 | `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. |
 | `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
@@ -287,12 +287,18 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Cursor defaulting to shell execution path for large file modifications.
 - **Fix:** Skip the shell command proposal. Redirect with explicit instruction: "use file tools only, no shell commands." Don't allowlist — shell commands for file edits are always the wrong path.
 
+**7. Stale Metro bundle (JS-only changes don't always hot-reload)**
+- **Signature:** Code looks right + tests pass + DB writes partially succeed. New write paths (e.g. XP) silently don't fire while existing write paths (e.g. resources) still do. Render-side UI changes in the same file also don't appear.
+- **Cause:** Metro served the previous JS bundle while DB writes from existing code paths still fired. The render side is the diagnostic — if a UI change in the same file doesn't appear, the behaviour change isn't running either.
+- **Fix:** Reload Metro before testing JS-only changes (press `r` in Metro terminal, or shake phone → Reload). When the symptom is "code looks right + tests pass + DB writes partially succeed", suspect the bundle on device before suspecting the code.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
 3. **EXPLAIN ANALYZE in SQL editor** — tells you if the database query is slow
-4. **Force-stop the app** after `lib/supabase.js` changes — long-press app icon → App info → Force stop. Required to fully reset the client singleton.
-5. **Get evidence before theorising.**
+4. **Render-side check** — does a UI change in the same file appear on device? If not, you're on a stale bundle. Reload Metro (press `r`) before debugging the code.
+5. **Force-stop the app** after `lib/supabase.js` changes — long-press app icon → App info → Force stop. Required to fully reset the client singleton.
+6. **Get evidence before theorising.**
 
 ---
 
@@ -317,7 +323,9 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | lib/streak.js has no unit tests | Has Supabase I/O so needs mocking strategy. ~60-min session. |
 | lib/territory.js has no unit tests | Has Supabase I/O so needs mocking strategy. ~60-min session. |
 | player_number hardcoded as #0001 | Sequential player_number column in Supabase not yet added. |
-| Hall of Holders UI hardcoded | territory_history table ready but TerritorySheet display not wired. Cheap follow-up. |
+| Siege XP constants exist with no writers | XP_PER_DEFENCE_WIN (defender flow not built), XP_RECONQUEST (no reconquest mechanic), XP_PER_DEV_TIER_REACHED (no development), XP_ALLIANCE_MISSION (mission rewards), XP_STREAK_MILESTONE (no streak milestone events). Each is a small wiring task as relevant feature comes online. |
+| lifetime_defence_wins schema placeholder | Column added but no writer until defender flow ships. |
+| Legacy Power inputs partial | titlesEarned + championshipWins hardcoded to 0 on Profile — title system and championship system don't exist yet. |
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
@@ -338,19 +346,27 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (337 tests) ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓**
 
-**Immediate:** Phase 5 design conversation — activity_log table schema + cron infrastructure. Answer before touching code: what events get logged, retention period, how often Activity Power recomputes, where the cron lives. Goal: written spec that any future session can implement against, plus clear ordering (probably activity_log writes from existing code paths first, cron second).
+**Immediate — Phase 5a (design conversation locked in):**
+- Raw events written to `activity_log` table; recompute Activity Power on read (Option A — no cache).
+- Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
+- `km_amount` column exists from day one but stays NULL until step tracking lands.
+- No read-side aggregator yet — nothing to display Activity Power until step tracking solves the km gap.
+- Verification via Supabase SQL + dev console logs at each write site (open decision: console-log dev safety net or pure invisible).
+- Open the chat and start with: "Phase 5a — write the activity_log spec and the Cursor prompt for the schema migration plus the three write-site changes."
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
 - Phase 2 ✓ — Influence/day + Territory Power on Profile
 - Phase 3 ✓ — Resource economy: claim/contest earn + deductions, banner refetch
 - Phase 4 ✓ — territory_history table + live Legacy Rank + held days + changed hands wired
-- Phase 5 ○ — Backend: Activity Power + Total Power + Alliance Power (needs activity_log + cron). First phase to cross into real backend territory — design conversation first.
+- Phase 4.5 ✓ — Siege XP wired (claim + contest win), POWER section on Profile, lifetime_contest_wins live
+- Phase 5a ○ — activity_log table + 3 event-write sites (no read-side aggregator yet)
+- Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
 
 **Quick wins to pick up any time:**
-- Wire Hall of Holders UI in TerritorySheet (data is ready)
+- Wire remaining Siege XP write sites as features come online (defence win, reconquest, dev tier reached, mission complete, streak milestone)
 - Tests for lib/streak.js and lib/territory.js (~60-min session each, need mocking strategy for Supabase I/O)
 
 **Other backlog:**
@@ -360,13 +376,13 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Wire War Room ACTIVATE buttons (role gating + Morale deduction)
 - Refactor ProfileScreen colour constants to lib/theme.js
 - Fix auth flow order
-- Real step tracking — try expo-sensors Pedometer.watchStepCount()
+- Real step tracking — try expo-sensors Pedometer.watchStepCount() (blocks Activity Power read-side)
 - Draggable bottom sheet — batch into EAS build
 - Invite non-player flow
 - Home District mechanic
 - Onboarding home pin 500m verification
 - Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
-- Defender flow — revisit once Ably is built
+- Defender flow — revisit once Ably is built (will then wire XP_PER_DEFENCE_WIN + lifetime_defence_wins)
 
 ---
 
@@ -488,12 +504,23 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Currently-held rows count toward hold duration metrics | Player holding 30 days hits Rank 2 even before losing it — Date.now() as end time for open rows. Mechanics doc supports this. |
 | Backfilled open rows excluded from ownershipChanges | Only completed holds (lost_at set) count toward change tally. |
 | Plain Jest config (testEnvironment: node), NOT jest-expo preset | formulas.js is pure CommonJS — jest-expo loads full Expo winter-runtime which crashes on non-RN test files. jest-expo left in devDependencies for future component tests; not in active global config. |
-| Single test file sectioned with describe blocks | Easier to grep than multiple files — all 337 tests run in one command. |
+| Single test file sectioned with describe blocks | Easier to grep than multiple files — all 348 tests run in one command. |
 | No snapshot tests | Decision held — not needed for pure math functions. |
 | legacyRankName lookup uses object not array | Array with empty-string at index 0 caused `??` operator to skip fallback (empty string isn't nullish). Object keyed by valid ranks with `||` fallback is correct. |
 | When Cursor proposes shell commands for file edits: skip, redirect | Cursor twice proposed `node -e` / PowerShell instead of direct file edits during test session. Skip-then-redirect worked. Added to working style. |
 | Project knowledge sync habit established | Re-upload lib/formulas.js (and other core libs) whenever they change meaningfully. SHA256 hash check confirms sync. A 2-version drift caused 10 mins of confusion today. |
 | "Confirm" state label reuses existing sheetStateLabel style | Same slot, different content — no new style needed |
+| POWER section sits above Influence on Profile | Power is the §10 canonical ranking metric, Influence is a resource. Hierarchy was inverted; corrected. |
+| Total Power hero shown even when 2 of 3 components blank | Today equals Territory Power, will diverge as Activity/Legacy come online. Better to show the hero now with honest empty rows than wait. |
+| Inactive Power rows use em-dash + Inter inline reason | Light empty-state form ("Step tracking required" / "Contest history required"). Labels stay Slate-2 regardless of state. Inactive values use Slate, live values use Bone. |
+| calcContestWinXp + calcClaimXp return BASE XP only | Modifiers (streak ×1.10, supply line ×1.20, city event ×1.5) deferred to broader canonical-earn-calc wiring later. Matches calcResourceEarn's base-only pattern. |
+| Atomic write of resource + xp in single .update() | Safer than separate writes — if one column had an invalid value, all would fail together rather than splitting state. Matches Promise.all + indexes pattern. |
+| lifetime_defence_wins added as schema placeholder | No writer until defender flow ships, but ready when it does. |
+| XP_PER_CONTEST_WIN naming wins over CONTEST_WIN_XP | Cursor proactively used XP_PER_X to match existing XP_PER_CHALLENGE pattern. Kept Cursor's version — more consistent with file conventions. |
+| SIEGE XP shown first in earned beat line | "+300 SIEGE XP · +15 IRON · ..." — XP is the §5.7 lifetime record and outranks resources. |
+| Did not verify claim XP on device | Same code pattern as contest, trusted to work, moved on. Pattern reuse + tests + identical write shape = high enough confidence. |
+| Render-side check is a first-class diagnostic | If a UI change in the same file doesn't appear, the behaviour change isn't running either. Added to debugging playbook as step 4. |
+| Reload Metro before testing JS-only changes | Stale bundle was today's biggest debugging trap (wrong hypothesis chain: partial-edit → auth.js overwrite, real cause: bundle). Reload first, debug code second. |
 
 ---
 
@@ -508,5 +535,5 @@ Do not start coding immediately. Work conversationally:
 - After Cursor builds it, wait for the user to check their phone and report back
 - Give the user time to ask questions at every step
 - Handle one screen or one fix at a time — never batch unrelated changes
-- **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, and EXPLAIN ANALYZE in SQL editor are the three fastest diagnostics for "is it server, client, or network".
+- **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, EXPLAIN ANALYZE in SQL editor, and **render-side check** (does the UI change show up?) are the four fastest diagnostics for "is it server, client, network, or stale bundle".
 - **When Cursor proposes shell commands (node -e, PowerShell) for tasks that are file edits:** SKIP, don't allowlist, redirect to use file tools only.
