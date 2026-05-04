@@ -11,6 +11,7 @@ import {
   calcDailyInfluence,
   calcTerritoryPower,
   calcFullValueCap,
+  calcLegacyPower,
 } from '../lib/formulas';
 
 // Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
@@ -98,7 +99,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale')
+        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -180,6 +181,18 @@ export default function ProfileScreen() {
     })),
     fullValueCap
   );
+  const lifetimeContestWins = Math.max(0, Number(playerRow?.lifetime_contest_wins) || 0);
+  const lifetimeDefenceWins = Math.max(0, Number(playerRow?.lifetime_defence_wins) || 0);
+
+  const legacyPower = calcLegacyPower({
+    titlesEarned: 0,
+    championshipWins: 0,
+    lifetimeContestWins,
+    lifetimeDefenceWins,
+    highestStreakDays: longestStreak,
+    lifetimeXp: xpInt,
+  });
+  const totalPower = territoryPower + legacyPower;
 
   const playerName = playerRow?.username ?? '—';
   const rankBadge = getLevelTitle(level);
@@ -239,6 +252,45 @@ export default function ProfileScreen() {
 
         {!loading && playerRow ? (
           <>
+          <View style={styles.powerSection}>
+            <View style={styles.influenceHeader}>
+              <Text style={styles.influenceLabel}>POWER</Text>
+              <View style={styles.influenceHairline} />
+            </View>
+            <View style={styles.powerHeroBlock}>
+              <Text style={styles.powerValue}>{totalPower.toLocaleString()}</Text>
+              <Text style={styles.influenceSublabel}>TOTAL POWER</Text>
+            </View>
+            <View style={styles.powerHeroDivider} />
+            <View style={styles.powerRow}>
+              <View style={styles.powerRowLeft}>
+                <Text style={styles.powerRowLabel}>ACTIVITY POWER</Text>
+                <Text style={styles.powerRowReason}>Step tracking required</Text>
+              </View>
+              <Text style={styles.powerRowValueInactive}>—</Text>
+            </View>
+            <View style={styles.powerRowDivider} />
+            <View style={styles.powerRow}>
+              <View style={styles.powerRowLeft}>
+                <Text style={styles.powerRowLabel}>TERRITORY POWER</Text>
+                <Text style={styles.powerRowReason}>
+                  {`${ownedTerritories.length} ${ownedTerritories.length === 1 ? 'territory' : 'territories'} · ${fullValueCap} full-value cap`}
+                </Text>
+              </View>
+              <Text style={styles.powerRowValueLive}>{territoryPower.toLocaleString()}</Text>
+            </View>
+            <View style={styles.powerRowDivider} />
+            <View style={styles.powerRow}>
+              <View style={styles.powerRowLeft}>
+                <Text style={styles.powerRowLabel}>LEGACY POWER</Text>
+                <Text style={styles.powerRowReason}>
+                  {`${lifetimeContestWins} contest ${lifetimeContestWins === 1 ? 'win' : 'wins'} · best streak ${longestStreak} ${longestStreak === 1 ? 'day' : 'days'}`}
+                </Text>
+              </View>
+              <Text style={styles.powerRowValueLive}>{legacyPower.toLocaleString()}</Text>
+            </View>
+          </View>
+
           <View style={styles.influenceBlock}>
             <View style={styles.influenceHeader}>
               <Text style={styles.influenceLabel}>INFLUENCE</Text>
@@ -296,17 +348,6 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>SIEGE XP</Text>
               <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
             </View>
-          </View>
-
-          <View style={styles.powerBlock}>
-            <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>TERRITORY POWER</Text>
-              <View style={styles.influenceHairline} />
-            </View>
-            <Text style={styles.powerValue}>{territoryPower.toLocaleString()}</Text>
-            <Text style={styles.influenceContext}>
-              {`${ownedTerritories.length} ${ownedTerritories.length === 1 ? 'territory' : 'territories'} · ${fullValueCap} full-value cap`}
-            </Text>
           </View>
 
           <View style={styles.card}>
@@ -751,6 +792,57 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: CLAIM,
+  },
+  powerSection: {
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  powerHeroBlock: {
+    marginBottom: 16,
+  },
+  powerHeroDivider: {
+    height: 1,
+    backgroundColor: HAIRLINE,
+    marginBottom: 4,
+  },
+  powerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+  },
+  powerRowDivider: {
+    height: 1,
+    backgroundColor: HAIRLINE,
+  },
+  powerRowLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  powerRowLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: SLATE2,
+  },
+  powerRowReason: {
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: SLATE2,
+  },
+  powerRowValueLive: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 20,
+    color: BONE,
+    letterSpacing: -0.4,
+  },
+  powerRowValueInactive: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 20,
+    color: SLATE,
+    letterSpacing: -0.4,
   },
 });
 

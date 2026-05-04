@@ -109,7 +109,9 @@ export default function ContestResultScreen() {
           .from('territories')
           .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
           .eq('id', territoryId)
-          .then(async ({ error }) => {
+          .select('tier')
+          .single()
+          .then(async ({ data: updatedTerritory, error }) => {
             if (error) {
               console.error('Contest win write failed:', error);
               return;
@@ -130,11 +132,32 @@ export default function ContestResultScreen() {
               console.warn('[territory_history] contest insert failed:', historyInsertError);
             }
 
+            // Increment lifetime_contest_wins for the attacker
+            const { data: currentPlayer, error: fetchErr } = await supabase
+              .from('players')
+              .select('lifetime_contest_wins')
+              .eq('id', playerId)
+              .single();
+
+            if (!fetchErr && currentPlayer) {
+              const newCount = (currentPlayer.lifetime_contest_wins ?? 0) + 1;
+              const { error: writeErr } = await supabase
+                .from('players')
+                .update({ lifetime_contest_wins: newCount })
+                .eq('id', playerId)
+                .select();
+              if (writeErr) {
+                console.warn('[ContestResult] failed to increment lifetime_contest_wins:', writeErr.message);
+              }
+            } else if (fetchErr) {
+              console.warn('[ContestResult] failed to fetch lifetime_contest_wins:', fetchErr.message);
+            }
+
             try {
               const contestEarned = F.calcResourceEarn('contest_win');
               const { data: playerResources, error: playerResourcesError } = await supabase
                 .from('players')
-                .select('iron, gold, morale')
+                .select('iron, gold, morale, xp')
                 .eq('id', playerId)
                 .single();
               if (playerResourcesError) throw playerResourcesError;
@@ -142,6 +165,10 @@ export default function ContestResultScreen() {
               const currentIron = Number(playerResources?.iron) || 0;
               const currentGold = Number(playerResources?.gold) || 0;
               const currentMorale = Number(playerResources?.morale) || 0;
+              const currentXp = Number(playerResources?.xp) || 0;
+
+              const tier = F.normaliseTier(updatedTerritory?.tier);
+              const xpEarned = F.calcContestWinXp(tier);
 
               const { error: writeResourcesError } = await supabase
                 .from('players')
@@ -149,11 +176,13 @@ export default function ContestResultScreen() {
                   iron: currentIron + contestEarned.iron,
                   gold: currentGold + contestEarned.gold,
                   morale: currentMorale + contestEarned.morale,
+                  xp: currentXp + xpEarned,
                 })
-                .eq('id', playerId);
+                .eq('id', playerId)
+                .select();
               if (writeResourcesError) throw writeResourcesError;
 
-              setEarned(contestEarned);
+              setEarned({ ...contestEarned, xp: xpEarned });
             } catch (resourceError) {
               // TODO: make ownership + reward writes transactional in phase 4.
               console.error('[ContestResult] contest win resource update failed:', resourceError);
@@ -257,7 +286,7 @@ export default function ContestResultScreen() {
       </View>
       {contestState === 'attack_won' && earned ? (
         <Text style={styles.earnedBeat}>
-          +{earned.iron} IRON · +{earned.gold} GOLD · +{earned.morale} MORALE
+          +{earned.xp} SIEGE XP · +{earned.iron} IRON · +{earned.gold} GOLD · +{earned.morale} MORALE
         </Text>
       ) : null}
 

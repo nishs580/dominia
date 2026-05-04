@@ -27,6 +27,7 @@ export default function ClaimSuccessScreen() {
   const fade = useRef(new Animated.Value(0)).current;
   const pop = useRef(new Animated.Value(0.96)).current;
   const [goldEarned, setGoldEarned] = useState(null);
+  const [xpEarned, setXpEarned] = useState(null);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
@@ -67,23 +68,31 @@ export default function ClaimSuccessScreen() {
 
       try {
         const tier = F.normaliseTier(updatedTerritory?.tier);
-        const earned = F.CLAIM_GOLD_REWARD[tier];
-        const { data: playerGoldRow, error: playerGoldError } = await supabase
+        const goldEarned = F.CLAIM_GOLD_REWARD[tier];
+        const xpEarned = F.calcClaimXp(tier);
+
+        const { data: playerRow, error: playerFetchError } = await supabase
           .from('players')
-          .select('gold')
+          .select('gold, xp')
           .eq('id', playerId)
           .single();
-        if (playerGoldError) throw playerGoldError;
+        if (playerFetchError) throw playerFetchError;
 
-        const currentGold = Number(playerGoldRow?.gold) || 0;
-        const { error: writeGoldError } = await supabase
+        const currentGold = Number(playerRow?.gold) || 0;
+        const currentXp = Number(playerRow?.xp) || 0;
+
+        const { error: writeRewardError } = await supabase
           .from('players')
-          .update({ gold: currentGold + earned })
+          .update({
+            gold: currentGold + goldEarned,
+            xp: currentXp + xpEarned,
+          })
           .eq('id', playerId)
           .select();
-        if (writeGoldError) throw writeGoldError;
+        if (writeRewardError) throw writeRewardError;
 
-        setGoldEarned(earned);
+        setGoldEarned(goldEarned);
+        setXpEarned(xpEarned);
       } catch (goldError) {
         // TODO: make ownership + reward writes transactional in phase 4.
         console.error('[ClaimSuccess] gold reward update failed:', goldError);
@@ -138,6 +147,9 @@ export default function ClaimSuccessScreen() {
 
         <Text style={styles.territory}>{territoryName}</Text>
         <Text style={styles.territoryCaption}>is yours.</Text>
+        {xpEarned != null ? (
+          <Text style={styles.goldEarnedBeat}>+{xpEarned} SIEGE XP EARNED</Text>
+        ) : null}
         {goldEarned != null ? (
           <Text style={styles.goldEarnedBeat}>+{goldEarned} GOLD EARNED</Text>
         ) : null}
