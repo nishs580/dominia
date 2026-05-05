@@ -169,6 +169,7 @@ export default function ContestResultScreen() {
 
               const tier = F.normaliseTier(updatedTerritory?.tier);
               const xpEarned = F.calcContestWinXp(tier);
+              const contestXp = xpEarned;
 
               const { error: writeResourcesError } = await supabase
                 .from('players')
@@ -181,6 +182,17 @@ export default function ContestResultScreen() {
                 .eq('id', playerId)
                 .select();
               if (writeResourcesError) throw writeResourcesError;
+
+              try {
+                const { error: logError } = await supabase
+                  .from('activity_log')
+                  .insert([{ player_id: playerId, event_type: 'contest_win', xp_amount: contestXp }])
+                  .select();
+                if (logError) console.warn('[activity_log] contest_win insert failed:', logError);
+                else console.log('[activity_log] contest_win written — xp:', contestXp);
+              } catch (e) {
+                console.warn('[activity_log] contest_win insert threw:', e);
+              }
 
               setEarned({ ...contestEarned, xp: xpEarned });
             } catch (resourceError) {

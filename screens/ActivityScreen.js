@@ -241,6 +241,17 @@ export default function ActivityScreen() {
           .maybeSingle();
         setCurrentStreak(Math.max(0, Number(streakRow?.current_streak) || 0));
       }
+
+      try {
+        const { error: logError } = await supabase
+          .from('activity_log')
+          .insert([{ player_id: playerId, event_type: 'challenge_complete', xp_amount: ch.xp }])
+          .select();
+        if (logError) console.warn('[activity_log] challenge insert failed:', logError);
+        else console.log('[activity_log] challenge written — xp:', ch.xp);
+      } catch (e) {
+        console.warn('[activity_log] challenge insert threw:', e);
+      }
     } catch (e) {
       console.error('onCompleteChallenge failed:', e?.message ?? e);
       // revert if something goes wrong

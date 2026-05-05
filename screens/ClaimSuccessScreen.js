@@ -93,6 +93,17 @@ export default function ClaimSuccessScreen() {
 
         setGoldEarned(goldEarned);
         setXpEarned(xpEarned);
+
+        try {
+          const { error: logError } = await supabase
+            .from('activity_log')
+            .insert([{ player_id: playerId, event_type: 'claim', xp_amount: xpEarned }])
+            .select();
+          if (logError) console.warn('[activity_log] claim insert failed:', logError);
+          else console.log('[activity_log] claim written — xp:', xpEarned);
+        } catch (e) {
+          console.warn('[activity_log] claim insert threw:', e);
+        }
       } catch (goldError) {
         // TODO: make ownership + reward writes transactional in phase 4.
         console.error('[ClaimSuccess] gold reward update failed:', goldError);

@@ -11,15 +11,13 @@ import {
   calcDailyInfluence,
   calcTerritoryPower,
   calcFullValueCap,
+  calcTerritoryCapForLevel,
   calcLegacyPower,
 } from '../lib/formulas';
 
-// Territory caps per Siege level (former lib/level.js LEVELS[].territoryCap)
-const TERRITORY_CAP_BY_LEVEL = [3, 6, 10, 15, 20, 28, 38, 50, 65, 75];
-
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
-  return TERRITORY_CAP_BY_LEVEL[lv - 1] ?? 1;
+  return calcTerritoryCapForLevel(lv);
 }
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
