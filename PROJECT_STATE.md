@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 5, 2026 (Real OSM polygons + War Room ACTIVATE + Morale donation session)
+Last updated: May 6, 2026 (Mapbox Standard night basemap + state-aware territory opacity)
 
 ---
 
@@ -358,6 +358,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
+| POI icons on Standard night basemap | Museums, hotels, breweries (e.g. Heineken Experience, Hotel Okura, Eye Filmmuseum) still render on Mapbox Standard night basemap despite both `showPointOfInterestLabels` and `showLandmarkIcons` toggles being OFF in Studio and published. Studio publish completes but icons persist on phone. Cause unclear — may be a deeper Studio config issue, a Standard style behaviour we haven't found docs for, or a `@rnmapbox/maps` v10 quirk. Not blocking — territories are the visual signal and read clearly. Revisit in Map Session 3. |
 
 ---
 
@@ -374,7 +375,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | REAL OSM POLYGONS FOR ALL 10 TERRITORIES ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | REAL OSM POLYGONS FOR ALL 10 TERRITORIES ✓ | MAP HERO SCREEN: BRAND-BRIEF NIGHT BASEMAP + STATE-AWARE TERRITORY OPACITY ✓**
 
 **Immediate — tests for `lib/streak.js`:**
 - Agree on Supabase mocking strategy first (manual mock vs jest.mock vs in-memory fake), then write tests.
@@ -386,6 +387,18 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
 - `km_amount` column exists from day one but stays NULL until step tracking lands.
 - No read-side aggregator yet — nothing to display Activity Power until step tracking solves the km gap.
+
+**Map Session 2 (queued — territory redesign):**
+- Curate ~20-30 Amsterdam territories via Overpass Turbo with intent: 12 Small / 10 Medium / 4 Large / 2 Epic.
+- Resolve overlaps (current 10 territories were named-by-search and some collide — e.g. Vondelpark / Museumplein boundary).
+- Update fetch-osm-polygons.js for the new set; validate non-overlap visually before DB write.
+- Currently no Large or Epic in DB — formulas.js validates all four tiers but data is Small/Medium only.
+
+**Map Session 3 (queued — polish, after Session 2):**
+- First Claim visual pulse for Level 1-2 players on Smalls (mechanics doc §7.2).
+- Tier-aware visual treatment (Epic should feel heavier than Small).
+- Level-gate visual states (lock indicator on Large for L1-3, Epic for L1-6).
+- Resolve POI icons issue (see Open Bugs).
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -480,7 +493,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Claim square removed from step headings | Inline nested Text wraps unpredictably on real device widths — square on wordmark and CTA button is sufficient |
 | Bone pin with Claim centre for home pin map | Dark-v11 map makes Bone readable; Claim outer was used before dark map was added |
 | Pure RN teardrop pin instead of SVG | react-native-svg not installed for this shape — avoids EAS build |
-| Map style dark-v11 via styleURL directly | lightPreset prop not reliable across rnmapbox versions |
+| Custom Mapbox Studio style "Dominia Night" (`mapbox://styles/nishs/cmot1yv5h006z01sf32a7coow`) | Standard style + brand-brief config overrides applied at style level (night preset, POI off, transit off, place + road labels on, 3D on). V11 + StyleImport deferred — current `@rnmapbox/maps ^10.3.0` is V10, StyleImport requires V11 (would burn 1 EAS build). Studio style is configurable visually + JS-only swap. |
 | resolvedPlayerId fallback pattern | If playerId missing from nav params, fetch from Supabase using clerkUserId — prevents session error when nav param is dropped |
 | Auth flow order deferred | New users should see Steps 0+1 before sign-up — fix after branding complete |
 | has_onboarded reset via Supabase SQL | No DEV_SKIP_INTRO flag needed — direct SQL simpler for dev testing |
@@ -562,6 +575,10 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | `fetch-osm-polygons.js` reads territory list from Supabase, not hardcoded | Adding a new city = add rows with `osm_id` + `osm_type` and rerun the script. Zero code changes per city. |
 | `t.geojson ?? rectangle fallback` in MapScreen | Safe rollout — territories without geojson still render as bounding boxes during partial migrations. Removes the all-or-nothing risk of a schema change. |
 | Script lives on Desktop, not in repo | One-off backfill / occasional refresh tool — not part of the app. Keeps repo clean. Reusable as-is for any future city. |
+| Custom layers on Mapbox Standard need fillEmissiveStrength + lineEmissiveStrength = 1.0 | Otherwise the night-preset 3D ambient lighting dims the layer's true colour. Without this, Claim red rendered as muddy brown-red, Alliance green as olive, Slate hairline invisible. Set on FillLayer + LineLayer style objects. |
+| State-aware fillOpacity (case expression) instead of flat opacity | Saturation imbalance — Claim ~80%, Alliance ~56%, Enemy ~30% — means flat opacity makes cool colours visually recede on night basemap. Per-state values (Claim 0.42 / Alliance 0.55 / Enemy 0.50) compensate while preserving brief intent (Claim loudest, Enemy quietest). Unclaimed remains line-only. |
+| Brand colours held against map-driven pressure | Considered changing Alliance green / Enemy blue when they read weakly on night basemap; resisted because brief is explicit ("Five colours only"), every branded screen depends on these tokens, and map shouldn't dictate brand. Solution was opacity tuning, not colour change. |
+| V11 upgrade for runtime style config deferred | Would enable runtime config switching (day/dusk events) and StyleImport API, but burns 1 EAS build and risks ripple to react-native-screens / legacy-peer-deps / expo-build-properties pinning. Custom Studio style covers static brand config without upgrade. Revisit when runtime switching becomes needed. |
 
 ---
 

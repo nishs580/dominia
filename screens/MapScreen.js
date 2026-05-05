@@ -611,7 +611,14 @@ export default function MapScreen() {
   const fillStyle = useMemo(
     () => ({
       fillColor: ['get', 'color'],
-      fillOpacity: 0.22,
+      fillOpacity: [
+        'case',
+        ['==', ['get', 'color'], '#D64525'], 0.42,
+        ['==', ['get', 'color'], '#3F8F4E'], 0.55,
+        ['==', ['get', 'color'], '#4A6B8A'], 0.50,
+        0,
+      ],
+      fillEmissiveStrength: 1.0,
     }),
     [],
   );
@@ -619,8 +626,9 @@ export default function MapScreen() {
   const lineStyle = useMemo(
     () => ({
       lineColor: ['case', ['==', ['get', 'color'], UNCLAIMED], SLATE, ['get', 'color']],
-      lineWidth: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.6, 1],
-      lineOpacity: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.5, 0.9],
+      lineWidth: ['case', ['==', ['get', 'color'], UNCLAIMED], 1, 2],
+      lineOpacity: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.7, 0.95],
+      lineEmissiveStrength: 1.0,
     }),
     [],
   );
@@ -672,7 +680,7 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
-      <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/mapbox/dark-v11">
+      <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/nishs/cmot1yv5h006z01sf32a7coow">
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
         <MapboxGL.UserLocation
