@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 4, 2026 (Siege XP wired session)
+Last updated: May 5, 2026 (Real OSM polygons + War Room ACTIVATE + Morale donation session)
 
 ---
 
@@ -48,9 +48,9 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 | nish_s player ID | 94a9036e-1d59-49ae-9b5f-eae064913fbf |
 | nish_s clerk_id | user_3CRjZoj8XaCoFwuAayVcgA2RPaP |
-| nish_s territories | Museumplein, Oosterpark, Vondelpark, Leidseplein, Prinsengracht (won vs boo this session) |
+| nish_s territories | Museumplein, Oosterpark, Vondelpark, Leidseplein, Jordaan |
 | Rubik player ID | 788e9834 — KAI alliance, holds Sarphatipark |
-| boo player ID | 53a0186a — GGG alliance, lost Prinsengracht to nish_s this session |
+| boo player ID | 53a0186a — GGG alliance |
 | Phantom | alliance id 80caca88-85ba-4830-9b63-1c4fc8d8372c, holds Oud-West |
 | Kainetic Allied [KAI] | id=6bc19cb1-97ce-4f76-95fa-b645606c2b47 |
 | Unclaimed territories | Rembrandtplein, Plantage |
@@ -75,7 +75,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 `players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins
 
-`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue
+`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type (text), geojson (jsonb)
 
 `alliances`: id, name, short_name, city, created_at, founder_id, morale
 
@@ -84,11 +84,11 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 `territory_history`: id, territory_id, owner_id, alliance_id (nullable), claimed_at, lost_at (nullable = currently held), backfilled (boolean), created_at
 
 **Test data:**
-- 10 territories (Amsterdam, hardcoded bounding box polygons, all unclaimed unless noted):
-  - Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Prinsengracht (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m)
-  - Rembrandtplein · Oosterpark · Westerpark · Plantage · Oud-West (all unclaimed, added this session)
+- 10 territories (Amsterdam, **real OSM polygon shapes** via `geojson` column, all unclaimed unless noted):
+  - Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Jordaan (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m)
+  - Rembrandtplein · Oosterpark · Westerpark · Plantage · Oud-West (all unclaimed)
 - Active alliances: Kainetic Allied [KAI] id=6bc19cb1-97ce-4f76-95fa-b645606c2b47 · Gritty Greeks [GGG]
-- Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG — holds Leidseplein + Prinsengracht)
+- Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG)
 - Territory tier values must be **lowercase** in DB (small/medium/large) — check constraint enforces this
 
 **Indexes added:**
@@ -125,6 +125,10 @@ WHERE t.territory_name = 'X'
 ORDER BY th.claimed_at ASC;
 ```
 
+**RPCs (server-side, atomic):**
+- `deduct_alliance_morale(alliance_id, amount)` — guards `morale >= amount`, prevents negatives. Used by War Room ACTIVATE buttons.
+- `donate_morale(player_id, alliance_id, amount)` — atomic transaction: deducts `players.morale` and credits `alliances.morale` in single call. Used by Wallet donate flow.
+
 ---
 
 ## SCREENS — STATUS
@@ -132,12 +136,12 @@ ORDER BY th.claimed_at ASC;
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Live data | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept, Iron deducted on contest accept. Live Legacy Rank, Held days, Changed hands, Hall of Holders all wired from territory_history. All suppressed on unclaimed via shared !isUnclaimed wrapper. |
+| Map screen | ✓ Live data | **Real OSM polygon shapes for all 10 territories** via `t.geojson` (rectangle fallback retained). Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept, Iron deducted on contest accept. Live Legacy Rank, Held days, Changed hands, Hall of Holders all wired from territory_history. All suppressed on unclaimed via shared !isUnclaimed wrapper. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | POWER section above Influence (Power is §10 canonical metric, Influence demoted to resource). Total Power hero + 3 breakdown rows: Activity (inactive — em-dash + "Step tracking required"), Territory (live, calcTerritoryPower), Legacy (live, calcLegacyPower with lifetime_contest_wins + longest_streak inputs, reason "X contest wins · best streak Y days"). Hairline-divided rows. Live Influence/day below. My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
-| War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only (Iron/Gold/Stone removed — personal wallet, not alliance). All 6 abilities with correct costs. Header wired from nav params. |
-| Wallet screen | ✓ New | Live resource fetch on open. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. Accessible from Profile. |
+| War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only (Iron/Gold/Stone removed — personal wallet, not alliance). All 6 abilities with correct costs. Header wired from nav params. **ACTIVATE buttons wired (Founder only)** — role derived from `alliances.founder_id` (zero migration), confirmation alert, Morale deducted via `deduct_alliance_morale` RPC (server-side guard). |
+| Wallet screen | ✓ Live data | Live resource fetch on open. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. Accessible from Profile. **Morale row shows "DONATE →" hint** — tap opens bottom modal sheet (custom amount input + DONATE ALL button), atomic via `donate_morale` RPC. **← PROFILE back button** (Claim red, matches War Room pattern). |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation on Step 0, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
@@ -174,12 +178,12 @@ ORDER BY th.claimed_at ASC;
 | `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + getLegacyRankForTerritory(territoryId) + getTerritoryHistoryStats(territoryId). **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Live Legacy Rank fetched on territory change via getLegacyRankForTerritory(). |
+| `screens/MapScreen.js` | Renders real OSM polygon shapes via `t.geojson ?? rectangle fallback` (safe for territories without geojson yet). Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Live Legacy Rank fetched on territory change via getLegacyRankForTerritory(). |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
 | `screens/ProfileScreen.js` | POWER section above Influence (Total Power hero + 3 rows: Activity inactive / Territory live / Legacy live). Fetches lifetime_contest_wins + lifetime_defence_wins. calcLegacyPower called with real inputs (titlesEarned + championshipWins still hardcoded to 0). Live Influence/day (calcDailyInfluence()). My Resources ghost button → WalletScreen. XP via formulas.js. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
-| `screens/WarRoomScreen.js` | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. Header wired from nav params. |
-| `screens/WalletScreen.js` | Live resource fetch on mount. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. |
+| `screens/WarRoomScreen.js` | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. Header wired from nav params. ACTIVATE buttons wired (Founder only) — role derived from `alliances.founder_id`, confirmation alert, Morale deducted via `deduct_alliance_morale` RPC. |
+| `screens/WalletScreen.js` | Live resource fetch on mount. 4 resources (Iron, Stone, Gold, Morale) with glyphs + balances. Morale row → bottom modal sheet (custom amount + DONATE ALL) → `donate_morale` RPC. ← PROFILE back button (Claim red). |
 | `screens/SignInScreen.js` | Fully branded. DOMINIA wordmark + ▪ claim mark, Geist Mono tagline, sharp inputs + Claim button. |
 | `screens/UsernameScreen.js` | Fully branded. Sharp layout, Next pinned to bottom, 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 map, resolvedPlayerId fallback, live username |
@@ -188,6 +192,7 @@ ORDER BY th.claimed_at ASC;
 | `screens/ContestResultScreen.js` | 4 states, animated square, consequence block. attack_won: close-out UPDATE (lost_at = now()) → territories UPDATE (with .select('tier').single()) → INSERT new row → atomic player UPDATE writing iron/gold/morale + Siege XP (calcContestWinXp(tier)) + lifetime_contest_wins increment in single .update().select(). Order is critical — preserves single-open-row invariant. SIEGE XP shown first in earned beat line. |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. HQ picked from player-owned territories (Home District mechanic deferred). |
 | `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. |
+| `fetch-osm-polygons.js` | **Standalone Node script (lives on Desktop, not in repo).** Reads `osm_id` + `osm_type` from Supabase territories table, fetches real polygon from Overpass API by ID, writes to `geojson` column. Reusable for any future city — add rows with osm_id + osm_type, rerun. Run with `cd Desktop → node fetch-osm-polygons.js`. |
 | `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
@@ -232,6 +237,10 @@ Get-FileHash lib\formulas.js -Algorithm SHA256
 
 # Mirror phone to PC
 scrcpy
+
+# Refresh OSM territory polygons (rerun anytime to refresh, or after adding new city rows)
+cd Desktop
+node fetch-osm-polygons.js
 
 # Force-stop app on phone (required after lib/supabase.js changes — fully resets client singleton)
 # Long-press app icon → App info → Force stop
@@ -292,6 +301,26 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Metro served the previous JS bundle while DB writes from existing code paths still fired. The render side is the diagnostic — if a UI change in the same file doesn't appear, the behaviour change isn't running either.
 - **Fix:** Reload Metro before testing JS-only changes (press `r` in Metro terminal, or shake phone → Reload). When the symptom is "code looks right + tests pass + DB writes partially succeed", suspect the bundle on device before suspecting the code.
 
+**8. Overpass API 406 Not Acceptable**
+- **Signature:** `node fetch-osm-polygons.js` returns HTTP 406 immediately with no useful body.
+- **Cause:** Overpass requires `Content-Type: application/x-www-form-urlencoded` and a `User-Agent` header. Without both, it rejects the request.
+- **Fix:** Send both headers explicitly. See `fetch-osm-polygons.js`.
+
+**9. Overpass API 429 rate limiting**
+- **Signature:** First few queries succeed, then 429 Too Many Requests.
+- **Cause:** Overpass enforces a per-IP slot quota; tight loops trip it within seconds.
+- **Fix:** Sleep 8000ms between requests in the script. Slow but reliable for a 10-row backfill.
+
+**10. Supabase write fails with "Invalid path specified"**
+- **Signature:** REST writes from external scripts return 400 / "Invalid path specified" while reads work fine elsewhere.
+- **Cause:** `SUPABASE_URL` env var has a trailing `/rest/v1/` suffix. The supabase-js client appends its own path and ends up with `/rest/v1/rest/v1/...`.
+- **Fix:** `SUPABASE_URL` must be the **base domain only** (e.g. `https://xxx.supabase.co`) — no trailing path.
+
+**11. Node 24 `fetch()` rejects raw string body for form-encoded POST**
+- **Signature:** Overpass returns a parser error on a body that worked under older Node versions.
+- **Cause:** Node 24's built-in `fetch` is stricter — a raw URL-encoded string body is no longer accepted as form data.
+- **Fix:** Wrap in `URLSearchParams`. The runtime sets the body and Content-Length correctly.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
@@ -315,8 +344,8 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Abandon flow not built | Must UPDATE open territory_history row (lost_at = now()) when built. Same close-out pattern as contest, no follow-up insert. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred — home pin saves lat/lng but no verification step. |
 | Auth flow order wrong | New users hit sign-up before seeing any game content (Steps 0+1). Fix deferred. |
-| War Room ACTIVATE buttons not wired | Role gating for Founder/Marshal not built. Morale deduction on activate not wired. |
 | Achievements table hardcoded | Distance, Calories, Active Minutes need HealthKit/Health Connect before real data possible. |
+| Marshal role not tracked | Founder is derived from `alliances.founder_id` (zero migration). Marshal needs `players.role` column — deferred until member management flow exists. Marshal currently cannot activate War Room abilities. |
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Still uses local hex constants (CLAIM, INK, INK2 etc) — needs refactor to lib/theme.js. |
 | TERRITORY_CAP_BY_LEVEL duplicated | Inlined in MapScreen.js and ProfileScreen.js — should move to formulas.js as calcTerritoryCapForLevel(). |
@@ -334,7 +363,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## DEFERRED / OUT OF SCOPE
 
-- Real OSM territory shapes — bounding box polygons sufficient for all mechanic testing, revisit when showing to people
 - Real step tracking — Health Connect failed, expo-sensors fallback not yet tried, deferred due to EAS budget
 - Defender flow — needs Ably real-time layer, deferred to backend phase
 - Alliance disband flow — dropped from backlog, no real gameplay use case
@@ -346,15 +374,18 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | REAL OSM POLYGONS FOR ALL 10 TERRITORIES ✓**
 
-**Immediate — Phase 5a (design conversation locked in):**
+**Immediate — tests for `lib/streak.js`:**
+- Agree on Supabase mocking strategy first (manual mock vs jest.mock vs in-memory fake), then write tests.
+- `lib/streak.js` does Supabase I/O, so mocking is the gating decision — once chosen, the same pattern applies to `lib/territory.js` next.
+- Open the chat and start with: "Tests for lib/streak.js — let's lock the Supabase mocking strategy before writing any tests."
+
+**Phase 5a (queued, was previous immediate):**
 - Raw events written to `activity_log` table; recompute Activity Power on read (Option A — no cache).
 - Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
 - `km_amount` column exists from day one but stays NULL until step tracking lands.
 - No read-side aggregator yet — nothing to display Activity Power until step tracking solves the km gap.
-- Verification via Supabase SQL + dev console logs at each write site (open decision: console-log dev safety net or pure invisible).
-- Open the chat and start with: "Phase 5a — write the activity_log spec and the Cursor prompt for the schema migration plus the three write-site changes."
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -362,20 +393,21 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Phase 3 ✓ — Resource economy: claim/contest earn + deductions, banner refetch
 - Phase 4 ✓ — territory_history table + live Legacy Rank + held days + changed hands wired
 - Phase 4.5 ✓ — Siege XP wired (claim + contest win), POWER section on Profile, lifetime_contest_wins live
+- Phase 4.6 ✓ — War Room ACTIVATE wired (Founder, atomic RPC), Morale donation flow (Wallet modal, atomic RPC), real OSM polygons for all 10 Amsterdam territories
 - Phase 5a ○ — activity_log table + 3 event-write sites (no read-side aggregator yet)
 - Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
 
 **Quick wins to pick up any time:**
 - Wire remaining Siege XP write sites as features come online (defence win, reconquest, dev tier reached, mission complete, streak milestone)
-- Tests for lib/streak.js and lib/territory.js (~60-min session each, need mocking strategy for Supabase I/O)
+- Tests for lib/territory.js (~60-min session, same Supabase mocking strategy locked in for streak.js)
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
 - Strip diagnostic console.logs once stable
 - Move TERRITORY_CAP_BY_LEVEL into formulas.js
-- Wire War Room ACTIVATE buttons (role gating + Morale deduction)
 - Refactor ProfileScreen colour constants to lib/theme.js
 - Fix auth flow order
+- `players.role` column migration → wire Marshal role for War Room ACTIVATE (currently Founder-only)
 - Real step tracking — try expo-sensors Pedometer.watchStepCount() (blocks Activity Power read-side)
 - Draggable bottom sheet — batch into EAS build
 - Invite non-player flow
@@ -521,6 +553,15 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Did not verify claim XP on device | Same code pattern as contest, trusted to work, moved on. Pattern reuse + tests + identical write shape = high enough confidence. |
 | Render-side check is a first-class diagnostic | If a UI change in the same file doesn't appear, the behaviour change isn't running either. Added to debugging playbook as step 4. |
 | Reload Metro before testing JS-only changes | Stale bundle was today's biggest debugging trap (wrong hypothesis chain: partial-edit → auth.js overwrite, real cause: bundle). Reload first, debug code second. |
+| Founder-only ACTIVATE (Marshal deferred) | Founder derived from `alliances.founder_id` — zero migration. Marshal needs `players.role` column migration, deferred until member management flow is built. Ship the 80% now, wire Marshal when the column lands. |
+| Server-side guards for alliance Morale via Supabase RPC | `deduct_alliance_morale` enforces `morale >= amount` in SQL — no negative balances possible even from buggy clients. Same pattern for `donate_morale` (atomic deduct + credit in single transaction). Pushes invariants down to where they cannot be bypassed. |
+| Morale donate UI lives in Wallet (not War Room, not inline) | Contextual to where personal resources live; focused action sheet pattern matches game conventions. War Room would have made it feel like spending alliance Morale, not donating personal Morale. |
+| Modal bottom sheet (not new screen) for donate | One-decision flow — amount + confirm. Doesn't justify a screen, doesn't need its own nav entry. |
+| Prinsengracht renamed to Jordaan | Prinsengracht is a canal/street with no closed OSM polygon — not viable as a territory. Jordaan is the surrounding neighbourhood with a clean boundary that fetches reliably. Better to rename one row than fake a polygon. |
+| OSM territories fetched by `osm_id`, not by name | Name matching is ambiguous (multiple "Westerpark" matches in OSM) and fragile (locale, casing). ID lookup is exact and scales to any city. |
+| `fetch-osm-polygons.js` reads territory list from Supabase, not hardcoded | Adding a new city = add rows with `osm_id` + `osm_type` and rerun the script. Zero code changes per city. |
+| `t.geojson ?? rectangle fallback` in MapScreen | Safe rollout — territories without geojson still render as bounding boxes during partial migrations. Removes the all-or-nothing risk of a schema change. |
+| Script lives on Desktop, not in repo | One-off backfill / occasional refresh tool — not part of the app. Keeps repo clean. Reusable as-is for any future city. |
 
 ---
 
