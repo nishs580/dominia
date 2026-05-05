@@ -561,7 +561,7 @@ export default function MapScreen() {
 
     const { data, error } = await supabase
       .from('territories')
-      .select('*, players(username, clerk_id, current_streak), alliances(short_name)');
+      .select('*, players(username, clerk_id, current_streak), alliances(short_name), geojson');
     if (error) {
       console.error('Error fetching territories:', error);
       return;
@@ -583,7 +583,7 @@ export default function MapScreen() {
             (playerRow?.alliance_id && t.alliance_id === playerRow.alliance_id) ? '#3F8F4E' :
             t.owner_id != null ? '#4A6B8A' : 'transparent',
         },
-        geometry: {
+        geometry: t.geojson ?? {
           type: 'Polygon',
           coordinates: [[
             [t.longitude - 0.003, t.latitude + 0.002],
