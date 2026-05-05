@@ -321,6 +321,7 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
             allianceId: myAlliance?.id,
             allianceName: myAlliance?.name,
             shortName: myAlliance?.short_name,
+            currentPlayerId: playerId,
           })}
         >
           <Text style={styles.warRoomBtnText}>ENTER WAR ROOM →</Text>

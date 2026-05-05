@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -66,17 +67,24 @@ function SectionLabel({ left, accent }) {
   );
 }
 
+function parseMoraleCost(costStr) {
+  const match = costStr.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
 export default function WarRoomScreen({ route }) {
   const navigation = useNavigation();
   const {
     allianceId = null,
     allianceName = 'Alliance',
     shortName = '—',
+    currentPlayerId = null,
   } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
   const [warChestMorale, setWarChestMorale] = useState(0);
   const [allianceInfluence, setAllianceInfluence] = useState(0);
+  const [isFounder, setIsFounder] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -91,7 +99,7 @@ export default function WarRoomScreen({ route }) {
       setLoading(true);
       setError(null);
 
-      const [allianceResult, territoriesResult] = await Promise.all([
+      const [allianceResult, territoriesResult, founderResult] = await Promise.all([
         supabase
           .from('alliances')
           .select('morale')
@@ -101,6 +109,11 @@ export default function WarRoomScreen({ route }) {
           .from('territories')
           .select('tier, development_level, legacy_rank, upkeep_overdue')
           .eq('alliance_id', allianceId),
+        supabase
+          .from('alliances')
+          .select('founder_id')
+          .eq('id', allianceId)
+          .maybeSingle(),
       ]);
 
       if (cancelled) return;
@@ -112,6 +125,7 @@ export default function WarRoomScreen({ route }) {
       }
 
       setWarChestMorale(allianceResult.data?.morale ?? 0);
+      setIsFounder(founderResult.data?.founder_id === currentPlayerId);
 
       const territories = territoriesResult.data ?? [];
       const totalInfluence = territories.reduce((sum, t) => {
@@ -134,6 +148,33 @@ export default function WarRoomScreen({ route }) {
     loadWarRoom();
     return () => { cancelled = true; };
   }, [allianceId]);
+
+  async function confirmActivate(ability, costAmount) {
+    if (warChestMorale < costAmount) return;
+
+    Alert.alert(
+      `Activate ${ability}?`,
+      `Costs ${costAmount} Morale from the war chest.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Activate',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.rpc('deduct_alliance_morale', {
+              alliance_id: allianceId,
+              amount: costAmount,
+            });
+            if (error) {
+              Alert.alert('Failed', 'Could not activate ability. Try again.');
+            } else {
+              setWarChestMorale(prev => prev - costAmount);
+            }
+          },
+        },
+      ]
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -219,9 +260,22 @@ export default function WarRoomScreen({ route }) {
                   <Text style={styles.abilityCost}>{a.cost} · {a.duration}</Text>
                   <Text style={styles.abilityEffect}>{a.effect}</Text>
                 </View>
-                <Pressable style={styles.activateBtn}>
-                  <Text style={styles.activateBtnText}>ACTIVATE</Text>
-                </Pressable>
+                {(() => {
+                  const costAmount = parseMoraleCost(a.cost);
+                  const canAfford = warChestMorale >= costAmount;
+                  const active = isFounder && canAfford;
+                  return (
+                    <Pressable
+                      style={[styles.activateBtn, !active && styles.activateBtnDisabled]}
+                      onPress={active ? () => confirmActivate(a.name, costAmount) : undefined}
+                      disabled={!active}
+                    >
+                      <Text style={[styles.activateBtnText, active && styles.activateBtnTextActive]}>
+                        ACTIVATE
+                      </Text>
+                    </Pressable>
+                  );
+                })()}
               </View>
               {i < ABILITIES.length - 1 && <View style={styles.rowDivider} />}
             </React.Fragment>
@@ -475,12 +529,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  activateBtnDisabled: {
+    borderColor: colors.hairline,
+    opacity: 0.4,
+  },
   activateBtnText: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.sm,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+  },
+  activateBtnTextActive: {
+    color: colors.bone,
   },
   rowDivider: {
     height: 1,
