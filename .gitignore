@@ -40,3 +40,5 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+# Local-only scripts with credentials
+fetch-osm-polygons.js
