@@ -42,3 +42,12 @@ yarn-error.*
 /android
 # Local-only scripts with credentials
 fetch-osm-polygons.js
+
+# Local dev scripts (not part of app)
+retry-failed-polygons.js
+migrate-territories-v2.js
+analyze-territories.js
+fetch-osm-polygons.js
+
+# Territory candidate CSVs
+candidates_*.csv

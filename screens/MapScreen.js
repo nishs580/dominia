@@ -519,6 +519,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 export default function MapScreen() {
   const navigation = useNavigation();
   const cameraRef = useRef(null);
+  const mapRef = useRef(null);
+  const idleTimeoutRef = useRef(null);
+  const lastBoundsRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
@@ -540,7 +543,28 @@ export default function MapScreen() {
     setMyPlayer(prev => (prev ? { ...prev, ...data } : prev));
   }, [resourcePlayerId]);
 
-  const fetchTerritories = useCallback(async () => {
+  const signedArea = (ring) => {
+    let s = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      s += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+    }
+    return s;
+  };
+
+  const ensureCCWOuterRing = (geom) => {
+    if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]) return geom;
+    const outer = geom.coordinates[0];
+    if (signedArea(outer) > 0) {
+      // Clockwise — reverse to make it CCW
+      return {
+        ...geom,
+        coordinates: [outer.slice().reverse(), ...geom.coordinates.slice(1)],
+      };
+    }
+    return geom;
+  };
+
+  const fetchPlayer = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
       .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale')
@@ -558,32 +582,60 @@ export default function MapScreen() {
     } else {
       setMyAllianceName(null);
     }
+  }, [userId]);
 
-    const { data, error } = await supabase
-      .from('territories')
-      .select('*, players(username, clerk_id, current_streak), alliances(short_name), geojson');
-    if (error) {
-      console.error('Error fetching territories:', error);
-      return;
+  const fetchTerritoriesForViewport = useCallback(async (bounds) => {
+    if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
+    lastBoundsRef.current = bounds;
+
+    // getVisibleBounds returns [[neLon, neLat], [swLon, swLat]]
+    const [ne, sw] = bounds;
+    const min_lon = sw[0];
+    const min_lat = sw[1];
+    const max_lon = ne[0];
+    const max_lat = ne[1];
+
+    const { data, error } = await supabase.rpc('get_territories_in_viewport', {
+      min_lon,
+      min_lat,
+      max_lon,
+      max_lat,
+    });
+
+    console.log('[viewport fetch]', 'bounds:', bounds, '| rows:', data?.length, '| error:', error?.message);
+
+    if (error) return;
+    const rows = data ?? [];
+
+    if (rows.length > 0) {
+      const sample = rows[0];
+      console.log('[geojson diag]',
+        'typeof:', typeof sample.geojson,
+        '| isObject:', sample.geojson && typeof sample.geojson === 'object',
+        '| hasType:', sample.geojson?.type,
+        '| hasCoords:', Array.isArray(sample.geojson?.coordinates),
+        '| firstCoord:', sample.geojson?.coordinates?.[0]?.[0]
+      );
     }
-    const features = data.map((t) => {
+
+    const features = rows.map((t) => {
       return {
         type: 'Feature',
         id: t.id,
         properties: {
           name: t.territory_name,
-          owner: t.players?.username ?? 'Unclaimed',
-          alliance: t.alliances?.short_name ?? null,
+          owner: t.owner_username ?? 'Unclaimed',
+          alliance: t.alliance_short_name ?? null,
           tier: t.tier ?? 'Medium',
           level: `D${t.development_level ?? 0}`,
-          ownerStreak: t.players?.current_streak ?? 0,
+          ownerStreak: t.owner_streak_days ?? 0,
           developmentLevel: t.development_level ?? 0,
           perimeter: t.perimeter_distance,
-          color: t.players?.clerk_id === userId ? '#D64525' :
-            (playerRow?.alliance_id && t.alliance_id === playerRow.alliance_id) ? '#3F8F4E' :
+          color: t.owner_clerk_id === userId ? '#D64525' :
+            (myPlayer?.alliance_id && t.alliance_id === myPlayer.alliance_id) ? '#3F8F4E' :
             t.owner_id != null ? '#4A6B8A' : 'transparent',
         },
-        geometry: t.geojson ?? {
+        geometry: t.geojson ? ensureCCWOuterRing(t.geojson) : {
           type: 'Polygon',
           coordinates: [[
             [t.longitude - 0.003, t.latitude + 0.002],
@@ -595,12 +647,49 @@ export default function MapScreen() {
         },
       };
     });
-    setTerritories({ type: 'FeatureCollection', features });
-  }, [userId]);
+    const fc = { type: 'FeatureCollection', features };
+    console.log(
+      '[shape source feed]',
+      'fc.type:', fc.type,
+      '| fc.features.length:', fc.features.length,
+      '| first feat geom type:', fc.features[0]?.geometry?.type,
+    );
+    console.log(
+      '[feature builder]',
+      'features:', features.length,
+      '| first geom:', features[0]?.geometry?.type,
+      '| first props keys:', features[0]?.properties ? Object.keys(features[0].properties).join(',') : 'NO_PROPS',
+      '| with geom:', features.filter(f => f.geometry?.coordinates?.length > 0).length,
+    );
+    setTerritories(fc);
+  }, [userId, myPlayer?.alliance_id]);
 
   useEffect(() => {
-    fetchTerritories();
-  }, [fetchTerritories]);
+    fetchPlayer();
+  }, [fetchPlayer]);
+
+  const onMapIdle = useCallback(() => {
+    if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
+    idleTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!mapRef.current) return;
+        const bounds = await mapRef.current.getVisibleBounds();
+        if (!bounds) {
+          console.log('[viewport fetch] no bounds from getVisibleBounds');
+          return;
+        }
+        fetchTerritoriesForViewport(bounds);
+      } catch (err) {
+        console.log('[viewport fetch] getVisibleBounds threw:', err?.message);
+      }
+    }, 300);
+  }, [fetchTerritoriesForViewport]);
+
+  const handleTerritoriesRefetched = useCallback(() => {
+    if (lastBoundsRef.current) {
+      fetchTerritoriesForViewport(lastBoundsRef.current);
+    }
+  }, [fetchTerritoriesForViewport]);
 
   useFocusEffect(
     useCallback(() => {
@@ -625,9 +714,15 @@ export default function MapScreen() {
 
   const lineStyle = useMemo(
     () => ({
-      lineColor: ['case', ['==', ['get', 'color'], UNCLAIMED], SLATE, ['get', 'color']],
-      lineWidth: ['case', ['==', ['get', 'color'], UNCLAIMED], 1, 2],
-      lineOpacity: ['case', ['==', ['get', 'color'], UNCLAIMED], 0.7, 0.95],
+      lineColor: [
+        'case',
+        ['==', ['get', 'color'], '#D64525'], '#D64525',
+        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
+        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
+        '#5C6068',
+      ],
+      lineWidth: 1.2,
+      lineOpacity: 0.9,
       lineEmissiveStrength: 1.0,
     }),
     [],
@@ -657,6 +752,8 @@ export default function MapScreen() {
     });
   };
 
+  console.log('[render]', 'territories.features:', territories.features.length);
+
   return (
     <View style={styles.screen}>
       <View style={styles.resourceBanner}>
@@ -680,7 +777,12 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
-      <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/nishs/cmot1yv5h006z01sf32a7coow">
+      <MapboxGL.MapView
+        ref={mapRef}
+        style={styles.map}
+        styleURL="mapbox://styles/mapbox/light-v11"
+        onMapIdle={onMapIdle}
+      >
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
         <MapboxGL.UserLocation
@@ -703,7 +805,7 @@ export default function MapScreen() {
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
           <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
-          <MapboxGL.SymbolLayer id="territories-labels" style={labelStyle} />
+          <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
         </MapboxGL.ShapeSource>
       </MapboxGL.MapView>
 
@@ -717,7 +819,7 @@ export default function MapScreen() {
         allFeatures={selected?.allFeatures ?? []}
         userId={userId}
         onClose={() => setSelected(null)}
-        onTerritoriesRefetched={fetchTerritories}
+        onTerritoriesRefetched={handleTerritoriesRefetched}
         onResourceBannerRefresh={fetchResourceBanner}
         myPlayer={myPlayer}
       />
