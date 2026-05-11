@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 6, 2026 (Mapbox Standard night basemap + state-aware territory opacity)
+Last updated: May 11, 2026 (PostGIS migration — viewport-based territory fetch, 271 Amsterdam territories)
 
 ---
 
@@ -30,7 +30,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 |---|---|---|
 | Mobile | React Native + Expo SDK 54 | ✓ Running |
 | Maps | Mapbox GL (`@rnmapbox/maps`) | ✓ Working |
-| Database | Supabase (PostgreSQL) | ✓ Connected |
+| Database | Supabase (PostgreSQL + PostGIS 3.3.7) | ✓ Connected (Pro plan, Micro compute) |
 | Auth | Clerk (`@clerk/clerk-expo`) | ✓ Working end to end |
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
@@ -38,7 +38,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
 | Test runner | Jest 30 (plain `testEnvironment: node`, NOT jest-expo preset) | ✓ 348 tests passing |
-| Backend (future) | Node.js + Fastify + PostGIS | Not started |
+| Backend (future) | Node.js + Fastify | Not started |
 | Real-time (future) | Ably | Not started |
 | Push (future) | Firebase Cloud Messaging | Not started |
 
@@ -61,7 +61,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 | Service | Plan | Key limits |
 |---|---|---|
-| Supabase | Free | 1 project, 500MB DB, 50MB storage, 2GB bandwidth/month |
+| Supabase | Pro | Micro compute, ~$25/month all-in ($10 compute credit covers Micro). PostGIS 3.3.7 enabled in `postgis` schema. |
 | Mapbox | Free | 50,000 map loads/month |
 | Clerk | Free | 10,000 MAU |
 | EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~13 Android used, ~17 remaining.** |
@@ -75,7 +75,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 `players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins
 
-`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type (text), geojson (jsonb)
+`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type (text), geojson (jsonb), **geom (postgis.geometry(Polygon, 4326))** — backfilled from geojson via `postgis.ST_GeomFromGeoJSON`
 
 `alliances`: id, name, short_name, city, created_at, founder_id, morale
 
@@ -84,11 +84,10 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 `territory_history`: id, territory_id, owner_id, alliance_id (nullable), claimed_at, lost_at (nullable = currently held), backfilled (boolean), created_at
 
 **Test data:**
-- 10 territories (Amsterdam, **real OSM polygon shapes** via `geojson` column, all unclaimed unless noted):
-  - Vondelpark (large, 3200m) · Leidseplein (small, 450m) · Jordaan (medium, 1800m) · Museumplein (medium, 1200m) · Sarphatipark (small, 600m)
-  - Rembrandtplein · Oosterpark · Westerpark · Plantage · Oud-West (all unclaimed)
+- **271 Amsterdam territories** with real OSM polygon shapes (was 10 — full city-scale dataset added Session 6 via OSM curation + Overpass fetch). All unclaimed by default, `dev_level = 0`, `legacy_rank = 1`, `upkeep_overdue = false`. Polygons stored in both `geojson` (jsonb) and `geom` (PostGIS geometry) columns — geom is canonical for queries, geojson kept for client rendering.
+- One degenerate polygon (Weesperbuurt — 3 points, 0 m² area, `ST_IsValid = false`) deleted Session 6. Source CSV (`candidates_combined.csv`) has 286 candidate rows; 271 currently playable in DB after dedup/validation.
 - Active alliances: Kainetic Allied [KAI] id=6bc19cb1-97ce-4f76-95fa-b645606c2b47 · Gritty Greeks [GGG]
-- Test players: nish_s (94a9036e, KAI) · Rubik (788e9834, KAI) · boo (53a0186a, GGG)
+- Test players: nish_s (94a9036e, KAI, holds Museumplein/Oosterpark/Vondelpark/Leidseplein/Jordaan from earlier sessions — kept) · Rubik (788e9834, KAI) · boo (53a0186a, GGG)
 - Territory tier values must be **lowercase** in DB (small/medium/large) — check constraint enforces this
 
 **Indexes added:**
@@ -99,6 +98,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 - `idx_territory_history_territory_id` ON territory_history(territory_id)
 - `idx_territory_history_owner_id` ON territory_history(owner_id)
 - `idx_territory_history_current_holder` partial index ON territory_history(territory_id) WHERE lost_at IS NULL
+- `territories_geom_idx` **GIST index** on territories(geom) — powers fast viewport intersection queries
 
 **Row Level Security (RLS):**
 - `players` table: **DISABLED** (manually via dashboard). Was causing 19-minute hangs because old policies referenced `auth.uid()` but project uses Clerk, not Supabase Auth.
@@ -126,8 +126,13 @@ ORDER BY th.claimed_at ASC;
 ```
 
 **RPCs (server-side, atomic):**
+- `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat)` — **canonical territory fetch for MapScreen.** SECURITY DEFINER + SET search_path = public, postgis. Returns 14 flat columns (no nested joins) including `owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, and CCW-corrected geojson via `postgis.ST_AsGeoJSON(postgis.ST_ForcePolygonCCW(t.geom))::jsonb`. Filters at source with `postgis.ST_IsValid` AND `postgis.ST_NPoints >= 4` to reject degenerate polygons. Replaces previous two-phase fetch (meta + 7 batched RPCs with 1500ms gaps = ~10s+). Now ~330ms for 71 territories in central Amsterdam bbox.
 - `deduct_alliance_morale(alliance_id, amount)` — guards `morale >= amount`, prevents negatives. Used by War Room ACTIVATE buttons.
 - `donate_morale(player_id, alliance_id, amount)` — atomic transaction: deducts `players.morale` and credits `alliances.morale` in single call. Used by Wallet donate flow.
+
+**Dead RPCs (safe to drop next session):**
+- `get_all_territories_meta` — superseded by `get_territories_in_viewport`
+- `get_territories_geojson_batch` — superseded by `get_territories_in_viewport`
 
 ---
 
@@ -136,7 +141,7 @@ ORDER BY th.claimed_at ASC;
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ✓ Live data | **Real OSM polygon shapes for all 10 territories** via `t.geojson` (rectangle fallback retained). Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept, Iron deducted on contest accept. Live Legacy Rank, Held days, Changed hands, Hall of Holders all wired from territory_history. All suppressed on unclaimed via shared !isUnclaimed wrapper. |
+| Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders 271 Amsterdam territories on initial load (~330ms vs old ~10s+). 300ms debounced fetch on `onMapIdle`, bounds read via `mapRef.current.getVisibleBounds()`. Feature builder reads FLAT RPC columns (`t.owner_username`, `t.owner_clerk_id`, `t.owner_streak_days`, `t.alliance_short_name`) — no nested joins. State-aware fill + line + label styles unchanged. Tap-to-sheet verified on real data. TerritorySheet state machine (info/confirm) with contestMode branch, Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E), live Legacy Rank fetched on territory change. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility — switch back to custom night Studio style at polish phase. **KNOWN BUG: onMapIdle doesn't reliably re-fire on subsequent zoom/pan** — see Open Bugs. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | POWER section above Influence (Power is §10 canonical metric, Influence demoted to resource). Total Power hero + 3 breakdown rows: Activity (inactive — em-dash + "Step tracking required"), Territory (live, calcTerritoryPower), Legacy (live, calcLegacyPower with lifetime_contest_wins + longest_streak inputs, reason "X contest wins · best streak Y days"). Hairline-divided rows. Live Influence/day below. My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
@@ -178,7 +183,7 @@ ORDER BY th.claimed_at ASC;
 | `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + getLegacyRankForTerritory(territoryId) + getTerritoryHistoryStats(territoryId). **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | Renders real OSM polygon shapes via `t.geojson ?? rectangle fallback` (safe for territories without geojson yet). Resource banner refetches via useFocusEffect. TerritorySheet state machine (info/confirm) with contestMode branch. Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E). Live Legacy Rank fetched on territory change via getLegacyRankForTerritory(). |
+| `screens/MapScreen.js` | **PostGIS viewport-based architecture.** mapRef + cameraRef both wired. `fetchPlayer` (one-time) split from `fetchTerritoriesForViewport` (bounds-driven). `onMapIdle` handler with 300ms `setTimeout` debounce, reads bounds via `mapRef.current.getVisibleBounds()` (returns `[[neLon, neLat], [swLon, swLat]]`). Single RPC call to `get_territories_in_viewport` per fetch. Feature builder reads FLAT fields. `lastBoundsRef` stores last successful bounds — `handleTerritoriesRefetched` re-fires it for post-claim/abandon refresh. `signedArea()` + `ensureCCWOuterRing()` retained as defensive code despite server-side ST_ForcePolygonCCW. styleURL = `mapbox://styles/mapbox/light-v11` (dev). State-aware fillStyle / lineStyle / labelStyle useMemos unchanged (Slot="top" on labels, emissiveStrength 1.0 throughout). Diagnostic logs in place: `[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]` — strip after viewport-refire bug fixed and stable. |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
 | `screens/ProfileScreen.js` | POWER section above Influence (Total Power hero + 3 rows: Activity inactive / Territory live / Legacy live). Fetches lifetime_contest_wins + lifetime_defence_wins. calcLegacyPower called with real inputs (titlesEarned + championshipWins still hardcoded to 0). Live Influence/day (calcDailyInfluence()). My Resources ghost button → WalletScreen. XP via formulas.js. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
@@ -192,7 +197,11 @@ ORDER BY th.claimed_at ASC;
 | `screens/ContestResultScreen.js` | 4 states, animated square, consequence block. attack_won: close-out UPDATE (lost_at = now()) → territories UPDATE (with .select('tier').single()) → INSERT new row → atomic player UPDATE writing iron/gold/morale + Siege XP (calcContestWinXp(tier)) + lifetime_contest_wins increment in single .update().select(). Order is critical — preserves single-open-row invariant. SIEGE XP shown first in earned beat line. |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. HQ picked from player-owned territories (Home District mechanic deferred). |
 | `screens/AllianceJoinedScreen.js` | Fully branded. Alliance green accent bar, Archivo 900 name, [TAG], italic subtitle, 2-col meta grid, 5 numbered benefit rows. |
-| `fetch-osm-polygons.js` | **Standalone Node script (lives on Desktop, not in repo).** Reads `osm_id` + `osm_type` from Supabase territories table, fetches real polygon from Overpass API by ID, writes to `geojson` column. Reusable for any future city — add rows with osm_id + osm_type, rerun. Run with `cd Desktop → node fetch-osm-polygons.js`. |
+| `fetch-osm-polygons.js` (local-only, gitignored) | Standalone Node script. Reads `osm_id` + `osm_type` from Supabase territories table, fetches real polygon from Overpass API by ID, writes to `geojson` column. Used to populate the 271-territory Amsterdam dataset. Reusable for Bengaluru / Saint Petersburg — add rows with osm_id + osm_type, rerun. |
+| `migrate-territories-v2.js` (local-only, gitignored) | Session 6 one-off — migration helper for the 271-territory dataset. Kept on disk for re-runs / new cities, never in repo. |
+| `retry-failed-polygons.js` (local-only, gitignored) | Session 6 one-off — retries Overpass fetches that failed mid-batch. ⚠️ **Service role key still hardcoded inside this file — must move to env var before it ever leaves the local machine.** |
+| `analyze-territories.js` (local-only, gitignored) | Session 6 one-off — inspects polygon validity, area, and point counts to find degenerate rows (caught Weesperbuurt this way). |
+| `candidates_combined.csv` (local-only, gitignored) | 286-row source CSV of curated Amsterdam OSM territory candidates. 271 currently playable in DB after dedup + validity filter. |
 | `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
 | `.env` | All 4 keys (Mapbox, Supabase URL, Supabase anon key, Clerk publishable key) — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
@@ -238,9 +247,25 @@ Get-FileHash lib\formulas.js -Algorithm SHA256
 # Mirror phone to PC
 scrcpy
 
-# Refresh OSM territory polygons (rerun anytime to refresh, or after adding new city rows)
-cd Desktop
+# Refresh OSM territory polygons (rerun anytime, or after adding new city rows)
+cd C:\Users\nisha\dominia
 node fetch-osm-polygons.js
+
+# PostGIS schema is `postgis` — all PostGIS types/functions must be schema-qualified:
+#   postgis.geometry(Polygon, 4326)
+#   postgis.ST_Intersects(geom, bbox)
+#   postgis.ST_GeomFromGeoJSON(text)
+#   postgis.ST_ForcePolygonCCW(geom)
+#   postgis.ST_AsGeoJSON(geom)::jsonb
+# When changing an RPC return shape: DROP FUNCTION first, then CREATE — Postgres
+# won't allow return-type changes via CREATE OR REPLACE.
+
+# When a Mapbox layer change isn't taking effect (native layer registry stale):
+#   1. Uninstall the Dominia dev build from the phone
+#   2. Stop Metro (Ctrl+C in the Expo Warp tab)
+#   3. Restart: npx expo start --dev-client --host lan --clear
+#   4. Reinstall the dev build
+# Hot reloads do not clear the native layer registry.
 
 # Force-stop app on phone (required after lib/supabase.js changes — fully resets client singleton)
 # Long-press app icon → App info → Force stop
@@ -250,8 +275,9 @@ $headers = @{ "apikey"="<key>"; "Authorization"="Bearer <key>" }
 Measure-Command { Invoke-RestMethod -Uri "<full-url>" -Headers $headers }
 # If fast on PC + slow on phone → it's the dead-connection-pool bug.
 
-# Save to GitHub
-git add .
+# Save to GitHub — NEVER use `git add .` (too easy to commit secrets or dev scripts)
+git status
+git add <specific files>
 git commit -m "message"
 git push
 ```
@@ -321,13 +347,34 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Node 24's built-in `fetch` is stricter — a raw URL-encoded string body is no longer accepted as form data.
 - **Fix:** Wrap in `URLSearchParams`. The runtime sets the body and Content-Length correctly.
 
+**12. Single degenerate polygon poisons entire Mapbox source (Session 6)**
+- **Signature:** Valid FeatureCollection with many polygons returned from RPC, but nothing renders — fill, line, AND tap hit-test all fail simultaneously. No errors in JS logs. Removing the source and re-adding it doesn't help.
+- **Cause:** ONE malformed feature in the collection (3-point "polygon", area = 0 m², `ST_IsValid = false`) causes Mapbox GL Native v10 to silently drop the entire layer's rendering. Mapbox does not log this — it just stops drawing.
+- **Fix:** Filter at the source, not the client. The viewport RPC now applies `postgis.ST_IsValid(geom)` AND `postgis.ST_NPoints(geom) >= 4` so bad polygons can never reach the client. Lesson: **when fill + line + tap ALL fail on a "valid" feature collection, the bug is at the data-parse level, not the styling level.** Dump `JSON.stringify(rows[0].geojson)` first, debug styles only after raw data is verified.
+
+**13. PostGIS schema qualification required (Session 6)**
+- **Signature:** SQL errors like `type "geometry" does not exist` or `function st_intersects does not exist` when running PostGIS queries in Supabase.
+- **Cause:** Supabase installs PostGIS in a dedicated `postgis` schema (not `public` or `extensions`) for namespace isolation. Without schema qualification, the resolver doesn't find PostGIS types or functions.
+- **Fix:** Every PostGIS type and function must be schema-qualified: `postgis.geometry(Polygon, 4326)`, `postgis.ST_Intersects(...)`, `postgis.ST_GeomFromGeoJSON(...)`, etc. RPCs that use PostGIS must also include `SET search_path = public, postgis`.
+
+**14. Postgres function return-type changes require DROP + CREATE (Session 6)**
+- **Signature:** `CREATE OR REPLACE FUNCTION ...` fails with `cannot change return type of existing function`.
+- **Cause:** Postgres does not permit return-type changes via `CREATE OR REPLACE` — only body changes.
+- **Fix:** `DROP FUNCTION <name>(<arg types>);` first, then `CREATE FUNCTION ...` with the new return shape.
+
+**15. GeoJSON CCW convention vs PostGIS CW convention (Session 6)**
+- **Signature:** Polygons fetched from PostGIS render incorrectly in Mapbox (flipped fills, inside-out shading) or fail to render at all.
+- **Cause:** PostGIS stores polygons clockwise by convention, but the GeoJSON spec requires counter-clockwise outer rings. Mapbox follows the GeoJSON spec strictly.
+- **Fix:** Apply `postgis.ST_ForcePolygonCCW(geom)` inside the RPC before `postgis.ST_AsGeoJSON()`. Server-side fix means the client never sees the wrong winding. `ensureCCWOuterRing()` helper kept in MapScreen.js as defensive code regardless.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
 3. **EXPLAIN ANALYZE in SQL editor** — tells you if the database query is slow
 4. **Render-side check** — does a UI change in the same file appear on device? If not, you're on a stale bundle. Reload Metro (press `r`) before debugging the code.
 5. **Force-stop the app** after `lib/supabase.js` changes — long-press app icon → App info → Force stop. Required to fully reset the client singleton.
-6. **Get evidence before theorising.**
+6. **Dump raw data first when rendering breaks** — when fill + line + tap hit-test ALL fail on a Mapbox source, `JSON.stringify(rows[0].geojson)` BEFORE chasing style / slot / key hypotheses. One bad row can silently poison the entire source (see Pitfall #12).
+7. **Get evidence before theorising.**
 
 ---
 
@@ -335,8 +382,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 | Bug | Detail |
 |---|---|
+| **onMapIdle viewport re-fire unreliable (NEW Session 6 — fix next session)** | First `onMapIdle` fires correctly on initial map load and the viewport RPC returns 271 territories as expected. Subsequent zoom/pan does not reliably re-trigger fetch — same ~9-19 territories stay rendered after camera moves to a completely different area (e.g. pan to Vondelpark, no new territories appear). Suspected cause: known `@rnmapbox/maps` v10 behaviour where `onMapIdle` doesn't reliably re-fire on subsequent camera changes. Likely fix: swap to `onCameraChanged` with `state.gestures.isGestureActive` guard so fetch only fires when camera settles. Diagnostic step first — confirm whether `[viewport fetch]` log appears on zoom/pan before deciding between debounce tuning vs event swap. |
+| Diagnostic logs in MapScreen.js | `[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]` — keep until viewport-refire bug solved and stable for a session, then strip. Also still in code: `[Profile]`, `[Alliance]`, `[supabase fetch]` from earlier sessions. |
+| Dead RPCs in Supabase | `get_all_territories_meta` and `get_territories_geojson_batch` are no longer called by any client code. Safe to drop next session for cleanliness. |
+| `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but the key must be moved to env var before the file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production launch. |
-| Diagnostic logs in code | `[Profile]`, `[Alliance]`, `[supabase fetch]` console.logs left in. Strip once app has been stable for a few sessions. |
 | Client Trust disabled in Clerk | Disabled during dev. Needs proper 2FA or email OTP re-enabled before production. |
 | Clerk email verification disabled | Disabled for dev. Must re-enable before production. |
 | Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect removed — native crash. Steps hardcoded to 0. DEV_MODE=true on ActiveClaimScreen. |
@@ -358,7 +408,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Draggable bottom sheet deferred | More/Less toggle is a workaround — gorhom/bottom-sheet deferred until can batch into EAS build. |
 | Home District mechanic incomplete | CreateAlliance HQ picker shows player-owned territories only. Spec: 5 nearest OSM territories. Deferred. |
 | Invite non-player flow missing | No share/invite link flow exists yet. Needs building before launch. |
-| POI icons on Standard night basemap | Museums, hotels, breweries (e.g. Heineken Experience, Hotel Okura, Eye Filmmuseum) still render on Mapbox Standard night basemap despite both `showPointOfInterestLabels` and `showLandmarkIcons` toggles being OFF in Studio and published. Studio publish completes but icons persist on phone. Cause unclear — may be a deeper Studio config issue, a Standard style behaviour we haven't found docs for, or a `@rnmapbox/maps` v10 quirk. Not blocking — territories are the visual signal and read clearly. Revisit in Map Session 3. |
+| POI icons on Standard night basemap | Museums, hotels, breweries still render on Mapbox Standard night basemap despite Studio toggles being OFF. Currently overridden by `light-v11` dev style — will resurface when switching back to night Studio style at polish phase. Revisit in Map Session 3. |
 
 ---
 
@@ -375,30 +425,42 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | REAL OSM POLYGONS FOR ALL 10 TERRITORIES ✓ | MAP HERO SCREEN: BRAND-BRIEF NIGHT BASEMAP + STATE-AWARE TERRITORY OPACITY ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | MAP HERO SCREEN: NIGHT BASEMAP + STATE-AWARE OPACITY ✓ | POSTGIS MIGRATION COMPLETE: 271 AMSTERDAM TERRITORIES VIA VIEWPORT FETCH ✓**
 
-**Immediate — tests for `lib/streak.js`:**
+**Immediate — fix onMapIdle viewport re-fire bug:**
+
+1. **Diagnostic first.** Open the app, fire initial fetch (note `[viewport fetch]` logs), then watch Metro while doing each of:
+   - Zoom out → does a new `[viewport fetch]` log appear?
+   - Zoom back in → does a new `[viewport fetch]` log appear?
+   - Pan to Vondelpark area → does a new `[viewport fetch]` log appear?
+2. **If onMapIdle is firing but with stale bounds:** fix the debounce implementation (likely stale closure on bounds).
+3. **If onMapIdle is NOT firing on subsequent moves:** swap to `onCameraChanged` with a `state.gestures.isGestureActive` guard so fetch only fires when camera settles (not during active gesture).
+4. **After fix is verified, end-to-end test:**
+   - Pan around all of Amsterdam, confirm new territories load as bbox shifts
+   - Zoom in/out at various levels, confirm count climbs/falls correctly
+   - Tap real territories at different zooms, confirm sheet opens with correct data
+   - Try claim flow on an unclaimed territory (e.g. Vondelpark): Claim → ActiveClaim → walk → success
+5. **After verification, strip all remaining diagnostic logs in MapScreen.js** (`[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]`).
+6. **Optional cleanup:** drop dead RPCs from Supabase (`get_all_territories_meta`, `get_territories_geojson_batch`).
+
+**Do NOT touch the PostGIS RPC or schema unless a bug is traced specifically to it.** The server side is fully verified and clean.
+
+**Queued — tests for `lib/streak.js`:**
 - Agree on Supabase mocking strategy first (manual mock vs jest.mock vs in-memory fake), then write tests.
 - `lib/streak.js` does Supabase I/O, so mocking is the gating decision — once chosen, the same pattern applies to `lib/territory.js` next.
-- Open the chat and start with: "Tests for lib/streak.js — let's lock the Supabase mocking strategy before writing any tests."
 
-**Phase 5a (queued, was previous immediate):**
+**Queued — Phase 5a:**
 - Raw events written to `activity_log` table; recompute Activity Power on read (Option A — no cache).
 - Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
 - `km_amount` column exists from day one but stays NULL until step tracking lands.
 - No read-side aggregator yet — nothing to display Activity Power until step tracking solves the km gap.
 
-**Map Session 2 (queued — territory redesign):**
-- Curate ~20-30 Amsterdam territories via Overpass Turbo with intent: 12 Small / 10 Medium / 4 Large / 2 Epic.
-- Resolve overlaps (current 10 territories were named-by-search and some collide — e.g. Vondelpark / Museumplein boundary).
-- Update fetch-osm-polygons.js for the new set; validate non-overlap visually before DB write.
-- Currently no Large or Epic in DB — formulas.js validates all four tiers but data is Small/Medium only.
-
-**Map Session 3 (queued — polish, after Session 2):**
+**Queued — Map Session 3 (polish):**
+- Switch styleURL back to custom night Studio style (`mapbox://styles/nishs/cmot1yv5h006z01sf32a7coow`) — currently `light-v11` for dev visibility. Re-check POI icons issue when switching back.
 - First Claim visual pulse for Level 1-2 players on Smalls (mechanics doc §7.2).
 - Tier-aware visual treatment (Epic should feel heavier than Small).
 - Level-gate visual states (lock indicator on Large for L1-3, Epic for L1-6).
-- Resolve POI icons issue (see Open Bugs).
+- Territory tier audit — current 271 territories are predominantly Small/Medium from OSM curation. Confirm Large/Epic distribution matches mechanics doc before beta.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -406,13 +468,15 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Phase 3 ✓ — Resource economy: claim/contest earn + deductions, banner refetch
 - Phase 4 ✓ — territory_history table + live Legacy Rank + held days + changed hands wired
 - Phase 4.5 ✓ — Siege XP wired (claim + contest win), POWER section on Profile, lifetime_contest_wins live
-- Phase 4.6 ✓ — War Room ACTIVATE wired (Founder, atomic RPC), Morale donation flow (Wallet modal, atomic RPC), real OSM polygons for all 10 Amsterdam territories
+- Phase 4.6 ✓ — War Room ACTIVATE wired, Morale donation flow, OSM polygons for original 10 territories
+- Phase 4.7 ✓ — PostGIS migration, viewport-based fetch RPC, 271-territory Amsterdam dataset (Session 6)
 - Phase 5a ○ — activity_log table + 3 event-write sites (no read-side aggregator yet)
 - Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
 
 **Quick wins to pick up any time:**
 - Wire remaining Siege XP write sites as features come online (defence win, reconquest, dev tier reached, mission complete, streak milestone)
 - Tests for lib/territory.js (~60-min session, same Supabase mocking strategy locked in for streak.js)
+- Drop the two dead RPCs
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
@@ -426,7 +490,9 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Invite non-player flow
 - Home District mechanic
 - Onboarding home pin 500m verification
-- Backend phase (Fastify, PostGIS, BullMQ, Ably, FCM)
+- Move hardcoded service role key in `retry-failed-polygons.js` to env var before that file leaves the local machine
+- Add Bengaluru + Saint Petersburg territory datasets (rerun fetch-osm-polygons.js with new rows)
+- Backend phase (Fastify, BullMQ, Ably, FCM — PostGIS already live)
 - Defender flow — revisit once Ably is built (will then wire XP_PER_DEFENCE_WIN + lifetime_defence_wins)
 
 ---
@@ -574,11 +640,23 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | OSM territories fetched by `osm_id`, not by name | Name matching is ambiguous (multiple "Westerpark" matches in OSM) and fragile (locale, casing). ID lookup is exact and scales to any city. |
 | `fetch-osm-polygons.js` reads territory list from Supabase, not hardcoded | Adding a new city = add rows with `osm_id` + `osm_type` and rerun the script. Zero code changes per city. |
 | `t.geojson ?? rectangle fallback` in MapScreen | Safe rollout — territories without geojson still render as bounding boxes during partial migrations. Removes the all-or-nothing risk of a schema change. |
-| Script lives on Desktop, not in repo | One-off backfill / occasional refresh tool — not part of the app. Keeps repo clean. Reusable as-is for any future city. |
+| One-off dev scripts live in project dir, gitignored — not on Desktop, not in repo | Easier to keep alongside the code they relate to. `.gitignore` excludes them explicitly (migrate-territories-v2.js, retry-failed-polygons.js, fetch-osm-polygons.js, analyze-territories.js, candidates_*.csv). Reusable as-is for Bengaluru / Saint Petersburg without polluting the repo. |
 | Custom layers on Mapbox Standard need fillEmissiveStrength + lineEmissiveStrength = 1.0 | Otherwise the night-preset 3D ambient lighting dims the layer's true colour. Without this, Claim red rendered as muddy brown-red, Alliance green as olive, Slate hairline invisible. Set on FillLayer + LineLayer style objects. |
 | State-aware fillOpacity (case expression) instead of flat opacity | Saturation imbalance — Claim ~80%, Alliance ~56%, Enemy ~30% — means flat opacity makes cool colours visually recede on night basemap. Per-state values (Claim 0.42 / Alliance 0.55 / Enemy 0.50) compensate while preserving brief intent (Claim loudest, Enemy quietest). Unclaimed remains line-only. |
 | Brand colours held against map-driven pressure | Considered changing Alliance green / Enemy blue when they read weakly on night basemap; resisted because brief is explicit ("Five colours only"), every branded screen depends on these tokens, and map shouldn't dictate brand. Solution was opacity tuning, not colour change. |
 | V11 upgrade for runtime style config deferred | Would enable runtime config switching (day/dusk events) and StyleImport API, but burns 1 EAS build and risks ripple to react-native-screens / legacy-peer-deps / expo-build-properties pinning. Custom Studio style covers static brand config without upgrade. Revisit when runtime switching becomes needed. |
+| PostGIS lives in `postgis` schema, not `public` (Session 6) | Supabase's recommended pattern — separate schema isolates PostGIS types/functions from app tables and makes upgrades safer. Cost is verbosity: every PostGIS reference must be schema-qualified. Trade accepted. |
+| RPC returns flat columns, not nested objects (Session 6) | `get_territories_in_viewport` returns 14 flat columns (`owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, etc) instead of joining to nested `owner.*` / `alliance.*` objects. Easier to debug, one fewer JOIN layer for the client to unpack, no surprises with null relations. |
+| Server-side ST_ForcePolygonCCW in RPC (Session 6) | PostGIS stores polygons clockwise; GeoJSON/Mapbox require CCW outer rings. Fix at source so the client never sees wrong winding. `ensureCCWOuterRing` helper kept in client as defensive code regardless — belt-and-braces for a class of bug that's silent when it strikes. |
+| Server-side ST_IsValid + ST_NPoints >= 4 filter in RPC (Session 6) | One degenerate polygon (Weesperbuurt, 3 points, 0 m² area) silently broke entire Mapbox source rendering. Filter at source so this can never poison the client again. Principle: defensive code lives at the layer closest to the data source. |
+| Single viewport RPC replaces two-phase fetch (Session 6) | Old architecture: `get_all_territories_meta` + 7 batches of `get_territories_geojson_batch` with 1500ms gaps = ~10s+. New: one `get_territories_in_viewport` call = ~330ms for 71 territories in central Amsterdam. The old wedge/transport problem from Session 5 became moot — solved by architecture change, not tuning. |
+| Light Mapbox style (`light-v11`) for dev, custom night style at polish (Session 6) | Switching from custom night Studio style to `light-v11` collapsed a complex visual-debugging problem (faint outlines on dark blue) into an obvious binary check (red on white). Switch back at polish phase, not before. |
+| Initial fetch waits for first onMapIdle, no hardcoded bbox (Session 6) | Single fetch code path handles every fetch. Empty-state flash on first load is brief and acceptable. Avoids the bug-surface of two parallel fetch paths. |
+| Delete degenerate territories rather than fix them (Session 6) | Weesperbuurt had 3 points and 0 m² area — no valid polygon to fix. Better to remove the row than fabricate geometry. Source CSV (286 rows) still has it for traceability; DB has 271 rows. |
+| DROP FUNCTION before CREATE when return shape changes (Session 6) | Postgres doesn't permit return-type changes via `CREATE OR REPLACE` — error is "cannot change return type of existing function". Added to playbook. |
+| Mapbox `slot` semantics non-obvious, omit by default (Session 6) | Standard style slot behaviour varies across `@rnmapbox/maps` versions. When in doubt, omit `slot` and let Mapbox place layers in source-order. Add slot only when layer-order problems are diagnosed (currently: `slot="top"` on labels). |
+| Never `git add .` — always specify files (Session 6) | Local-only dev scripts contain hardcoded secrets and one-off tooling. `git add .` is one slip from leaking the service role key. Specific-file workflow is mandatory. Already paid off this session — `.gitignore` updated, one-off scripts stayed local. |
+| Data-before-styling diagnostic (Session 6) | When fill + line + tap hit-test ALL fail on a source that contains "valid" features, the cause is upstream — at the data parse level, not the styling level. Should have dumped `JSON.stringify(rows[0].geojson)` an hour earlier; spent too long on style/slot/key hypotheses before checking raw data. Added to debugging playbook step 6. |
 
 ---
 
@@ -589,9 +667,12 @@ Do not start coding immediately. Work conversationally:
 - Show a wireframe or mockup when introducing a new screen
 - Ask for confirmation before writing any code
 - Wait for the user to say "yes" or "let's build it" before touching any files
-- Once confirmed, provide the exact prompt to paste into Cursor's agent chat as a single copyable code block
+- Once confirmed, provide the exact prompt to paste into Cursor's agent chat as a single copyable code block — one-click copyable, no inline prompts mixed with prose
 - After Cursor builds it, wait for the user to check their phone and report back
 - Give the user time to ask questions at every step
 - Handle one screen or one fix at a time — never batch unrelated changes
-- **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, EXPLAIN ANALYZE in SQL editor, and **render-side check** (does the UI change show up?) are the four fastest diagnostics for "is it server, client, network, or stale bundle".
+- **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, EXPLAIN ANALYZE in SQL editor, render-side check (does the UI change show up?), and **raw-data dump (`JSON.stringify(rows[0])` before chasing style hypotheses)** are the fastest diagnostics. Cheapest binary test wins.
+- **Filter / validate at the source, not at the client.** One bad row can silently break the whole UI. Server-side guards (PostGIS `ST_IsValid`, RPC argument checks, atomic transactions) are always cheaper than client-side defensive code — though both are fine together.
 - **When Cursor proposes shell commands (node -e, PowerShell) for tasks that are file edits:** SKIP, don't allowlist, redirect to use file tools only.
+- **Never `git add .`** — always specify files. Local-only dev scripts and `.env` artefacts have already been kept out of the repo by this rule.
+- **When the same problem resists multiple targeted fixes, the fix isn't another tweak — it's the architecture.** Session 5's wedge-transport problem became moot in Session 6 once the architecture changed (two-phase fetch → single viewport RPC).
