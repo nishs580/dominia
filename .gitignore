@@ -51,3 +51,8 @@ fetch-osm-polygons.js
 
 # Territory candidate CSVs
 candidates_*.csv
+# Local-only territory dev scripts (contain hardcoded service key)
+insert-spb-territories.js
+fetch-spb-candidates.js
+filter-spb-candidates.js
+candidates_spb*.csv
