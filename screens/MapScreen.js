@@ -521,6 +521,7 @@ export default function MapScreen() {
   const cameraRef = useRef(null);
   const mapRef = useRef(null);
   const idleTimeoutRef = useRef(null);
+  const abortControllerRef = useRef(null);
   const lastBoundsRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -584,9 +585,12 @@ export default function MapScreen() {
     }
   }, [userId]);
 
-  const fetchTerritoriesForViewport = useCallback(async (bounds) => {
+  const fetchTerritoriesForViewport = useCallback(async (bounds, zoomArg) => {
     if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
     lastBoundsRef.current = bounds;
+
+    const zoom =
+      typeof zoomArg === 'number' && Number.isFinite(zoomArg) ? zoomArg : 14;
 
     // getVisibleBounds returns [[neLon, neLat], [swLon, swLat]]
     const [ne, sw] = bounds;
@@ -595,27 +599,46 @@ export default function MapScreen() {
     const max_lon = ne[0];
     const max_lat = ne[1];
 
-    const { data, error } = await supabase.rpc('get_territories_in_viewport', {
-      min_lon,
-      min_lat,
-      max_lon,
-      max_lat,
-    });
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    console.log('[viewport fetch]', 'bounds:', bounds, '| rows:', data?.length, '| error:', error?.message);
+    let data;
+    let error;
+    try {
+      const res = await supabase
+        .rpc('get_territories_in_viewport', {
+          min_lon,
+          min_lat,
+          max_lon,
+          max_lat,
+          zoom,
+        })
+        .abortSignal(controller.signal);
+      data = res.data;
+      error = res.error;
+    } catch (err) {
+      if (err?.name === 'AbortError' || err?.code === '20' || err?.code === 20) {
+        return;
+      }
+      throw err;
+    }
+
+    if (
+      error?.name === 'AbortError' ||
+      error?.code === '20' ||
+      error?.code === 20
+    ) {
+      return;
+    }
 
     if (error) return;
     const rows = data ?? [];
 
     if (rows.length > 0) {
       const sample = rows[0];
-      console.log('[geojson diag]',
-        'typeof:', typeof sample.geojson,
-        '| isObject:', sample.geojson && typeof sample.geojson === 'object',
-        '| hasType:', sample.geojson?.type,
-        '| hasCoords:', Array.isArray(sample.geojson?.coordinates),
-        '| firstCoord:', sample.geojson?.coordinates?.[0]?.[0]
-      );
     }
 
     const features = rows.map((t) => {
@@ -648,19 +671,6 @@ export default function MapScreen() {
       };
     });
     const fc = { type: 'FeatureCollection', features };
-    console.log(
-      '[shape source feed]',
-      'fc.type:', fc.type,
-      '| fc.features.length:', fc.features.length,
-      '| first feat geom type:', fc.features[0]?.geometry?.type,
-    );
-    console.log(
-      '[feature builder]',
-      'features:', features.length,
-      '| first geom:', features[0]?.geometry?.type,
-      '| first props keys:', features[0]?.properties ? Object.keys(features[0].properties).join(',') : 'NO_PROPS',
-      '| with geom:', features.filter(f => f.geometry?.coordinates?.length > 0).length,
-    );
     setTerritories(fc);
   }, [userId, myPlayer?.alliance_id]);
 
@@ -668,27 +678,51 @@ export default function MapScreen() {
     fetchPlayer();
   }, [fetchPlayer]);
 
-  const onMapIdle = useCallback(() => {
+  const onCameraChanged = useCallback((state) => {
+    if (state?.gestures?.isGestureActive === true) {
+      return;
+    }
     if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
     idleTimeoutRef.current = setTimeout(async () => {
       try {
         if (!mapRef.current) return;
-        const bounds = await mapRef.current.getVisibleBounds();
+        const map = mapRef.current;
+        const zoomSafe = async () => {
+          try {
+            const z = await map.getZoom();
+            if (z == null || z === undefined) return 14;
+            return z;
+          } catch {
+            return 14;
+          }
+        };
+        const [bounds, zoom] = await Promise.all([
+          map.getVisibleBounds(),
+          zoomSafe(),
+        ]);
         if (!bounds) {
           console.log('[viewport fetch] no bounds from getVisibleBounds');
           return;
         }
-        fetchTerritoriesForViewport(bounds);
+        fetchTerritoriesForViewport(bounds, zoom);
       } catch (err) {
         console.log('[viewport fetch] getVisibleBounds threw:', err?.message);
       }
-    }, 300);
+    }, 600);
   }, [fetchTerritoriesForViewport]);
 
-  const handleTerritoriesRefetched = useCallback(() => {
-    if (lastBoundsRef.current) {
-      fetchTerritoriesForViewport(lastBoundsRef.current);
+  const handleTerritoriesRefetched = useCallback(async () => {
+    if (!lastBoundsRef.current) return;
+    let zoom = 14;
+    if (mapRef.current) {
+      try {
+        const z = await mapRef.current.getZoom();
+        if (z != null && z !== undefined) zoom = z;
+      } catch {
+        zoom = 14;
+      }
     }
+    fetchTerritoriesForViewport(lastBoundsRef.current, zoom);
   }, [fetchTerritoriesForViewport]);
 
   useFocusEffect(
@@ -752,8 +786,6 @@ export default function MapScreen() {
     });
   };
 
-  console.log('[render]', 'territories.features:', territories.features.length);
-
   return (
     <View style={styles.screen}>
       <View style={styles.resourceBanner}>
@@ -781,7 +813,7 @@ export default function MapScreen() {
         ref={mapRef}
         style={styles.map}
         styleURL="mapbox://styles/mapbox/light-v11"
-        onMapIdle={onMapIdle}
+        onCameraChanged={onCameraChanged}
       >
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
