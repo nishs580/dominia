@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 11, 2026 (PostGIS migration — viewport-based territory fetch, 271 Amsterdam territories)
+Last updated: May 12, 2026 (viewport fetch hardened — AbortController + gesture-guarded onCameraChanged + zoom-tier server-side simplification; all fetches sub-500ms across zoom levels)
 
 ---
 
@@ -126,7 +126,7 @@ ORDER BY th.claimed_at ASC;
 ```
 
 **RPCs (server-side, atomic):**
-- `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat)` — **canonical territory fetch for MapScreen.** SECURITY DEFINER + SET search_path = public, postgis. Returns 14 flat columns (no nested joins) including `owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, and CCW-corrected geojson via `postgis.ST_AsGeoJSON(postgis.ST_ForcePolygonCCW(t.geom))::jsonb`. Filters at source with `postgis.ST_IsValid` AND `postgis.ST_NPoints >= 4` to reject degenerate polygons. Replaces previous two-phase fetch (meta + 7 batched RPCs with 1500ms gaps = ~10s+). Now ~330ms for 71 territories in central Amsterdam bbox.
+- `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat, zoom DEFAULT 14)` — **canonical territory fetch for MapScreen.** SECURITY DEFINER + SET search_path = public, postgis. Returns 16 flat columns (no nested joins) including `owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, and CCW-corrected geojson. **Zoom-tier polygon simplification** applied server-side via `postgis.ST_SimplifyPreserveTopology` before `postgis.ST_AsGeoJSON`: zoom ≥14 returns full detail; zoom 12–14 light simplify; zoom 10–12 medium simplify + drop `small` tier; zoom <10 heavy simplify + drop `small` and `medium` tiers. Filters at source with `postgis.ST_IsValid` AND `postgis.ST_NPoints >= 4` to reject degenerate polygons. Every returned text column explicitly cast with `::text` (defensive against schema type-drift — see Pitfall #16). Replaces previous two-phase fetch (meta + 7 batched RPCs with 1500ms gaps = ~10s+). **All fetches now sub-500ms across the zoom range**: zoom 9 wide bbox → 58–117 rows in 270–360ms; zoom 14 street → 13–18 rows in 250–290ms.
 - `deduct_alliance_morale(alliance_id, amount)` — guards `morale >= amount`, prevents negatives. Used by War Room ACTIVATE buttons.
 - `donate_morale(player_id, alliance_id, amount)` — atomic transaction: deducts `players.morale` and credits `alliances.morale` in single call. Used by Wallet donate flow.
 
@@ -141,7 +141,7 @@ ORDER BY th.claimed_at ASC;
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders 271 Amsterdam territories on initial load (~330ms vs old ~10s+). 300ms debounced fetch on `onMapIdle`, bounds read via `mapRef.current.getVisibleBounds()`. Feature builder reads FLAT RPC columns (`t.owner_username`, `t.owner_clerk_id`, `t.owner_streak_days`, `t.alliance_short_name`) — no nested joins. State-aware fill + line + label styles unchanged. Tap-to-sheet verified on real data. TerritorySheet state machine (info/confirm) with contestMode branch, Gold deducted on claim accept (Slice D), Iron deducted on contest accept (Slice E), live Legacy Rank fetched on territory change. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility — switch back to custom night Studio style at polish phase. **KNOWN BUG: onMapIdle doesn't reliably re-fire on subsequent zoom/pan** — see Open Bugs. |
+| Map screen | ~ Live data | **PostGIS viewport-based fetch** via zoom-tiered `get_territories_in_viewport(...,zoom)` RPC. Renders 271 Amsterdam territories. **Hardened fetch architecture (Session 7):** `onCameraChanged` (replaced `onMapIdle`) with `state.gestures.isGestureActive` guard so fetches only fire when the user releases the gesture; `AbortController` cancels in-flight fetch when a new one starts (covers both throw and `{ error }` resolution paths); 600ms debounce on bounds settle. Client reads `mapRef.current.getZoom()` alongside `getVisibleBounds()` and passes zoom into the RPC; defensive fallback to zoom 14 if `getZoom()` throws. `handleTerritoriesRefetched` also passes current zoom. Feature builder reads FLAT RPC columns. All fetches sub-500ms at every zoom level. State-aware fill + line + label styles unchanged. Tap-to-sheet verified. TerritorySheet state machine (info/confirm) with contestMode branch, Gold deducted on claim accept, Iron deducted on contest accept, live Legacy Rank fetched on territory change. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility — switch back to custom night Studio style at polish phase. All diagnostic logs stripped; only defensive error-path logs in `onCameraChanged` retained. |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | POWER section above Influence (Power is §10 canonical metric, Influence demoted to resource). Total Power hero + 3 breakdown rows: Activity (inactive — em-dash + "Step tracking required"), Territory (live, calcTerritoryPower), Legacy (live, calcLegacyPower with lifetime_contest_wins + longest_streak inputs, reason "X contest wins · best streak Y days"). Hairline-divided rows. Live Influence/day below. My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button now passes allianceId, allianceName, shortName as nav params. |
@@ -183,7 +183,7 @@ ORDER BY th.claimed_at ASC;
 | `lib/territory.js` | Display helpers (developmentName, legacyRankName, streakTierName, streakReductionPercent) + getLegacyRankForTerritory(territoryId) + getTerritoryHistoryStats(territoryId). **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | **PostGIS viewport-based architecture.** mapRef + cameraRef both wired. `fetchPlayer` (one-time) split from `fetchTerritoriesForViewport` (bounds-driven). `onMapIdle` handler with 300ms `setTimeout` debounce, reads bounds via `mapRef.current.getVisibleBounds()` (returns `[[neLon, neLat], [swLon, swLat]]`). Single RPC call to `get_territories_in_viewport` per fetch. Feature builder reads FLAT fields. `lastBoundsRef` stores last successful bounds — `handleTerritoriesRefetched` re-fires it for post-claim/abandon refresh. `signedArea()` + `ensureCCWOuterRing()` retained as defensive code despite server-side ST_ForcePolygonCCW. styleURL = `mapbox://styles/mapbox/light-v11` (dev). State-aware fillStyle / lineStyle / labelStyle useMemos unchanged (Slot="top" on labels, emissiveStrength 1.0 throughout). Diagnostic logs in place: `[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]` — strip after viewport-refire bug fixed and stable. |
+| `screens/MapScreen.js` | **PostGIS viewport-based architecture, hardened (Session 7).** mapRef + cameraRef both wired. `fetchPlayer` (one-time) split from `fetchTerritoriesForViewport` (bounds-driven). **`onCameraChanged` handler** (replaced `onMapIdle`) with `state?.gestures?.isGestureActive` guard (optional-chaining fallback for older `@rnmapbox/maps` versions) so fetches only fire when camera settles. **600ms debounce** via `setTimeout`. **`AbortController`** per fetch: each new viewport fetch cancels the in-flight one. Try/catch handles AbortError; resolve-with-`{ error }` path (PostgREST cancellation) also handled. Bounds read via `mapRef.current.getVisibleBounds()` (returns `[[neLon, neLat], [swLon, swLat]]`); zoom read via `mapRef.current.getZoom()` with defensive fallback to 14 — both passed to RPC. `handleTerritoriesRefetched` also reads current zoom for post-claim/contest refetch. `lastBoundsRef` stores last successful bounds. `signedArea()` + `ensureCCWOuterRing()` retained as defensive code despite server-side `ST_ForcePolygonCCW`. styleURL = `mapbox://styles/mapbox/light-v11` (dev). State-aware fillStyle / lineStyle / labelStyle useMemos unchanged (slot="top" on labels, emissiveStrength 1.0 throughout). **All diagnostic logs stripped** (`[render]`, `[viewport fetch]` success path, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[setTerritories]`, `[territories state changed]`); only defensive error-path logs in `onCameraChanged` ([viewport fetch] no bounds / threw) remain. |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning (calcResourceEarn()). Parallel Supabase queries. Challenge XP: easy 50, medium 150, hard 400. |
 | `screens/ProfileScreen.js` | POWER section above Influence (Total Power hero + 3 rows: Activity inactive / Territory live / Legacy live). Fetches lifetime_contest_wins + lifetime_defence_wins. calcLegacyPower called with real inputs (titlesEarned + championshipWins still hardcoded to 0). Live Influence/day (calcDailyInfluence()). My Resources ghost button → WalletScreen. XP via formulas.js. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. War Room button passes allianceId, allianceName, shortName as nav params. |
@@ -274,6 +274,10 @@ node fetch-osm-polygons.js
 $headers = @{ "apikey"="<key>"; "Authorization"="Bearer <key>" }
 Measure-Command { Invoke-RestMethod -Uri "<full-url>" -Headers $headers }
 # If fast on PC + slow on phone → it's the dead-connection-pool bug.
+
+# EXPLAIN ANALYZE the viewport RPC at different zoom levels (Supabase SQL editor):
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM get_territories_in_viewport(4.67, 52.12, 5.10, 52.60, 9);   -- wide / metro
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM get_territories_in_viewport(4.85, 52.34, 4.95, 52.40, 14);  -- street zoom
 
 # Save to GitHub — NEVER use `git add .` (too easy to commit secrets or dev scripts)
 git status
@@ -367,8 +371,22 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** PostGIS stores polygons clockwise by convention, but the GeoJSON spec requires counter-clockwise outer rings. Mapbox follows the GeoJSON spec strictly.
 - **Fix:** Apply `postgis.ST_ForcePolygonCCW(geom)` inside the RPC before `postgis.ST_AsGeoJSON()`. Server-side fix means the client never sees the wrong winding. `ensureCCWOuterRing()` helper kept in MapScreen.js as defensive code regardless.
 
+**16. RPC "structure of query does not match function result type" (Session 7)**
+- **Signature:** RPC compiles, function exists, but every call fails with `structure of query does not match function result type` and a column number / type pair.
+- **Cause:** The `RETURNS TABLE(...)` declaration types don't match the actual column types in the underlying tables. `territories.perimeter_distance` is `double precision`, not `integer`. `alliances.short_name` is `character(3)` (fixed-width!), not `text`. PostgreSQL will not silently coerce on function return.
+- **Fix:** Either (a) match declared types exactly to the schema, or (b) cast every returned column explicitly — `col::text`, `col::int`, `col::double precision`. Belt-and-braces preference: cast every text column with `::text` even when it already is text, so future schema changes (e.g. switching a `text` column to `varchar(N)` or `character(N)`) don't break the RPC. Verify column types in `information_schema.columns` before declaring an RPC's return shape.
+
+**17. Map-camera event flood + mid-flight cancellation chain (Session 7)**
+- **Signature (phase 1):** Continuous zoom/pan triggers many viewport fetches; pool saturates; no fetch ever lands; territories stop updating even though the map keeps moving. (Phase 2:) After adding AbortController, continuous zoom-out gestures keep cancelling fetches mid-flight via the abort logic — same result: nothing ever settles.
+- **Cause:** `onMapIdle` and `onCameraChanged` fire faster than a fetch can complete during a sustained gesture. AbortController alone makes it worse — each new event aborts the previous fetch, so the chain never resolves.
+- **Fix:** Three layered guards, all of which are needed (each solves a different failure mode):
+  1. **`AbortController`** — each new fetch cancels the previous (covers throw-path and resolve-with-`{ error }` path; PostgREST returns the error rather than throwing on cancel).
+  2. **600ms debounce** — gives camera time to settle before kicking off a fetch.
+  3. **`state.gestures.isGestureActive` guard** on `onCameraChanged` — fetches only fire when the user releases the gesture, not during sustained pan/zoom.
+- **Bonus fix:** Wide-bbox queries returning megabytes of polygon detail are slow over the wire even when the DB is fast (DB returned in 54ms but phone saw 16-22s wall time). Solve at source with zoom-tier polygon simplification and small/medium tier filtering at low zoom. **Confirmed via PowerShell-from-PC test (2.1s) vs phone test (16s+) before chasing the network layer.**
+
 **Debugging playbook — when something is slow or broken:**
-1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
+1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue. **Use it also to split DB time vs payload/transit time** — a query that's 54ms in `EXPLAIN ANALYZE` but 2s+ from PowerShell is payload-size-bound, not DB-bound (Session 7).
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call itself is slow
 3. **EXPLAIN ANALYZE in SQL editor** — tells you if the database query is slow
 4. **Render-side check** — does a UI change in the same file appear on device? If not, you're on a stale bundle. Reload Metro (press `r`) before debugging the code.
@@ -382,8 +400,8 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 | Bug | Detail |
 |---|---|
-| **onMapIdle viewport re-fire unreliable (NEW Session 6 — fix next session)** | First `onMapIdle` fires correctly on initial map load and the viewport RPC returns 271 territories as expected. Subsequent zoom/pan does not reliably re-trigger fetch — same ~9-19 territories stay rendered after camera moves to a completely different area (e.g. pan to Vondelpark, no new territories appear). Suspected cause: known `@rnmapbox/maps` v10 behaviour where `onMapIdle` doesn't reliably re-fire on subsequent camera changes. Likely fix: swap to `onCameraChanged` with `state.gestures.isGestureActive` guard so fetch only fires when camera settles. Diagnostic step first — confirm whether `[viewport fetch]` log appears on zoom/pan before deciding between debounce tuning vs event swap. |
-| Diagnostic logs in MapScreen.js | `[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]` — keep until viewport-refire bug solved and stable for a session, then strip. Also still in code: `[Profile]`, `[Alliance]`, `[supabase fetch]` from earlier sessions. |
+| **Territory overlaps & containment in dataset (NEW Session 7 — decide strategy next session)** | Multiple Amsterdam territories overlap each other or sit nested inside one another (e.g. a neighbourhood polygon contains a park polygon, both kept as separate territories). Visible on the map at street zoom. Not blocking but needs cleanup before beta. Three options to evaluate: (a) curate `candidates_combined.csv` to remove parent/child pairs; (b) add a PostGIS diagnostic (`ST_Overlaps`, `ST_Within`) to detect overlaps and flag/remove offenders; (c) allow nested territories as a game-design decision. Recommended first step: run the PostGIS diagnostic to count overlaps + containments — that decides whether this is a 5-min CSV fix or a multi-hour audit. |
+| Render-loop noise during map idle (cosmetic) | `[render]` log spammed during idle in Session 7 — confirmed `setTerritories` fires exactly once per fetch; extra re-renders come from other state (likely expo-location ticks). Not a functional issue, not GPU-bound. Parked — premature to optimise. |
 | Dead RPCs in Supabase | `get_all_territories_meta` and `get_territories_geojson_batch` are no longer called by any client code. Safe to drop next session for cleanliness. |
 | `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but the key must be moved to env var before the file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production launch. |
@@ -425,25 +443,28 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | MAP HERO SCREEN: NIGHT BASEMAP + STATE-AWARE OPACITY ✓ | POSTGIS MIGRATION COMPLETE: 271 AMSTERDAM TERRITORIES VIA VIEWPORT FETCH ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE SCHEMA LIVE ✓ | SLOW-LOAD CRISIS RESOLVED ✓ | PHASE 3 RESOURCE ECONOMY COMPLETE ✓ | PHASE 4 TERRITORY HISTORY + LEGACY RANK COMPLETE ✓ | FORMULAS.JS FULLY UNIT TESTED (348 tests) ✓ | SIEGE XP WIRED ON CLAIM + CONTEST WIN ✓ | POWER SECTION ON PROFILE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION FLOW LIVE ✓ | MAP HERO SCREEN: NIGHT BASEMAP + STATE-AWARE OPACITY ✓ | POSTGIS MIGRATION COMPLETE: 271 AMSTERDAM TERRITORIES VIA VIEWPORT FETCH ✓ | VIEWPORT FETCH HARDENED — ALL ZOOMS SUB-500MS (Session 7) ✓**
 
-**Immediate — fix onMapIdle viewport re-fire bug:**
+**Immediate — decide overlap-handling strategy for the 271-territory dataset:**
 
-1. **Diagnostic first.** Open the app, fire initial fetch (note `[viewport fetch]` logs), then watch Metro while doing each of:
-   - Zoom out → does a new `[viewport fetch]` log appear?
-   - Zoom back in → does a new `[viewport fetch]` log appear?
-   - Pan to Vondelpark area → does a new `[viewport fetch]` log appear?
-2. **If onMapIdle is firing but with stale bounds:** fix the debounce implementation (likely stale closure on bounds).
-3. **If onMapIdle is NOT firing on subsequent moves:** swap to `onCameraChanged` with a `state.gestures.isGestureActive` guard so fetch only fires when camera settles (not during active gesture).
-4. **After fix is verified, end-to-end test:**
-   - Pan around all of Amsterdam, confirm new territories load as bbox shifts
-   - Zoom in/out at various levels, confirm count climbs/falls correctly
-   - Tap real territories at different zooms, confirm sheet opens with correct data
-   - Try claim flow on an unclaimed territory (e.g. Vondelpark): Claim → ActiveClaim → walk → success
-5. **After verification, strip all remaining diagnostic logs in MapScreen.js** (`[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]`).
-6. **Optional cleanup:** drop dead RPCs from Supabase (`get_all_territories_meta`, `get_territories_geojson_batch`).
+1. **Diagnostic first.** Run a PostGIS query in the Supabase SQL editor to count overlaps and containments in the current dataset:
+   ```sql
+   -- Count overlapping pairs (intersecting but neither contains the other)
+   SELECT COUNT(*) FROM territories a, territories b
+   WHERE a.id < b.id
+     AND postgis.ST_Overlaps(a.geom, b.geom);
 
-**Do NOT touch the PostGIS RPC or schema unless a bug is traced specifically to it.** The server side is fully verified and clean.
+   -- Count containment pairs (one fully inside another)
+   SELECT COUNT(*) FROM territories a, territories b
+   WHERE a.id <> b.id
+     AND postgis.ST_Within(a.geom, b.geom);
+   ```
+2. **If counts are small (< ~20):** curate `candidates_combined.csv` directly — drop the parent or the child of each conflict by hand, rerun `fetch-osm-polygons.js`.
+3. **If counts are large (> ~50):** build a diagnostic query that lists offenders with names + areas so the decision can be batched. Then choose a rule (e.g. "keep the smaller polygon when one contains another", or "keep the more recognisable name").
+4. **Game-design alternative:** explicitly allow nested territories — small territories inside large ones could be a legitimate mechanic. Worth weighing before deleting rows.
+5. **After cleanup,** confirm territory tier distribution still matches mechanics doc (current 271 are predominantly Small/Medium — Large/Epic distribution needs an audit before beta).
+
+**Do NOT touch the viewport RPC architecture (now hardened) or schema unless a bug is traced specifically to it.** Fetch architecture is fully verified across zoom range and clean.
 
 **Queued — tests for `lib/streak.js`:**
 - Agree on Supabase mocking strategy first (manual mock vs jest.mock vs in-memory fake), then write tests.
@@ -470,13 +491,14 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Phase 4.5 ✓ — Siege XP wired (claim + contest win), POWER section on Profile, lifetime_contest_wins live
 - Phase 4.6 ✓ — War Room ACTIVATE wired, Morale donation flow, OSM polygons for original 10 territories
 - Phase 4.7 ✓ — PostGIS migration, viewport-based fetch RPC, 271-territory Amsterdam dataset (Session 6)
+- Phase 4.8 ✓ — Viewport fetch hardened: AbortController + 600ms debounce + gesture-guarded `onCameraChanged` + zoom-tier server-side polygon simplification; all fetches sub-500ms across zoom range (Session 7)
 - Phase 5a ○ — activity_log table + 3 event-write sites (no read-side aggregator yet)
 - Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
 
 **Quick wins to pick up any time:**
 - Wire remaining Siege XP write sites as features come online (defence win, reconquest, dev tier reached, mission complete, streak milestone)
 - Tests for lib/territory.js (~60-min session, same Supabase mocking strategy locked in for streak.js)
-- Drop the two dead RPCs
+- Drop the two dead RPCs (`get_all_territories_meta`, `get_territories_geojson_batch`)
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
@@ -646,7 +668,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Brand colours held against map-driven pressure | Considered changing Alliance green / Enemy blue when they read weakly on night basemap; resisted because brief is explicit ("Five colours only"), every branded screen depends on these tokens, and map shouldn't dictate brand. Solution was opacity tuning, not colour change. |
 | V11 upgrade for runtime style config deferred | Would enable runtime config switching (day/dusk events) and StyleImport API, but burns 1 EAS build and risks ripple to react-native-screens / legacy-peer-deps / expo-build-properties pinning. Custom Studio style covers static brand config without upgrade. Revisit when runtime switching becomes needed. |
 | PostGIS lives in `postgis` schema, not `public` (Session 6) | Supabase's recommended pattern — separate schema isolates PostGIS types/functions from app tables and makes upgrades safer. Cost is verbosity: every PostGIS reference must be schema-qualified. Trade accepted. |
-| RPC returns flat columns, not nested objects (Session 6) | `get_territories_in_viewport` returns 14 flat columns (`owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, etc) instead of joining to nested `owner.*` / `alliance.*` objects. Easier to debug, one fewer JOIN layer for the client to unpack, no surprises with null relations. |
+| RPC returns flat columns, not nested objects (Session 6) | `get_territories_in_viewport` returns 16 flat columns (`owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, etc) instead of joining to nested `owner.*` / `alliance.*` objects. Easier to debug, one fewer JOIN layer for the client to unpack, no surprises with null relations. |
 | Server-side ST_ForcePolygonCCW in RPC (Session 6) | PostGIS stores polygons clockwise; GeoJSON/Mapbox require CCW outer rings. Fix at source so the client never sees wrong winding. `ensureCCWOuterRing` helper kept in client as defensive code regardless — belt-and-braces for a class of bug that's silent when it strikes. |
 | Server-side ST_IsValid + ST_NPoints >= 4 filter in RPC (Session 6) | One degenerate polygon (Weesperbuurt, 3 points, 0 m² area) silently broke entire Mapbox source rendering. Filter at source so this can never poison the client again. Principle: defensive code lives at the layer closest to the data source. |
 | Single viewport RPC replaces two-phase fetch (Session 6) | Old architecture: `get_all_territories_meta` + 7 batches of `get_territories_geojson_batch` with 1500ms gaps = ~10s+. New: one `get_territories_in_viewport` call = ~330ms for 71 territories in central Amsterdam. The old wedge/transport problem from Session 5 became moot — solved by architecture change, not tuning. |
@@ -657,6 +679,16 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Mapbox `slot` semantics non-obvious, omit by default (Session 6) | Standard style slot behaviour varies across `@rnmapbox/maps` versions. When in doubt, omit `slot` and let Mapbox place layers in source-order. Add slot only when layer-order problems are diagnosed (currently: `slot="top"` on labels). |
 | Never `git add .` — always specify files (Session 6) | Local-only dev scripts contain hardcoded secrets and one-off tooling. `git add .` is one slip from leaking the service role key. Specific-file workflow is mandatory. Already paid off this session — `.gitignore` updated, one-off scripts stayed local. |
 | Data-before-styling diagnostic (Session 6) | When fill + line + tap hit-test ALL fail on a source that contains "valid" features, the cause is upstream — at the data parse level, not the styling level. Should have dumped `JSON.stringify(rows[0].geojson)` an hour earlier; spent too long on style/slot/key hypotheses before checking raw data. Added to debugging playbook step 6. |
+| Three-layer fetch guard: AbortController + 600ms debounce + gesture guard (Session 7) | Each solves a different failure mode and all three are needed. AbortController alone caused mid-flight cancellation chains. Debounce alone couldn't keep up with sustained gestures. Gesture guard alone leaks fetches during fast pan-then-stop. Layered, they cover the full matrix. |
+| `onCameraChanged` with `isGestureActive` guard, not `onMapIdle` (Session 7) | `onMapIdle` doesn't reliably re-fire on subsequent camera changes in `@rnmapbox/maps` v10. `onCameraChanged` does — and with the `state.gestures.isGestureActive` guard fetches only fire when the user releases, not during the gesture. Optional-chaining + fallback used for older versions of the lib. |
+| Zoom-tier polygon simplification with hard cutoffs (14/12/10), not interpolated (Session 7) | Simpler logic, easier to reason about, easier to tune per tier. `ST_SimplifyPreserveTopology` chosen over plain `ST_Simplify` to preserve polygon validity and avoid creating new degenerate polygons mid-simplification (which would re-introduce the Session 6 single-bad-polygon poison bug). |
+| Drop `small` tier below zoom 10, also drop `medium` at the heaviest tier (Session 7) | At metro scale, small territories are sub-pixel anyway — no visual loss, big payload win. Filtering by tier at the RPC keeps the wire skinny without touching the client's render logic. |
+| Client passes zoom to RPC, with defensive fallback to 14 (Session 7) | `mapRef.current.getZoom()` is wrapped in try/catch with a zoom-14 fallback (returns full detail) so a method failure degrades to "render everything" rather than "render nothing". Both the main fetch path and `handleTerritoriesRefetched` (post-claim/contest) read current zoom — otherwise post-claim refetch could return full-detail polygons for a city-zoom viewport. |
+| `::text` casts on every returned text column in the RPC (Session 7) | Belt-and-braces against future schema changes. Hit two return-type mismatches mid-rollout: `territories.perimeter_distance` is `double precision` (not integer), `alliances.short_name` is `character(3)` (not text). Casting every text column explicitly, even ones that already are text, costs nothing and prevents the entire class of "structure of query does not match function result type" errors. |
+| Investigated render-loop noise but did not fix (Session 7) | `setTerritories` fires exactly once per fetch — the renders come from other state (likely expo-location ticks). Cheap React reconciliation, not GPU work. Premature to optimise; logged in Open Bugs as cosmetic and parked. |
+| Kept defensive error-path logs in `onCameraChanged` after stripping diagnostic logs (Session 7) | `[viewport fetch] no bounds` and `[viewport fetch] threw` are real failure indicators, not noise. Stripped: `[render]`, `[viewport fetch]` (success path), `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[setTerritories]`, `[territories state changed]`. Kept: error-path logs that fire only when something is actually wrong. |
+| Payload size vs DB time split via PowerShell test (Session 7) | DB returned in 54ms but phone saw 16-22s wall time. PowerShell-from-PC test showed 2.1s, which proved it was payload/transit, not the dead-pool bug. Added "split DB vs payload time" to debugging playbook step 1. Confirmed once again that the cheapest binary test wins. |
+| When the same problem resists multiple targeted fixes, the fix is the architecture, not another tweak (Session 7) | Re-affirmed: Session 5's wedge/transport problem became moot in Session 6 once the architecture changed. Session 7's "onMapIdle viewport re-fire" bug followed the same pattern — tweaking the debounce wouldn't have helped; the event itself was wrong. Codified in working style. |
 
 ---
 
