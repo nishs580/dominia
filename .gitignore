@@ -56,3 +56,10 @@ insert-spb-territories.js
 fetch-spb-candidates.js
 filter-spb-candidates.js
 candidates_spb*.csv
+load-roads-to-postgis.js
+load-pois-to-postgis.js
+
+# Generated GeoJSON outputs (local-only)
+spb_envelope.geojson
+roads_spb.geojson
+pois_spb.geojson
