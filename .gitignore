@@ -58,6 +58,11 @@ filter-spb-candidates.js
 candidates_spb*.csv
 load-roads-to-postgis.js
 load-pois-to-postgis.js
+districts_spb.geojson
+okrugs_spb.geojson
+fetch-spb-admin.js
+spb_admin_setup.sql
+load-admin-to-postgis.js
 
 # Generated GeoJSON outputs (local-only)
 spb_envelope.geojson
