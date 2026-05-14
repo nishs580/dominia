@@ -401,7 +401,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                         return;
                       }
                       onClose();
-                      onTerritoriesRefetched?.();
+                      onTerritoriesRefetched?.(territory.id);
                     },
                   },
                 ]);
@@ -522,7 +522,12 @@ export default function MapScreen() {
   const mapRef = useRef(null);
   const idleTimeoutRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const abortControllerStartRef = useRef(0);
   const lastBoundsRef = useRef(null);
+  // Cache of all loaded territory features, keyed by id.
+  // New fetches merge into this map; render derives FeatureCollection from it.
+  // Bounded to ~3000 entries — when exceeded, evict features outside last viewport.
+  const featureCacheRef = useRef(new Map());
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
@@ -587,6 +592,7 @@ export default function MapScreen() {
 
   const fetchTerritoriesForViewport = useCallback(async (bounds, zoomArg) => {
     if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
+    console.log('[vp fetch] START', { min_lon: bounds[1][0], min_lat: bounds[1][1], max_lon: bounds[0][0], max_lat: bounds[0][1], zoom: zoomArg });
     lastBoundsRef.current = bounds;
 
     const zoom =
@@ -599,11 +605,25 @@ export default function MapScreen() {
     const max_lon = ne[0];
     const max_lat = ne[1];
 
-    if (abortControllerRef.current) {
+    // Only abort if the in-flight fetch is older than 1s. Recent fetches are
+    // likely seconds from completing — let them populate the cache for areas
+    // the user panned through, rather than unconditionally cancelling.
+    const now = Date.now();
+    const inFlightAge = now - abortControllerStartRef.current;
+    if (abortControllerRef.current && inFlightAge > 1000) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
+
+    // If a recent fetch is still in flight, do not start a new one — let it finish.
+    if (abortControllerRef.current) {
+      console.log('[vp fetch] SKIP (recent in-flight, age', inFlightAge, 'ms)');
+      return;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    abortControllerStartRef.current = now;
 
     let data;
     let error;
@@ -621,8 +641,11 @@ export default function MapScreen() {
       error = res.error;
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === '20' || err?.code === 20) {
+        console.log('[vp fetch] ABORTED (caught in catch)');
+        abortControllerRef.current = null;
         return;
       }
+      console.log('[vp fetch] THREW', err?.message);
       throw err;
     }
 
@@ -631,10 +654,16 @@ export default function MapScreen() {
       error?.code === '20' ||
       error?.code === 20
     ) {
+      console.log('[vp fetch] ABORTED (returned as error)');
+      abortControllerRef.current = null;
       return;
     }
 
-    if (error) return;
+    if (error) {
+      console.log('[vp fetch] ERROR', error.message);
+      abortControllerRef.current = null;
+      return;
+    }
     const rows = data ?? [];
 
     if (rows.length > 0) {
@@ -670,8 +699,32 @@ export default function MapScreen() {
         },
       };
     });
-    const fc = { type: 'FeatureCollection', features };
-    setTerritories(fc);
+    // Merge new features into cache by id (last write wins per feature)
+    const cache = featureCacheRef.current;
+    for (const feat of features) {
+      cache.set(feat.id, feat);
+    }
+
+    // Bound cache size: if over 3000, evict features whose first vertex falls
+    // outside the current viewport (keep what the player is looking at)
+    if (cache.size > 3000) {
+      for (const [id, feat] of cache) {
+        const coords = feat.geometry?.coordinates?.[0];
+        if (!coords || coords.length === 0) continue;
+        const [lon, lat] = coords[0];
+        const inView =
+          lon >= min_lon && lon <= max_lon && lat >= min_lat && lat <= max_lat;
+        if (!inView) cache.delete(id);
+        if (cache.size <= 3000) break;
+      }
+    }
+
+    console.log('[vp fetch] OK', { newRows: rows.length, cacheSize: cache.size });
+    abortControllerRef.current = null;
+    setTerritories({
+      type: 'FeatureCollection',
+      features: Array.from(cache.values()),
+    });
   }, [userId, myPlayer?.alliance_id]);
 
   useEffect(() => {
@@ -708,10 +761,13 @@ export default function MapScreen() {
       } catch (err) {
         console.log('[viewport fetch] getVisibleBounds threw:', err?.message);
       }
-    }, 600);
+    }, 150);
   }, [fetchTerritoriesForViewport]);
 
-  const handleTerritoriesRefetched = useCallback(async () => {
+  const handleTerritoriesRefetched = useCallback(async (territoryId) => {
+    if (territoryId) {
+      featureCacheRef.current.delete(territoryId);
+    }
     if (!lastBoundsRef.current) return;
     let zoom = 14;
     if (mapRef.current) {
