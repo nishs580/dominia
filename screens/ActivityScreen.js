@@ -205,6 +205,22 @@ export default function ActivityScreen() {
         .update({ xp: (Math.max(0, Number(prevXp) || 0) + ch.xp) })
         .eq('id', playerId);
 
+      const { error: logError } = await supabase
+        .from('activity_log')
+        .insert({
+          player_id: playerId,
+          event_type: 'challenge_completed',
+          xp_amount: ch.xp,
+          challenge_count: 1,
+          metadata: {
+            challenge_key: ch.key,
+            difficulty: ch.key,
+          },
+        });
+      if (logError) {
+        console.warn('[activity_log] challenge_completed write failed:', logError);
+      }
+
       const newXp = Math.max(0, Number(prevXp) || 0) + ch.xp;
       const newLevel = levelFromXp(newXp);
       if (newLevel.level > prevLevel.level) {
@@ -240,17 +256,6 @@ export default function ActivityScreen() {
           .eq('id', playerId)
           .maybeSingle();
         setCurrentStreak(Math.max(0, Number(streakRow?.current_streak) || 0));
-      }
-
-      try {
-        const { error: logError } = await supabase
-          .from('activity_log')
-          .insert([{ player_id: playerId, event_type: 'challenge_complete', xp_amount: ch.xp }])
-          .select();
-        if (logError) console.warn('[activity_log] challenge insert failed:', logError);
-        else console.log('[activity_log] challenge written — xp:', ch.xp);
-      } catch (e) {
-        console.warn('[activity_log] challenge insert threw:', e);
       }
     } catch (e) {
       console.error('onCompleteChallenge failed:', e?.message ?? e);

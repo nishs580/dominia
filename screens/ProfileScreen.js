@@ -13,6 +13,7 @@ import {
   calcFullValueCap,
   calcTerritoryCapForLevel,
   calcLegacyPower,
+  calcActivityPower,
 } from '../lib/formulas';
 
 function territoryCapForLevel(level) {
@@ -77,6 +78,7 @@ export default function ProfileScreen() {
   const [allianceName, setAllianceName] = useState(null);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
+  const [activityPower, setActivityPower] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +89,7 @@ export default function ProfileScreen() {
       if (!userId) {
         setPlayerRow(null);
         setOwnedTerritories([]);
+        setActivityPower(0);
         setProfileError('Not signed in.');
         setLoading(false);
         return;
@@ -94,6 +97,7 @@ export default function ProfileScreen() {
 
       setLoading(true);
       setProfileError(null);
+      setActivityPower(0);
 
       const { data: player, error: playerError } = await supabase
         .from('players')
@@ -109,6 +113,7 @@ export default function ProfileScreen() {
         setProfileError(playerError.message ?? 'Could not load profile');
         setPlayerRow(null);
         setOwnedTerritories([]);
+        setActivityPower(0);
         setLoading(false);
         return;
       }
@@ -117,6 +122,7 @@ export default function ProfileScreen() {
         setProfileError('No player record for this account.');
         setPlayerRow(null);
         setOwnedTerritories([]);
+        setActivityPower(0);
         setCurrentStreak(0);
         setLongestStreak(0);
         setLoading(false);
@@ -144,6 +150,24 @@ export default function ProfileScreen() {
       } else {
         setOwnedTerritories(territoriesResult.data ?? []);
       }
+
+      const { data, error } = await supabase.rpc('get_activity_stats_30d', {
+        p_player_id: player.id,
+      });
+      if (cancelled) return;
+      if (error) {
+        console.warn('[ProfileScreen] activity stats fetch failed:', error);
+      } else if (data && data.length > 0) {
+        const stats = data[0];
+        const power = calcActivityPower({
+          xp30d: Number(stats.xp_30d) || 0,
+          km30d: Number(stats.km_30d) || 0,
+          challenges30d: Number(stats.challenges_30d) || 0,
+          contests30d: Number(stats.contests_30d) || 0,
+        });
+        setActivityPower(power);
+      }
+
       setLoading(false);
     }
 
@@ -190,7 +214,7 @@ export default function ProfileScreen() {
     highestStreakDays: longestStreak,
     lifetimeXp: xpInt,
   });
-  const totalPower = territoryPower + legacyPower;
+  const totalPower = activityPower + territoryPower + legacyPower;
 
   const playerName = playerRow?.username ?? '—';
   const rankBadge = getLevelTitle(level);
@@ -265,7 +289,7 @@ export default function ProfileScreen() {
                 <Text style={styles.powerRowLabel}>ACTIVITY POWER</Text>
                 <Text style={styles.powerRowReason}>Step tracking required</Text>
               </View>
-              <Text style={styles.powerRowValueInactive}>—</Text>
+              <Text style={styles.powerRowValueLive}>{activityPower.toLocaleString()}</Text>
             </View>
             <View style={styles.powerRowDivider} />
             <View style={styles.powerRow}>
