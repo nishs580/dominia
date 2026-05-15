@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 14, 2026 (Map render performance — client-side feature cache, merge-on-fetch, age-gated abort. Pan/zoom now tile-like.)
+Last updated: May 15, 2026 (Phase 5a complete — `activity_log` table live, 3 event-write sites wired, Activity Power rendering on Profile via `get_activity_stats_30d` RPC. nish_s Activity Power = 995.)
 
 ---
 
@@ -85,6 +85,8 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 `territory_history`: id, territory_id, owner_id, alliance_id (nullable), claimed_at, lost_at (nullable = currently held), backfilled (boolean), created_at
 
+**`activity_log` (NEW Session 16 — Phase 5a):** id (uuid PK), player_id (uuid FK → players(id) ON DELETE CASCADE), event_type (text, CHECK: `'challenge_completed' | 'territory_claimed' | 'contest_participated' | 'km_walked'`), xp_amount (int, default 0), km_amount (numeric, nullable — stays NULL until step tracking lands), challenge_count (int, default 0), contest_count (int, default 0), territory_id (uuid, nullable), challenge_key (text, nullable), metadata (jsonb, nullable), created_at (timestamptz, default now()). RLS off. Single row per event (not aggregated daily roll-up) — aggregation happens on RPC read.
+
 **TEMP tables (Sessions 13–14 — keep ~1 week post-ship for oversize review + rollback, then drop):**
 - `public.gap_fill_roads_spb` — 27,899 SPB road LineStrings (no service roads), GIST indexed
 - `public.gap_fill_pois_spb` — 1,721 SPB POIs for tier-2 landmark naming, GIST indexed
@@ -115,6 +117,8 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 - `idx_territory_history_owner_id` ON territory_history(owner_id)
 - `idx_territory_history_current_holder` partial index ON territory_history(territory_id) WHERE lost_at IS NULL
 - `territories_geom_idx` **GIST index** on territories(geom) — powers fast viewport intersection queries
+- `idx_activity_log_player_created` ON activity_log(player_id, created_at DESC) — powers rolling 30-day RPC
+- `idx_activity_log_event_type` ON activity_log(event_type)
 
 **Row Level Security (RLS):**
 - `players` table: **DISABLED** (manually via dashboard). Was causing 19-minute hangs because old policies referenced `auth.uid()` but project uses Clerk, not Supabase Auth.
@@ -147,6 +151,8 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 - `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat)` — **canonical territory fetch for MapScreen.** SECURITY DEFINER + SET search_path = public, postgis. Returns 14 flat columns (no nested joins) including `owner_username`, `owner_clerk_id`, `owner_streak_days`, `alliance_short_name`, and CCW-corrected geojson via `postgis.ST_AsGeoJSON(postgis.ST_ForcePolygonCCW(t.geom))::jsonb`. Filters at source with `postgis.ST_IsValid` AND `postgis.ST_NPoints >= 4` to reject degenerate polygons.
 - `deduct_alliance_morale(alliance_id, amount)` — guards `morale >= amount`, prevents negatives. Used by War Room ACTIVATE buttons.
 - `donate_morale(player_id, alliance_id, amount)` — atomic transaction: deducts `players.morale` and credits `alliances.morale` in single call. Used by Wallet donate flow.
+- **NEW Session 16 (Phase 5a):**
+  - `get_activity_stats_30d(p_player_id uuid)` — rolling 30-day SUM across xp_amount, km_amount, challenge_count, contest_count. SECURITY DEFINER, `SET search_path = public`, COALESCE-protected zeros. Returns flat row: `{ xp_30d, km_30d, challenges_30d, contests_30d }`. Called by ProfileScreen → `calcActivityPower()` → renders Activity row + Total Power hero.
 - **NEW Session 13 (loaders for SPB pipeline, idempotent):**
   - `insert_road_batch(geojson)` — SECURITY DEFINER, batched road insert via ST_GeomFromGeoJSON
   - `insert_poi_batch(geojson)` — SECURITY DEFINER, batched POI insert
@@ -174,8 +180,8 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
 | Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders Amsterdam (239) and SPB (8,295) territories from the same RPC depending on viewport. **Client-side feature cache (`featureCacheRef`, Map keyed by territory id, ~3000-entry cap with viewport-aware eviction)** + **merge-on-fetch** (never blanks the FeatureCollection on pan/zoom) + **age-gated abort** (only cancels in-flight fetches older than 1s, so near-complete fetches still populate cache). Debounce 150ms on `onCameraChanged`. Cache invalidates per-feature on Abandon via `handleTerritoriesRefetched(territoryId)`. Feature builder reads FLAT RPC columns. State-aware fill + line + label styles unchanged. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility. **KNOWN BUGS: zoom-level simplification hides some small polygons at wide zoom; nested/overlapping territories detected on phone visual test — see Open Bugs.** |
-| Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
-| Profile screen | ✓ Live data | POWER section above Influence. Total Power hero + 3 breakdown rows: Activity (inactive), Territory (live), Legacy (live). My Resources ghost button → WalletScreen. |
+| Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. **Writes `activity_log` row (event_type='challenge_completed', challenge_count=1, xp_amount=earned) AFTER atomic player update succeeds. console.warn-only on failure — never blocks gameplay.** |
+| Profile screen | ✓ Live data | POWER section above Influence. **Activity Power now LIVE** — calls `get_activity_stats_30d` RPC → `calcActivityPower()` → renders live Activity row. Total Power hero updates from all 3 components. Territory + Legacy already live. nish_s Activity Power = 995 = (1760×0.5) + (0×3) + (9×10) + (1×25). km component runs at 0 until step tracking lands. My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button passes allianceId, allianceName, shortName as nav params. |
 | War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. ACTIVATE buttons wired (Founder only) via `deduct_alliance_morale` RPC. |
 | Wallet screen | ✓ Live data | Live resource fetch on open. 4 resources with glyphs + balances. Morale row → bottom modal sheet (custom amount + DONATE ALL) → `donate_morale` RPC. |
@@ -183,8 +189,8 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
 | Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
-| Claim Success screen | ✓ Live data | Atomic write of Gold reward + Siege XP via single .update().select(). Tier fetched via .select('tier').single(). |
-| Contest Result screen | ✓ Live data | 4 states. attack_won: close-out → territories → INSERT new history row, atomic write of iron/gold/morale + Siege XP + lifetime_contest_wins increment via single .update().select(). |
+| Claim Success screen | ✓ Live data | Atomic write of Gold reward + Siege XP via single .update().select(). Tier fetched via .select('tier').single(). **Writes `activity_log` row (event_type='territory_claimed', xp_amount=siegeXp, territory_id) AFTER atomic player update succeeds. console.warn-only on failure.** |
+| Contest Result screen | ✓ Live data | 4 states. attack_won: close-out → territories → INSERT new history row, atomic write of iron/gold/morale + Siege XP + lifetime_contest_wins increment via single .update().select(). **Writes `activity_log` row (event_type='contest_participated', contest_count=1, xp_amount=branch reward) on ALL 4 outcomes per v6.10 §2152 ('contest participations, win or lose'). Cancelled contests naturally bypass (screen only renders on resolved outcomes). attack_won verified on device; 3 other branches code-wired but unverified (defence states need Ably).** |
 | Create Alliance screen | ✓ Branded | 3-step founding flow (identity → HQ territory → confirm). |
 | Alliance Joined screen | ✓ Branded | Alliance green accent bar, Archivo 900 alliance name, [TAG], 5 numbered benefit rows. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded, routes to Onboarding or MainTabs |
@@ -217,8 +223,8 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `screens/MapScreen.js` | **PostGIS viewport-based architecture with client-side feature cache.** Single RPC call to `get_territories_in_viewport` per fetch. `featureCacheRef` (Map keyed by territory id) holds previously fetched features; new fetches **merge** into cache, never replace. ~3000-entry cap with viewport-edge eviction. Debounce 150ms on `onCameraChanged`. **Age-gated abort:** only cancels in-flight fetches older than 1s; recent ones complete and populate cache. Skip-if-recent-in-flight prevents pile-up. `handleTerritoriesRefetched(territoryId)` clears the cache entry on Abandon before refetch. Diagnostic logs (`[vp fetch] START / OK / ABORTED / ERROR / SKIP`) still in place — strip when zoom-simplify bug resolved. Feature builder reads FLAT fields. styleURL = `mapbox://styles/mapbox/light-v11` (dev). |
-| `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning. |
-| `screens/ProfileScreen.js` | POWER section above Influence. |
+| `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning. **Writes `activity_log` row (event_type='challenge_completed') after `player_challenges` insert + atomic player update succeed.** |
+| `screens/ProfileScreen.js` | POWER section above Influence. **POWER FULLY LIVE** — calls `get_activity_stats_30d` RPC, runs result through `calcActivityPower()`, renders Activity row + updates Total Power hero. Territory + Legacy already live. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. |
 | `screens/WarRoomScreen.js` | All 6 abilities. ACTIVATE wired (Founder only) via `deduct_alliance_morale` RPC. |
 | `screens/WalletScreen.js` | 4-resource view. Morale row → donate modal → `donate_morale` RPC. |
@@ -226,8 +232,8 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `screens/UsernameScreen.js` | Fully branded. 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow. |
 | `screens/ActiveClaimScreen.js` | Fully branded. DEV_MODE=true. |
-| `screens/ClaimSuccessScreen.js` | Atomic Gold + Siege XP write. |
-| `screens/ContestResultScreen.js` | 4 states. attack_won: close-out → territories → INSERT → atomic player update. |
+| `screens/ClaimSuccessScreen.js` | Atomic Gold + Siege XP write. **Writes `activity_log` row (event_type='territory_claimed') after atomic player update succeeds. INSERT runs OUTSIDE atomic update — gameplay state never rolls back on a logging failure.** |
+| `screens/ContestResultScreen.js` | 4 states. attack_won: close-out → territories → INSERT → atomic player update. **Writes `activity_log` row (event_type='contest_participated', contest_count=1) on ALL 4 outcomes per v6.10 spec. xp_amount = whatever the branch awards.** |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. |
 | `screens/AllianceJoinedScreen.js` | Fully branded. |
 | **SPB GAP-FILL PIPELINE (local-only, gitignored, Session 13):** | |
@@ -489,7 +495,8 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but key must move to env var before file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production. |
 | Client Trust + email verification disabled in Clerk | Both disabled for dev. Re-enable before production. |
-| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. DEV_MODE=true on ActiveClaimScreen. |
+| **3 of 4 ContestResultScreen branches unverified on device** | activity_log INSERT wired in all 4 outcomes; only attack_won tested live (rows confirmed). attack_lost, defence_won, defence_lost code-wired but defender states need Ably to test cleanly. Trust until naturally testable. |
+| Real step tracking broken | `Pedometer.getStepCountAsync()` unsupported on Android. Health Connect crashed natively. expo-sensors `watchStepCount()` fallback untested. DEV_MODE=true on ActiveClaimScreen. **`activity_log.km_amount` stays NULL until this lands; Activity Power runs at 3/4 components.** |
 | Defender flow deferred | Needs Ably real-time layer. |
 | Abandon flow not built | Must UPDATE open territory_history row when built. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred. |
@@ -524,7 +531,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase
 - **Phase 2 of SPB territory pool** — merging existing sub-tier OSM-named SPB territories (485 of them) into the unified gap-fill pool. Phase 1 was greenfield gap-fill only; Phase 2 deferred.
 - **Amsterdam gap-fill pipeline** — expected ≤30 new fill blocks. Not run yet. Run after SPB nested-territories cleanup completes and pipeline is proven idempotent.
-- Phase 5a `activity_log` table
 - Custom Mapbox night style swap-back (currently `light-v11` for dev)
 - **Ably cache-invalidation hook in MapScreen.js** — when real-time multiplayer lands, subscribe to `territory:updated` channel and call `featureCacheRef.current.delete(territoryId)` on each event. ~1 hour of work; integrates with existing `handleTerritoriesRefetched(territoryId)` pattern.
 
@@ -532,14 +538,14 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION FULLY LIVE ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | PHASE 5a ACTIVITY_LOG + ACTIVITY POWER LIVE ✓**
 
-**Immediate — pick the next priority off the backlog.** Map performance is good enough to develop on. Discuss at the start of next session and choose one of:
+**Immediate — real step tracking integration.** Replace `DEV_MODE=true` fake interval in ActiveClaimScreen with real km/step data; populate `activity_log.km_amount`; light up the 4th Activity Power component (currently runs at 3/4). Likely involves an EAS build (15 Android + 15 iOS fresh allocation available). **Decide approach early in session before building** — three candidates:
+1. Revisit Health Connect (last attempt crashed natively — investigate why)
+2. Try `expo-sensors` `Pedometer.watchStepCount()` (untested fallback)
+3. Evaluate a third-party SDK
 
-- **Phase 5a** — `activity_log` table + event-write sites in ClaimSuccessScreen, ContestResultScreen, ActivityScreen
-- **Backend phase kickoff** — Fastify + BullMQ + Ably scaffolding (also unblocks defender flow and the cache-invalidation hook in MapScreen.js)
-- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish.
-- **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision. Both files in one session once strategy is agreed.
+Expect debugging-heavy session given track record on this project. Ably is **not** next — doing Ably before step tracking would mean shipping multiplayer feel on top of a fake-interval claim system. Step tracking closes the 4th Activity Power component, fixes the DEV_MODE flow, and is single-player scope (no backend phase required).
 
 **Queued — deferred map work (revisit at polish phase):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `postgis.ST_Overlaps` / `postgis.ST_Contains` pairs, group by overlap type, decide handling per type
@@ -561,10 +567,8 @@ These are bugs that have already cost significant debugging time. Learn the sign
 **Queued — tests for `lib/streak.js` and `lib/territory.js`:**
 - Agree on Supabase mocking strategy (manual mock vs jest.mock vs in-memory fake), then both files in one session.
 
-**Queued — Phase 5a:**
-- Raw events written to `activity_log` table; recompute Activity Power on read (Option A — no cache).
-- Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
-- `km_amount` column NULL until step tracking lands.
+**Queued — frontend display helper:**
+- Write `formatTerritoryDisplayName(name)` — strip 'Near ' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic POI asset codes (e.g. `СО17-2873`). Wire when first touching a display surface that hits the long-name cases.
 
 **Queued — Map Session 3 (polish):**
 - Switch styleURL back to custom night Studio style.
@@ -572,9 +576,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Tier-aware visual treatment.
 - Level-gate visual states.
 - Territory tier audit across both Amsterdam and SPB.
-
-**Queued — frontend display helper:**
-- Write `formatTerritoryDisplayName(name)` — strip 'Near ' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic POI asset codes (e.g. `СО17-2873`). Wire when first touching a display surface that hits the long-name cases.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -585,8 +586,9 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Phase 4.6 ✓ — War Room ACTIVATE, Morale donation, OSM polygons for original 10 territories
 - Phase 4.7 ✓ — PostGIS migration, viewport RPC, Amsterdam dataset (Session 6)
 - Phase 4.8 ✓ — SPB full city coverage (Sessions 13–14): KAD envelope, 7,810 gap-fill blocks, 3-tier naming, district + okrug spatial join, hybrid disambiguation
-- Phase 5a ○ — activity_log table + 3 event-write sites
-- Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
+- Phase 5a ✓ — activity_log table + 3 event-write sites + get_activity_stats_30d RPC + ProfileScreen wiring (Session 16)
+- Phase 5b ○ — Real step tracking → populates km_amount → 4th Activity Power component live (NEXT)
+- Phase 5c ○ — Backend: cron for Total/Alliance Power, Ably real-time, defender flow
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
@@ -595,7 +597,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Refactor ProfileScreen colour constants to lib/theme.js
 - Fix auth flow order
 - `players.role` column migration → wire Marshal role for War Room ACTIVATE
-- Real step tracking — try expo-sensors Pedometer.watchStepCount()
 - Draggable bottom sheet — batch into EAS build
 - Invite non-player flow
 - Home District mechanic
@@ -641,6 +642,14 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | **Merge-on-fetch over replace (Session 15)** | Visible features never blank during a pan. The FeatureCollection grows monotonically (bounded by cache cap), so the shape source is stable across fetches. |
 | **150ms debounce on onCameraChanged (Session 15, down from 600ms on onMapIdle)** | Cache absorbs the resulting higher fetch frequency safely. Tight debounce gives near-immediate feedback on pan-end without the redundant fetches that caused the original perf problem. |
 | **Zoom-simplify bug deferred (Session 15)** | Performance is good enough to develop on. Bug only affects wide zoom (≤zoom 14) on small polygons — most of the active gameplay happens at tighter zoom where everything renders. Fix when map polish lands; not blocking. |
+| **ALTER over DROP for partial existing `activity_log` table (Session 16)** | Discovered 17 rows of dev test data already in a partial activity_log table from an earlier session. ALTER added the 4 missing columns + CHECK constraint + FK CASCADE + 2 indexes without losing the rows. Lower-risk than DROP, and no consumer was reading the table yet so historical rows could be normalised in place (event_type renames). |
+| **Single row per event, not aggregated daily roll-up (Session 16)** | Simpler writes, no race conditions on concurrent events. Aggregation happens on RPC read via SUM. Cheap at current scale — revisit if scan cost becomes a concern. |
+| **Separate `challenge_count` + `contest_count` columns over CASE WHEN in queries (Session 16)** | One-pass SUM in `get_activity_stats_30d` RPC. Storage cost is negligible; query simplicity wins. |
+| **`activity_log` INSERT runs OUTSIDE the atomic player update, not inside (Session 16)** | Gameplay state must never roll back on a logging failure. Pattern: atomic .update().select() succeeds first → INSERT runs after → console.warn-only on failure. Mirrors the existing `territory_history` write pattern (the Pitfall #5 principle: a history bug must never cost a player XP, resources, or ownership). |
+| **All 4 ContestResultScreen outcomes write `activity_log` (Session 16)** | Per v6.10 spec §2152 — "contest participations, win or lose". contest_count=1 always; xp_amount = whatever the branch awards. Cancelled contests naturally bypass because ContestResultScreen only renders on resolved outcomes. |
+| **`km_amount` NULLABLE until step tracking lands (Session 16)** | Activity Power runs at 3/4 components for now. NULL is honest — distinguishes "no km data yet" from "0 km walked". `calcActivityPower()` treats NULL as 0 for the calc but the column stays NULL for future analytics. |
+| **Step tracking before Ably (Session 16)** | Closes the 4th Activity Power component, fixes the DEV_MODE=true claim flow, single-player scope. Ably requires backend phase first (Fastify + BullMQ); doing Ably before step tracking would mean shipping multiplayer feel on top of a fake-interval claim system. |
+| **Verify-and-trust on the 3 unverified contest branches (Session 16)** | attack_lost, defence_won, defence_lost code-wired identically to attack_won (which is verified). Defence states need Ably to test cleanly. Naturally testable when defender flow ships — not worth blocking on now. |
 | History writes use console.warn-only error handling | A history bug must never cause a player to lose XP, resources, or ownership |
 | Currently-held rows count toward hold duration metrics | Player holding 30 days hits Rank 2 even before losing it |
 | Backfilled open rows excluded from ownershipChanges | Only completed holds count |
