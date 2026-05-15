@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 14, 2026 (SPB gap-fill pipeline + disambiguation — 8,295 SPB territories live, full city coverage)
+Last updated: May 14, 2026 (Map render performance — client-side feature cache, merge-on-fetch, age-gated abort. Pan/zoom now tile-like.)
 
 ---
 
@@ -173,7 +173,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
-| Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders Amsterdam (239) and SPB (8,295) territories from the same RPC depending on viewport. 300ms debounced fetch on `onMapIdle`, bounds read via `mapRef.current.getVisibleBounds()`. Feature builder reads FLAT RPC columns. State-aware fill + line + label styles unchanged. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility. **KNOWN BUGS: onMapIdle doesn't reliably re-fire on subsequent zoom/pan; nested/overlapping territories detected on phone visual test — see Open Bugs.** |
+| Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders Amsterdam (239) and SPB (8,295) territories from the same RPC depending on viewport. **Client-side feature cache (`featureCacheRef`, Map keyed by territory id, ~3000-entry cap with viewport-aware eviction)** + **merge-on-fetch** (never blanks the FeatureCollection on pan/zoom) + **age-gated abort** (only cancels in-flight fetches older than 1s, so near-complete fetches still populate cache). Debounce 150ms on `onCameraChanged`. Cache invalidates per-feature on Abandon via `handleTerritoriesRefetched(territoryId)`. Feature builder reads FLAT RPC columns. State-aware fill + line + label styles unchanged. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility. **KNOWN BUGS: zoom-level simplification hides some small polygons at wide zoom; nested/overlapping territories detected on phone visual test — see Open Bugs.** |
 | Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
 | Profile screen | ✓ Live data | POWER section above Influence. Total Power hero + 3 breakdown rows: Activity (inactive), Territory (live), Legacy (live). My Resources ghost button → WalletScreen. |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button passes allianceId, allianceName, shortName as nav params. |
@@ -216,7 +216,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `lib/territory.js` | Display helpers + getLegacyRankForTerritory + getTerritoryHistoryStats. **No tests yet.** |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
-| `screens/MapScreen.js` | **PostGIS viewport-based architecture.** Single RPC call to `get_territories_in_viewport` per fetch. Feature builder reads FLAT fields. `lastBoundsRef` stores last successful bounds. styleURL = `mapbox://styles/mapbox/light-v11` (dev). Diagnostic logs still in place — strip after viewport-refire bug + nested-territories bug fixed. |
+| `screens/MapScreen.js` | **PostGIS viewport-based architecture with client-side feature cache.** Single RPC call to `get_territories_in_viewport` per fetch. `featureCacheRef` (Map keyed by territory id) holds previously fetched features; new fetches **merge** into cache, never replace. ~3000-entry cap with viewport-edge eviction. Debounce 150ms on `onCameraChanged`. **Age-gated abort:** only cancels in-flight fetches older than 1s; recent ones complete and populate cache. Skip-if-recent-in-flight prevents pile-up. `handleTerritoriesRefetched(territoryId)` clears the cache entry on Abandon before refetch. Diagnostic logs (`[vp fetch] START / OK / ABORTED / ERROR / SKIP`) still in place — strip when zoom-simplify bug resolved. Feature builder reads FLAT fields. styleURL = `mapbox://styles/mapbox/light-v11` (dev). |
 | `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning. |
 | `screens/ProfileScreen.js` | POWER section above Influence. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. |
@@ -453,6 +453,16 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Overpass relations sometimes resolve to a single Polygon outline, sometimes a MultiPolygon. The receiving column expects one shape.
 - **Fix:** In the loader RPC, run `CASE WHEN GeometryType(g) = 'POLYGON' THEN ST_Multi(g) ELSE g END` before the INSERT so single Polygons get promoted to MultiPolygon.
 
+**22. Aggressive AbortController blanks panned-through map areas (Session 15)**
+- **Signature:** User pans fast across the map, intermediate areas show no polygons even after the pan stops. Logs are full of `AbortError` from cancelled fetches.
+- **Cause:** Unconditional `abort()` on every new viewport fires cancels near-complete fetches mid-flight, so areas the user briefly passed through never populate the cache.
+- **Fix:** **Age-gated abort** — only abort in-flight fetches older than 1s; recent fetches are allowed to complete. Pair with merge-on-fetch (don't replace the FeatureCollection — merge new features into a cache keyed by territory id) so the partial population persists. AbortError logs are then *expected noise* confirming stale-request cancellation, not failures.
+
+**23. Replacing FeatureCollection on every pan = trailing-polygon symptom (Session 15)**
+- **Signature:** "Polygons trail in late" on pan — already-visible territories briefly disappear during the fetch, then come back. Map feels laggy even when network is fast.
+- **Cause:** Setting the shape source to a fresh FeatureCollection on each fetch blanks every feature for the duration of the round-trip.
+- **Fix:** Hold features in an in-memory cache (`featureCacheRef`, Map keyed by territory id), bound it (~3000 entries with viewport-aware eviction so on-screen features never get evicted), and **merge** new fetch results in instead of replacing. Visible features then never blank. When real-time lands, invalidate per-entry via `featureCacheRef.current.delete(territoryId)`.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -470,10 +480,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Bug | Detail |
 |---|---|
 | **Nested / overlapping SPB territories (NEW Session 14 — NEXT SESSION'S FIRST TASK)** | Spotted on phone visual test after gap-fill propagation. Some gap-fill blocks overlap each other and/or overlap existing OSM-named SPB territories. Root cause unknown — could be (a) OSM-named territory containing one or more gap-fill blocks, (b) gap-fill block containing another gap-fill block, (c) partial overlap from polygonisation edges, or any combination. Diagnostic query needed: find all pairs where `postgis.ST_Overlaps(a.geom, b.geom)` or `postgis.ST_Contains(a.geom, b.geom)` is true beyond a tiny tolerance. Group results by overlap type before deciding handling per type (likely delete smaller / sub-tier or merge into larger). |
-| **onMapIdle viewport re-fire unreliable (Session 6 — still open)** | First `onMapIdle` fires correctly on initial map load. Subsequent zoom/pan does not reliably re-trigger fetch. Suspected `@rnmapbox/maps` v10 quirk where `onMapIdle` doesn't reliably re-fire. Likely fix: swap to `onCameraChanged` with `state.gestures.isGestureActive` guard. Diagnostic step first — confirm whether `[viewport fetch]` log appears on zoom/pan. |
+| **onMapIdle viewport re-fire unreliable (Session 6 — RESOLVED differently this session)** | ~~Fixed.~~ Replaced `onMapIdle` flow with `onCameraChanged` (150ms debounce) + client-side cache + merge-on-fetch. Pan/zoom now feels tile-like — visited areas stick, new areas populate reliably. Cache absorbs the higher fetch frequency safely. |
+| **Zoom-level rendering: some small polygons missing at wide zoom (NEW this session, DEFERRED)** | At Mapbox scale ~500m/750m (zoom ~13–14), some territories that exist in DB do not render; same area at tighter zoom (≤250m, zoom ≥15) shows them. `get_territories_in_viewport` applies `postgis.ST_SimplifyPreserveTopology` with tolerance 0.00005° at zoom 12–14 and 0.0002° at zoom 10–12. Hypothesis: simplification collapses small polygons below the `ST_NPoints >= 4` filter threshold, hiding them. Diagnostic query drafted (count survives-simplify vs total in viewport) but not run. Fix likely: scale `simplify_tolerance` down further or only apply `ST_NPoints >= 4` to the un-simplified geom. Defer to map polish phase — performance is good enough to develop on. |
 | **37 SPB gap-fill blocks flagged_oversize = true** | Perim > 8000m, manual visual review deferred. Examples: block #9771 'улица Демьяна Бедного' at 7052m perim (street name on a huge block — suspicious). |
 | **Some OSM POI names are bureaucratic asset codes** | e.g. 'Near СО17-2873 N' as a tier-2 landmark name. Fix at frontend display layer (formatTerritoryDisplayName) when display surfaces are touched. |
-| Diagnostic logs still in MapScreen.js | `[viewport fetch]`, `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]` — keep until viewport-refire + nested-territories bugs solved, then strip. |
+| Diagnostic logs still in MapScreen.js | `[vp fetch] START / OK / ABORTED / ERROR / SKIP` + older `[geojson diag]`, `[shape source feed]`, `[feature builder]`, `[render]`. Keep until zoom-simplify + nested-territories bugs solved, then strip. AbortError logs are noise, not failures — they confirm the system is correctly cancelling stale requests. |
 | Dead RPCs in Supabase | `get_all_territories_meta` and `get_territories_geojson_batch` no longer called. Safe to drop. |
 | `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but key must move to env var before file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production. |
@@ -515,47 +526,34 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Amsterdam gap-fill pipeline** — expected ≤30 new fill blocks. Not run yet. Run after SPB nested-territories cleanup completes and pipeline is proven idempotent.
 - Phase 5a `activity_log` table
 - Custom Mapbox night style swap-back (currently `light-v11` for dev)
+- **Ably cache-invalidation hook in MapScreen.js** — when real-time multiplayer lands, subscribe to `territory:updated` channel and call `featureCacheRef.current.delete(territoryId)` on each event. ~1 hour of work; integrates with existing `handleTerritoriesRefetched(territoryId)` pattern.
 
 ---
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓**
 
-**Immediate — investigate and clean up nested / overlapping SPB territories:**
+**Immediate — pick the next priority off the backlog.** Map performance is good enough to develop on. Discuss at the start of next session and choose one of:
 
-1. **Diagnostic query** (one at a time, verify each):
-   ```sql
-   -- Find all overlap pairs beyond a small tolerance
-   SELECT
-     a.id AS id_a, a.territory_name AS name_a,
-     b.id AS id_b, b.territory_name AS name_b,
-     postgis.ST_Area(postgis.ST_Intersection(a.geom, b.geom)::geography) AS overlap_m2,
-     postgis.ST_Area(a.geom::geography) AS area_a_m2,
-     postgis.ST_Area(b.geom::geography) AS area_b_m2
-   FROM territories a
-   JOIN territories b
-     ON a.id < b.id
-     AND postgis.ST_Intersects(a.geom, b.geom)
-   WHERE postgis.ST_Area(postgis.ST_Intersection(a.geom, b.geom)::geography) > 50  -- 50m² tolerance
-   ORDER BY overlap_m2 DESC
-   LIMIT 100;
-   ```
-2. **Group results by overlap type:**
-   - `gap-fill inside OSM-named` (containment, area_a fully covers area_b)
-   - `OSM-named inside gap-fill` (reverse)
-   - `gap-fill inside gap-fill`
-   - `partial overlap` (no containment, just intersection edge)
-3. **Decide handling per type** (likely: delete smaller / sub-tier where contained, investigate partials case-by-case).
-4. **Apply fix, verify by zooming the relevant SPB area on phone.**
+- **Phase 5a** — `activity_log` table + event-write sites in ClaimSuccessScreen, ContestResultScreen, ActivityScreen
+- **Backend phase kickoff** — Fastify + BullMQ + Ably scaffolding (also unblocks defender flow and the cache-invalidation hook in MapScreen.js)
+- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish.
+- **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision. Both files in one session once strategy is agreed.
 
-**Queued — after overlap cleanup:**
-- Strip diagnostic logs in MapScreen.js
+**Queued — deferred map work (revisit at polish phase):**
+- Nested / overlapping SPB territories investigation — diagnostic query for `postgis.ST_Overlaps` / `postgis.ST_Contains` pairs, group by overlap type, decide handling per type
+- Zoom-level simplification fix — diagnostic count of survives-simplify vs total in viewport, then scale tolerance down or move `ST_NPoints >= 4` to un-simplified geom
+- Strip diagnostic logs in MapScreen.js (`[vp fetch] *`, `[geojson diag]`, etc.)
 - Drop dead RPCs (`get_all_territories_meta`, `get_territories_geojson_batch`)
 - Phone visual review of 37 `flagged_oversize` blocks
 - Drop `territory_name_v1` rollback column once gap-fill names verified stable
 - Drop 5 temp tables (`gap_fill_*`, `spb_*`) once oversize review complete
-- onMapIdle viewport re-fire fix (`onCameraChanged` with gesture guard)
+
+**Queued — Ably real-time integration (~1 hour when backend lands):**
+- Subscribe to `territory:updated` channel
+- On event, call `featureCacheRef.current.delete(territoryId)` and trigger re-render
+- Integrates cleanly with existing `handleTerritoriesRefetched(territoryId)` pattern already in MapScreen.js
 
 **Queued — Amsterdam gap-fill:**
 - Rerun the SPB pipeline pattern on Amsterdam envelope. Expected ≤30 new fill blocks. Validate same pipeline is idempotent across cities before adding Bengaluru / other cities.
@@ -636,6 +634,13 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | minSdkVersion 26 via expo-build-properties plugin | android.minSdkVersion in app.json not respected by Expo managed workflow |
 | App-code writes for territory_history (not Postgres triggers) | Easier to debug, matches existing pattern |
 | Contest write order: close-out → territories → INSERT | Prevents two rows with lost_at = null for same territory |
+| **Client-side feature cache over server-side caching (Session 15)** | Small, no infra change, works offline-ish on revisit. Server-side caching would have meant Redis or PG materialised views — both overkill for the actual problem (per-pan re-fetch of the same features). |
+| **Stale-while-revalidate semantics for cache (Session 15)** | When Ably real-time lands, subscribe to `territory:updated` events and invalidate per-feature cache entries on each event. Pattern: `featureCacheRef.current.delete(territoryId)` + trigger re-render. Already wired via `handleTerritoriesRefetched(territoryId)` for Abandon flow — Ably integration extends the same hook. |
+| **3000-entry cache cap with viewport-edge eviction (Session 15)** | Balances memory vs UX. Eviction never touches what's currently on screen — only features outside the viewport ring get dropped first. Re-fetching evicted features is cheap once they come back into view. |
+| **Age-gated abort (1s threshold) over unconditional cancel (Session 15)** | Preserves intermediate viewport data when user pans fast. Recent fetches finish and populate the cache; only truly stale fetches (>1s) get killed. Single in-flight + skip-if-recent prevents pile-up. |
+| **Merge-on-fetch over replace (Session 15)** | Visible features never blank during a pan. The FeatureCollection grows monotonically (bounded by cache cap), so the shape source is stable across fetches. |
+| **150ms debounce on onCameraChanged (Session 15, down from 600ms on onMapIdle)** | Cache absorbs the resulting higher fetch frequency safely. Tight debounce gives near-immediate feedback on pan-end without the redundant fetches that caused the original perf problem. |
+| **Zoom-simplify bug deferred (Session 15)** | Performance is good enough to develop on. Bug only affects wide zoom (≤zoom 14) on small polygons — most of the active gameplay happens at tighter zoom where everything renders. Fix when map polish lands; not blocking. |
 | History writes use console.warn-only error handling | A history bug must never cause a player to lose XP, resources, or ownership |
 | Currently-held rows count toward hold duration metrics | Player holding 30 days hits Rank 2 even before losing it |
 | Backfilled open rows excluded from ownershipChanges | Only completed holds count |
