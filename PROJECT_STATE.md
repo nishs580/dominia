@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 16, 2026 (Health Connect integration verified end-to-end — read-only, foreground. Custom Expo plugin, debug screen, debug_events table.)
+Last updated: May 16, 2026 (Session 17 — Health Connect wired into ActivityScreen daily challenges with 10s live poll, auto-complete cascade, permission banner, and a real 7-day weekly chart with smooth Claim-red SVG trend curve and tap-to-reveal step counts.)
 
 ---
 
@@ -177,7 +177,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono, uppercase, Ink background, hairline-strong top border, Bone active / Slate inactive, no icons |
 | Map screen | ~ Live data | **PostGIS viewport-based fetch** via `get_territories_in_viewport` RPC. Renders Amsterdam (239) and SPB (8,295) territories from the same RPC depending on viewport. **Client-side feature cache (`featureCacheRef`, Map keyed by territory id, ~3000-entry cap with viewport-aware eviction)** + **merge-on-fetch** (never blanks the FeatureCollection on pan/zoom) + **age-gated abort** (only cancels in-flight fetches older than 1s, so near-complete fetches still populate cache). Debounce 150ms on `onCameraChanged`. Cache invalidates per-feature on Abandon via `handleTerritoriesRefetched(territoryId)`. Feature builder reads FLAT RPC columns. State-aware fill + line + label styles unchanged. styleURL temporarily `mapbox://styles/mapbox/light-v11` for dev visibility. **KNOWN BUGS: zoom-level simplification hides some small polygons at wide zoom; nested/overlapping territories detected on phone visual test — see Open Bugs.** |
-| Activity screen | ✓ Live data | Daily challenges with live XP + resource earning (calcResourceEarn()). Challenge XP fixed: easy 50, medium 150, hard 400. |
+| Activity screen | ✓ Live data | **Health Connect wired end-to-end (Session 17).** On focus: `initialize` + `getGrantedPermissions` + start 10s `readRecords('Steps', today 00:00 → now)` poll. Permission banner above challenge card when Steps read ungranted (LOCKED tier rows). Live tier progress `X / 5,000 steps` replaces COMPLETE button. Auto-complete watcher fires `onCompleteChallenge` for each tier whose target is crossed (Easy → Med → Hard cascade order); each tier writes player_challenges + atomic player update + activity_log independently. Idempotency via `inFlightTiersRef` + `completedKeys`. `DEV_MODE_MANUAL` constant at top of file restores COMPLETE buttons when set true (for testing without walking). Real 7-day weekly chart: `readWeeklySteps` reads HC for 7 days, groups by local day key, ends today at idx 6, overlays `liveSteps` via Math.max so today's bar animates with the poll. Today auto-highlighted in bone, tap-to-reveal step count label above chart, smooth Claim-red SVG trend curve over bar tops with dots at each day. |
 | Profile screen | ✓ Live data | POWER section above Influence. Total Power hero + 3 breakdown rows: Activity (inactive), Territory (live), Legacy (live). My Resources ghost button → WalletScreen. **Long-press commander name (delayLongPress=1000) opens hidden HealthConnectDebug screen.** |
 | Alliance screen | ✓ Branded | Join/create flow, roster, collective mission. War Room button passes allianceId, allianceName, shortName as nav params. |
 | War Room screen | ✓ Live data | Live alliance Influence/day. Live war chest Morale only. All 6 abilities with correct costs. ACTIVATE buttons wired (Founder only) via `deduct_alliance_morale` RPC. |
@@ -186,7 +186,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
 | Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
-| HealthConnectDebug screen | ✓ Live data | Hidden, long-press Profile commander name. SDK status, permission state, today's steps + raw JSON dump, last 7 days breakdown, REQUEST PERMISSIONS button, REFRESH button, Log to Supabase button (writes `health_connect_snapshot` event to `debug_events`). Permanent — reusable for every future HC bug. |
+| HealthConnectDebug screen | ✓ Live data | Hidden, long-press Profile commander name. SDK status, permission state, today's steps + raw JSON dump, last 7 days breakdown, REQUEST PERMISSIONS button, REFRESH button, Log to Supabase button (writes `health_connect_snapshot` event to `debug_events`). **`handleRequestPermissions` now re-runs `loadTodaySteps` + `loadSevenDays` after permission grant (Session 17 fix — previously left `sevenDayBreakdown: []` in snapshot payload).** Permanent — reusable for every future HC bug. |
 | Claim Success screen | ✓ Live data | Atomic write of Gold reward + Siege XP via single .update().select(). Tier fetched via .select('tier').single(). |
 | Contest Result screen | ✓ Live data | 4 states. attack_won: close-out → territories → INSERT new history row, atomic write of iron/gold/morale + Siege XP + lifetime_contest_wins increment via single .update().select(). |
 | Create Alliance screen | ✓ Branded | 3-step founding flow (identity → HQ territory → confirm). |
@@ -223,7 +223,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `plugins/withHealthConnect.js` | Custom Expo config plugin. Injects `HealthConnectPermissionDelegate.setPermissionDelegate(this)` into MainActivity.kt `onCreate` at prebuild time (anchor regex `/super\.onCreate\(.+?\)/` matches both `savedInstanceState` and `null` forms — Expo SDK 54 uses `null`). Adds `PermissionsRationaleActivity`, `ViewPermissionUsageActivity` activity-alias, and `com.google.android.apps.healthdata` `<queries>` tag. Owned in-repo over the community `expo-health-connect` plugin (last updated July 2024, predates RN 0.74+ New Arch). NEW Session 16. |
 | `screens/MapScreen.js` | **PostGIS viewport-based architecture with client-side feature cache.** Single RPC call to `get_territories_in_viewport` per fetch. `featureCacheRef` (Map keyed by territory id) holds previously fetched features; new fetches **merge** into cache, never replace. ~3000-entry cap with viewport-edge eviction. Debounce 150ms on `onCameraChanged`. **Age-gated abort:** only cancels in-flight fetches older than 1s; recent ones complete and populate cache. Skip-if-recent-in-flight prevents pile-up. `handleTerritoriesRefetched(territoryId)` clears the cache entry on Abandon before refetch. Diagnostic logs (`[vp fetch] START / OK / ABORTED / ERROR / SKIP`) still in place — strip when zoom-simplify bug resolved. Feature builder reads FLAT fields. styleURL = `mapbox://styles/mapbox/light-v11` (dev). |
-| `screens/ActivityScreen.js` | Daily challenges with live XP + resource earning. |
+| `screens/ActivityScreen.js` | **Health Connect wired (Session 17).** 10s poll of today's steps via `useFocusEffect` + `setInterval`. Live tier progress UI, permission banner with GRANT PERMISSION button, auto-complete watcher that cascades Easy → Med → Hard with idempotency guards (`inFlightTiersRef` + `completedKeys`). Each tier writes player_challenges + player update + activity_log independently per §6.1. `DEV_MODE_MANUAL` constant at top of file gates COMPLETE buttons for manual testing (default false). Real weekly steps chart (`readWeeklySteps` HC read + group by local day key, today always last index, liveSteps overlay via Math.max) with bone-highlighted today bar, tap-to-reveal step count, and smooth Claim-red SVG `<Path>` trend curve (Catmull-Rom→Bézier, tension 0.2) drawn over bar tops via absolute-positioned `<Svg>` overlay with `pointerEvents="none"` so bars remain tappable. |
 | `screens/ProfileScreen.js` | POWER section above Influence. Long-press on headerBlock (commander name, delayLongPress=1000) navigates to HealthConnectDebug. Same pattern reusable for future debug screens. |
 | `screens/AllianceScreen.js` | Join/create flow, roster, mission. |
 | `screens/WarRoomScreen.js` | All 6 abilities. ACTIVATE wired (Founder only) via `deduct_alliance_morale` RPC. |
@@ -232,7 +232,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `screens/UsernameScreen.js` | Fully branded. 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow. |
 | `screens/ActiveClaimScreen.js` | Fully branded. DEV_MODE=true. |
-| `screens/HealthConnectDebugScreen.js` | Hidden debug screen. SDK status check (`getSdkStatus`), permission request flow (`requestPermission` after MainActivity delegate is wired), today's steps via `readRecords('Steps', { timeRangeFilter: { operator: 'between', startTime, endTime } })`, raw JSON dump, last 7 days breakdown, snapshot write to `debug_events` via `lib/debug.js`. NEW Session 16. |
+| `screens/HealthConnectDebugScreen.js` | Hidden debug screen. SDK status check (`getSdkStatus`), permission request flow (`requestPermission` after MainActivity delegate is wired), today's steps via `readRecords('Steps', { timeRangeFilter: { operator: 'between', startTime, endTime } })`, raw JSON dump, last 7 days breakdown, snapshot write to `debug_events` via `lib/debug.js`. **`handleRequestPermissions` calls `loadTodaySteps` + `loadSevenDays` after `refreshGranted` (Session 17 fix — sevenDayBreakdown empty-array bug).** NEW Session 16. |
 | `screens/ClaimSuccessScreen.js` | Atomic Gold + Siege XP write. |
 | `screens/ContestResultScreen.js` | 4 states. attack_won: close-out → territories → INSERT → atomic player update. |
 | `screens/CreateAllianceScreen.js` | Fully branded. 3-step founding flow. |
@@ -516,8 +516,8 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but key must move to env var before file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production. |
 | Client Trust + email verification disabled in Clerk | Both disabled for dev. Re-enable before production. |
-| Real step tracking not yet wired into gameplay | Health Connect read-only working in debug screen. ActiveClaimScreen still on DEV_MODE=true. ActivityScreen daily challenges still don't consume real step data. Wire in next session (Session B of the 3-session split). |
-| `sevenDayBreakdown` empty in `health_connect_snapshot` payload (NEW Session 16) | UI shows the 7-day breakdown entries correctly but the snapshot written to `debug_events` records `sevenDayBreakdown: []`. Likely either (a) snapshot logged before the 7-day fetch resolves, or (b) field-name mismatch between local state var and snapshot key. 5-min sanity check at start of next session before wiring HC into ActivityScreen. |
+| Real step tracking in ActiveClaimScreen | Health Connect now drives ActivityScreen daily challenges (Session 17). ActiveClaimScreen still on `DEV_MODE=true` (fake interval) — next session's target (Session C: foreground GPS + live HC step reads). |
+| Cascade auto-completion not yet verified on a real walking day (NEW Session 17) | Manual one-by-one tier writes (Easy → Med → Hard) verified end-to-end (one player_challenges row + one activity_log row per tier). True cascade (Hard crossing 15k in a single 10s poll tick auto-completing Med + Easy in the same loop) deferred to first natural 15k-step day. Logic is straightforward; the underlying write path is proven. |
 | Steps (background read) permission not granted | Only required for true background reads when app is closed. Foreground reads from ActivityScreen on mount don't need it. Decide whether to request as part of onboarding or defer to a later "always-on tracking" feature. |
 | 3 of 4 ContestResultScreen branches unverified on device | Code wired for attack_won, attack_lost, defence_won, defence_lost. Only attack_won verified on phone. Defence states need Ably real-time to test, so harder to verify in isolation. |
 | Defender flow deferred | Needs Ably real-time layer. |
@@ -546,7 +546,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## DEFERRED / OUT OF SCOPE
 
-- Real step tracking — Health Connect verified read-only foreground (Session 16); wiring into gameplay split across two more sessions (B: ActivityScreen daily challenges, C: foreground service + GPS + live steps for Active Claim)
+- Real step tracking — Health Connect verified read-only foreground (Session 16); wired into ActivityScreen daily challenges with 10s poll + live weekly chart (Session 17). Session C remaining: foreground service + GPS + live steps for ActiveClaimScreen.
 - Background step reads (`READ_HEALTH_DATA_IN_BACKGROUND` permission) — granted in manifest, not yet requested from user. Only needed when app is closed; defer until "always-on tracking" feature
 - Defender flow — needs Ably real-time layer
 - Alliance disband flow — no real gameplay use case
@@ -555,7 +555,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase
 - **Phase 2 of SPB territory pool** — merging existing sub-tier OSM-named SPB territories (485 of them) into the unified gap-fill pool. Phase 1 was greenfield gap-fill only; Phase 2 deferred.
 - **Amsterdam gap-fill pipeline** — expected ≤30 new fill blocks. Not run yet. Run after SPB nested-territories cleanup completes and pipeline is proven idempotent.
-- Phase 5a `activity_log` table
 - Custom Mapbox night style swap-back (currently `light-v11` for dev)
 - **Ably cache-invalidation hook in MapScreen.js** — when real-time multiplayer lands, subscribe to `territory:updated` channel and call `featureCacheRef.current.delete(territoryId)` on each event. ~1 hour of work; integrates with existing `handleTerritoriesRefetched(territoryId)` pattern.
 
@@ -563,23 +562,18 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓**
 
-**Immediate — Session B of step tracking split: wire Health Connect into ActivityScreen daily challenges.**
+**Immediate — Session C of step tracking split: replace ActiveClaimScreen `DEV_MODE=true` fake interval with real foreground GPS + live step reads.**
 
-On screen mount: call `readRecords('Steps', { timeRangeFilter: { operator: 'between', startTime: today00:00 local, endTime: now } })`, sum the `count` field, compare against active challenge tiers (Easy 5k / Med 10k / Hard 15k from the challenge rotation), mark completed challenges and write to `activity_log` + atomic player update via §6 economy. Auto-complete cascade per §6.1 (Hard completes Med + Easy, each pays out independently).
-
-**First 5-min sanity check:** fix the `sevenDayBreakdown: []` empty-array bug in HealthConnectDebugScreen snapshot before wiring. Likely a snapshot-before-fetch-resolves or field-name mismatch.
-
-**After Session B is verified — Session C of step tracking split:**
-Foreground service + GPS + live steps for ActiveClaimScreen (replaces DEV_MODE=true fake interval).
+On claim start: start `expo-location` foreground watch (GPS), accumulate distance walked via Haversine between successive positions, read live steps from Health Connect at the same 10s cadence as ActivityScreen. Active Claim ring fills based on distance walked vs territory perimeter target. On claim success: pass real distance + step count to ClaimSuccessScreen for `activity_log.km_amount` + future anti-cheat. Decide upfront: foreground service notification (required on Android 14+ for sustained GPS), GPS accuracy preset (High vs BestForNavigation — battery vs jitter trade-off), and stale-position threshold (skip points more than N seconds old).
 
 **Then pick the next priority off the backlog.** Discuss at the start of the next-next session and choose:
 
-- **Phase 5a** — `activity_log` table + event-write sites in ClaimSuccessScreen, ContestResultScreen, ActivityScreen
 - **Backend phase kickoff** — Fastify + BullMQ + Ably scaffolding (also unblocks defender flow and the cache-invalidation hook in MapScreen.js)
 - **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish.
 - **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision. Both files in one session once strategy is agreed.
+- **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls (Distance, TotalCaloriesBurned, ExerciseSession). Today/Best logic needs persistent best storage.
 
 **Queued — deferred map work (revisit at polish phase):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `postgis.ST_Overlaps` / `postgis.ST_Contains` pairs, group by overlap type, decide handling per type
@@ -747,6 +741,14 @@ Foreground service + GPS + live steps for ActiveClaimScreen (replaces DEV_MODE=t
 | **`territory_name_v1` rollback column on gap-fill rows (Session 14)** | Cheap insurance against disambiguation bugs visible only on device. Drop after ~1 week of stable rendering. |
 | **Verified originally-unique names preserved through disambiguation (Session 14)** | 850 names were unique pre-pass. All 850 verified untouched post-pass. The disambiguation functions are scoped to duplicates only — but verifying this empirically is cheap and catches regressions. |
 | **`.gitignore` is the only file pushed for Sessions 13–14 (Session 14)** | All new scripts (fetch-spb-*, load-*-to-postgis.js) and all geojson outputs explicitly ignored. No secrets leaked. No app code changed in two sessions of heavy DB work — by design. |
+| **10s polling cadence for ActivityScreen step reads (Session 17)** | Health Connect doesn't push events — it's read-only polling. 10s feels "live enough" for daily totals without battery cost. Polling is gated behind `useFocusEffect` so it only runs while ActivityScreen is focused. |
+| **Permission banner + LOCKED tiers, not auto-prompt (Session 17)** | User controls the consent moment. Matches the HealthConnectDebugScreen pattern. The Steps-read permission is requested via an explicit GRANT PERMISSION button when the screen loads ungranted. |
+| **Three separate atomic writes for cascaded tier completion (Session 17)** | §6.1 mandates each resolved tier pays out independently — Easy + Med + Hard each get their own `player_challenges` row, `activity_log` row, and player resource update when Hard crosses 15k. No batched single-write. |
+| **`DEV_MODE_MANUAL` flag kept in source (Session 17)** | Mirrors `ActiveClaimScreen.DEV_MODE` pattern. Useful escape hatch for future HC debugging (permission revoked, sensor stops reporting, etc.). Default false; flip to true to bring back COMPLETE buttons without walking. |
+| **Hardcoded Easy/Med/Hard step tiers in ActivityScreen (Session 17)** | Rotation pool (10 tasks per tier from §6.2) deferred to its own session. Step tracking works regardless of which task the rotation surfaces — current hardcoded tiers are the most common case anyway. |
+| **Today's bar in weekly chart detected by position, not weekday (Session 17)** | `readWeeklySteps` always returns 7 rows ending today (idx 6). Bar highlight derived as `data.length - 1` — immune to weekday-indexing bugs and works across timezones. |
+| **Smooth trend curve drawn as SVG overlay, pointerEvents="none" (Session 17)** | Bars remain independently tappable for step-count reveal. The curve is decorative, drawn via Catmull-Rom→Bézier conversion with tension 0.2 for a flowing rather than spiky look. Claim red for brand accent. |
+| **Cascade verification deferred to first real 15k-step day (Session 17)** | Manual one-by-one tier writes proved the underlying write path. Synthesising a 15k step total just to verify the cascade loop wasn't worth the SQL setup; the logic is straightforward and reverting via SQL is cheap if it misbehaves. |
 
 ---
 
