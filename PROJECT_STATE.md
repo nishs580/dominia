@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 16, 2026 (Session 17 — Health Connect wired into ActivityScreen daily challenges with 10s live poll, auto-complete cascade, permission banner, and a real 7-day weekly chart with smooth Claim-red SVG trend curve and tap-to-reveal step counts.)
+Last updated: May 16, 2026 (Session 18 — Step-tracking Session C complete: ActiveClaimScreen now fully steps-driven via Health Connect with foreground service GPS. Real-walk verified end-to-end on SPB. Stride calibration scaffolding live (writer active, qualifying window too strict — pending tune). `lib/claim.js` extracted. 15-min Continuous Walk Rule extended from contests to claims.)
 
 ---
 
@@ -35,6 +35,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
 | Health | react-native-health-connect 3.x | ✓ Working (read-only, foreground verified) |
+| Background tasks | expo-task-manager + expo-location startLocationUpdatesAsync | ✓ Working (foreground service for active claim GPS) |
 | Animations | react-native-svg | ✓ Installed |
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
@@ -49,12 +50,12 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 | nish_s player ID | 94a9036e-1d59-49ae-9b5f-eae064913fbf |
 | nish_s clerk_id | user_3CRjZoj8XaCoFwuAayVcgA2RPaP |
-| nish_s territories | Museumplein, Oosterpark, Vondelpark, Leidseplein, Jordaan |
+| nish_s territories | Рашетова улица (SPB), Near Колледж экономики и права (SPB), Лиственная улица (SPB), Museumplein (AMS) — 4 active |
 | Rubik player ID | 788e9834 — KAI alliance, holds Sarphatipark |
 | boo player ID | 53a0186a — GGG alliance |
 | Phantom | alliance id 80caca88-85ba-4830-9b63-1c4fc8d8372c, holds Oud-West |
 | Kainetic Allied [KAI] | id=6bc19cb1-97ce-4f76-95fa-b645606c2b47 |
-| Unclaimed territories | Rembrandtplein, Plantage |
+| Unclaimed territories | Rembrandtplein, Plantage (both AMS) |
 | SPB test home pin | Palace Square (jittered) for nish_s, Rubik, TINA, Alyona — reset 13 May for SPB testing |
 | KAD ring road | OSM relation 1861646 (Cyrillic 'А-118') — defines SPB playable envelope |
 
@@ -67,7 +68,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Supabase | Pro | Micro compute, ~$25/month all-in ($10 compute credit covers Micro). PostGIS 3.3.7 enabled in `postgis` schema. |
 | Mapbox | Free | 50,000 map loads/month |
 | Clerk | Free | 10,000 MAU |
-| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~16 Android used, ~14 remaining.** |
+| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~17 Android used, ~13 remaining.** |
 | Cursor | Pro | No usage limits on AI edits |
 
 ---
@@ -76,7 +77,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, **stride_length_m float DEFAULT 0.75 (NEW Session 18)**, **stride_calibration_sessions int DEFAULT 0 (NEW Session 18)**, **stride_calibration_samples jsonb DEFAULT '[]' (NEW Session 18 — rolling max-10 sample buffer)**
 
 `territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type (text), geojson (jsonb), geom (postgis.geometry(Polygon, 4326)), **district (text, nullable, indexed — NEW Session 14)**, **territory_name_v1 (text, nullable — NEW Session 14, rollback backup on gap-fill rows only, drop after ~1 week of stable rendering)**
 
@@ -125,7 +126,10 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 - ⚠️ **Re-enabling RLS on players without proper Clerk JWT integration will reintroduce the 19-min hang.** Implement Clerk-JWT-based RLS before production launch.
 
 ```sql
--- Reset a territory
+-- Reset a territory (ALSO close any open history row — Session 18 lesson)
+UPDATE territory_history SET lost_at = now()
+  WHERE territory_id = (SELECT id FROM territories WHERE territory_name = 'X')
+    AND lost_at IS NULL;
 UPDATE territories SET owner_id = null, alliance_id = null WHERE territory_name = 'X';
 -- Reset player alliance
 UPDATE players SET alliance_id = NULL WHERE username = 'X';
@@ -185,7 +189,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation, numbered rows, Mapbox dark-v11 home pin map, resolvedPlayerId fallback, live username on Step 4 |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark, Geist Mono uppercase tagline, sharp inputs, Claim red button |
 | Username screen | ✓ Branded | Sharp layout, Next button pinned to bottom, 2-char minimum enforced |
-| Active Claim screen | ✓ Branded | Claim red ring (butt cap), sharp cards, Geist Mono labels, INK background, DEV_MODE=true |
+| Active Claim screen | ✓ Live data | **Steps-driven via Health Connect with foreground service GPS (Session 18 full rewrite).** On claim start: snapshot HC step baseline + start `Location.startLocationUpdatesAsync` with TaskManager-registered task `dominia-active-claim-location`. 10s `useFocusEffect` poll computes distance = (currentSteps − baseline − vehicleExcludedSteps) × strideM. Ring fills based on distance vs perimeter. GPS used for vehicle filter (>25 km/h excludes steps) + stride calibration writer (rolling 10-sample mean, sanity-bounded 0.4–1.1m, qualifying window: accuracy 5–20m AND speed <25 km/h AND >30s). Foreground service notification ("Dominia · Active Claim · Tracking your walk", colour #D64525) survives screen-off and pocket. 4-row stats panel: STEPS · DISTANCE · STRIDE (CAL/DEFAULT) · PACE (spm). Banner priority: vehicle → paused → reset → gpsWeak → halfway. 30s zero-step → PAUSED banner with countdown; 15-min zero-step → progress reset (§7.6 Continuous Walk Rule extended to claims). 50% halfway haptic-pulse fires once per claim. `DEV_MODE_MANUAL=false` flag (default false; flip true for COMPLETE NOW button without walking). GPS accuracy preset: `BestForNavigation`. Stale-position threshold: 5s. |
 | HealthConnectDebug screen | ✓ Live data | Hidden, long-press Profile commander name. SDK status, permission state, today's steps + raw JSON dump, last 7 days breakdown, REQUEST PERMISSIONS button, REFRESH button, Log to Supabase button (writes `health_connect_snapshot` event to `debug_events`). **`handleRequestPermissions` now re-runs `loadTodaySteps` + `loadSevenDays` after permission grant (Session 17 fix — previously left `sevenDayBreakdown: []` in snapshot payload).** Permanent — reusable for every future HC bug. |
 | Claim Success screen | ✓ Live data | Atomic write of Gold reward + Siege XP via single .update().select(). Tier fetched via .select('tier').single(). |
 | Contest Result screen | ✓ Live data | 4 states. attack_won: close-out → territories → INSERT new history row, atomic write of iron/gold/morale + Siege XP + lifetime_contest_wins increment via single .update().select(). |
@@ -218,6 +222,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `lib/__tests__/formulas.test.js` | 348 Jest tests covering all of formulas.js. Run with `npm test`. Must stay green before any commit touching formulas.js. |
 | `lib/streak.js` | updateStreakOnChallengeComplete — Supabase I/O. **No tests yet.** |
 | `lib/territory.js` | Display helpers + getLegacyRankForTerritory + getTerritoryHistoryStats. **No tests yet.** |
+| `lib/claim.js` | **NEW Session 18.** Pure math + Supabase I/O for ActiveClaimScreen. Exports `loadPlayerStride`, `stepsToMetres`, `computeSpeedKmh`, `isVehicleSpeed` (>25 km/h), `isQualifyingCalibrationWindow` (accuracy 5–20m AND speed <25 km/h AND >30s), `pushCalibrationSample` (rolling 10-sample mean writer, sanity-bounded 0.4–1.1m), `haversineMetres`, `paceSpm`, plus `CLAIM_CONSTANTS`. **No tests yet.** |
 | `lib/debug.js` | `logDebug(playerId, eventType, payload)` — fire-and-forget Supabase write to `debug_events`. Console.warn-only error handling, matches territory_history pattern. NEW Session 16. |
 | `metro.config.js` | react-dom shim to fix @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
@@ -231,7 +236,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `screens/SignInScreen.js` | Fully branded. |
 | `screens/UsernameScreen.js` | Fully branded. 2-char minimum. |
 | `screens/OnboardingScreen.js` | Fully branded. 5-step flow. |
-| `screens/ActiveClaimScreen.js` | Fully branded. DEV_MODE=true. |
+| `screens/ActiveClaimScreen.js` | **Full rewrite Session 18.** Steps-driven loop via Health Connect, foreground service GPS via `Location.startLocationUpdatesAsync` + `TaskManager.defineTask("dominia-active-claim-location")`. Module-level `latestTaskFix` bridged into `lastGpsFixRef` at start of each poll tick. Distance = (currentSteps − baseline − vehicleExcludedSteps) × strideM, recomputed every 10s. Stride calibration writer pushes (gpsDist/stepsInWindow) samples when qualifying window criteria met. 4-row stats panel (STEPS · DISTANCE · STRIDE (CAL/DEFAULT) · PACE). Banner priority queue: vehicle, paused, reset, gpsWeak, halfway. 30s zero-step → PAUSED MM:SS; 15-min zero-step → progress reset. 50% halfway haptic-pulse with idempotency flag. `DEV_MODE_MANUAL=false` constant at top (mirrors ActivityScreen pattern). All existing logic preserved: contest mode, opponent + attacker alliance fetches, contest-vs-claim destination, cancel button. |
 | `screens/HealthConnectDebugScreen.js` | Hidden debug screen. SDK status check (`getSdkStatus`), permission request flow (`requestPermission` after MainActivity delegate is wired), today's steps via `readRecords('Steps', { timeRangeFilter: { operator: 'between', startTime, endTime } })`, raw JSON dump, last 7 days breakdown, snapshot write to `debug_events` via `lib/debug.js`. **`handleRequestPermissions` calls `loadTodaySteps` + `loadSevenDays` after `refreshGranted` (Session 17 fix — sevenDayBreakdown empty-array bug).** NEW Session 16. |
 | `screens/ClaimSuccessScreen.js` | Atomic Gold + Siege XP write. |
 | `screens/ContestResultScreen.js` | 4 states. attack_won: close-out → territories → INSERT → atomic player update. |
@@ -258,7 +263,7 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `dominia_mechanics_v6_10.md` | Game design doc — formulas.js aligned to this version |
 | `.env` | All 4 keys — gitignored |
 | `.npmrc` | legacy-peer-deps=true for EAS build compatibility |
-| `app.json` | Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26), **`./plugins/withHealthConnect.js`**. Android permissions include `android.permission.health.READ_STEPS`, `android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND`, `android.permission.ACTIVITY_RECOGNITION`. |
+| `app.json` | Plugins: expo-location (with `isIosBackgroundLocationEnabled: false` set explicit Session 18), expo-sensors, expo-build-properties (minSdkVersion 26), **`./plugins/withHealthConnect.js`**. Android permissions include `android.permission.health.READ_STEPS`, `android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND`, `android.permission.ACTIVITY_RECOGNITION`, **`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` (NEW Session 18 — required for sustained GPS on Android 14+)**. |
 | `eas.json` | EAS build profiles, MAPBOX_DOWNLOADS_TOKEN env reference |
 | `android/gradle.properties` | Mapbox download token for builds |
 
@@ -363,7 +368,7 @@ git commit -m "message"
 git push
 ```
 
-**EAS build budget:** 30/month. ~16 Android used, ~14 remaining. Only build for new native modules. Batch all native installs into one build.
+**EAS build budget:** 30/month. ~17 Android used, ~13 remaining. Only build for new native modules. Batch all native installs into one build.
 
 **Native module rule:** New native modules need an EAS build + APK reinstall. JS-only packages just need a Metro restart.
 
@@ -490,6 +495,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Cause:** Expo SDK 54's MainActivity.kt calls `super.onCreate(null)`, not `super.onCreate(savedInstanceState)`. A regex written for an older template silently misses.
 - **Fix:** Use the relaxed anchor `/super\.onCreate\(.+?\)/` that matches both forms. General lesson for any custom plugin that touches MainActivity.kt: never assume a specific argument name — match the call shape, not the argument string. Re-check the anchor every Expo SDK upgrade.
 
+**26. Orphan territory_history rows after dev territory reset (Session 18)**
+- **Signature:** A territory shows as "Unclaimed" (`territories.owner_id = NULL`) but a `territory_history` row for it still has `lost_at = NULL`, so it appears as currently-held in any history-driven query (Legacy Rank, dashboards, ownershipChanges).
+- **Cause:** Old reset SQL snippet only updated `territories.owner_id = NULL` and missed closing the open history row. Two-table invariant broken.
+- **Fix:** Always close the open history row first, then null the owner. Updated SQL snippet in this doc. Lesson: any write that changes ownership state MUST touch both `territories` and `territory_history` — they are paired writes and must be paired in every code path (including dev SQL).
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -516,8 +526,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | `retry-failed-polygons.js` has hardcoded service role key | Local-only file (never committed) but key must move to env var before file ever leaves the local machine. |
 | RLS missing on all tables | Disabled to fix slow load. Re-enable with Clerk-JWT-based RLS before production. |
 | Client Trust + email verification disabled in Clerk | Both disabled for dev. Re-enable before production. |
-| Real step tracking in ActiveClaimScreen | Health Connect now drives ActivityScreen daily challenges (Session 17). ActiveClaimScreen still on `DEV_MODE=true` (fake interval) — next session's target (Session C: foreground GPS + live HC step reads). |
-| Cascade auto-completion not yet verified on a real walking day (NEW Session 17) | Manual one-by-one tier writes (Easy → Med → Hard) verified end-to-end (one player_challenges row + one activity_log row per tier). True cascade (Hard crossing 15k in a single 10s poll tick auto-completing Med + Easy in the same loop) deferred to first natural 15k-step day. Logic is straightforward; the underlying write path is proven. |
+| **PACE (spm) reads 0 during phone-locked walks (NEW Session 18)** | JS tick suspended while phone is locked, so step delta isn't computed per tick; should spike-correct on unlock but instead reads 0. Display-only field — claim math (steps × stride) is unaffected. Root cause not yet diagnosed. Fix likely: calculate pace from `stepsSinceLastEffectiveTick / actualElapsedMs` rather than assuming POLL_INTERVAL_MS. Defer to ActiveClaimScreen polish pass. |
+| **Stride calibration lower-bound accuracy too strict (NEW Session 18)** | Verification walk produced 0 qualifying calibration windows (sessions stayed 0, stride remained 0.75 default). Most likely cause: the 5m lower bound on GPS accuracy (intended to reject implausibly-perfect spoofed signals) is also rejecting clean outdoor signals. Likely fix: drop lower bound to 0m or 3m. Diagnostic logging of `(accuracyM, speedKmh, windowMs, qualifies)` per tick needed to confirm. |
+| Cascade auto-completion not yet verified on a real walking day (Session 17) | Manual one-by-one tier writes (Easy → Med → Hard) verified end-to-end (one player_challenges row + one activity_log row per tier). True cascade (Hard crossing 15k in a single 10s poll tick auto-completing Med + Easy in the same loop) deferred to first natural 15k-step day. Logic is straightforward; the underlying write path is proven. |
+| Notification icon for foreground service is app icon (NEW Session 18) | Should be monochrome 24×24 white PNG per Android notification icon spec. Currently uses app icon — works but not polished. ~30 min asset task; doesn't affect functionality. |
+| v6.11 doc addendum: 15-min Continuous Walk Rule extended to claims (NEW Session 18) | Spec §7.6 currently scopes the 15-min reset rule to contests only. Session 18 designer call: apply same rule to claims. Worth a v6.11 mechanics doc addendum. |
 | Steps (background read) permission not granted | Only required for true background reads when app is closed. Foreground reads from ActivityScreen on mount don't need it. Decide whether to request as part of onboarding or defer to a later "always-on tracking" feature. |
 | 3 of 4 ContestResultScreen branches unverified on device | Code wired for attack_won, attack_lost, defence_won, defence_lost. Only attack_won verified on phone. Defence states need Ably real-time to test, so harder to verify in isolation. |
 | Defender flow deferred | Needs Ably real-time layer. |
@@ -529,7 +542,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Refactor to lib/theme.js. |
 | TERRITORY_CAP_BY_LEVEL duplicated | In MapScreen.js + ProfileScreen.js. Move to formulas.js. |
-| lib/streak.js + lib/territory.js have no unit tests | Both do Supabase I/O — mocking strategy is the gating decision. |
+| lib/streak.js + lib/territory.js + lib/claim.js have no unit tests | All three do Supabase I/O — mocking strategy is the gating decision. |
 | player_number hardcoded as #0001 | Sequential column not yet added. |
 | Siege XP constants exist with no writers | XP_PER_DEFENCE_WIN, XP_RECONQUEST, XP_PER_DEV_TIER_REACHED, XP_ALLIANCE_MISSION, XP_STREAK_MILESTONE — each wires when feature arrives. |
 | lifetime_defence_wins schema placeholder | No writer until defender flow ships. |
@@ -546,7 +559,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## DEFERRED / OUT OF SCOPE
 
-- Real step tracking — Health Connect verified read-only foreground (Session 16); wired into ActivityScreen daily challenges with 10s poll + live weekly chart (Session 17). Session C remaining: foreground service + GPS + live steps for ActiveClaimScreen.
+- Real step tracking — Health Connect verified read-only foreground (Session 16); wired into ActivityScreen daily challenges with 10s poll + live weekly chart (Session 17); ActiveClaimScreen now fully steps-driven with foreground service GPS (Session 18). All three step-tracking sessions complete. Remaining: pace (spm) lock-screen fix, stride calibration tuning, iOS HealthKit when iOS lands.
 - Background step reads (`READ_HEALTH_DATA_IN_BACKGROUND` permission) — granted in manifest, not yet requested from user. Only needed when app is closed; defer until "always-on tracking" feature
 - Defender flow — needs Ably real-time layer
 - Alliance disband flow — no real gameplay use case
@@ -562,18 +575,17 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | ACTIVE CLAIM STEP-DRIVEN WITH FOREGROUND GPS ✓**
 
-**Immediate — Session C of step tracking split: replace ActiveClaimScreen `DEV_MODE=true` fake interval with real foreground GPS + live step reads.**
+**Immediate — discuss + pick from the backlog at start of next session.** Step-tracking 3-session split is complete (Sessions 16/17/18). Top candidates, in rough recommended order:
 
-On claim start: start `expo-location` foreground watch (GPS), accumulate distance walked via Haversine between successive positions, read live steps from Health Connect at the same 10s cadence as ActivityScreen. Active Claim ring fills based on distance walked vs territory perimeter target. On claim success: pass real distance + step count to ClaimSuccessScreen for `activity_log.km_amount` + future anti-cheat. Decide upfront: foreground service notification (required on Android 14+ for sustained GPS), GPS accuracy preset (High vs BestForNavigation — battery vs jitter trade-off), and stale-position threshold (skip points more than N seconds old).
+1. **Backend phase kickoff** — Fastify + BullMQ + Ably scaffolding. Highest-leverage unlock: enables defender flow, real-time territory updates, server-side anti-cheat, and the cache-invalidation hook in MapScreen.js. The longest unstarted phase in the project — worth starting before more frontend work accretes.
+2. **ActiveClaimScreen polish pass** — pace (spm) lock-screen fix + widen stride calibration accuracy lower bound (5m → 0 or 3m) + add per-tick diagnostic logging of `(accuracyM, speedKmh, windowMs, qualifies)` to confirm. Small, focused, ships polish on what was just built.
+3. **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish on every label in the app.
+4. **Tests for `lib/streak.js`, `lib/territory.js`, `lib/claim.js`** — Supabase mocking strategy is the gating decision. All three files in one session once strategy is agreed.
+5. **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls (Distance, TotalCaloriesBurned, ExerciseSession). Today/Best logic needs persistent best storage.
 
-**Then pick the next priority off the backlog.** Discuss at the start of the next-next session and choose:
-
-- **Backend phase kickoff** — Fastify + BullMQ + Ably scaffolding (also unblocks defender flow and the cache-invalidation hook in MapScreen.js)
-- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish.
-- **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision. Both files in one session once strategy is agreed.
-- **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls (Distance, TotalCaloriesBurned, ExerciseSession). Today/Best logic needs persistent best storage.
+**Companion doc work — v6.11 mechanics addendum:** 15-min Continuous Walk Rule extended to claims (currently §7.6 contests-only). Worth a small spec addendum so the doc and code agree.
 
 **Queued — deferred map work (revisit at polish phase):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `postgis.ST_Overlaps` / `postgis.ST_Contains` pairs, group by overlap type, decide handling per type
@@ -592,13 +604,10 @@ On claim start: start `expo-location` foreground watch (GPS), accumulate distanc
 **Queued — Amsterdam gap-fill:**
 - Rerun the SPB pipeline pattern on Amsterdam envelope. Expected ≤30 new fill blocks. Validate same pipeline is idempotent across cities before adding Bengaluru / other cities.
 
-**Queued — tests for `lib/streak.js` and `lib/territory.js`:**
-- Agree on Supabase mocking strategy (manual mock vs jest.mock vs in-memory fake), then both files in one session.
-
 **Queued — Phase 5a:**
 - Raw events written to `activity_log` table; recompute Activity Power on read (Option A — no cache).
 - Three event-write sites: ClaimSuccessScreen, ContestResultScreen, ActivityScreen.
-- `km_amount` column NULL until step tracking lands.
+- `km_amount` column NULL until step tracking lands. **NOTE Session 18:** real distance + step counts now available from ActiveClaimScreen — `km_amount` can be wired on the next Phase 5a pass.
 
 **Queued — Map Session 3 (polish):**
 - Switch styleURL back to custom night Studio style.
@@ -606,9 +615,6 @@ On claim start: start `expo-location` foreground watch (GPS), accumulate distanc
 - Tier-aware visual treatment.
 - Level-gate visual states.
 - Territory tier audit across both Amsterdam and SPB.
-
-**Queued — frontend display helper:**
-- Write `formatTerritoryDisplayName(name)` — strip 'Near ' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic POI asset codes (e.g. `СО17-2873`). Wire when first touching a display surface that hits the long-name cases.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -618,9 +624,10 @@ On claim start: start `expo-location` foreground watch (GPS), accumulate distanc
 - Phase 4.5 ✓ — Siege XP wired, POWER section, lifetime_contest_wins live
 - Phase 4.6 ✓ — War Room ACTIVATE, Morale donation, OSM polygons for original 10 territories
 - Phase 4.7 ✓ — PostGIS migration, viewport RPC, Amsterdam dataset (Session 6)
-- Phase 4.8 ✓ — SPB full city coverage (Sessions 13–14): KAD envelope, 7,810 gap-fill blocks, 3-tier naming, district + okrug spatial join, hybrid disambiguation
+- Phase 4.8 ✓ — SPB full city coverage (Sessions 13–14)
+- Phase 4.9 ✓ — Health Connect end-to-end: ActivityScreen + ActiveClaimScreen step-driven (Sessions 16–18)
 - Phase 5a ○ — activity_log table + 3 event-write sites
-- Phase 5b ○ — Backend: Activity Power read-side once step tracking lands + cron for Total/Alliance Power
+- Phase 5b ○ — Backend: Activity Power read-side once activity_log populates + cron for Total/Alliance Power
 
 **Other backlog:**
 - Implement Clerk-JWT-based RLS on all tables (before production)
@@ -637,6 +644,7 @@ On claim start: start `expo-location` foreground watch (GPS), accumulate distanc
 - Move hardcoded service role key in `retry-failed-polygons.js` to env var
 - Add Bengaluru territory dataset (rerun fetch-osm-polygons.js + gap-fill pipeline)
 - Backend phase (Fastify, BullMQ, Ably, FCM)
+- Notification icon polish: monochrome 24×24 white PNG for foreground service notification
 
 ---
 
@@ -749,6 +757,19 @@ On claim start: start `expo-location` foreground watch (GPS), accumulate distanc
 | **Today's bar in weekly chart detected by position, not weekday (Session 17)** | `readWeeklySteps` always returns 7 rows ending today (idx 6). Bar highlight derived as `data.length - 1` — immune to weekday-indexing bugs and works across timezones. |
 | **Smooth trend curve drawn as SVG overlay, pointerEvents="none" (Session 17)** | Bars remain independently tappable for step-count reveal. The curve is decorative, drawn via Catmull-Rom→Bézier conversion with tension 0.2 for a flowing rather than spiky look. Claim red for brand accent. |
 | **Cascade verification deferred to first real 15k-step day (Session 17)** | Manual one-by-one tier writes proved the underlying write path. Synthesising a 15k step total just to verify the cascade loop wasn't worth the SQL setup; the logic is straightforward and reverting via SQL is cheap if it misbehaves. |
+| **Steps-driven primary loop in ActiveClaimScreen, GPS only for vehicle filter + calibration (Session 18)** | Original GPS-as-distance approach was wrong per §7.3/§7.6 spec — "walk from anywhere", distance comes from steps × stride. Steps survive screen-off + pocket via Health Connect; GPS would have needed continuous foreground tracking just to be the source of truth, burning battery and creating jitter-driven false negatives. |
+| **15-min Continuous Walk Rule extended from contests (§7.6) to claims (Session 18)** | Designer call. The rule's purpose — preventing AFK exploitation of long-distance progress bars — applies just as much to a 5km claim as to a contest. Worth a v6.11 spec addendum so the doc and code agree. |
+| **GPS accuracy preset: BestForNavigation (Session 18)** | Anti-cheat integrity (clean speed signal for vehicle exclusion + stride calibration) outweighs the battery cost on what's typically a 5–60 min walk. Foreground service notification makes the battery cost transparent to the user anyway. |
+| **Stale GPS-position threshold 5s (Session 18)** | Anything older than 5s shouldn't influence speed/distance calcs — a stale fix during a 10s poll tick can produce spurious vehicle-speed readings. 5s is short enough to reject staleness, long enough to tolerate occasional fix gaps in urban canyon. |
+| **Rolling 10-sample stride calibration with mean (Session 18)** | Single-sample stride writes are too noisy. Rolling mean smooths over per-window GPS jitter while still tracking real changes in gait over time. Cap at 10 (FIFO eviction) so a recent gait change isn't drowned by ancient samples. Sanity bounds 0.4–1.1m reject implausible outliers before they enter the mean. |
+| **Stride calibration qualifying window: accuracy 5–20m AND speed <25 km/h AND >30s (Session 18)** | Tight window to avoid contaminated samples (in-vehicle, lost-signal, transient bursts). **Lower bound on accuracy (5m) turned out too strict in practice — rejects clean outdoor signals.** Pending tune to 0m or 3m next session, gated on per-tick diagnostic logging. |
+| **Zero-movement thresholds: 30s pause banner, 15-min full reset (Session 18)** | 30s is conservative enough that a stoplight wait doesn't fire the banner, but short enough that a real pause is visible immediately. 15-min matches §7.6's existing Continuous Walk Rule, applied to claims too. |
+| **Foreground service notification "Dominia · Active Claim" with claim-red colour (Session 18)** | Required on Android 14+ for sustained GPS via `Location.startLocationUpdatesAsync` + TaskManager. Brand-consistent (Claim red #D64525). Notification icon is currently app icon — monochrome 24×24 PNG asset deferred (cosmetic only). |
+| **`expo-task-manager` + module-level `latestTaskFix` + per-tick bridge into ref (Session 18)** | TaskManager tasks run outside React's lifecycle, so a module-level mutable variable is the cleanest hand-off. The poll tick reads-and-mirrors at the top of each 10s loop, which keeps all the React state in one place and avoids subscription gymnastics. Same pattern reusable for any other background sensor data we add later. |
+| **Extracted `lib/claim.js` for pure math + Supabase I/O (Session 18)** | ActiveClaimScreen was approaching 800+ lines with all the calibration writers, speed calcs, and bridges inline. Extracting the pure functions makes them unit-testable later (alongside `lib/streak.js` and `lib/territory.js`) and clarifies what the screen does vs what the math does. Same pattern as `lib/streak.js` / `lib/territory.js`. |
+| **`DEV_MODE_MANUAL=false` default in ActiveClaimScreen (Session 18, renamed from DEV_MODE=true)** | Mirrors ActivityScreen Session 17 pattern. Default false (real-walk mode) since the underlying step-tracking is now proven. Flip true to drop a COMPLETE NOW button for UI iteration without walking — useful for screen polish work that doesn't need to validate the math. |
+| **Snapshot baseline step count from Health Connect on claim start (Session 18)** | All distance math is `(currentSteps − baseline − vehicleExcludedSteps) × strideM` — the baseline is the only thing the screen owns. HC handles the actual counting, so we never have to worry about catching every step event ourselves. Simple, robust to phone-locked walks, no drift accumulation. |
+| **Snapshot resources before any test claim/contest going forward (Session 18 lesson)** | Couldn't prove a specific claim's resource delta from DB alone post-hoc — only saw current balances. From this session on: SELECT iron, stone, gold, morale, xp from players before any test, then diff after. Cheap insurance for future verification. |
 
 ---
 
