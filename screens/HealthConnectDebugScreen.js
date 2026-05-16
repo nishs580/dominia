@@ -333,6 +333,8 @@ export default function HealthConnectDebugScreen() {
     try {
       await requestPermission([STEPS_READ_PERM]);
       await refreshGranted();
+      await loadTodaySteps();
+      await loadSevenDays();
     } catch (e) {
       const msg = await reportError('HealthConnectDebug.requestPermission', e);
       setPermError(msg);

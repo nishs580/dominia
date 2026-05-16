@@ -1,6 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import {
+  initialize,
+  getGrantedPermissions,
+  requestPermission,
+  readRecords,
+} from 'react-native-health-connect';
 import { supabase } from '../lib/supabase';
 import { updateStreakOnChallengeComplete } from '../lib/streak';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
@@ -11,6 +19,8 @@ function levelFromXp(xp) {
   return { level, title: getLevelTitle(level) };
 }
 import { colors, fonts, spacing } from '../lib/theme';
+
+const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
 
 function formatToday(d) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -31,8 +41,54 @@ function formatToday(d) {
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
+function startOfLocalDay(d = new Date()) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function localDayKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const WEEK_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const STEPS_READ_PERM = { accessType: 'read', recordType: 'Steps' };
+
+function hasStepsRead(granted) {
+  return (granted ?? []).some(
+    (p) =>
+      p.recordType === 'Steps' &&
+      p.accessType === 'read' &&
+      p.background !== true &&
+      p.backgroundRead !== true &&
+      p.isBackground !== true,
+  );
+}
+
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
+}
+
+function buildSmoothPath(points) {
+  if (points.length < 2) return '';
+  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const tension = 0.2;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
 }
 
 function ProgressBar({ progress }) {
@@ -44,31 +100,94 @@ function ProgressBar({ progress }) {
   );
 }
 
-function WeeklyBarChart({ data, highlightIndex }) {
+function WeeklyBarChart({ data }) {
+  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [chartWidth, setChartWidth] = useState(0);
   const max = Math.max(...data.map((d) => d.steps), 1);
+  const highlightIndex = data.length - 1;
+  const BAR_TRACK_HEIGHT = 88;
+  const MAX_BAR_HEIGHT = 80;
+
+  // Compute centre-x of each bar based on measured chart width
+  const trendPoints =
+    chartWidth > 0
+      ? data.map((d, idx) => {
+          const colWidth = chartWidth / data.length;
+          const x = colWidth * idx + colWidth / 2;
+          const barH = clamp(d.steps / max, 0, 1) * MAX_BAR_HEIGHT;
+          const y = BAR_TRACK_HEIGHT - barH;
+          return { x, y };
+        })
+      : [];
+  const pathD = buildSmoothPath(trendPoints);
+
   return (
     <View style={styles.chartWrap}>
-      <View style={styles.chartRow}>
-        {data.map((d, idx) => {
-          const isToday = idx === highlightIndex;
-          const h = clamp(d.steps / max, 0, 1) * 80;
-          return (
-            <View key={d.day} style={styles.chartCol}>
-              <View style={styles.chartBarTrack}>
-                <View
-                  style={[
-                    styles.chartBar,
-                    {
-                      height: h,
-                      backgroundColor: isToday ? colors.bone : 'rgba(242,238,230,0.16)',
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.chartDay, isToday && styles.chartDayToday]}>{d.day}</Text>
-            </View>
-          );
-        })}
+      <View style={styles.chartLabelSlot}>
+        {selectedIdx !== null ? (
+          <Text style={styles.chartLabelText}>
+            {data[selectedIdx].day} — {data[selectedIdx].steps.toLocaleString()} steps
+          </Text>
+        ) : (
+          <Text style={styles.chartLabelText}> </Text>
+        )}
+      </View>
+      <View
+        style={styles.chartCanvas}
+        onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
+      >
+        <View style={styles.chartRow}>
+          {data.map((d, idx) => {
+            const isToday = idx === highlightIndex;
+            const isSelected = idx === selectedIdx;
+            const h = clamp(d.steps / max, 0, 1) * MAX_BAR_HEIGHT;
+            return (
+              <Pressable
+                key={`${d.day}-${idx}`}
+                style={styles.chartCol}
+                onPress={() => setSelectedIdx(isSelected ? null : idx)}
+              >
+                <View style={styles.chartBarTrack}>
+                  <View
+                    style={[
+                      styles.chartBar,
+                      {
+                        height: h,
+                        backgroundColor: isToday
+                          ? colors.bone
+                          : isSelected
+                          ? 'rgba(242,238,230,0.45)'
+                          : 'rgba(242,238,230,0.16)',
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.chartDay, (isToday || isSelected) && styles.chartDayToday]}>
+                  {d.day}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {chartWidth > 0 ? (
+          <Svg
+            width={chartWidth}
+            height={BAR_TRACK_HEIGHT}
+            style={styles.chartTrendOverlay}
+            pointerEvents="none"
+          >
+            <Path d={pathD} stroke={colors.claim} strokeWidth={2} fill="none" />
+            {trendPoints.map((p, idx) => (
+              <Circle
+                key={`pt-${idx}`}
+                cx={p.x}
+                cy={p.y}
+                r={2.5}
+                fill={colors.claim}
+              />
+            ))}
+          </Svg>
+        ) : null}
       </View>
     </View>
   );
@@ -84,6 +203,21 @@ export default function ActivityScreen() {
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
   const [isCompleting, setIsCompleting] = useState(() => new Set());
   const [playerLevel, setPlayerLevel] = useState(() => levelFromXp(0));
+  const [hcReady, setHcReady] = useState(false);
+  const [hasStepsPerm, setHasStepsPerm] = useState(false);
+  const [permRequesting, setPermRequesting] = useState(false);
+  const [liveSteps, setLiveSteps] = useState(0);
+  const [weeklySteps, setWeeklySteps] = useState([
+    { day: 'Mon', steps: 0 },
+    { day: 'Tue', steps: 0 },
+    { day: 'Wed', steps: 0 },
+    { day: 'Thu', steps: 0 },
+    { day: 'Fri', steps: 0 },
+    { day: 'Sat', steps: 0 },
+    { day: 'Sun', steps: 0 },
+  ]);
+  const pollRef = useRef(null);
+  const inFlightTiersRef = useRef(new Set());
 
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -141,7 +275,24 @@ export default function ActivityScreen() {
     };
   }, [userId]);
 
-  const chartHighlightIndex = useMemo(() => (today.getDay() + 6) % 7, [today]);
+  useEffect(() => {
+    let cancelled = false;
+    async function bootHC() {
+      try {
+        const ok = await initialize();
+        if (cancelled) return;
+        if (!ok) return;
+        setHcReady(true);
+        const granted = await getGrantedPermissions();
+        if (cancelled) return;
+        setHasStepsPerm(hasStepsRead(granted));
+      } catch (e) {
+        console.warn('[HC] init failed:', e?.message ?? e);
+      }
+    }
+    bootHC();
+    return () => { cancelled = true; };
+  }, []);
 
   const challenges = useMemo(
     () => [
@@ -151,6 +302,7 @@ export default function ActivityScreen() {
         task: 'Walk 5,000 steps',
         xp: 50,
         earnKey: 'easy_step_challenge',
+        target: 5000,
       },
       {
         key: 'medium',
@@ -158,6 +310,7 @@ export default function ActivityScreen() {
         task: 'Walk 10,000 steps',
         xp: 150,
         earnKey: 'medium_step_challenge',
+        target: 10000,
       },
       {
         key: 'hard',
@@ -165,6 +318,7 @@ export default function ActivityScreen() {
         task: 'Walk 15,000 steps',
         xp: 400,
         earnKey: 'hard_step_challenge',
+        target: 15000,
       },
     ],
     [],
@@ -276,15 +430,123 @@ export default function ActivityScreen() {
     }
   }
 
-  const weekly = [
-    { day: 'Mon', steps: 5200 },
-    { day: 'Tue', steps: 8300 },
-    { day: 'Wed', steps: 6100 },
-    { day: 'Thu', steps: 9100 },
-    { day: 'Fri', steps: 6240 },
-    { day: 'Sat', steps: 7400 },
-    { day: 'Sun', steps: 4600 },
-  ];
+  const readTodaySteps = useCallback(async () => {
+    if (!hcReady || !hasStepsPerm) return;
+    try {
+      const start = startOfLocalDay();
+      const end = new Date();
+      const result = await readRecords('Steps', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+        },
+      });
+      const total = (result?.records ?? []).reduce(
+        (s, r) => s + (Number(r?.count) || 0),
+        0,
+      );
+      setLiveSteps(total);
+    } catch (e) {
+      console.warn('[HC] read failed:', e?.message ?? e);
+    }
+  }, [hcReady, hasStepsPerm]);
+
+  const readWeeklySteps = useCallback(async () => {
+    if (!hcReady || !hasStepsPerm) return;
+    try {
+      const end = new Date();
+      const start = startOfLocalDay();
+      start.setDate(start.getDate() - 6);
+
+      const result = await readRecords('Steps', {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+        },
+      });
+
+      const buckets = {};
+      for (const r of result?.records ?? []) {
+        const t = r?.startTime ?? r?.endTime;
+        if (!t) continue;
+        const key = localDayKey(new Date(t));
+        buckets[key] = (buckets[key] || 0) + (Number(r?.count) || 0);
+      }
+
+      const rows = [];
+      for (let i = 6; i >= 0; i -= 1) {
+        const day = startOfLocalDay();
+        day.setDate(day.getDate() - i);
+        const key = localDayKey(day);
+        const jsDayIdx = day.getDay();
+        const labelIdx = (jsDayIdx + 6) % 7;
+        rows.push({
+          day: WEEK_DAY_LABELS[labelIdx],
+          steps: buckets[key] ?? 0,
+        });
+      }
+      setWeeklySteps(rows);
+    } catch (e) {
+      console.warn('[HC] weekly read failed:', e?.message ?? e);
+    }
+  }, [hcReady, hasStepsPerm]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hcReady || !hasStepsPerm) return;
+      readTodaySteps();
+      readWeeklySteps();
+      pollRef.current = setInterval(readTodaySteps, 10000);
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+      };
+    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps]),
+  );
+
+  async function handleRequestStepsPerm() {
+    if (!hcReady || permRequesting) return;
+    setPermRequesting(true);
+    try {
+      await requestPermission([STEPS_READ_PERM]);
+      const granted = await getGrantedPermissions();
+      setHasStepsPerm(hasStepsRead(granted));
+    } catch (e) {
+      console.warn('[HC] permission request failed:', e?.message ?? e);
+    } finally {
+      setPermRequesting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!playerId || !hasStepsPerm) return;
+    (async () => {
+      for (const ch of challenges) {
+        if (liveSteps < ch.target) continue;
+        if (completedKeys.has(ch.key)) continue;
+        if (inFlightTiersRef.current.has(ch.key)) continue;
+        if (isCompleting.has(ch.key)) continue;
+        inFlightTiersRef.current.add(ch.key);
+        try {
+          await onCompleteChallenge(ch);
+        } finally {
+          inFlightTiersRef.current.delete(ch.key);
+        }
+      }
+    })();
+  }, [liveSteps, playerId, hasStepsPerm, challenges, completedKeys, isCompleting]);
+
+  const weekly = useMemo(() => {
+    if (!hasStepsPerm) {
+      return WEEK_DAY_LABELS.map((d) => ({ day: d, steps: 0 }));
+    }
+    // Today is the last entry; overlay live count so today's bar updates with the 10s poll
+    return weeklySteps.map((row, idx) =>
+      idx === 6 ? { ...row, steps: Math.max(row.steps, liveSteps) } : row,
+    );
+  }, [weeklySteps, liveSteps, hasStepsPerm]);
 
   return (
     <View style={styles.screen}>
@@ -304,6 +566,29 @@ export default function ActivityScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {hcReady && !hasStepsPerm ? (
+          <View style={styles.permBanner}>
+            <Text style={styles.permBannerLabel}>HEALTH CONNECT</Text>
+            <Text style={styles.permBannerText}>
+              Step tracking is locked. Grant Health Connect permission to start earning from daily challenges.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleRequestStepsPerm}
+              disabled={permRequesting}
+              style={({ pressed }) => [
+                styles.permBannerBtn,
+                permRequesting && { opacity: 0.45 },
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Text style={styles.permBannerBtnText}>
+                {permRequesting ? 'REQUESTING…' : 'GRANT PERMISSION'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.challengeBlock}>
           <View style={styles.challengeHeaderRow}>
             <Text style={styles.challengeSectionLabel}>DAILY CHALLENGES</Text>
@@ -342,7 +627,7 @@ export default function ActivityScreen() {
                     <View style={styles.challengeAction}>
                       {isDone ? (
                         <Text style={styles.challengeDone}>DONE</Text>
-                      ) : (
+                      ) : DEV_MODE_MANUAL ? (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`Complete ${ch.difficulty} challenge`}
@@ -356,6 +641,12 @@ export default function ActivityScreen() {
                         >
                           <Text style={styles.completeBtnText}>COMPLETE</Text>
                         </Pressable>
+                      ) : !hasStepsPerm ? (
+                        <Text style={styles.challengeLocked}>LOCKED</Text>
+                      ) : (
+                        <Text style={styles.challengeProgress}>
+                          {Math.min(liveSteps, ch.target).toLocaleString()} / {ch.target.toLocaleString()}
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -407,7 +698,7 @@ export default function ActivityScreen() {
             <Text style={styles.weeklySectionLabel}>WEEKLY STEPS</Text>
             <View style={styles.weeklyHairline} />
           </View>
-          <WeeklyBarChart data={weekly} highlightIndex={chartHighlightIndex} />
+          <WeeklyBarChart data={weekly} />
         </View>
       </ScrollView>
     </View>
@@ -533,6 +824,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  permBanner: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink2,
+    gap: spacing.sm,
+  },
+  permBannerLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.claim,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  permBannerText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.bone,
+    lineHeight: 18,
+  },
+  permBannerBtn: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.claim,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  permBannerBtnText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.bone,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
   challengeBlock: {
     marginTop: spacing.lg,
   },
@@ -637,6 +963,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  challengeProgress: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 11,
+    color: colors.bone,
+    letterSpacing: 1.2,
+  },
+  challengeLocked: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
   achievementsBlock: {
     marginTop: spacing.lg,
   },
@@ -731,6 +1070,27 @@ const styles = StyleSheet.create({
   },
   chartWrap: {
     marginTop: spacing.sm,
+  },
+  chartLabelSlot: {
+    height: 16,
+    marginBottom: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartLabelText: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    color: colors.bone,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  chartCanvas: {
+    position: 'relative',
+  },
+  chartTrendOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   chartRow: {
     flexDirection: 'row',
