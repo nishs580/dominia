@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { logDebug } from '../lib/debug';
 import {
   calcLevel,
   calcLevelProgress,
@@ -242,7 +243,11 @@ export default function ProfileScreen() {
   return (
     <View style={styles.screen}>
       {!loading && playerRow ? (
-        <View style={styles.headerBlock}>
+        <Pressable
+          style={styles.headerBlock}
+          onLongPress={() => navigation.navigate('HealthConnectDebug')}
+          delayLongPress={1000}
+        >
           <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
           <Text style={styles.commanderName}>{playerName}</Text>
           <Text style={styles.rankLine}>
@@ -255,7 +260,7 @@ export default function ProfileScreen() {
             )}
           </Text>
           <View style={styles.hairlineStrong} />
-        </View>
+        </Pressable>
       ) : null}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>

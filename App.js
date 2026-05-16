@@ -16,6 +16,7 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
 import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import WalletScreen from './screens/WalletScreen';
+import HealthConnectDebugScreen from './screens/HealthConnectDebugScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
@@ -224,6 +225,11 @@ export default function App() {
           <Stack.Screen
             name="Wallet"
             component={WalletScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="HealthConnectDebug"
+            component={HealthConnectDebugScreen}
             options={{ headerShown: false }}
           />
         </Stack.Navigator>
