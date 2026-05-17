@@ -28,7 +28,9 @@
         "ACCESS_BACKGROUND_LOCATION",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
-        "android.permission.ACTIVITY_RECOGNITION"
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -43,7 +45,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Dominia needs your location to track walks for territory claims.",
           "locationWhenInUsePermission": "Dominia needs your location to track walks for territory claims.",
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": false
         }
       ],
       "expo-sensors",
