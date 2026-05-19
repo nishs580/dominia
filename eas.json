@@ -12,8 +12,12 @@
       }
     },
     "preview": {
-      "distribution": "internal"
-    },
+  "developmentClient": false,
+  "distribution": "internal",
+  "env": {
+    "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
+  }
+},
     "production": {
       "autoIncrement": true
     }

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useReducer, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import {
@@ -14,6 +14,14 @@ import {
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
 import {
+  claimState,
+  subscribe,
+  startClaim,
+  endClaim,
+  setTick,
+  rehydrateFromStorage,
+} from '../lib/claimState';
+import {
   loadPlayerStride,
   stepsToMetres,
   computeSpeedKmh,
@@ -25,24 +33,26 @@ import {
 } from '../lib/claim';
 
 // ─── Foreground-service location task (module scope) ────────────────────
-// Task callback runs outside React. It writes the latest fix to a module-level
-// holder; the screen reads it on every poll tick.
 const LOCATION_TASK_NAME = 'dominia-active-claim-location';
 
 let latestTaskFix = null;
 
-TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => {
-  if (error) {
-    console.warn('[claim] location task error:', error?.message);
-    return;
-  }
-  const loc = data?.locations?.[data.locations.length - 1];
-  if (!loc?.coords) return;
-  const { latitude, longitude, accuracy } = loc.coords;
-  const ts = loc.timestamp ?? Date.now();
-  if (latitude == null || longitude == null) return;
-  latestTaskFix = { latitude, longitude, accuracy: accuracy ?? 9999, timestamp: ts };
-});
+// Calibration / step state (module scope — survives screen blur)
+let baselineSteps = null;
+let lastSteps = 0;
+let lastStepTimestamp = Date.now();
+let claimStartMs = Date.now();
+let vehicleExcludedSteps = 0;
+let halfwayFired = false;
+let calibrationWindowStart = null;   // { steps, timestamp, lat, lon }
+let calibrationSamples = [];
+let currentStrideM = 0.75;
+let currentStrideSessions = 0;
+let lastGpsFix = null;
+let currentSpeedKmh = 0;
+let gpsWeak = false;
+let bannerStateModule = null;
+let halfwayResetTimer = null;
 
 // Set to true to drop a COMPLETE NOW button at the bottom for UI iteration without walking.
 const DEV_MODE_MANUAL = false;
@@ -98,6 +108,164 @@ async function readTodaySteps() {
   return records.reduce((sum, r) => sum + (r?.count ?? 0), 0);
 }
 
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.warn('[claim] task error:', error?.message);
+    return;
+  }
+  const loc = data?.locations?.[data.locations.length - 1];
+  if (!loc?.coords) return;
+
+  const { latitude, longitude, accuracy, speed } = loc.coords;
+  const ts = loc.timestamp ?? Date.now();
+  if (latitude == null || longitude == null) return;
+
+  const taskFix = { latitude, longitude, accuracy: accuracy ?? 9999, timestamp: ts, speed };
+  latestTaskFix = taskFix;
+
+  if (!claimState.active) return;
+
+  if (lastGpsFix && lastGpsFix.timestamp !== taskFix.timestamp &&
+      (Date.now() - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS) {
+    currentSpeedKmh = computeSpeedKmh(lastGpsFix, taskFix);
+  }
+  lastGpsFix = taskFix;
+  gpsWeak = (taskFix.accuracy ?? 9999) > 20;
+
+  const now = Date.now();
+  if (claimState.lastTickAt && (now - claimState.lastTickAt) < POLL_INTERVAL_MS) return;
+
+  try {
+    if (claimState.hcPermission !== 'granted') {
+      setTick({});
+      return;
+    }
+
+    const currentSteps = await readTodaySteps();
+    if (baselineSteps == null) {
+      baselineSteps = currentSteps;
+      lastSteps = currentSteps;
+      setTick({});
+      return;
+    }
+
+    const stepDeltaTick = Math.max(0, currentSteps - lastSteps);
+    const speedKmh = currentSpeedKmh;
+    const inVehicle = isVehicleSpeed(speedKmh);
+
+    if (inVehicle) vehicleExcludedSteps += stepDeltaTick;
+    if (stepDeltaTick > 0) lastStepTimestamp = now;
+
+    const totalSteps = currentSteps - baselineSteps;
+    const usableSteps = Math.max(0, totalSteps - vehicleExcludedSteps);
+    const walkedM = stepsToMetres(usableSteps, currentStrideM);
+
+    const zeroMovementMs = now - lastStepTimestamp;
+    const pauseElapsedMs = zeroMovementMs;
+
+    let nextBanner = bannerStateModule;
+    let didReset = false;
+
+    if (zeroMovementMs >= PAUSE_RESET_MS) {
+      baselineSteps = currentSteps;
+      vehicleExcludedSteps = 0;
+      halfwayFired = false;
+      lastStepTimestamp = now;
+      claimStartMs = now;
+      didReset = true;
+      nextBanner = 'reset';
+    } else if (zeroMovementMs >= ZERO_MOVEMENT_WARN_MS) {
+      nextBanner = 'paused';
+    } else if (inVehicle) {
+      nextBanner = 'vehicle';
+    } else if (gpsWeak && !lastGpsFix) {
+      nextBanner = 'gpsWeak';
+    } else if (claimState.perimeterM > 0 && walkedM / claimState.perimeterM >= 0.5 && !halfwayFired) {
+      halfwayFired = true;
+      nextBanner = 'halfway';
+      if (halfwayResetTimer) clearTimeout(halfwayResetTimer);
+      halfwayResetTimer = setTimeout(() => {
+        bannerStateModule = null;
+        setTick({ bannerState: null });
+      }, 4000);
+    } else if (bannerStateModule !== 'halfway') {
+      nextBanner = null;
+    }
+    bannerStateModule = nextBanner;
+
+    const newDistance = didReset ? 0 : walkedM;
+    const newSteps = didReset ? 0 : usableSteps;
+    const newPace = paceSpm(stepDeltaTick, POLL_INTERVAL_MS);
+
+    let calTickDiag = null;
+    const fix = lastGpsFix;
+    if (fix && !inVehicle && (fix.accuracy ?? 9999) <= 20) {
+      if (!calibrationWindowStart) {
+        calibrationWindowStart = { steps: currentSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
+      } else {
+        const windowMs = now - calibrationWindowStart.timestamp;
+        const stepsInWindow = currentSteps - calibrationWindowStart.steps;
+        const gpsDist = haversineMetres(calibrationWindowStart.lat, calibrationWindowStart.lon, fix.latitude, fix.longitude);
+        const accuracyM = fix.accuracy ?? 9999;
+        const { qualifies, rejectReason } = isQualifyingCalibrationWindow({ accuracyM, speedKmh, windowMs });
+        const candidateStride = stepsInWindow > 0 ? gpsDist / stepsInWindow : null;
+        calTickDiag = { accuracyM, speedKmh, windowMs, stepsInWindow, gpsDistM: gpsDist, candidateStride, qualifies, rejectReason };
+        if (windowMs >= 30000) {
+          if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
+            const result = await pushCalibrationSample(claimState.playerId, gpsDist, stepsInWindow, calibrationSamples);
+            if (result) {
+              calibrationSamples = result.samples;
+              currentStrideM = result.strideM;
+              currentStrideSessions = result.sessions;
+            }
+          }
+          calibrationWindowStart = { steps: currentSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
+        }
+      }
+    } else {
+      calibrationWindowStart = null;
+    }
+
+    if (DIAG_CALIBRATION && claimState.playerId) {
+      const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
+      logDebug(claimState.playerId, 'claim_calibration_tick', {
+        accuracyM: round3(calTickDiag?.accuracyM ?? (fix ? fix.accuracy ?? 9999 : null)),
+        speedKmh: round3(speedKmh),
+        windowMs: round3(calTickDiag?.windowMs ?? null),
+        stepsInWindow: calTickDiag?.stepsInWindow ?? null,
+        gpsDistM: round3(calTickDiag?.gpsDistM ?? null),
+        candidateStride: round3(calTickDiag?.candidateStride ?? null),
+        qualifies: calTickDiag?.qualifies ?? null,
+        rejectReason: calTickDiag?.rejectReason ?? null,
+      }).catch(() => {});
+    }
+
+    lastSteps = currentSteps;
+
+    const isComplete = !claimState.completed && newDistance >= claimState.perimeterM && claimState.perimeterM > 0;
+
+    setTick({
+      distanceM: newDistance,
+      liveSteps: newSteps,
+      livePace: newPace,
+      strideM: currentStrideM,
+      strideSessions: currentStrideSessions,
+      lastAccuracyM: calTickDiag?.accuracyM ?? null,
+      lastSpeedKmh: speedKmh,
+      lastWindowMs: calTickDiag?.windowMs ?? null,
+      lastStepsInWindow: calTickDiag?.stepsInWindow ?? null,
+      lastQualifies: calTickDiag?.qualifies ?? null,
+      lastRejectReason: calTickDiag?.rejectReason ?? null,
+      bannerState: nextBanner,
+      pauseElapsedMs,
+      gpsFixReady: !!lastGpsFix,
+      completed: isComplete,
+    });
+  } catch (err) {
+    console.warn('[claim] task tick error:', err?.message);
+  }
+});
+
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -105,41 +273,10 @@ export default function ActiveClaimScreen() {
   const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId, mode = 'claim' } = route?.params ?? {};
   const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
 
-  // UI state
-  const [distanceWalkedM, setDistanceWalkedM] = useState(0);
-  const [liveSteps, setLiveSteps] = useState(0);
-  const [livePace, setLivePace] = useState(0);
-  const [strideM, setStrideM] = useState(0.75);
-  const [strideSessions, setStrideSessions] = useState(0);
-  const [hcPermission, setHcPermission] = useState('unknown'); // 'granted' | 'denied' | 'unknown'
-  const [bannerState, setBannerState] = useState(null); // 'vehicle' | 'paused' | 'reset' | 'gpsWeak' | 'halfway' | null
-  const [pauseElapsedMs, setPauseElapsedMs] = useState(0);
-
   const progress = useRef(new Animated.Value(0)).current;
   const navigatingRef = useRef(false);
+  const [, forceRender] = useReducer((x) => x + 1, 0);
 
-  // Step tracking refs
-  const baselineStepsRef = useRef(null);            // steps at claim start
-  const lastStepsRef = useRef(0);                   // last polled total
-  const lastStepTimestampRef = useRef(Date.now()); // when steps last changed
-  const claimStartMsRef = useRef(Date.now());
-  const vehicleExcludedStepsRef = useRef(0);
-  const halfwayFiredRef = useRef(false);
-  const samplesRef = useRef([]);
-
-  // Calibration window tracking
-  const calibrationWindowStartRef = useRef(null); // { steps, timestamp, lat, lon }
-
-  // GPS refs
-  const locationWatchRef = useRef(null);
-  const lastGpsFixRef = useRef(null); // { latitude, longitude, accuracy, timestamp }
-  const currentSpeedKmhRef = useRef(0);
-  const gpsWeakRef = useRef(false);
-
-  // Polling
-  const pollIntervalRef = useRef(null);
-
-  // Contest-only metadata
   const opponentNameRef = useRef('opponent');
   const attackerAllianceRef = useRef(null);
 
@@ -147,46 +284,98 @@ export default function ActiveClaimScreen() {
     navigation.setOptions?.({ headerShown: false, tabBarStyle: { display: 'none' } });
   }, [navigation]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      await rehydrateFromStorage();
+      if (mounted) forceRender();
+    })();
+    const unsub = subscribe(() => { if (mounted) forceRender(); });
+    return () => { mounted = false; unsub(); };
+  }, []);
+
+  useEffect(() => {
+    if (claimState.completed && !navigatingRef.current) {
+      navigatingRef.current = true;
+      setTimeout(() => completeClaim(claimState.distanceM, claimState.liveSteps), 600);
+    }
+  });
+
+  useEffect(() => {
+    const nextPct = claimState.perimeterM > 0
+      ? clamp(claimState.distanceM / claimState.perimeterM, 0, 1)
+      : 0;
+    Animated.timing(progress, {
+      toValue: nextPct,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  });
+
+  useEffect(() => {
+    return () => {
+      if (!navigatingRef.current) endClaim();
+    };
+  }, []);
+
   // ─── Mount: load stride, init HC, fetch contest metadata ────────────────
   useEffect(() => {
     let cancelled = false;
 
+    baselineSteps = null;
+    lastSteps = 0;
+    lastStepTimestamp = Date.now();
+    claimStartMs = Date.now();
+    vehicleExcludedSteps = 0;
+    halfwayFired = false;
+    calibrationWindowStart = null;
+    calibrationSamples = [];
+    bannerStateModule = null;
+    lastGpsFix = null;
+    currentSpeedKmh = 0;
+    gpsWeak = false;
+    if (halfwayResetTimer) {
+      clearTimeout(halfwayResetTimer);
+      halfwayResetTimer = null;
+    }
+
+    startClaim({ territoryId, playerId, perimeterM, mode, territoryName });
+
     (async () => {
-      // 1. Load player stride from DB
       const { strideM: loadedStride, sessions, samples } = await loadPlayerStride(playerId);
       if (cancelled) return;
-      setStrideM(loadedStride);
-      setStrideSessions(sessions);
-      samplesRef.current = samples;
+      currentStrideM = loadedStride;
+      currentStrideSessions = sessions;
+      calibrationSamples = samples;
+      setTick({ strideM: loadedStride, strideSessions: sessions });
 
-      // 2. Init Health Connect
       try {
         const status = await getSdkStatus();
         if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
-          setHcPermission('denied');
+          setTick({ hcPermission: 'denied' });
           return;
         }
         await initialize();
         const granted = await requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
         const hasSteps = granted?.some((p) => p.recordType === 'Steps' && p.accessType === 'read');
         if (cancelled) return;
-        setHcPermission(hasSteps ? 'granted' : 'denied');
+        setTick({ hcPermission: hasSteps ? 'granted' : 'denied' });
 
         if (hasSteps) {
           const steps = await readTodaySteps();
           if (cancelled) return;
-          baselineStepsRef.current = steps;
-          lastStepsRef.current = steps;
-          lastStepTimestampRef.current = Date.now();
-          claimStartMsRef.current = Date.now();
+          baselineSteps = steps;
+          lastSteps = steps;
+          lastStepTimestamp = Date.now();
+          claimStartMs = Date.now();
         }
       } catch (err) {
         console.warn('[claim] HC init failed:', err?.message);
-        if (!cancelled) setHcPermission('denied');
+        if (!cancelled) setTick({ hcPermission: 'denied' });
       }
     })();
 
-    // Contest metadata fetch (preserved from original)
     if (mode === 'contest' && territoryId && playerId) {
       supabase
         .from('territories')
@@ -209,7 +398,7 @@ export default function ActiveClaimScreen() {
     return () => {
       cancelled = true;
     };
-  }, [playerId, mode, territoryId]);
+  }, [playerId, mode, territoryId, perimeterM, territoryName]);
 
   // ─── GPS watch via foreground service ──────────────────────────────────
   useEffect(() => {
@@ -221,8 +410,6 @@ export default function ActiveClaimScreen() {
         const fg = await Location.requestForegroundPermissionsAsync();
         if (fg.status !== 'granted' || cancelled) return;
 
-        // Background permission is also needed for the foreground service to
-        // continue receiving updates while the app is backgrounded.
         const bg = await Location.requestBackgroundPermissionsAsync();
         if (bg.status !== 'granted') {
           console.warn('[claim] background location not granted — service may be killed on screen off');
@@ -256,200 +443,6 @@ export default function ActiveClaimScreen() {
     };
   }, []);
 
-  // ─── HC step poll + claim progress ──────────────────────────────────────
-  useFocusEffect(
-    React.useCallback(() => {
-      if (hcPermission !== 'granted') return undefined;
-
-      const tick = async () => {
-        try {
-          // Bridge: copy the latest task-scope GPS fix into the component refs.
-          // The foreground-service task writes to `latestTaskFix` outside React;
-          // we sync into the refs here so the vehicle filter + calibration logic
-          // (which were written for component-scope refs) work unchanged.
-          if (latestTaskFix) {
-            const taskFix = latestTaskFix;
-            // Skip stale fixes
-            if (Date.now() - taskFix.timestamp <= STALE_GPS_THRESHOLD_MS) {
-              const prev = lastGpsFixRef.current;
-              if (prev && prev.timestamp !== taskFix.timestamp) {
-                currentSpeedKmhRef.current = computeSpeedKmh(prev, taskFix);
-              }
-              lastGpsFixRef.current = taskFix;
-              gpsWeakRef.current = (taskFix.accuracy ?? 9999) > 20;
-            }
-          }
-          const currentSteps = await readTodaySteps();
-          if (baselineStepsRef.current == null) {
-            baselineStepsRef.current = currentSteps;
-            lastStepsRef.current = currentSteps;
-            return;
-          }
-
-          const stepDeltaTick = Math.max(0, currentSteps - lastStepsRef.current);
-          const now = Date.now();
-          const speedKmh = currentSpeedKmhRef.current;
-          const inVehicle = isVehicleSpeed(speedKmh);
-
-          // Vehicle filter — exclude this tick's steps if speed > 25 km/h
-          if (inVehicle) {
-            vehicleExcludedStepsRef.current += stepDeltaTick;
-          }
-
-          // Track when steps last changed (for pause detection)
-          if (stepDeltaTick > 0) {
-            lastStepTimestampRef.current = now;
-          }
-
-          const totalSteps = currentSteps - baselineStepsRef.current;
-          const usableSteps = Math.max(0, totalSteps - vehicleExcludedStepsRef.current);
-          const walkedM = stepsToMetres(usableSteps, strideM);
-
-          // Pause logic
-          const zeroMovementMs = now - lastStepTimestampRef.current;
-          setPauseElapsedMs(zeroMovementMs);
-
-          if (zeroMovementMs >= PAUSE_RESET_MS) {
-            // Reset claim progress
-            baselineStepsRef.current = currentSteps;
-            vehicleExcludedStepsRef.current = 0;
-            halfwayFiredRef.current = false;
-            lastStepTimestampRef.current = now;
-            claimStartMsRef.current = now;
-            setDistanceWalkedM(0);
-            setLiveSteps(0);
-            progress.setValue(0);
-            setBannerState('reset');
-          } else if (zeroMovementMs >= ZERO_MOVEMENT_WARN_MS) {
-            setBannerState('paused');
-          } else if (inVehicle) {
-            setBannerState('vehicle');
-          } else if (gpsWeakRef.current && !lastGpsFixRef.current) {
-            setBannerState('gpsWeak');
-          } else if (walkedM / perimeterM >= 0.5 && !halfwayFiredRef.current) {
-            halfwayFiredRef.current = true;
-            setBannerState('halfway');
-            setTimeout(() => setBannerState(null), 4000);
-          } else if (bannerState !== 'halfway') {
-            setBannerState(null);
-          }
-
-          // Update UI
-          setLiveSteps(usableSteps);
-          setDistanceWalkedM(walkedM);
-          setLivePace(paceSpm(stepDeltaTick, POLL_INTERVAL_MS));
-
-          const nextPct = perimeterM > 0 ? clamp(walkedM / perimeterM, 0, 1) : 0;
-          Animated.timing(progress, {
-            toValue: nextPct,
-            duration: 900,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }).start();
-
-          // ─── Calibration window ─────────────────────────────────────────
-          let calTickDiag = null;
-          const fix = lastGpsFixRef.current;
-          if (fix && !inVehicle && (fix.accuracy ?? 9999) <= 20) {
-            const winStart = calibrationWindowStartRef.current;
-            if (!winStart) {
-              calibrationWindowStartRef.current = {
-                steps: currentSteps,
-                timestamp: now,
-                lat: fix.latitude,
-                lon: fix.longitude,
-              };
-            } else {
-              const windowMs = now - winStart.timestamp;
-              const stepsInWindow = currentSteps - winStart.steps;
-              const gpsDist = haversineMetres(winStart.lat, winStart.lon, fix.latitude, fix.longitude);
-              const accuracyM = fix.accuracy ?? 9999;
-              const { qualifies, rejectReason } = isQualifyingCalibrationWindow({
-                accuracyM,
-                speedKmh,
-                windowMs,
-              });
-              const candidateStride = stepsInWindow > 0 ? gpsDist / stepsInWindow : null;
-              calTickDiag = {
-                accuracyM,
-                speedKmh,
-                windowMs,
-                stepsInWindow,
-                gpsDistM: gpsDist,
-                candidateStride,
-                qualifies,
-                rejectReason,
-              };
-              if (windowMs >= 30000) {
-                if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
-                  const result = await pushCalibrationSample(
-                    playerId,
-                    gpsDist,
-                    stepsInWindow,
-                    samplesRef.current,
-                  );
-                  if (result) {
-                    samplesRef.current = result.samples;
-                    setStrideM(result.strideM);
-                    setStrideSessions(result.sessions);
-                  }
-                }
-                // Reset window regardless of qualification
-                calibrationWindowStartRef.current = {
-                  steps: currentSteps,
-                  timestamp: now,
-                  lat: fix.latitude,
-                  lon: fix.longitude,
-                };
-              }
-            }
-          } else {
-            // Invalid conditions — reset window
-            calibrationWindowStartRef.current = null;
-          }
-
-          if (DIAG_CALIBRATION && playerId) {
-            const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
-            logDebug(playerId, 'claim_calibration_tick', {
-              accuracyM: round3(calTickDiag?.accuracyM ?? (fix ? fix.accuracy ?? 9999 : null)),
-              speedKmh: round3(speedKmh),
-              windowMs: round3(calTickDiag?.windowMs ?? null),
-              stepsInWindow: calTickDiag?.stepsInWindow ?? null,
-              gpsDistM: round3(calTickDiag?.gpsDistM ?? null),
-              candidateStride: round3(calTickDiag?.candidateStride ?? null),
-              qualifies: calTickDiag?.qualifies ?? null,
-              rejectReason: calTickDiag?.rejectReason ?? null,
-            }).catch(() => {});
-          }
-
-          lastStepsRef.current = currentSteps;
-
-          // ─── Claim complete? ────────────────────────────────────────────
-          if (walkedM >= perimeterM && !navigatingRef.current) {
-            navigatingRef.current = true;
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            locationWatchRef.current?.remove?.();
-            locationWatchRef.current = null;
-            setTimeout(() => {
-              completeClaim(walkedM, usableSteps);
-            }, 600);
-          }
-        } catch (err) {
-          console.warn('[claim] poll tick error:', err?.message);
-        }
-      };
-
-      tick();
-      pollIntervalRef.current = setInterval(tick, POLL_INTERVAL_MS);
-
-      return () => {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      };
-    }, [hcPermission, strideM, perimeterM, playerId, bannerState]),
-  );
-
-  // ─── Completion handler ────────────────────────────────────────────────
   function completeClaim(walkedM, finalSteps) {
     if (mode === 'contest') {
       navigation.navigate('ContestResultScreen', {
@@ -475,13 +468,9 @@ export default function ActiveClaimScreen() {
   function handleManualComplete() {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    locationWatchRef.current?.remove?.();
-    locationWatchRef.current = null;
-    completeClaim(perimeterM, liveSteps);
+    completeClaim(perimeterM, claimState.liveSteps);
   }
 
-  // ─── Ring geometry ─────────────────────────────────────────────────────
   const ring = useMemo(() => {
     const size = 230;
     const strokeWidth = 16;
@@ -494,10 +483,9 @@ export default function ActiveClaimScreen() {
     [progress, ring.circumference],
   );
 
-  const pct = perimeterM > 0 ? Math.round(clamp((distanceWalkedM / perimeterM) * 100, 0, 100)) : 0;
-  const isCalibrated = strideSessions >= 3;
+  const pct = perimeterM > 0 ? Math.round(clamp((claimState.distanceM / perimeterM) * 100, 0, 100)) : 0;
+  const isCalibrated = claimState.strideSessions >= 3;
 
-  // ─── Render ────────────────────────────────────────────────────────────
   return (
     <View style={styles.screen}>
       <View style={styles.topRow}>
@@ -531,37 +519,35 @@ export default function ActiveClaimScreen() {
           </Svg>
           <View style={styles.ringCenter}>
             <Text style={styles.pctText}>{pct}%</Text>
-            <Text style={styles.metresText}>{`${formatMetres(distanceWalkedM)} / ${formatMetres(perimeterM)} m`}</Text>
+            <Text style={styles.metresText}>{`${formatMetres(claimState.distanceM)} / ${formatMetres(perimeterM)} m`}</Text>
           </View>
         </View>
       </View>
 
-      {/* Stats panel */}
       <View style={styles.statsPanel}>
-        <StatRow label="STEPS WALKED" value={String(liveSteps)} />
-        <StatRow label="DISTANCE" value={`${formatMetres(distanceWalkedM)} m`} />
-        <StatRow label={isCalibrated ? 'STRIDE (CAL)' : 'STRIDE (DEFAULT)'} value={`${strideM.toFixed(2)} m`} />
-        <StatRow label="PACE" value={`${livePace} spm`} last />
+        <StatRow label="STEPS WALKED" value={String(claimState.liveSteps)} />
+        <StatRow label="DISTANCE" value={`${formatMetres(claimState.distanceM)} m`} />
+        <StatRow label={isCalibrated ? 'STRIDE (CAL)' : 'STRIDE (DEFAULT)'} value={`${claimState.strideM.toFixed(2)} m`} />
+        <StatRow label="PACE" value={`${claimState.livePace} spm`} last />
       </View>
 
-      {/* Banner zone */}
       <View style={styles.bannerZone}>
-        {hcPermission === 'denied' && (
+        {claimState.hcPermission === 'denied' && (
           <Banner color={CLAIM} label="HEALTH CONNECT NOT GRANTED · Steps cannot be read" />
         )}
-        {hcPermission === 'granted' && bannerState === 'vehicle' && (
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'vehicle' && (
           <Banner color={CLAIM} label="VEHICLE DETECTED · Steps paused" />
         )}
-        {hcPermission === 'granted' && bannerState === 'paused' && (
-          <Banner color={AMBER} label={`PAUSED · ${formatPauseCountdown(pauseElapsedMs)} until reset`} />
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'paused' && (
+          <Banner color={AMBER} label={`PAUSED · ${formatPauseCountdown(claimState.pauseElapsedMs)} until reset`} />
         )}
-        {hcPermission === 'granted' && bannerState === 'reset' && (
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'reset' && (
           <Banner color={CLAIM} label="PROGRESS RESET · Walk to resume" />
         )}
-        {hcPermission === 'granted' && bannerState === 'gpsWeak' && (
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'gpsWeak' && (
           <Banner color={SLATE2} label="GPS WEAK · Vehicle filter on hold" />
         )}
-        {hcPermission === 'granted' && bannerState === 'halfway' && (
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'halfway' && (
           <Banner color={BONE} label="50% — KEEP GOING" />
         )}
       </View>

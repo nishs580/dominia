@@ -205,6 +205,7 @@ export default function ActivityScreen() {
   const [playerLevel, setPlayerLevel] = useState(() => levelFromXp(0));
   const [hcReady, setHcReady] = useState(false);
   const [hasStepsPerm, setHasStepsPerm] = useState(false);
+  const [challengesLoaded, setChallengesLoaded] = useState(false);
   const [permRequesting, setPermRequesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState(0);
   const [weeklySteps, setWeeklySteps] = useState([
@@ -232,6 +233,7 @@ export default function ActivityScreen() {
         setCurrentStreak(0);
         setTerritoryCount(0);
         setCompletedKeys(new Set());
+        setChallengesLoaded(false);
         return;
       }
 
@@ -249,6 +251,7 @@ export default function ActivityScreen() {
         setCurrentStreak(0);
         setTerritoryCount(0);
         setCompletedKeys(new Set());
+        setChallengesLoaded(false);
         return;
       }
 
@@ -267,6 +270,7 @@ export default function ActivityScreen() {
       setTerritoryCount(terrResult.count ?? 0);
       const next = new Set((challengeResult.data ?? []).map((r) => r.challenge_key).filter(Boolean));
       setCompletedKeys(next);
+      setChallengesLoaded(true);
     }
 
     loadPlayerActivity();
@@ -348,11 +352,42 @@ export default function ActivityScreen() {
     setPlayerLevel(levelFromXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
 
     try {
-      await supabase.from('player_challenges').insert({
-        player_id: playerId,
-        challenge_key: ch.key,
-        date: todayStr,
-      });
+      // Idempotent insert — only proceed with payout if a NEW row was created
+      const { data: insertedRows, error: insertError } = await supabase
+        .from('player_challenges')
+        .insert({
+          player_id: playerId,
+          challenge_key: ch.key,
+          date: todayStr,
+        })
+        .select();
+
+      // 23505 = unique_violation. Treat as "already completed today" — bail silently.
+      // Also bail if insert returned no rows for any reason.
+      const isDuplicate =
+        insertError?.code === '23505' || !insertedRows || insertedRows.length === 0;
+
+      if (isDuplicate) {
+        // The challenge IS done — keep optimistic UI (completedKeys already has ch.key,
+        // playerXp already optimistically incremented). Do NOT roll back.
+        // Refetch authoritative XP from DB to correct any optimistic-vs-reality drift.
+        const { data: authoritative } = await supabase
+          .from('players')
+          .select('xp, current_streak')
+          .eq('id', playerId)
+          .maybeSingle();
+        if (authoritative) {
+          const xpInt = Math.max(0, Number(authoritative.xp) || 0);
+          setPlayerXp(xpInt);
+          setPlayerLevel(levelFromXp(xpInt));
+          setCurrentStreak(Math.max(0, Number(authoritative.current_streak) || 0));
+        }
+        return;
+      }
+
+      if (insertError) {
+        throw insertError;
+      }
 
       await supabase
         .from('players')
@@ -521,7 +556,7 @@ export default function ActivityScreen() {
   }
 
   useEffect(() => {
-    if (!playerId || !hasStepsPerm) return;
+    if (!playerId || !hasStepsPerm || !challengesLoaded) return;
     (async () => {
       for (const ch of challenges) {
         if (liveSteps < ch.target) continue;
@@ -536,7 +571,7 @@ export default function ActivityScreen() {
         }
       }
     })();
-  }, [liveSteps, playerId, hasStepsPerm, challenges, completedKeys, isCompleting]);
+  }, [liveSteps, playerId, hasStepsPerm, challenges, completedKeys, isCompleting, challengesLoaded]);
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
