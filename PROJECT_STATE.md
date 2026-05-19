@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 19, 2026 (Session 20 — All three Session 19 bugs CLOSED. Bug 1 (screen-focus-bound polling) fixed by rearchitecting ActiveClaimScreen — new `lib/claimState.js` with shared module-level state + subscribe/emit + AsyncStorage snapshot; TaskManager task now owns the 10s calibration tick on the location-event stream (gated by `now - lastTickAt >= 10000`); screen is a pure consumer that subscribes and re-renders on emit. Bug 2 (GPS speed always 0) resolved as side-effect — non-zero realistic walking speeds confirmed (0.057–6.485 km/h + one 40 km/h jitter spike). Bug 3 (duplicate challenge writes on remount) fixed with DB-level idempotency: ActivityScreen `onCompleteChallenge` insert now chains `.select()` and inspects 23505/empty-rows, bailing before downstream writes on duplicate; `challengesLoaded` boolean gates the auto-complete watcher until completedKeys is hydrated from DB. Indoor lock-the-phone test: 23 ticks in 4 min (~10.4s cadence), 4 qualifying calibration ticks, claim of улица Хошимина (Small) completed cleanly with no duplicates on tab-switch remount. Next session: backend phase kickoff — Fastify + BullMQ + Ably scaffolding.)
+Last updated: May 19, 2026 (Session 21 — Backend phase officially launched. New `dominia-backend` repo scaffolded (Fastify + TypeScript, module-based architecture), pushed to private GitHub repo, deployed live on Railway at `https://dominia-backend-production.up.railway.app`. Three endpoints/middlewares working end-to-end: `GET /healthcheck` (unauthenticated liveness probe), `GET /me` (Clerk-authenticated player lookup), and `requireAuth` Fastify preHandler that verifies Clerk JWTs via `verifyToken` from `@clerk/backend`. Full stack proven against the live URL with a real Clerk JWT from the phone — returned nish_s, level 4, full player payload through phone JWT → Railway → Clerk verify → Supabase service-role query → JSON response. Locked decisions: separate repo (not monorepo), Railway deploy, Prisma planned for backend / Supabase JS stays on mobile, Fastify first / Ably later, TypeScript on backend. Node 22 pinned (Supabase realtime-js needs native WebSocket support, Node 20 crashes on boot). Next session: install Prisma, define first schema, build player onboarding endpoints (PATCH /me, POST /me/home-pin).)
 
 ---
 
@@ -17,20 +17,31 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | OS | Windows |
 | Terminal | Warp — PowerShell syntax. Run commands one at a time. `&&` does not work. |
 | Warp tabs | Ctrl+T = new tab. Never stop the Expo tab. Open new tab for everything else. |
-| Editor | Cursor — Agent chat (Ctrl+L). Claude writes directly to files. Always check phone after Cursor makes changes. |
+| Editor | Cursor — Agent chat (Ctrl+L). Claude writes directly to files. Always check phone after Cursor makes changes. **Cursor remembers a stale working directory if a folder moves on disk — always `File → Open Folder` on the right repo before pasting a prompt.** |
 | Device | OnePlus Android |
 | Screen mirror | scrcpy — run `scrcpy` to mirror phone to PC for sharing errors |
-| GitHub | github.com/nishs580/dominia |
+| Mobile GitHub | github.com/nishs580/dominia |
+| Mobile local path | `C:\Users\nisha\dominia` |
+| Backend GitHub | github.com/nishs580/dominia-backend (**PRIVATE**) |
+| Backend local path | `C:\Users\nisha\dominia-backend` |
+| Backend live URL | https://dominia-backend-production.up.railway.app |
+
+**TWO REPOS — ALWAYS BE EXPLICIT (from Session 21 onwards):**
+- Every Cursor prompt must state which repo it targets before paste.
+- Every Warp command sequence must start with the matching `cd` to avoid running against the wrong repo.
+- Shorthand for prompts: `[MOBILE: C:\Users\nisha\dominia]` or `[BACKEND: C:\Users\nisha\dominia-backend]` at the top of the prompt block.
 
 ---
 
 ## STACK
 
+**Mobile (`dominia` repo):**
+
 | Layer | Technology | Status |
 |---|---|---|
 | Mobile | React Native + Expo SDK 54 | ✓ Running |
 | Maps | Mapbox GL (`@rnmapbox/maps`) | ✓ Working |
-| Database | Supabase (PostgreSQL + PostGIS 3.3.7) | ✓ Connected (Pro plan, Micro compute) |
+| Database (client) | Supabase JS (`@supabase/supabase-js`) — anon key | ✓ Connected (Pro plan, Micro compute) |
 | Auth | Clerk (`@clerk/clerk-expo`) | ✓ Working end to end |
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
@@ -39,9 +50,135 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
 | Test runner | Jest 29.7 + jest-expo (downgraded from Jest 30 via `npx expo install --fix` in Session 19 — tests still green) | ✓ 348 tests passing |
-| Backend (future) | Node.js + Fastify | Not started |
-| Real-time (future) | Ably | Not started |
-| Push (future) | Firebase Cloud Messaging | Not started |
+
+**Backend (`dominia-backend` repo — NEW Session 21):**
+
+| Layer | Technology | Status |
+|---|---|---|
+| Runtime | Node.js 22 (pinned via `engines` + `.nvmrc`) | ✓ Running on Railway |
+| Server | Fastify 5 + TypeScript (ES2022 / ESM / Bundler resolution / strict) | ✓ Live |
+| Hosting | Railway (europe-west4 edge) | ✓ Deployed, auto-deploy on push to `main` |
+| Auth | `@clerk/backend` `verifyToken` (stateless, JWKS-verified) | ✓ Live (`requireAuth` Fastify preHandler) |
+| Database (server) | `@supabase/supabase-js` — **service role key** (full DB access, bypasses RLS) | ✓ Live |
+| ORM (planned) | Prisma — not yet installed | ○ Next session |
+| Real-time (planned) | Ably | ○ Not started |
+| Job queue (planned) | BullMQ + Redis | ○ Not started |
+| Push (planned) | Firebase Cloud Messaging | ○ Not started |
+
+---
+
+## BACKEND ARCHITECTURE — MODULE STRUCTURE (target end-state)
+
+The backend follows a module-based architecture. Every session builds toward this exact structure — no throwaway code. New modules are added as features land; sessions never rearrange existing modules unless an explicit refactor decision is made.
+
+```
+dominia-backend/
+├── src/
+│   ├── modules/
+│   │   ├── player/                  ✓ Scaffolded (Session 21)
+│   │   │   ├── routes.ts            // GET /me ✓ · PATCH /me ○ · POST /me/home-pin ○
+│   │   │   ├── service.ts           // ensurePlayer ○, updateHomePin ○, role checks ○
+│   │   │   ├── queries.ts           // Prisma + raw SQL for player table
+│   │   │   ├── types.ts             // Player, Role, HomePin
+│   │   │   └── index.ts             // public exports only
+│   │   │
+│   │   ├── health/                  ✓ Scaffolded (Session 21)
+│   │   │   ├── routes.ts            // GET /healthcheck ✓
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── territory/               ○ Not started
+│   │   │   ├── routes.ts            // GET /territories/viewport, POST /claim
+│   │   │   ├── service.ts           // claim logic, ownership transfer
+│   │   │   ├── queries.ts           // PostGIS viewport RPC, ST_IsValid filter
+│   │   │   ├── history.ts           // territory_history INSERTs, lost_at updates
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── contest/                 ○ Not started
+│   │   │   ├── routes.ts            // POST /contest/initiate, POST /contest/defend
+│   │   │   ├── service.ts           // resolution logic (the critical write path)
+│   │   │   ├── resolver.ts          // atomic transaction: validate → multiply → transfer → notify
+│   │   │   ├── queries.ts           // SELECT FOR UPDATE, millisecond timestamp resolution
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── alliance/                ○ Not started
+│   │   │   ├── routes.ts            // POST /alliance, POST /alliance/join, war chest
+│   │   │   ├── service.ts           // founding flow, member mgmt, Marshal actions
+│   │   │   ├── morale.ts            // donate_morale, deduct_alliance_morale RPCs
+│   │   │   ├── queries.ts
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── streak/                  ○ Not started
+│   │   │   ├── service.ts           // streak evaluation, Grace Day grants
+│   │   │   ├── jobs.ts              // midnight streak BullMQ job per timezone
+│   │   │   ├── queries.ts
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── progression/             ○ Not started
+│   │   │   ├── service.ts           // XP, levels, Siege XP, solo protection tiers
+│   │   │   ├── queries.ts
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── leaderboard/             ○ Not started
+│   │   │   ├── routes.ts            // GET /leaderboard/city, /alliance, /realm
+│   │   │   ├── service.ts           // Redis Sorted Set reads
+│   │   │   ├── cache.ts             // ZADD on contest resolution, ZREVRANGE on read
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── realm/                   ○ Not started
+│   │   │   ├── service.ts           // realm assignment, saturation monitoring
+│   │   │   ├── queries.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   └── activity/                ○ Not started
+│   │       ├── routes.ts            // POST /activity/steps, velocity check
+│   │       ├── service.ts           // GPS trace validation, distance credit
+│   │       ├── antiCheat.ts         // 30 km/h velocity threshold
+│   │       └── index.ts
+│   │
+│   ├── shared/
+│   │   ├── formulas.ts              // mobile formulas.js ported — pure functions, no module imports ○
+│   │   ├── db/
+│   │   │   ├── prisma.ts            // single Prisma client instance ○
+│   │   │   └── postgis.ts           // raw SQL helpers, ST_ForcePolygonCCW wrappers ○
+│   │   ├── supabase.ts              ✓ Service-role client, env-validated at load (Session 21)
+│   │   ├── auth.ts                  ✓ Clerk verifyToken middleware, per-route preHandler (Session 21)
+│   │   ├── redis.ts                 ○ Single Redis client
+│   │   ├── ably.ts                  ○ Channel publishers — territory:updated, alliance:*
+│   │   ├── queue.ts                 ○ BullMQ setup, repeatable job registration
+│   │   ├── quietHours.ts            ○ 23:00–05:00 local time check (used by notifications)
+│   │   └── errors.ts                ○ typed app errors
+│   │
+│   ├── notifications/               ○ Not started — sits beside modules, every module calls into it
+│   │   ├── service.ts               // FCM dispatch, Quiet Hours enforcement
+│   │   ├── templates.ts             // contest outcome, streak warning, Grace Day grant
+│   │   └── index.ts
+│   │
+│   ├── jobs/                        ○ Not started — BullMQ workers, thin, delegate to module services
+│   │   ├── streakEvaluation.ts      // → streak/service
+│   │   ├── attackDayLifecycle.ts    // → territory + contest
+│   │   ├── contestResolution.ts     // → contest/resolver
+│   │   └── notificationDispatch.ts  // → notifications
+│   │
+│   ├── app.ts                       ✓ Fastify instance factory, registers modules (Session 21)
+│   └── server.ts                    ✓ Entry point, port + host config (Session 21)
+│
+├── prisma/                          ○ Folder exists (.gitkeep), schema not yet defined
+│   └── schema.prisma
+└── package.json                     ✓ Node >=22, ESM, dev/build/start/typecheck scripts
+```
+
+**Module conventions (apply to every new module):**
+- Each module is a folder with at minimum `index.ts` (public exports) and `routes.ts` (Fastify registration function).
+- Larger modules split into `service.ts` (business logic) + `queries.ts` (DB calls) + `types.ts`.
+- Routes use Clerk auth via `{ preHandler: requireAuth }` from `shared/auth.ts` unless explicitly public.
+- DB access goes through `shared/supabase.ts` (service role) for now; Prisma will become the default once installed.
+- Every new module is wired in `src/app.ts` via `await app.register(register<Name>Routes)`.
+- BullMQ workers (`src/jobs/`) are thin — they delegate to module services, never duplicate business logic.
 
 ---
 
@@ -57,6 +194,9 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Unclaimed territories | Rembrandtplein, Plantage |
 | SPB test home pin | Palace Square (jittered) for nish_s, Rubik, TINA, Alyona — reset 13 May for SPB testing |
 | KAD ring road | OSM relation 1861646 (Cyrillic 'А-118') — defines SPB playable envelope |
+| Backend live URL | https://dominia-backend-production.up.railway.app |
+| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...) |
+| Clerk instance | Single test instance shared between mobile (`pk_test_bGVu...`) and backend (`sk_test_...`). Backend must verify tokens issued by the same Clerk app the mobile bundle authenticates against. |
 
 ---
 
@@ -67,7 +207,8 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Supabase | Pro | Micro compute, ~$25/month all-in ($10 compute credit covers Micro). PostGIS 3.3.7 enabled in `postgis` schema. |
 | Mapbox | Free | 50,000 map loads/month |
 | Clerk | Free | 10,000 MAU |
-| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~18 Android used, ~12 remaining.** |
+| Railway | Free trial / Hobby | **NEW Session 21.** Backend hosting. $5 in credits visible at sign-up. Auto-deploys on push to `main` of `dominia-backend` repo. Public domain: `dominia-backend-production.up.railway.app`. Single service so far (`dominia-backend`), no Postgres / Redis services yet — those come when Prisma and BullMQ land. |
+| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~18 Android used, ~12 remaining. No EAS builds in Session 21 (backend phase, no APK work).** |
 | Cursor | Pro | No usage limits on AI edits |
 
 ---
@@ -264,6 +405,30 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `eas.json` | EAS build profiles. **Preview profile (Session 19): `developmentClient: false` explicitly + `MAPBOX_DOWNLOADS_TOKEN` env reference. Default scaffolded preview profile was incomplete.** Used for standalone-APK outdoor walk tests (no Metro / no PC tether). |
 | `android/gradle.properties` | Mapbox download token for builds |
 
+### KEY FILES — BACKEND (`C:\Users\nisha\dominia-backend`, NEW Session 21)
+
+| File | Purpose |
+|---|---|
+| `package.json` | Node `>=22`, `type: "module"` (ESM), scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `typecheck` (tsc --noEmit). Dependencies: `fastify`, `@supabase/supabase-js`, `@clerk/backend`, `dotenv`. Dev deps: `typescript`, `tsx`, `@types/node`. |
+| `.nvmrc` | `22` — required for Railway Nixpacks to pick Node 22 (Node 20 crashes on boot because Supabase realtime-js needs native WebSocket). |
+| `tsconfig.json` | ES2022 target, ESNext module, Bundler resolution, strict, esModuleInterop, outDir `./dist`, rootDir `./src`, include `["src/**/*"]`. |
+| `.env` (local, gitignored) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLERK_SECRET_KEY`. Identical key set on Railway. **Never paste env values into chat — they are secrets.** Values must NOT be wrapped in angle brackets — `<https://...>` is placeholder syntax, not literal characters. |
+| `.env.example` | Same keys as `.env` with blank values, committed for documentation. |
+| `.gitignore` | `node_modules/`, `dist/`, `.env`, `.env.local`, OS junk. |
+| `README.md` | One-paragraph description + dev/build/start commands. |
+| `src/server.ts` | Entry point. Imports `buildApp` from `./app.js`, listens on `process.env.PORT \|\| 3000`, host `0.0.0.0`. Logs "ready" on success, exits 1 on startup error. |
+| `src/app.ts` | `buildApp()` async factory. Creates Fastify instance with logger enabled, registers `registerHealthRoutes` and `registerPlayerRoutes`. Every new module gets `await app.register(...)` here. |
+| `src/shared/supabase.ts` | Single Supabase service-role client. Reads `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from env, throws clear error at module load if either is missing. `auth: { autoRefreshToken: false, persistSession: false }` because server-side has no session to manage. `export type Database = any` — placeholder until proper Supabase types are generated. |
+| `src/shared/auth.ts` | Clerk JWT verification middleware. Reads `CLERK_SECRET_KEY` at module load (throws if missing). Module augments `FastifyRequest` to add `clerkUserId?: string`. Exports `requireAuth(request, reply)` async function used as Fastify `preHandler` on protected routes — reads `Authorization: Bearer <token>`, calls `verifyToken` from `@clerk/backend`, attaches `payload.sub` to `request.clerkUserId`, returns 401 on missing/malformed header or invalid token. **Do not log token contents** — only log the verifier's error object if diagnostic logging is needed (temporary; revert before commit). |
+| `src/modules/health/routes.ts` + `index.ts` | `GET /healthcheck` — unauthenticated. Returns `{ ok: true, timestamp: <ISO> }`. Used by Railway probes and basic deploy verification. |
+| `src/modules/player/types.ts` | `Player` type — loose typing for now (`[key: string]: unknown`) until Supabase types are generated. |
+| `src/modules/player/queries.ts` | `getPlayerByClerkId(clerkId)` — Supabase query on `players` table, `.eq("clerk_id", clerkId).maybeSingle()`. Returns `Player \| null`. |
+| `src/modules/player/service.ts` | `getMe(clerkId)` — calls `getPlayerByClerkId`, returns `{ clerkUserId, player }`. |
+| `src/modules/player/routes.ts` | `GET /me` with `{ preHandler: requireAuth }`. Reads `request.clerkUserId`, calls `getMe`, returns the result or 404 if no player row matched. |
+| `src/modules/player/index.ts` | Public exports: `registerPlayerRoutes`. |
+| `prisma/` | Folder placeholder (`.gitkeep`). Schema not yet defined — install + migrate next session. |
+| `src/{jobs,notifications,shared,modules}/.gitkeep` | Placeholder dirs that lock in the target module structure even before each module has real code. |
+
 ---
 
 ## IMPORTANT COMMANDS
@@ -430,6 +595,72 @@ WHERE player_id='94a9036e-1d59-49ae-9b5f-eae064913fbf'
   AND event_type='challenge_completed'
   AND created_at::date = CURRENT_DATE
 GROUP BY metadata->>'challenge_key';
+
+# =====================================================================
+# BACKEND COMMANDS (NEW Session 21) — repo: C:\Users\nisha\dominia-backend
+# =====================================================================
+
+# Always cd into the backend repo first (NEVER skip):
+cd C:\Users\nisha\dominia-backend
+
+# Install a runtime dep (run in Warp, not Cursor — Warp is the source of truth)
+npm install <pkg>
+
+# Typecheck (no emit)
+npm run typecheck
+
+# Local dev server (tsx watch — auto-reload on save). Listens on http://localhost:3000.
+npm run dev
+
+# Production build (tsc → dist/)
+npm run build
+
+# Production start (what Railway runs)
+npm start
+
+# Test live healthcheck against Railway URL
+curl https://dominia-backend-production.up.railway.app/healthcheck
+
+# Test /me with a real Clerk bearer token (PowerShell flavour — `curl` is Invoke-WebRequest aliased)
+$token = "ey..."   # full JWT from mobile [CLERK_TOKEN] log — see below
+Invoke-WebRequest -Uri https://dominia-backend-production.up.railway.app/me `
+  -Headers @{ Authorization = "Bearer $token" } `
+  | Select-Object -ExpandProperty Content
+# Hit Y on PowerShell's "Script Execution Risk" prompt — irrelevant warning, response body is what matters.
+# Or silence for the whole session:
+$PSDefaultParameterValues['Invoke-WebRequest:UseBasicParsing'] = $true
+
+# Grab a fresh Clerk JWT from the phone for backend testing
+#   1. In Cursor on MOBILE repo, temporarily add inside components/AuthGate.js:
+#        const { getToken } = useAuth();   // restore destructure
+#        useEffect(() => {
+#          if (isLoaded && isSignedIn) getToken().then(t => console.log('[CLERK_TOKEN]', t));
+#        }, [isLoaded, isSignedIn]);
+#   2. Kill + reopen Dominia app on phone (Recents swipe).
+#   3. Grep Metro for [CLERK_TOKEN], copy the JWT.
+#   4. USE WITHIN ~60s — Clerk tokens are short-lived.
+#   5. ALWAYS remove the log after copying — NEVER commit.
+#
+# When backend returns 401 "Invalid token", first hypothesis is token expired —
+# regrab a fresh one before adding diagnostic logging. If still 401 on fresh token,
+# temporarily enable verbose error logging in shared/auth.ts catch:
+#   } catch (err) {
+#     request.log.error({ err }, "Clerk verifyToken failed");
+#     reply.code(401).send({ error: "Invalid token" });
+#     return;
+#   }
+# Then push, redeploy, retest, read the Railway live logs. Revert the diagnostic before commit.
+
+# Backend git workflow (same rule as mobile — never `git add .`)
+cd C:\Users\nisha\dominia-backend
+git status
+git add <specific files>
+git commit -m "message"
+git push                              # Railway auto-deploys on push to main
+
+# Railway public URL was generated via Railway dashboard → service Settings → Networking →
+# Generate Domain. Currently: dominia-backend-production.up.railway.app (port 8080 internally,
+# Railway routes :443 → :8080 automatically).
 ```
 
 **EAS build budget:** 30/month. ~18 Android used, ~12 remaining. Only build for new native modules. Batch all native installs into one build.
@@ -587,6 +818,46 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Fix:** Add a "loaded" boolean (e.g. `challengesLoaded`) set to true ONLY after every async setter in the load effect completes. Watcher guard: `if (!loaded) return`. Cheap, durable.
 - **General lesson:** when a watcher effect depends on data that loads asynchronously, gate the watcher on a separate "loaded" flag. The dependency-array model isn't enough — React doesn't know which states are derived from the same async load.
 
+**31. Cursor remembers a stale working directory after files move on disk (Session 21)**
+- **Signature:** You moved a folder (e.g. `C:\Users\nisha\dominia\dominia-backend` → `C:\Users\nisha\dominia-backend`) to fix a wrong scaffold location. Subsequent Cursor agent prompts say they wrote files, but the files don't exist at the new path. They turn up at the OLD path, recreating the structure you just moved.
+- **Cause:** Cursor caches the workspace's working directory. Moving a folder via `Move-Item` doesn't update Cursor's reference — it keeps writing to the original path silently.
+- **Fix:** Always `File → Open Folder` on the correct repo path before pasting any prompt. After any folder move, do this step BEFORE giving Cursor its next prompt. Additionally: `Remove-Item -Recurse -Force` the old (now empty) location after the move, so Cursor cannot accidentally recreate it. Then in the new location, verify with `dir <new path>` that the files Cursor claimed to create actually exist.
+- **General lesson:** Cursor's file ops are state-dependent on its workspace root. Trust `dir`/`type` in Warp over Cursor's reported success message.
+
+**32. Env-var values wrapped in `<...>` brackets crash Supabase client at module load (Session 21)**
+- **Signature:** Backend boots locally with `Error: Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.` traced to `createClient` at `src/shared/supabase.ts:18`.
+- **Cause:** Documentation placeholder syntax `SUPABASE_URL=<https://xxxxx.supabase.co>` was copy-pasted literally into `.env`. The `<` and `>` are not stripped — they end up as part of the URL string, failing the `^https?://` regex.
+- **Fix:** Env values are bare strings. No quotes, no angle brackets, no trailing slashes. Always paste:
+  ```
+  SUPABASE_URL=https://xxxxx.supabase.co
+  ```
+  not
+  ```
+  SUPABASE_URL=<https://xxxxx.supabase.co>
+  ```
+  Same applies to every other env value. Verify with `findstr SUPABASE_URL .env` (Cyrillic and other secrets safe to inspect locally, never to paste in chat).
+- **General lesson:** when giving placeholder syntax in instructions, prefer underscores or curly braces like `paste_url_here` over angle brackets. Angle brackets get copied verbatim by users new to env files.
+
+**33. Railway Node 20 default crashes Supabase realtime-js — needs Node 22 (Session 21)**
+- **Signature:** Railway build succeeds, deploy starts, then crashes immediately on `node dist/server.js` with `Error: Node.js 20 detected without native WebSocket support` from `@supabase/realtime-js`. Local boot works fine (Node 24+).
+- **Cause:** Railway's Nixpacks defaults to Node 20 if not pinned. `@supabase/supabase-js` instantiates a `RealtimeClient` inside `createClient` regardless of whether you use realtime — and `RealtimeClient` needs native `WebSocket`, which only arrived in Node 22.
+- **Fix:** Pin Node 22 in two places (belt + braces, since Railway picks whichever it finds first):
+  - `package.json`: `"engines": { "node": ">=22" }`
+  - `.nvmrc` in repo root: `22`
+  Push, Railway rebuilds with Node 22, deploy succeeds. Alternative fix exists (provide `ws` package via `transport` option) but pinning Node 22 is one config change vs touching every Supabase client instantiation.
+- **General lesson:** any Node hosting platform that doesn't pick the latest LTS by default needs explicit engines + `.nvmrc`. Always test the live deploy logs immediately after first push — local boot doesn't catch this.
+
+**34. Clerk JWTs are short-lived (~60s) — token expiry feels like a 401 bug (Session 21)**
+- **Signature:** `/me` returns 401 "Invalid token" with a token you just copied from the phone. Re-grabbing the token and re-running curl within seconds succeeds.
+- **Cause:** Clerk session JWTs default to ~60 second TTLs. The time spent copying from Metro logs, switching tabs, and constructing the curl command frequently exceeds the TTL.
+- **Fix:** Two patterns help. (1) Use the PowerShell variable form so you don't need to rebuild the request between attempts:
+  ```
+  $token = "..."   # paste once
+  Invoke-WebRequest -Uri ... -Headers @{ Authorization = "Bearer $token" } ...
+  ```
+  Re-run by reassigning `$token` and hitting up-arrow. (2) When in doubt, regrab the token first, then theorise about other causes only if a fresh token also fails. Speed matters — Metro log → curl in under 30s.
+- **General lesson:** for any short-lived bearer scheme, "Invalid token" is almost always expiry on the first failure. Don't add diagnostic logging until you've confirmed it isn't expiry.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -651,7 +922,7 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - Alliance disband flow — no real gameplay use case
 - Alliance chat — post-MVP
 - Onboarding home pin 500m verification
-- Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase
+- ~~Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase~~ → **Fastify backend LAUNCHED Session 21** (live on Railway with `/healthcheck` + `/me` + Clerk auth + Supabase service-role client). BullMQ + Ably + FCM still queued — wire as features land.
 - **Phase 2 of SPB territory pool** — merging existing sub-tier OSM-named SPB territories (485 of them) into the unified gap-fill pool. Phase 1 was greenfield gap-fill only; Phase 2 deferred.
 - **Amsterdam gap-fill pipeline** — expected ≤30 new fill blocks. Not run yet. Run after SPB nested-territories cleanup completes and pipeline is proven idempotent.
 - Custom Mapbox night style swap-back (currently `light-v11` for dev)
@@ -661,27 +932,29 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH MIDDLEWARE, SUPABASE SERVICE-ROLE CLIENT, `/me` PROVEN END-TO-END ✓**
 
-**Immediate — Backend phase kickoff: Fastify + BullMQ + Ably scaffolding.**
+**Immediate — build the player module's write paths + install Prisma.**
 
-This is the foundation for defender flow, real-time multiplayer cache invalidation (already-stubbed hook in `MapScreen.js`), and FCM push. First-session scope to discuss at the start of next session:
+Two related tracks to scope at the start of next session:
 
-1. Where the backend lives — separate repo (`dominia-backend`) vs mono-repo subfolder
-2. Deployment target — Railway / Fly / Render — research and pick
-3. Auth strategy — Clerk JWT verification middleware first
-4. First endpoint — likely a stub `/healthcheck` + Clerk-verified `/me`
-5. Whether to wire Ably at the same time or land Fastify first
+1. **Install Prisma** — `prisma/` folder exists with `.gitkeep` but no schema. Decision needed: define the first schema covering just the `players` table (minimum viable) vs the full canonical schema (players + territories + alliances + ...). Recommend minimal — one table at a time, expand as modules ship.
+2. **Player module write endpoints** — `PATCH /me` (update fields like display name) and `POST /me/home-pin` (set `home_pin_lat`/`home_pin_lng`). First real write path on the backend; will exercise Prisma if installed, or stay on Supabase JS if Prisma deferred.
 
-The dev build is still installed on phone from Session 20. No EAS build needed at the start of the next session; just `npx expo start --dev-client --host lan` + ADB reverse and Metro reconnects.
+Open sub-questions for the start of Session 22:
+- Generate proper Supabase types now (`supabase gen types`) or wait until Prisma replaces the placeholder `Database = any`?
+- Add `cors` to Fastify before the mobile app starts hitting the backend, or defer until the first mobile call?
+- Wire `dotenv/config` import into `server.ts` (already there from scaffold) + verify `.env` is read consistently across modules.
 
-**Outdoor walk validation of Bug 1/2/3 fixes — DEFERRED to a natural preview-build moment.** The indoor lock-the-phone test in Session 20 exercised the exact failure mode (screen sleeps, task continues) and passed cleanly. Bug fixes are correctness, not performance — they either work or they don't. No dedicated preview build for this validation; fold it into the next preview build whenever that naturally happens (e.g. validating Ably real-time, validating defender flow on the move, etc).
+**Backlog — after Prisma + player writes land, pick next:**
 
-**Backlog — after backend foundation lands, pick next:**
-
-- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes (e.g. `Near СО17-2873 N`), strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap, high-visibility polish.
-- **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision. Both files in one session once strategy is agreed.
-- **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls (Distance, TotalCaloriesBurned, ExerciseSession). Today/Best logic needs persistent best storage.
+- **Territory module — `GET /territories/viewport`** — port the existing PostGIS RPC call from the mobile app to the backend, return GeoJSON FeatureCollection. First read-heavy endpoint, gets the PostGIS layer exercised on the server.
+- **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit.
+- **Generate Supabase types** for the backend `Database` type. Currently `any`.
+- **Wire Ably** — add `shared/ably.ts` channel publisher, integrate with existing `handleTerritoriesRefetched(territoryId)` hook in mobile MapScreen.js.
+- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap polish.
+- **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision.
+- **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls.
 
 **Queued — deferred map work (revisit at polish phase):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `postgis.ST_Overlaps` / `postgis.ST_Contains` pairs, group by overlap type, decide handling per type
@@ -749,7 +1022,7 @@ The dev build is still installed on phone from Session 20. No EAS build needed a
 - Onboarding home pin 500m verification
 - Move hardcoded service role key in `retry-failed-polygons.js` to env var
 - Add Bengaluru territory dataset (rerun fetch-osm-polygons.js + gap-fill pipeline)
-- Backend phase (Fastify, BullMQ, Ably, FCM)
+- BullMQ + Redis + Ably + FCM — backend foundation lives, these layers still queued (see backend STACK table)
 
 ---
 
@@ -874,6 +1147,19 @@ The dev build is still installed on phone from Session 20. No EAS build needed a
 | **DB-level idempotency for challenge cascade, not better in-memory guards (Session 20, Bug 3 fix)** | Session 19 created 3x medium + 2x easy `challenge_completed` rows because the in-memory guards (`inFlightTiersRef` + `completedKeys`) reset on component remount during the 1hr walk's foreground/background cycles. Fix: chain `.select()` on the `player_challenges` insert and inspect the return; on `23505` (unique_violation) OR empty rows array, `return` before any downstream writes. In-memory state dies on unmount; the UNIQUE constraint is permanent. The right place to enforce single-pay is at the DB row, not in component refs. |
 | **`challengesLoaded` boolean gates the auto-complete watcher (Session 20, Bug 3 fix)** | Even with DB-level idempotency in place, the auto-complete watcher could fire writes for the duration of the async `player_challenges` load on remount — every fire would hit the duplicate-bail path but still cost a network round-trip. Adding `challengesLoaded` (set true only after the initial fetch completes) closes the race window entirely. Defense in depth — the watcher does not even try until state is hydrated. |
 | **Skip dedicated outdoor walk validation for Bug 1/2/3; fold into next natural preview build (Session 20)** | Two paths considered: (A) kick a fresh preview build now for a 30-45 min outdoor walk, (B) start backend on the current dev build and validate outdoors at the end of a future backend session that needs a preview build anyway. Chose B. The architectural fix passed the indoor lock-the-phone test (same code path: screen sleeps, task continues). Bug fixes are correctness, not performance — they either work or they don't. Outdoor adds GPS noise but no new code path. Costs 1 fewer EAS build now (~13 remaining → ~13). |
+| **Separate backend repo, not monorepo (Session 21)** | New repo `dominia-backend` over a subfolder inside `dominia`. Cleaner CI, independent deploy cadence, no risk of an Expo build accidentally picking up server-only deps (`@clerk/backend`, server-side `@supabase/supabase-js` with service role key). Mobile and backend already use different package managers' lockfiles and Node engine requirements — separating them removes a class of accidental coupling. |
+| **Railway over Fly / Render for backend hosting (Session 21)** | Easiest Postgres-adjacent deploy of the three (we don't need Postgres yet because Supabase hosts our DB, but the convenience extends to Redis when BullMQ lands). Generous free credits, GitHub auto-deploy on push to `main`, simpler ops surface than Fly. Render is fine but slower cold starts and the dashboard UX is rougher. Trade-off: Railway is opinionated about Nixpacks defaults (e.g. Node 20 by default — see Pitfall #33). |
+| **TypeScript on backend, plain JS stays on mobile (Session 21)** | Backend touches Supabase types, Clerk types, BullMQ job shapes, Prisma generated types — TypeScript pays for itself fast on a service that orchestrates this many typed boundaries. Mobile stays JS because the existing code is JS, the gain on RN component code is smaller, and a wholesale conversion would be a large unrelated refactor. The two codebases never share source — boundary is the JSON wire — so a language mismatch costs nothing. |
+| **Prisma on backend, Supabase JS stays on mobile (Session 21, partially implemented)** | Backend write paths benefit from Prisma's transaction primitives and generated types — especially the contest resolver, where atomic transfer + ledger write + history INSERT need a single `prisma.$transaction(...)`. Mobile uses Supabase JS for reads and simple writes, which is fine for that surface. Both hit the same Postgres — no conflict, just different access patterns. Prisma not yet installed; next session decides whether to scope it into player module work or land player writes via Supabase JS first and migrate to Prisma later. |
+| **Clerk `verifyToken` (Option A) over `clerkClient.authenticateRequest` (Option B) (Session 21)** | Mobile sends a bearer JWT in `Authorization: Bearer ...`. Backend just needs to verify the signature against Clerk's JWKS and extract `payload.sub`. No session storage, no SSR concerns, no cookie handling. Option B's session-management features are wasted on a stateless mobile-backend API. Option A is one function call, one error case (verifyToken throws → 401), and three lines of FastifyRequest type augmentation. |
+| **Service role Supabase key on backend, anon key stays on mobile (Session 21)** | Backend must bypass RLS to execute trusted operations (contest resolution, alliance morale donations, leaderboard cache writes). Anon key + RLS is the mobile pattern. Service role is full DB access — value must never leave the server, never be logged, never appear in any committed file. Stored in `.env` (gitignored) locally and Railway env vars in production. The naming changed recently in the Supabase dashboard: `secret` key = old `service_role`, `publishable` key = old `anon`. |
+| **Fastify first, Ably later (Session 21)** | Land the repo, deploy, auth middleware, and Supabase wiring cleanly before adding the realtime layer. Ably has its own auth model (token endpoint + channel auth) and is easier to bolt on once the Clerk middleware is proven working. Order optimises for the smallest amount of "is it broken because of A or B" debugging. |
+| **First endpoints are `/healthcheck` + `/me`, not a feature endpoint (Session 21)** | Together they validate the entire stack — `/healthcheck` proves the Railway deploy works (boot + listen + route), `/me` proves Clerk auth + Supabase service-role query + JSON serialisation work end-to-end. Without these two, every feature endpoint would be three layers of "is the stack wrong or is my code wrong" debugging. Cost: ~5 minutes of work, returns thousands of dollars of future debugging time. |
+| **Pin Node 22 in BOTH `package.json` engines AND `.nvmrc` (Session 21)** | Railway crashed on first deploy because Nixpacks picked Node 20 (no native WebSocket → Supabase realtime-js fails at `createClient` time). `package.json` engines field is documentation that some hosts respect and others don't; `.nvmrc` is a near-universal convention. Belt + braces, two-line change, no downside. Alternative was passing a `ws` polyfill to every Supabase client instantiation — strictly worse. |
+| **PRIVATE GitHub repo for backend (Session 21)** | Backend will eventually hold service-role Supabase keys (in env config docs and example files), Clerk secret keys, FCM credentials, signed URL secrets. Keeping the repo private now (vs flipping to public later) keeps the blast radius small if anything is ever accidentally committed. Flippable to public after a production-readiness review if needed. |
+| **Cursor proposes `npm install`/`npm run typecheck` — skip Cursor, run in Warp (Session 21)** | Cursor's terminal had stale working-directory issues this session (a folder moved on disk, Cursor kept writing to the old path silently). Treating Warp as the single source of truth for all shell execution removes one class of "did that actually run?" ambiguity. Cost: copy-paste into a second terminal. Benefit: one log of every command actually executed. |
+| **All Cursor prompts now state which repo they target, in a one-click copyable code block (Session 21)** | Two repos = two working directories. Even a careful operator can paste a backend prompt into Cursor while it's open on the mobile repo and not notice for several turns. Explicit `[BACKEND: C:\Users\nisha\dominia-backend]` or `[MOBILE: C:\Users\nisha\dominia]` header on every prompt block costs nothing and prevents the entire class of cross-repo accidents. Copyable code block is the existing rule extended to the two-repo world. |
+| **Module-based backend structure committed as the target end-state (Session 21)** | The `BACKEND ARCHITECTURE — MODULE STRUCTURE` section in this doc is the canonical target. Every session adds modules toward this structure — never throwaway scaffolds, never temporary shapes that get refactored later. Today's `modules/player/{routes,service,queries,types,index}.ts` is the exact pattern every future module follows. Settling the architecture upfront removes a recurring "how should I structure this" cost across the rest of the backend phase. |
 
 ---
 
@@ -885,13 +1171,17 @@ Do not start coding immediately. Work conversationally:
 - Ask for confirmation before writing any code
 - Wait for the user to say "yes" or "let's build it" before touching any files
 - Once confirmed, provide the exact prompt to paste into Cursor's agent chat as a single copyable code block — one-click copyable, no inline prompts mixed with prose
+- **ALWAYS state which repo every Cursor prompt and Warp command targets.** Two repos in play from Session 21 onwards: `MOBILE: C:\Users\nisha\dominia` and `BACKEND: C:\Users\nisha\dominia-backend`. Cursor prompts include a `[MOBILE: ...]` or `[BACKEND: ...]` header. Every Warp command sequence starts with the matching `cd`.
+- **For Cursor: confirm `File → Open Folder` is on the right repo before pasting.** Cursor caches working directory and can write files to the wrong path silently if the workspace has moved. After any folder move or repo switch, do this explicit step.
+- **When Cursor proposes shell commands (`npm install`, `npm run typecheck`, etc): SKIP and run them in Warp instead.** Warp is the single source of truth for what was executed. Cost: paste into a second terminal. Benefit: one consistent log of every shell command in the session.
 - After Cursor builds it, wait for the user to check their phone and report back
 - Give the user time to ask questions at every step
 - Handle one screen or one fix at a time — never batch unrelated changes
 - **For SQL: separate queries one at a time so user can verify each before proceeding.** Especially true for heavy PostGIS work — splitting also dodges the 60s SQL editor timeout.
 - **When debugging: get evidence before theorising.** PowerShell-from-PC test, fetch wrapper logs, EXPLAIN ANALYZE in SQL editor, render-side check, and **raw-data dump (`JSON.stringify(rows[0])` before chasing style hypotheses)** are the fastest diagnostics. Cheapest binary test wins.
+- **For backend 401s: regrab a fresh Clerk token before adding diagnostic logging.** Clerk tokens are ~60s TTL — expiry is the most likely cause (Pitfall #34).
 - **Filter / validate at the source, not at the client.** One bad row can silently break the whole UI. Server-side guards (PostGIS `ST_IsValid`, RPC argument checks, atomic transactions) are always cheaper than client-side defensive code.
 - **When Cursor proposes shell commands (node -e, PowerShell) for tasks that are file edits:** SKIP, don't allowlist, redirect to use file tools only.
-- **Never `git add .`** — always specify files. Local-only dev scripts and `.env` artefacts have already been kept out of the repo by this rule.
+- **Never `git add .`** — always specify files. Local-only dev scripts and `.env` artefacts have already been kept out of the repo by this rule. **Especially critical with two repos** — `git add .` in the wrong repo could pull in unintended files.
 - **When the same problem resists multiple targeted fixes, the fix isn't another tweak — it's the architecture.** Session 5's wedge-transport problem became moot in Session 6 once the architecture changed; Session 13's "no SPB territories" problem became moot once the gap-fill pipeline replaced one-by-one OSM curation.
 - **Crisp responses, recommend one option not pros/cons. No decisions without explicit user confirmation.**
