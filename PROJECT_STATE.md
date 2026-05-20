@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 19, 2026 (Session 21 — Backend phase officially launched. New `dominia-backend` repo scaffolded (Fastify + TypeScript, module-based architecture), pushed to private GitHub repo, deployed live on Railway at `https://dominia-backend-production.up.railway.app`. Three endpoints/middlewares working end-to-end: `GET /healthcheck` (unauthenticated liveness probe), `GET /me` (Clerk-authenticated player lookup), and `requireAuth` Fastify preHandler that verifies Clerk JWTs via `verifyToken` from `@clerk/backend`. Full stack proven against the live URL with a real Clerk JWT from the phone — returned nish_s, level 4, full player payload through phone JWT → Railway → Clerk verify → Supabase service-role query → JSON response. Locked decisions: separate repo (not monorepo), Railway deploy, Prisma planned for backend / Supabase JS stays on mobile, Fastify first / Ably later, TypeScript on backend. Node 22 pinned (Supabase realtime-js needs native WebSocket support, Node 20 crashes on boot). Next session: install Prisma, define first schema, build player onboarding endpoints (PATCH /me, POST /me/home-pin).)
+Last updated: May 20, 2026 (Session 22 — Prisma 7 installed and live on the backend. Full Supabase schema introspected via `prisma db pull` (12 models written to `prisma/schema.prisma`): players, alliances, territories, territory_history, activity_log, debug_events, player_challenges, gap_fill_blocks_spb, gap_fill_pois_spb, gap_fill_roads_spb, spb_districts, spb_okrugs. `@prisma/client` generated to default `node_modules/@prisma/client` path, typecheck passes, Railway redeployed with new `DATABASE_URL` (transaction pooler, port 6543) + `DIRECT_URL` (session pooler, port 5432) env vars, `/healthcheck` still 200 OK. Option A chosen: full schema as source of truth, only `players` model used in code initially — future modules add code, not schema changes. Prisma 7 gotchas hit and resolved: URL must live in `prisma.config.ts` not `schema.prisma`; single `url` field in config (no separate `directUrl`); Supabase direct connection requires IPv6 → use Session pooler for IPv4; special chars in DB password break dotenv → reset to alphanumeric. Backend modules unchanged this session (still `GET /healthcheck` + `GET /me`). Next session: create `src/shared/prisma.ts` singleton, refactor `modules/player/queries.ts` to use Prisma, build `PATCH /me` + `POST /me/home-pin` write endpoints, plan mobile migration of direct Supabase `players` writes to backend.)
 
 ---
 
@@ -60,7 +60,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Hosting | Railway (europe-west4 edge) | ✓ Deployed, auto-deploy on push to `main` |
 | Auth | `@clerk/backend` `verifyToken` (stateless, JWKS-verified) | ✓ Live (`requireAuth` Fastify preHandler) |
 | Database (server) | `@supabase/supabase-js` — **service role key** (full DB access, bypasses RLS) | ✓ Live |
-| ORM (planned) | Prisma — not yet installed | ○ Next session |
+| ORM | Prisma 7.8 (`@prisma/client` + `prisma` CLI, schema introspected from live Supabase, 12 models) | ✓ Installed (Session 22) — singleton client + write paths next session |
 | Real-time (planned) | Ably | ○ Not started |
 | Job queue (planned) | BullMQ + Redis | ○ Not started |
 | Push (planned) | Firebase Cloud Messaging | ○ Not started |
@@ -143,7 +143,7 @@ dominia-backend/
 │   ├── shared/
 │   │   ├── formulas.ts              // mobile formulas.js ported — pure functions, no module imports ○
 │   │   ├── db/
-│   │   │   ├── prisma.ts            // single Prisma client instance ○
+│   │   │   ├── prisma.ts            // single Prisma client instance (imports from `@prisma/client`, default path) ○ Next session
 │   │   │   └── postgis.ts           // raw SQL helpers, ST_ForcePolygonCCW wrappers ○
 │   │   ├── supabase.ts              ✓ Service-role client, env-validated at load (Session 21)
 │   │   ├── auth.ts                  ✓ Clerk verifyToken middleware, per-route preHandler (Session 21)
@@ -167,16 +167,17 @@ dominia-backend/
 │   ├── app.ts                       ✓ Fastify instance factory, registers modules (Session 21)
 │   └── server.ts                    ✓ Entry point, port + host config (Session 21)
 │
-├── prisma/                          ○ Folder exists (.gitkeep), schema not yet defined
-│   └── schema.prisma
-└── package.json                     ✓ Node >=22, ESM, dev/build/start/typecheck scripts
+├── prisma/                          ✓ Schema introspected from live Supabase (Session 22) — 12 models
+│   └── schema.prisma                ✓ All current Supabase tables; PostGIS fields as `Unsupported("geometry")` (intentional, never queried via Prisma)
+├── prisma.config.ts                 ✓ Prisma 7 config — dotenv-loaded, `env("DIRECT_URL")` as datasource.url (Session 22)
+└── package.json                     ✓ Node >=22, ESM, dev/build/start/typecheck scripts; deps now include `prisma` + `@prisma/client`
 ```
 
 **Module conventions (apply to every new module):**
 - Each module is a folder with at minimum `index.ts` (public exports) and `routes.ts` (Fastify registration function).
 - Larger modules split into `service.ts` (business logic) + `queries.ts` (DB calls) + `types.ts`.
 - Routes use Clerk auth via `{ preHandler: requireAuth }` from `shared/auth.ts` unless explicitly public.
-- DB access goes through `shared/supabase.ts` (service role) for now; Prisma will become the default once installed.
+- DB access: Prisma 7 client is installed and generated (`import { PrismaClient } from "@prisma/client"`). Singleton wrapper `shared/db/prisma.ts` is the next module to land. Existing `shared/supabase.ts` (service role) stays for now and is referenced by `GET /me`; new write paths use Prisma. Raw SQL via Prisma's `$queryRaw` is the fallback for PostGIS operations (which Prisma marks `Unsupported("geometry")`).
 - Every new module is wired in `src/app.ts` via `await app.register(register<Name>Routes)`.
 - BullMQ workers (`src/jobs/`) are thin — they delegate to module services, never duplicate business logic.
 
@@ -195,7 +196,7 @@ dominia-backend/
 | SPB test home pin | Palace Square (jittered) for nish_s, Rubik, TINA, Alyona — reset 13 May for SPB testing |
 | KAD ring road | OSM relation 1861646 (Cyrillic 'А-118') — defines SPB playable envelope |
 | Backend live URL | https://dominia-backend-production.up.railway.app |
-| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...) |
+| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...), `DATABASE_URL` (Supabase Transaction pooler, port 6543 — runtime queries), `DIRECT_URL` (Supabase Session pooler, port 5432, IPv4-proxied — Prisma CLI + migrations). On Railway, env values are pasted WITHOUT quotes (Railway stores as literal string); in local `.env` they MUST be wrapped in double quotes to survive dotenv parsing. |
 | Clerk instance | Single test instance shared between mobile (`pk_test_bGVu...`) and backend (`sk_test_...`). Backend must verify tokens issued by the same Clerk app the mobile bundle authenticates against. |
 
 ---
@@ -621,6 +622,16 @@ npm start
 # Test live healthcheck against Railway URL
 curl https://dominia-backend-production.up.railway.app/healthcheck
 
+# Prisma (NEW Session 22) — schema is the live Supabase DB, mirrored via introspection
+npx prisma db pull --print           # Dry-run introspect, prints schema to stdout
+npx prisma db pull                   # Introspect and write to prisma/schema.prisma
+npx prisma generate                  # Regenerate @prisma/client after schema changes
+# DATABASE_URL (port 6543, transaction pooler) is used by Prisma client at runtime.
+# DIRECT_URL  (port 5432, session pooler)     is used by `prisma db pull` and any future
+# `prisma migrate` calls. Both must be set in `.env` AND on Railway.
+# Verify a dotenv var loads correctly (diagnostic for env-parsing issues):
+node -e "require('dotenv').config(); console.log('VAR:', JSON.stringify(process.env.VAR_NAME))"
+
 # Test /me with a real Clerk bearer token (PowerShell flavour — `curl` is Invoke-WebRequest aliased)
 $token = "ey..."   # full JWT from mobile [CLERK_TOKEN] log — see below
 Invoke-WebRequest -Uri https://dominia-backend-production.up.railway.app/me `
@@ -858,6 +869,50 @@ These are bugs that have already cost significant debugging time. Learn the sign
   Re-run by reassigning `$token` and hitting up-arrow. (2) When in doubt, regrab the token first, then theorise about other causes only if a fresh token also fails. Speed matters — Metro log → curl in under 30s.
 - **General lesson:** for any short-lived bearer scheme, "Invalid token" is almost always expiry on the first failure. Don't add diagnostic logging until you've confirmed it isn't expiry.
 
+**35. Prisma 7 moved `url` out of `schema.prisma` into `prisma.config.ts` (Session 22)**
+- **Signature:** `npx prisma db pull` or `prisma generate` fails with `P1012: The datasource property url is no longer supported in schema files. Move connection URLs for Migrate to prisma.config.ts`.
+- **Cause:** Prisma 7 (released Nov 2025) made this a breaking change. The `datasource db` block in `schema.prisma` now ONLY contains `provider`. `url` (and the old `directUrl`) live in `prisma.config.ts`.
+- **Fix:** `schema.prisma` datasource is exactly `datasource db { provider = "postgresql" }`, nothing else. `prisma.config.ts` carries the URL:
+  ```ts
+  import "dotenv/config";
+  import { defineConfig, env } from "prisma/config";
+  export default defineConfig({
+    schema: "prisma/schema.prisma",
+    migrations: { path: "prisma/migrations" },
+    datasource: { url: env("DIRECT_URL") },
+  });
+  ```
+  Use `env("...")` from `"prisma/config"` (NOT `process.env[...]`) so Prisma can validate required vars at load time.
+- **General lesson:** Prisma 7 is a recent release; check the upgrade guide before assuming Prisma 6 patterns still apply. Single `url` in config now — no separate `directUrl` property; if you need two URLs (e.g. pooled at runtime + direct for CLI), the CLI url goes in config and runtime is overridden via the PrismaClient constructor.
+
+**36. Supabase direct connection (`db.[ref].supabase.co:5432`) requires IPv6 — Windows home networks need the Session pooler instead (Session 22)**
+- **Signature:** `npx prisma db pull` errors with `P1001: Can't reach database server at db.[ref].supabase.co:5432`. Connection string is correct, password is correct, but the host is unreachable.
+- **Cause:** Supabase's direct connection endpoint (`db.[project-ref].supabase.co`) is IPv6-only on the free/Pro tiers as of 2024+. Most Windows home internet is IPv4-only. The hostname resolves but no IPv4 route exists.
+- **Fix:** Use the **Session pooler** as your "direct" URL — it's the same shape (port 5432, single-connection semantics) but proxied through IPv4 (`aws-0-[region].pooler.supabase.com:5432`). Note the username format changes from `postgres` to `postgres.[project-ref]`. The Supabase dashboard labels it "Session pooler — only use on an IPv4 network" — that label is correct, and home Windows networks are exactly that case.
+- **General lesson:** when Supabase shows three connection options (Direct, Session pooler, Transaction pooler), Direct requires IPv6 and is best for cloud VMs with dual-stack networking; both pooler options are IPv4 proxied. For local development on Windows, both URLs should be pooler URLs.
+
+**37. Special characters in DB password break dotenv parsing silently (Session 22)**
+- **Signature:** `node -e "require('dotenv').config(); console.log(process.env.DIRECT_URL)"` prints the URL truncated mid-password (e.g. `"postgresql://postgres:qB`). Downstream Prisma errors with `P1013: invalid url`.
+- **Cause:** dotenv treats `#` as a comment marker. A password containing `#` (or unescaped `"`) truncates the value at the first occurrence. Even quoted values can break depending on the character.
+- **Fix:** Reset the Supabase DB password (Project Settings → Database → Reset database password) to alphanumeric-only (`[A-Za-z0-9]+`). A 24-char alphanumeric password is just as secure as one with symbols and avoids URL-encoding pain across `.env`, PowerShell, Railway. URL-encoding (`%23` for `#`, etc.) is a valid alternative but introduces a recurring source of "did I encode it right" bugs.
+- **General lesson:** for any string that ends up inside a URL inside a `.env`: alphanumeric only. The minor reduction in entropy is offset by zero parsing surprises across the tool chain.
+
+**38. `.env` file with `:` instead of `=` separator silently produces empty env vars (Session 22)**
+- **Signature:** `prisma db pull` errors with `P1013: must start with protocol postgresql://`. dotenv diagnostic shows the var as `undefined` even though the line exists in `.env`.
+- **Cause:** Typing the line as `DIRECT_URL:"postgresql://..."` instead of `DIRECT_URL="postgresql://..."`. dotenv requires `=` as the separator; `:` produces a silent no-op (line is treated as malformed and skipped).
+- **Fix:** Always verify with the dotenv diagnostic line BEFORE running any Prisma command after touching `.env`:
+  ```
+  node -e "require('dotenv').config(); console.log('VAR:', JSON.stringify(process.env.VAR_NAME))"
+  ```
+  If the output is `undefined`, the line is malformed. If it's `""`, the line is present but empty.
+- **General lesson:** the single-line dotenv diagnostic is the cheapest way to confirm an env var is reaching the runtime. Run it before any other debugging when env vars are involved.
+
+**39. Cursor stale workspace + `prisma init` "folder already exists" cycle (Session 22)**
+- **Signature:** `npx prisma init` fails with "A folder called prisma already exists in your project. Please try again in a project that is not yet using Prisma." But you've never run Prisma in this repo.
+- **Cause:** Pre-existing `prisma/` folder from an earlier scaffold (Session 21 left a `.gitkeep` placeholder there to commit the empty directory). `prisma init` is conservative and refuses to write into an existing folder regardless of its contents.
+- **Fix:** `Remove-Item -Recurse -Force prisma` first, then re-run `npx prisma init --datasource-provider postgresql`. The placeholder folder serves no purpose once Prisma is being set up. Don't try to manually create `schema.prisma` inside the existing folder — `init` also generates `prisma.config.ts` which you need.
+- **General lesson:** placeholder directories with `.gitkeep` work fine until they conflict with a tool's "I create this directory" assumption. Either remove placeholders before running scaffolders, or use scaffolders that respect existing folders. For Prisma specifically, the placeholder strategy is now obsolete since `schema.prisma` is committed from session 1.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -932,21 +987,22 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH MIDDLEWARE, SUPABASE SERVICE-ROLE CLIENT, `/me` PROVEN END-TO-END ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH MIDDLEWARE, SUPABASE SERVICE-ROLE CLIENT, `/me` PROVEN END-TO-END ✓ | PRISMA 7 INSTALLED + SCHEMA MIRRORS LIVE SUPABASE (12 MODELS) ✓**
 
-**Immediate — build the player module's write paths + install Prisma.**
+**Immediate — wire Prisma into the player module and build the first write endpoints.**
 
-Two related tracks to scope at the start of next session:
+Prisma 7.8 is installed, schema mirrors the live Supabase DB (12 models), client generated to `node_modules/@prisma/client`, typecheck passing. Three concrete steps to start Session 23:
 
-1. **Install Prisma** — `prisma/` folder exists with `.gitkeep` but no schema. Decision needed: define the first schema covering just the `players` table (minimum viable) vs the full canonical schema (players + territories + alliances + ...). Recommend minimal — one table at a time, expand as modules ship.
-2. **Player module write endpoints** — `PATCH /me` (update fields like display name) and `POST /me/home-pin` (set `home_pin_lat`/`home_pin_lng`). First real write path on the backend; will exercise Prisma if installed, or stay on Supabase JS if Prisma deferred.
+1. **Create `src/shared/db/prisma.ts`** — singleton `PrismaClient` instance (the hot-reload-safe pattern: assign to `global` in dev, fresh instance in prod). Single import surface for every module.
+2. **Refactor `modules/player/queries.ts`** — replace the current Supabase JS call in `getPlayerByClerkId` with `prisma.players.findUnique({ where: { clerk_id }})`. `GET /me` becomes the proof-of-life for Prisma in production, same as it was for the original stack.
+3. **Build `PATCH /me` and `POST /me/home-pin`** — first real write paths on the backend. `PATCH /me` updates fields like `has_onboarded`, display name. `POST /me/home-pin` writes `home_pin_lat` + `home_pin_lng`. Validate end-to-end against Railway with a fresh Clerk JWT.
 
-Open sub-questions for the start of Session 22:
-- Generate proper Supabase types now (`supabase gen types`) or wait until Prisma replaces the placeholder `Database = any`?
-- Add `cors` to Fastify before the mobile app starts hitting the backend, or defer until the first mobile call?
-- Wire `dotenv/config` import into `server.ts` (already there from scaffold) + verify `.env` is read consistently across modules.
+Open sub-question for the start of Session 23:
+- After backend writes land, mobile `players.update()` calls become divergent state. Plan to migrate them: identify every direct `supabase.from('players').update(...)` call in the mobile repo, point them at the new backend endpoints. Can be its own session (Session 24 candidate).
+- Add `cors` to Fastify before the mobile app starts hitting the backend.
+- Decide whether `shared/supabase.ts` stays for non-`players` reads or gets removed entirely once Prisma covers the player module's read path.
 
-**Backlog — after Prisma + player writes land, pick next:**
+**Backlog — after player writes land, pick next:**
 
 - **Territory module — `GET /territories/viewport`** — port the existing PostGIS RPC call from the mobile app to the backend, return GeoJSON FeatureCollection. First read-heavy endpoint, gets the PostGIS layer exercised on the server.
 - **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit.
@@ -1160,6 +1216,13 @@ Open sub-questions for the start of Session 22:
 | **Cursor proposes `npm install`/`npm run typecheck` — skip Cursor, run in Warp (Session 21)** | Cursor's terminal had stale working-directory issues this session (a folder moved on disk, Cursor kept writing to the old path silently). Treating Warp as the single source of truth for all shell execution removes one class of "did that actually run?" ambiguity. Cost: copy-paste into a second terminal. Benefit: one log of every command actually executed. |
 | **All Cursor prompts now state which repo they target, in a one-click copyable code block (Session 21)** | Two repos = two working directories. Even a careful operator can paste a backend prompt into Cursor while it's open on the mobile repo and not notice for several turns. Explicit `[BACKEND: C:\Users\nisha\dominia-backend]` or `[MOBILE: C:\Users\nisha\dominia]` header on every prompt block costs nothing and prevents the entire class of cross-repo accidents. Copyable code block is the existing rule extended to the two-repo world. |
 | **Module-based backend structure committed as the target end-state (Session 21)** | The `BACKEND ARCHITECTURE — MODULE STRUCTURE` section in this doc is the canonical target. Every session adds modules toward this structure — never throwaway scaffolds, never temporary shapes that get refactored later. Today's `modules/player/{routes,service,queries,types,index}.ts` is the exact pattern every future module follows. Settling the architecture upfront removes a recurring "how should I structure this" cost across the rest of the backend phase. |
+| **Prisma 7 over Prisma 6 — fresh install, no migration cost (Session 22)** | Prisma 7 (Nov 2025) was the current stable release when we installed. It made breaking changes (URL moved to `prisma.config.ts`, single `url` field, env helper from `prisma/config`), but since this was a fresh install with no Prisma 6 codebase to migrate, the cost was zero and we get the latest patterns. The breaking changes are well-documented in the upgrade guide. |
+| **Option A: full Supabase schema introspected and committed to `prisma/schema.prisma` — only `players` model used in code initially (Session 22)** | Two options considered. (A) Full `db pull` of all 12 tables, only write code against `players` for now. (B) Pull everything, delete unused models from schema, re-introspect as each module ships. Chose A: schema mirrors live DB reality (no drift), every model is ready to use the moment a new module needs it (zero schema work per new module), and the "unsupported" warnings (PostGIS `Unsupported("geometry")`, RLS, check constraints) cost nothing because Prisma is query-only — we never run `prisma migrate`. Supabase remains the schema owner. |
+| **Supabase Session pooler (port 5432, IPv4 proxied) as `DIRECT_URL`, Transaction pooler (port 6543) as `DATABASE_URL` (Session 22)** | Three URL options exposed by Supabase: Direct (`db.[ref].supabase.co:5432`, IPv6-only), Session pooler (IPv4 proxied, port 5432, single-connection semantics), Transaction pooler (IPv4 proxied, port 6543, statement-level pooling). Windows home networks are IPv4-only — Direct is unreachable. Picked Session pooler for `DIRECT_URL` (used by Prisma CLI + future migrations) and Transaction pooler for `DATABASE_URL` (runtime queries, Prisma docs default for serverless/high-concurrency workloads). |
+| **Alphanumeric-only Supabase DB password (Session 22)** | Symbols in passwords (`#`, `"`, `&`, etc.) break dotenv parsing silently (dotenv treats `#` as a comment marker) and create recurring URL-encoding pain across PowerShell + Railway + `.env` files. A 24-char alphanumeric password has equivalent entropy and zero parsing surprises. Reset Supabase DB password to alphanumeric-only as the standing policy for this project. |
+| **Prisma generates to default `node_modules/@prisma/client` path (Session 22)** | Original scaffold (Session 21) tried a custom output path (`src/generated/prisma`) but `prisma db pull` rewrote the generator block to default. Kept the default — it's the conventional import path (`import { PrismaClient } from "@prisma/client"`) used in all Prisma docs and tutorials. No reason to customise. `.gitignore` keeps the (now-unused) `/src/generated/prisma` path ignored as defensive housekeeping. |
+| **Prisma is query-only — Supabase owns the schema, not Prisma (Session 22)** | Supabase manages the DB schema via its SQL editor + migrations. Prisma is used only for typed query access from the backend. The "unsupported" warnings on PostGIS geometry / RLS tables / check constraints don't matter because we never run `prisma migrate`. If a schema change is needed, it's done in Supabase first, then `prisma db pull` brings the schema back into sync. This avoids dual-source-of-truth conflicts. |
+| **Verify env vars with the dotenv diagnostic before debugging Prisma (Session 22)** | `node -e "require('dotenv').config(); console.log('VAR:', JSON.stringify(process.env.VAR_NAME))"` is the cheapest, most reliable check that an env var is reaching the runtime. Two issues in Session 22 (the `:` vs `=` typo and the `#` password truncation) would have been spotted in 5 seconds with this diagnostic instead of bouncing through three Prisma error messages. Make this the first move whenever a Prisma error mentions a malformed connection string. |
 
 ---
 
