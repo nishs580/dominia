@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 20, 2026 (Session 22 — Prisma 7 installed and live on the backend. Full Supabase schema introspected via `prisma db pull` (12 models written to `prisma/schema.prisma`): players, alliances, territories, territory_history, activity_log, debug_events, player_challenges, gap_fill_blocks_spb, gap_fill_pois_spb, gap_fill_roads_spb, spb_districts, spb_okrugs. `@prisma/client` generated to default `node_modules/@prisma/client` path, typecheck passes, Railway redeployed with new `DATABASE_URL` (transaction pooler, port 6543) + `DIRECT_URL` (session pooler, port 5432) env vars, `/healthcheck` still 200 OK. Option A chosen: full schema as source of truth, only `players` model used in code initially — future modules add code, not schema changes. Prisma 7 gotchas hit and resolved: URL must live in `prisma.config.ts` not `schema.prisma`; single `url` field in config (no separate `directUrl`); Supabase direct connection requires IPv6 → use Session pooler for IPv4; special chars in DB password break dotenv → reset to alphanumeric. Backend modules unchanged this session (still `GET /healthcheck` + `GET /me`). Next session: create `src/shared/prisma.ts` singleton, refactor `modules/player/queries.ts` to use Prisma, build `PATCH /me` + `POST /me/home-pin` write endpoints, plan mobile migration of direct Supabase `players` writes to backend.)
+Last updated: May 21, 2026 (Sessions 23–25 — backend write paths shipped. Session 23: Prisma fully wired into the player module via `src/shared/prisma.ts` singleton with `@prisma/adapter-pg`. `GET /me` refactored to Prisma. `PATCH /me` (username + has_onboarded) and `POST /me/home-pin` built and live on Railway. Railway `DATABASE_URL` fixed (was pointing at direct host, now Transaction pooler). `postinstall: "prisma generate"` added to `package.json` so Railway's `npm ci` generates the client before `tsc` runs. Session 24: territory module bootstrapped. `GET /territories` wraps the existing Supabase RPC `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat, zoom)` via the service-role client (not Prisma — PostGIS `geom` is `Unsupported("geometry")`). Validation: 5 query params, finite numbers, lat/lng bounds, viewport ≤ 0.5° on each axis. Pass-through response shape `{ territories: rows }`. Session 25: first territory WRITE endpoint live — `POST /territories/:id/abandon`. Full transactional side effects via `prisma.$transaction`: close any open `territory_history` row (set `lost_at = now()`), clear ownership (`owner_id` + `alliance_id` both null), write `activity_log` row with `event_type='territory_abandoned'`. Atomicity verified by intentional CHECK-constraint failure (rollback worked). `activity_log_event_type_check` extended via bare SQL to include `'territory_abandoned'` — pattern locked: every new event_type needs a DROP+ADD CONSTRAINT change in Supabase until a migrations tool lands. 5 backend commits total, 0 mobile commits. Next session: `POST /territories/:id/claim` — needs resource deduction, first-3-free rule, race-condition strategy (row lock vs optimistic), full transactional write.)
 
 ---
 
@@ -75,24 +75,27 @@ The backend follows a module-based architecture. Every session builds toward thi
 dominia-backend/
 ├── src/
 │   ├── modules/
-│   │   ├── player/                  ✓ Scaffolded (Session 21)
-│   │   │   ├── routes.ts            // GET /me ✓ · PATCH /me ○ · POST /me/home-pin ○
-│   │   │   ├── service.ts           // ensurePlayer ○, updateHomePin ○, role checks ○
-│   │   │   ├── queries.ts           // Prisma + raw SQL for player table
-│   │   │   ├── types.ts             // Player, Role, HomePin
+│   │   ├── player/                  ✓ LIVE (Sessions 21–23) — all routes on Prisma
+│   │   │   ├── routes.ts            // GET /me ✓ · PATCH /me ✓ · POST /me/home-pin ✓
+│   │   │   ├── service.ts           // getMe ✓, updateMe ✓ (username + has_onboarded), setHomePin ✓
+│   │   │   ├── queries.ts           // getPlayerByClerkId, updatePlayerByClerkId, setPlayerHomePin — all Prisma
+│   │   │   ├── types.ts             // Player (loose [key: string]: unknown)
 │   │   │   └── index.ts             // public exports only
 │   │   │
 │   │   ├── health/                  ✓ Scaffolded (Session 21)
 │   │   │   ├── routes.ts            // GET /healthcheck ✓
 │   │   │   └── index.ts
 │   │   │
-│   │   ├── territory/               ○ Not started
-│   │   │   ├── routes.ts            // GET /territories/viewport, POST /claim
-│   │   │   ├── service.ts           // claim logic, ownership transfer
-│   │   │   ├── queries.ts           // PostGIS viewport RPC, ST_IsValid filter
-│   │   │   ├── history.ts           // territory_history INSERTs, lost_at updates
-│   │   │   ├── types.ts
-│   │   │   └── index.ts
+│   │   ├── territory/               ✓ LIVE — GET + first write path (Sessions 24–25)
+│   │   │   ├── routes.ts            // GET /territories ✓ (Supabase RPC pass-through, 5 params incl. zoom)
+│   │   │   ├── service.ts           // viewport validation: finite numbers, lat/lng bounds, ≤0.5° cap
+│   │   │   ├── queries.ts           // getTerritoriesInViewport (wraps supabase.rpc, NOT Prisma)
+│   │   │   ├── abandon.routes.ts    // POST /territories/:id/abandon ✓ (Prisma $transaction)
+│   │   │   ├── abandon.service.ts   // pre-tx auth checks + transaction orchestration
+│   │   │   ├── abandon.queries.ts   // closeTerritoryHistory + clearTerritoryOwnership + writeAbandonActivityLog
+│   │   │   ├── claim.* (next)       // POST /territories/:id/claim — Session 26
+│   │   │   ├── contest.* (later)    // POST /contest/initiate, /defend
+│   │   │   └── index.ts             // wrapper plugin registers GET + abandon routes
 │   │   │
 │   │   ├── contest/                 ○ Not started
 │   │   │   ├── routes.ts            // POST /contest/initiate, POST /contest/defend
@@ -142,10 +145,8 @@ dominia-backend/
 │   │
 │   ├── shared/
 │   │   ├── formulas.ts              // mobile formulas.js ported — pure functions, no module imports ○
-│   │   ├── db/
-│   │   │   ├── prisma.ts            // single Prisma client instance (imports from `@prisma/client`, default path) ○ Next session
-│   │   │   └── postgis.ts           // raw SQL helpers, ST_ForcePolygonCCW wrappers ○
-│   │   ├── supabase.ts              ✓ Service-role client, env-validated at load (Session 21)
+│   │   ├── prisma.ts                ✓ Singleton PrismaClient with `@prisma/adapter-pg` (Session 23). globalThis-cached for tsx-watch hot reload survival. Reads DATABASE_URL via the adapter.
+│   │   ├── supabase.ts              ✓ Service-role client (Session 21). Still used by territory GET module (PostGIS RPC); no longer used by player module.
 │   │   ├── auth.ts                  ✓ Clerk verifyToken middleware, per-route preHandler (Session 21)
 │   │   ├── redis.ts                 ○ Single Redis client
 │   │   ├── ably.ts                  ○ Channel publishers — territory:updated, alliance:*
@@ -170,14 +171,14 @@ dominia-backend/
 ├── prisma/                          ✓ Schema introspected from live Supabase (Session 22) — 12 models
 │   └── schema.prisma                ✓ All current Supabase tables; PostGIS fields as `Unsupported("geometry")` (intentional, never queried via Prisma)
 ├── prisma.config.ts                 ✓ Prisma 7 config — dotenv-loaded, `env("DIRECT_URL")` as datasource.url (Session 22)
-└── package.json                     ✓ Node >=22, ESM, dev/build/start/typecheck scripts; deps now include `prisma` + `@prisma/client`
+└── package.json                     ✓ Node >=22, ESM, dev/build/start/typecheck scripts; deps now include `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg`, `@types/pg`. `postinstall: "prisma generate"` so Railway `npm ci` generates the client before `tsc`.
 ```
 
 **Module conventions (apply to every new module):**
 - Each module is a folder with at minimum `index.ts` (public exports) and `routes.ts` (Fastify registration function).
 - Larger modules split into `service.ts` (business logic) + `queries.ts` (DB calls) + `types.ts`.
 - Routes use Clerk auth via `{ preHandler: requireAuth }` from `shared/auth.ts` unless explicitly public.
-- DB access: Prisma 7 client is installed and generated (`import { PrismaClient } from "@prisma/client"`). Singleton wrapper `shared/db/prisma.ts` is the next module to land. Existing `shared/supabase.ts` (service role) stays for now and is referenced by `GET /me`; new write paths use Prisma. Raw SQL via Prisma's `$queryRaw` is the fallback for PostGIS operations (which Prisma marks `Unsupported("geometry")`).
+- DB access: Prisma 7 is wired and live via `src/shared/prisma.ts` (singleton with `PrismaPg` adapter, Session 23). New write paths use Prisma (`prisma.players.findUnique`, `prisma.territories.update`, etc.). Multi-table writes go through `prisma.$transaction(async (tx) => { ... })` — the abandon endpoint (Session 25) is the first example and the pattern for everything that follows. `shared/supabase.ts` (service role) stays in service for PostGIS read paths because `geom` is `Unsupported("geometry")` in the Prisma schema — `GET /territories` calls `supabase.rpc('get_territories_in_viewport', ...)` and passes through the result. Raw SQL via `prisma.$queryRaw` is still on the table as a future fallback if a PostGIS write path ever needs it.
 - Every new module is wired in `src/app.ts` via `await app.register(register<Name>Routes)`.
 - BullMQ workers (`src/jobs/`) are thin — they delegate to module services, never duplicate business logic.
 
@@ -410,25 +411,34 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 
 | File | Purpose |
 |---|---|
-| `package.json` | Node `>=22`, `type: "module"` (ESM), scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `typecheck` (tsc --noEmit). Dependencies: `fastify`, `@supabase/supabase-js`, `@clerk/backend`, `dotenv`. Dev deps: `typescript`, `tsx`, `@types/node`. |
+| `package.json` | Node `>=22`, `type: "module"` (ESM), scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `typecheck` (tsc --noEmit), `postinstall` (`prisma generate` — required for Railway `npm ci`). Dependencies: `fastify`, `@supabase/supabase-js`, `@clerk/backend`, `dotenv`, `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg`. Dev deps: `typescript`, `tsx`, `@types/node`, `@types/pg`. |
 | `.nvmrc` | `22` — required for Railway Nixpacks to pick Node 22 (Node 20 crashes on boot because Supabase realtime-js needs native WebSocket). |
 | `tsconfig.json` | ES2022 target, ESNext module, Bundler resolution, strict, esModuleInterop, outDir `./dist`, rootDir `./src`, include `["src/**/*"]`. |
-| `.env` (local, gitignored) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLERK_SECRET_KEY`. Identical key set on Railway. **Never paste env values into chat — they are secrets.** Values must NOT be wrapped in angle brackets — `<https://...>` is placeholder syntax, not literal characters. |
+| `.env` (local, gitignored) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL` (Transaction pooler, port 6543), `DIRECT_URL` (Session pooler, port 5432). Identical key set on Railway. **Never paste env values into chat — they are secrets.** Values must NOT be wrapped in angle brackets. |
 | `.env.example` | Same keys as `.env` with blank values, committed for documentation. |
-| `.gitignore` | `node_modules/`, `dist/`, `.env`, `.env.local`, OS junk. |
+| `.gitignore` | `node_modules/`, `dist/`, `.env`, `.env.local`, `/src/generated/prisma`, OS junk. |
 | `README.md` | One-paragraph description + dev/build/start commands. |
+| `prisma.config.ts` | Prisma 7 config — dotenv-loaded, `env("DIRECT_URL")` as `datasource.url`. Used by Prisma CLI (db pull, generate) only — runtime uses the adapter. |
+| `prisma/schema.prisma` | 12 models introspected from live Supabase. Generator has `engineType="library"` (no-op with adapter, kept for documentation). PostGIS `geom` columns are `Unsupported("geometry")` — never queried via Prisma. |
 | `src/server.ts` | Entry point. Imports `buildApp` from `./app.js`, listens on `process.env.PORT \|\| 3000`, host `0.0.0.0`. Logs "ready" on success, exits 1 on startup error. |
-| `src/app.ts` | `buildApp()` async factory. Creates Fastify instance with logger enabled, registers `registerHealthRoutes` and `registerPlayerRoutes`. Every new module gets `await app.register(...)` here. |
-| `src/shared/supabase.ts` | Single Supabase service-role client. Reads `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from env, throws clear error at module load if either is missing. `auth: { autoRefreshToken: false, persistSession: false }` because server-side has no session to manage. `export type Database = any` — placeholder until proper Supabase types are generated. |
+| `src/app.ts` | `buildApp()` async factory. Creates Fastify instance with logger enabled, registers health + player + territory modules. Every new module gets `await app.register(...)` here. |
+| `src/shared/prisma.ts` (Session 23) | Singleton `PrismaClient` with `PrismaPg` adapter. Adapter reads `DATABASE_URL` (Transaction pooler) directly. `globalThis` caching survives `tsx watch` hot reload. `log: ["error","warn"]` in dev, `["error"]` in prod. Import surface: `import { prisma } from "../shared/prisma.js"`. |
+| `src/shared/supabase.ts` | Service-role Supabase client. Used by territory GET module to call PostGIS RPC. No longer used by player module (replaced with Prisma in Session 23). |
 | `src/shared/auth.ts` | Clerk JWT verification middleware. Reads `CLERK_SECRET_KEY` at module load (throws if missing). Module augments `FastifyRequest` to add `clerkUserId?: string`. Exports `requireAuth(request, reply)` async function used as Fastify `preHandler` on protected routes — reads `Authorization: Bearer <token>`, calls `verifyToken` from `@clerk/backend`, attaches `payload.sub` to `request.clerkUserId`, returns 401 on missing/malformed header or invalid token. **Do not log token contents** — only log the verifier's error object if diagnostic logging is needed (temporary; revert before commit). |
 | `src/modules/health/routes.ts` + `index.ts` | `GET /healthcheck` — unauthenticated. Returns `{ ok: true, timestamp: <ISO> }`. Used by Railway probes and basic deploy verification. |
-| `src/modules/player/types.ts` | `Player` type — loose typing for now (`[key: string]: unknown`) until Supabase types are generated. |
-| `src/modules/player/queries.ts` | `getPlayerByClerkId(clerkId)` — Supabase query on `players` table, `.eq("clerk_id", clerkId).maybeSingle()`. Returns `Player \| null`. |
-| `src/modules/player/service.ts` | `getMe(clerkId)` — calls `getPlayerByClerkId`, returns `{ clerkUserId, player }`. |
-| `src/modules/player/routes.ts` | `GET /me` with `{ preHandler: requireAuth }`. Reads `request.clerkUserId`, calls `getMe`, returns the result or 404 if no player row matched. |
+| `src/modules/player/types.ts` | `Player` type — loose typing (`[key: string]: unknown`) until Supabase types are generated. |
+| `src/modules/player/queries.ts` (Session 23 — refactored to Prisma) | `getPlayerByClerkId(clerkId)` — `prisma.players.findUnique({ where: { clerk_id }})`. `updatePlayerByClerkId(clerkId, fields)` — Prisma update. `setPlayerHomePin(clerkId, lat, lng)` — Prisma update. All return `Player \| null` semantics (`update()` throws P2025 on not-found; service layer narrows the type). |
+| `src/modules/player/service.ts` (Session 23) | `getMe(clerkId)` — returns `{ clerkUserId, player }`. `updateMe(clerkId, body)` — validates username (trimmed, non-empty, ≤30 chars) and/or has_onboarded (strict boolean), throws 400 if no valid fields. `setHomePin(clerkId, lat, lng)` — validates finite numbers + lat/lng bounds, throws 400 on fail. All throw `{ statusCode: 404 }` on Prisma P2025. |
+| `src/modules/player/routes.ts` (Session 23) | `GET /me`, `PATCH /me`, `POST /me/home-pin` — all with `{ preHandler: requireAuth }`. `PrismaClientKnownRequestError` imported from `@prisma/client/runtime/client` (Prisma 7 subpath — not `@prisma/client` or `.../runtime/library`). |
 | `src/modules/player/index.ts` | Public exports: `registerPlayerRoutes`. |
-| `prisma/` | Folder placeholder (`.gitkeep`). Schema not yet defined — install + migrate next session. |
-| `src/{jobs,notifications,shared,modules}/.gitkeep` | Placeholder dirs that lock in the target module structure even before each module has real code. |
+| `src/modules/territory/queries.ts` (Session 24) | `getTerritoriesInViewport({ minLng, minLat, maxLng, maxLat, zoom })` — calls `supabase.rpc('get_territories_in_viewport', { min_lon, min_lat, max_lon, max_lat, zoom })`. Key remapping `minLng → min_lon` etc. Returns `data ?? []`. Throws on RPC error. |
+| `src/modules/territory/service.ts` (Session 24) | Viewport validation: coerces 5 query params to numbers, checks `Number.isFinite`, lat ∈ [-90,90], lng ∈ [-180,180], `min < max`, zoom ∈ [0,22], viewport ≤ 0.5° on each axis. Throws `{ statusCode: 400 }` with specific messages. Calls `getTerritoriesInViewport` on success. |
+| `src/modules/territory/routes.ts` (Session 24) | `GET /territories` with `requireAuth` preHandler. Maps statusCode to 400/500. Response shape: `{ territories: rows }` — pass-through, no reshape. |
+| `src/modules/territory/abandon.queries.ts` (Session 25) | `findPlayerByClerkId` + `findTerritoryById` (singleton Prisma, read-only, no `geom` in select). In-transaction writes take a `tx` arg: `clearTerritoryOwnership(tx, territoryId)` sets `owner_id: null` AND `alliance_id: null`; `closeTerritoryHistory(tx, territoryId)` does `updateMany` WHERE `lost_at IS NULL` set `lost_at = now()`; `writeAbandonActivityLog(tx, playerId, territory)` inserts an `activity_log` row with `event_type='territory_abandoned'`. |
+| `src/modules/territory/abandon.service.ts` (Session 25) | Orchestration. Pre-transaction: auth check (clerkUserId present), find player, find territory, ownership check. Then `prisma.$transaction(async (tx) => { closeTerritoryHistory → clearTerritoryOwnership → writeAbandonActivityLog → return updated row })`. Throws `{ statusCode, message }` for 401/403/404 cases. |
+| `src/modules/territory/abandon.routes.ts` (Session 25) | `POST /territories/:id/abandon` with `requireAuth` preHandler. Maps statusCode to 401/403/404/500. Response: `{ territory: <updated row> }`. |
+| `src/modules/territory/index.ts` (Session 24, extended Session 25) | Wrapper plugin that registers both GET routes (existing) and abandon routes (new). |
+| `src/{jobs,notifications}/.gitkeep` | Placeholder dirs that lock in the target module structure even before each module has real code. |
 
 ---
 
@@ -613,7 +623,7 @@ npm run typecheck
 # Local dev server (tsx watch — auto-reload on save). Listens on http://localhost:3000.
 npm run dev
 
-# Production build (tsc → dist/)
+# Production build (tsc → dist/) — mirrors Railway, catches what `tsc --noEmit` cannot
 npm run build
 
 # Production start (what Railway runs)
@@ -626,24 +636,51 @@ curl https://dominia-backend-production.up.railway.app/healthcheck
 npx prisma db pull --print           # Dry-run introspect, prints schema to stdout
 npx prisma db pull                   # Introspect and write to prisma/schema.prisma
 npx prisma generate                  # Regenerate @prisma/client after schema changes
-# DATABASE_URL (port 6543, transaction pooler) is used by Prisma client at runtime.
+# DATABASE_URL (port 6543, transaction pooler) is used by Prisma client at runtime
+#   via the @prisma/adapter-pg adapter (Session 23 — singleton in src/shared/prisma.ts).
 # DIRECT_URL  (port 5432, session pooler)     is used by `prisma db pull` and any future
-# `prisma migrate` calls. Both must be set in `.env` AND on Railway.
+#   `prisma migrate` calls. Both must be set in `.env` AND on Railway.
 # Verify a dotenv var loads correctly (diagnostic for env-parsing issues):
 node -e "require('dotenv').config(); console.log('VAR:', JSON.stringify(process.env.VAR_NAME))"
+# Inspect Prisma runtime exports (Session 23 diagnostic):
+node -e "console.log(Object.keys(require('@prisma/client')))"
 
-# Test /me with a real Clerk bearer token (PowerShell flavour — `curl` is Invoke-WebRequest aliased)
+# Test /me with a real Clerk bearer token (PowerShell — `curl` is Invoke-WebRequest aliased)
 $token = "ey..."   # full JWT from mobile [CLERK_TOKEN] log — see below
 Invoke-WebRequest -Uri https://dominia-backend-production.up.railway.app/me `
-  -Headers @{ Authorization = "Bearer $token" } `
+  -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing `
   | Select-Object -ExpandProperty Content
-# Hit Y on PowerShell's "Script Execution Risk" prompt — irrelevant warning, response body is what matters.
-# Or silence for the whole session:
-$PSDefaultParameterValues['Invoke-WebRequest:UseBasicParsing'] = $true
+
+# Test write endpoints — PATCH /me example
+Invoke-WebRequest -Uri http://localhost:3000/me `
+  -Method PATCH -ContentType "application/json" -Body '{"username":"newname"}' `
+  -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing `
+  | Select-Object -ExpandProperty Content
+
+# Test GET /territories (Session 24) — viewport in Amsterdam, zoom 14
+Invoke-WebRequest -Uri "http://localhost:3000/territories?minLng=4.88&minLat=52.35&maxLng=4.92&maxLat=52.39&zoom=14" `
+  -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing `
+  | Select-Object -ExpandProperty Content
+
+# Test POST /territories/:id/abandon (Session 25) — empty body POST needs explicit Content-Type or Fastify returns 415
+Invoke-WebRequest -Uri "http://localhost:3000/territories/<UUID>/abandon" `
+  -Method POST -ContentType "application/json" -Body "{}" `
+  -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing `
+  | Select-Object -ExpandProperty Content
+
+# See the actual 4xx response body — Invoke-WebRequest throws on non-2xx and hides the body by default (Session 24 lesson)
+try {
+  Invoke-WebRequest -Uri "..." -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
+} catch {
+  $_.Exception.Response.StatusCode.value__
+  $_.ErrorDetails.Message
+}
+
+# Tokens last ~60s — run all tests fast after grabbing a fresh one.
 
 # Grab a fresh Clerk JWT from the phone for backend testing
 #   1. In Cursor on MOBILE repo, temporarily add inside components/AuthGate.js:
-#        const { getToken } = useAuth();   // restore destructure
+#        const { isSignedIn, isLoaded, userId, getToken } = useAuth();  // add getToken to destructure
 #        useEffect(() => {
 #          if (isLoaded && isSignedIn) getToken().then(t => console.log('[CLERK_TOKEN]', t));
 #        }, [isLoaded, isSignedIn]);
@@ -653,25 +690,60 @@ $PSDefaultParameterValues['Invoke-WebRequest:UseBasicParsing'] = $true
 #   5. ALWAYS remove the log after copying — NEVER commit.
 #
 # When backend returns 401 "Invalid token", first hypothesis is token expired —
-# regrab a fresh one before adding diagnostic logging. If still 401 on fresh token,
-# temporarily enable verbose error logging in shared/auth.ts catch:
-#   } catch (err) {
-#     request.log.error({ err }, "Clerk verifyToken failed");
-#     reply.code(401).send({ error: "Invalid token" });
-#     return;
-#   }
-# Then push, redeploy, retest, read the Railway live logs. Revert the diagnostic before commit.
+# regrab a fresh one before adding diagnostic logging.
 
 # Backend git workflow (same rule as mobile — never `git add .`)
 cd C:\Users\nisha\dominia-backend
 git status
-git add <specific files>
+git add <specific files>             # e.g. git add src/modules/territory/abandon.queries.ts src/modules/territory/abandon.service.ts
 git commit -m "message"
 git push                              # Railway auto-deploys on push to main
+
+# Phantom git "modified" status (Session 25 lesson):
+# When Cursor opens but doesn't change a file, git's stat cache shows it as modified.
+# Verify with `git diff <file>` — if empty, content is identical to HEAD.
+# Safe to leave unstaged. Do NOT `git add` phantom-modified files just to clean status.
 
 # Railway public URL was generated via Railway dashboard → service Settings → Networking →
 # Generate Domain. Currently: dominia-backend-production.up.railway.app (port 8080 internally,
 # Railway routes :443 → :8080 automatically).
+
+# ==========================================================================
+# DB SCHEMA CHANGES — no migrations tool yet, applied via Supabase SQL editor
+# ==========================================================================
+# Inspect a CHECK constraint definition (e.g. before adding a new event_type):
+#   SELECT conname, pg_get_constraintdef(oid) AS definition
+#   FROM pg_constraint
+#   WHERE conname = 'activity_log_event_type_check';
+#
+# Extend activity_log event_type whitelist when adding a new event type
+# (pattern locked in Session 25 — every new event_type needs this):
+#   ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
+#   ALTER TABLE activity_log ADD CONSTRAINT activity_log_event_type_check
+#   CHECK (event_type = ANY (ARRAY[
+#     'challenge_completed', 'territory_claimed', 'territory_abandoned',
+#     'contest_participated', 'km_walked',
+#     '<new_event_type_here>'
+#   ]));
+# Current whitelist (after Session 25): challenge_completed, territory_claimed,
+#   territory_abandoned, contest_participated, km_walked.
+#
+# Find nearest unowned territory for test assignment (PostGIS `<->` lives in `postgis` schema):
+#   UPDATE territories
+#   SET owner_id = (SELECT id FROM players WHERE username = '<player>')
+#   WHERE id = (
+#     SELECT t.id FROM territories t,
+#          (SELECT geom FROM territories WHERE id = '<anchor_id>') AS anchor
+#     WHERE t.owner_id IS NULL
+#     ORDER BY postgis.ST_Distance(t.geom, anchor.geom)
+#     LIMIT 1
+#   )
+#   RETURNING id, territory_name;
+#
+# Restore territory ownership after a write-path test:
+#   UPDATE territories SET owner_id = '<player_id>', alliance_id = '<alliance_id>' WHERE id = '<territory_id>';
+#   UPDATE territory_history SET lost_at = NULL WHERE id = '<history_row_id>';
+#   DELETE FROM activity_log WHERE id = '<activity_log_row_id>';
 ```
 
 **EAS build budget:** 30/month. ~18 Android used, ~12 remaining. Only build for new native modules. Batch all native installs into one build.
@@ -913,6 +985,72 @@ These are bugs that have already cost significant debugging time. Learn the sign
 - **Fix:** `Remove-Item -Recurse -Force prisma` first, then re-run `npx prisma init --datasource-provider postgresql`. The placeholder folder serves no purpose once Prisma is being set up. Don't try to manually create `schema.prisma` inside the existing folder — `init` also generates `prisma.config.ts` which you need.
 - **General lesson:** placeholder directories with `.gitkeep` work fine until they conflict with a tool's "I create this directory" assumption. Either remove placeholders before running scaffolders, or use scaffolders that respect existing folders. For Prisma specifically, the placeholder strategy is now obsolete since `schema.prisma` is committed from session 1.
 
+**40. Prisma 7 `PrismaClientConstructorValidationError: engine type "client" requires adapter or accelerateUrl` (Session 23)**
+- **Signature:** `npm run dev` crashes immediately on first Prisma import. Error mentions `engine type "client"`. Setting `engineType="library"` in `schema.prisma` generator block does nothing.
+- **Cause:** Prisma 7's `prisma-client-js` provider defaults to engine type `"client"` (the new architecture), which mandates either a driver adapter package OR an Accelerate URL. The legacy `engineType="library"` setting is silently ignored in 7.8.
+- **Fix:** Install adapter packages: `npm install @prisma/adapter-pg pg && npm install -D @types/pg`. In `src/shared/prisma.ts`, instantiate the adapter and pass it to `PrismaClient`:
+  ```ts
+  import { PrismaPg } from "@prisma/adapter-pg";
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const prisma = new PrismaClient({ adapter });
+  ```
+  The adapter reads `DATABASE_URL` directly via its constructor — not via `PrismaClient`.
+- **General lesson:** Prisma 7's "engine type" config is a one-way door — driver adapter is the only viable path for self-hosted Postgres (Accelerate is the alternative but requires Prisma's hosted service). Document the choice once, never re-litigate.
+
+**41. Railway build fails on fresh CI: "Cannot find module '@prisma/client'" or "missing PrismaClientKnownRequestError export" (Session 23)**
+- **Signature:** `tsc --noEmit` passes locally but `npm run build` on Railway fails with hundreds of "Cannot find name 'PrismaClient'" errors, OR missing-export errors on `PrismaClientKnownRequestError`.
+- **Cause:** Two combining issues. (1) `npm ci` on Railway does NOT run `prisma generate` — the generated client doesn't exist in `node_modules/@prisma/client` when `tsc` runs. (2) Prisma 7 moved `PrismaClientKnownRequestError` to a new subpath: `@prisma/client/runtime/client`. Old paths (`@prisma/client`, `@prisma/client/runtime/library`) no longer export it.
+- **Fix:** (1) Add `"postinstall": "prisma generate"` to `package.json` scripts. Railway's `npm ci` will now generate the client as part of install. (2) Import `PrismaClientKnownRequestError` from the new path:
+  ```ts
+  import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
+  ```
+- **General lesson:** `tsc --noEmit` and `tsc` (full build) can disagree on a fresh CI install. ALWAYS run `npm run build` locally before pushing if anything Prisma-related changed. The `--noEmit` flag does type-only resolution; the full build does emit-aware import resolution and catches missing modules.
+
+**42. Fastify returns 415 Unsupported Media Type on POST with no body (Session 25)**
+- **Signature:** PowerShell test `Invoke-WebRequest -Method POST -Uri http://localhost:3000/territories/<id>/abandon -Headers @{ Authorization = "Bearer ..." }` returns 415, NOT 200, even though the route is correctly registered and auth is valid.
+- **Cause:** Fastify's default content-type parser expects a Content-Type header on any POST. `Invoke-WebRequest` without `-Body` sends no Content-Type, Fastify rejects with 415 before the route handler ever runs.
+- **Fix:** Always include `-ContentType "application/json" -Body "{}"` in PowerShell test commands, even for endpoints that don't take a body:
+  ```ps1
+  Invoke-WebRequest -Uri "..." -Method POST -ContentType "application/json" -Body "{}" -Headers @{ ... } -UseBasicParsing
+  ```
+- **General lesson:** No server-side fix needed — mobile clients always send Content-Type via the fetch wrapper. This is purely a PowerShell-testing artifact. The fix lives in the test ritual, not in the server.
+
+**43. `Invoke-WebRequest` swallows the 4xx response body (Session 24)**
+- **Signature:** A request returns 400 (or 401, 404, etc.) and PowerShell shows `WebException: The remote server returned an error: (400) Bad Request` with no body. The actual error message from the server is invisible.
+- **Cause:** `Invoke-WebRequest` throws a terminating exception on any non-2xx response by default, and the throw discards the response body unless you catch it.
+- **Fix:** Wrap the call in try/catch and read the exception's response object:
+  ```ps1
+  try {
+    Invoke-WebRequest -Uri "..." -Headers @{ ... } -UseBasicParsing
+  } catch {
+    $_.Exception.Response.StatusCode.value__
+    $_.ErrorDetails.Message
+  }
+  ```
+  `$_.ErrorDetails.Message` is the actual server response body.
+- **General lesson:** PowerShell HTTP testing has sharp edges that don't exist in curl. Add the try/catch wrapper to muscle memory — every backend test where you don't already know the response will be 2xx should use it.
+
+**44. activity_log CHECK constraint silently rejects new event_types (Session 25)**
+- **Signature:** A new write path inserts an `activity_log` row with a new `event_type` value (e.g. `'territory_abandoned'`). The insert fails with a `DriverAdapterError` mentioning a CHECK constraint violation. The error doesn't say which constraint.
+- **Cause:** `activity_log.event_type` has a CHECK constraint (`activity_log_event_type_check`) with a hardcoded ARRAY whitelist. Any value outside the whitelist is rejected.
+- **Fix:** Inspect the constraint, then extend it:
+  ```sql
+  -- Inspect:
+  SELECT conname, pg_get_constraintdef(oid) AS definition
+  FROM pg_constraint
+  WHERE conname = 'activity_log_event_type_check';
+
+  -- Extend (DROP + ADD pattern, the only way Postgres updates CHECKs):
+  ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
+  ALTER TABLE activity_log ADD CONSTRAINT activity_log_event_type_check
+  CHECK (event_type = ANY (ARRAY[
+    'challenge_completed', 'territory_claimed', 'territory_abandoned',
+    'contest_participated', 'km_walked',
+    '<new_event_type_here>'
+  ]));
+  ```
+- **General lesson:** Schema constraints live in Supabase, not in code. Until a migrations tool lands, every new `activity_log` event_type is a two-step process: write code → run the DROP + ADD constraint SQL in Supabase before the code can succeed. Always check the current whitelist before introducing a new value. Current whitelist (Session 25): `challenge_completed`, `territory_claimed`, `territory_abandoned`, `contest_participated`, `km_walked`.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -931,6 +1069,9 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 | Bug | Detail |
 |---|---|
+| **Phantom git "modified" status on backend territory files (NEW Session 25)** | `git status` shows files like `abandon.routes.ts`, `queries.ts`, `routes.ts`, `service.ts` as modified after Cursor sessions, but `git diff <file>` returns empty — content is byte-identical to HEAD. Cursor opens the file, git stat cache invalidates. Cosmetic only — do NOT `git add` to clean status. |
+| **BigInt JSON serialization for `osm_id` (NEW Session 25, masked)** | Typecheck passes but runtime serialization may need a Fastify JSON serializer if `osm_id` ever lands in an outgoing payload. Currently masked because the test territory (Лиственная улица) has `osm_id = null`. Will surface when a territory with a real `osm_id` flows through any write path's response. |
+| **Mobile drift since Session 22 (NEW Session 25)** | Mobile repo has uncommitted changes — `package.json`, `package-lock.json` modified, `tsconfig.json` untracked. Unrelated to backend work, investigate at start of mobile-touching session. |
 | **Nested / overlapping SPB territories (NEW Session 14 — STILL DEFERRED)** | Spotted on phone visual test after gap-fill propagation. Some gap-fill blocks overlap each other and/or overlap existing OSM-named SPB territories. Root cause unknown — could be (a) OSM-named territory containing one or more gap-fill blocks, (b) gap-fill block containing another gap-fill block, (c) partial overlap from polygonisation edges, or any combination. Diagnostic query needed: find all pairs where `postgis.ST_Overlaps(a.geom, b.geom)` or `postgis.ST_Contains(a.geom, b.geom)` is true beyond a tiny tolerance. Group results by overlap type before deciding handling per type (likely delete smaller / sub-tier or merge into larger). |
 | **onMapIdle viewport re-fire unreliable (Session 6 — RESOLVED differently this session)** | ~~Fixed.~~ Replaced `onMapIdle` flow with `onCameraChanged` (150ms debounce) + client-side cache + merge-on-fetch. Pan/zoom now feels tile-like — visited areas stick, new areas populate reliably. Cache absorbs the higher fetch frequency safely. |
 | **Zoom-level rendering: some small polygons missing at wide zoom (NEW this session, DEFERRED)** | At Mapbox scale ~500m/750m (zoom ~13–14), some territories that exist in DB do not render; same area at tighter zoom (≤250m, zoom ≥15) shows them. `get_territories_in_viewport` applies `postgis.ST_SimplifyPreserveTopology` with tolerance 0.00005° at zoom 12–14 and 0.0002° at zoom 10–12. Hypothesis: simplification collapses small polygons below the `ST_NPoints >= 4` filter threshold, hiding them. Diagnostic query drafted (count survives-simplify vs total in viewport) but not run. Fix likely: scale `simplify_tolerance` down further or only apply `ST_NPoints >= 4` to the un-simplified geom. Defer to map polish phase — performance is good enough to develop on. |
@@ -946,7 +1087,6 @@ These are bugs that have already cost significant debugging time. Learn the sign
 | Steps (background read) permission not granted | Only required for true background reads when app is closed. Foreground reads from ActivityScreen on mount don't need it. Decide whether to request as part of onboarding or defer to a later "always-on tracking" feature. |
 | 3 of 4 ContestResultScreen branches unverified on device | Code wired for attack_won, attack_lost, defence_won, defence_lost. Only attack_won verified on phone. Defence states need Ably real-time to test, so harder to verify in isolation. |
 | Defender flow deferred | Needs Ably real-time layer. |
-| Abandon flow not built | Must UPDATE open territory_history row when built. |
 | Onboarding home pin verification not implemented | 500m proximity check deferred. |
 | Auth flow order wrong | New users hit sign-up before seeing any game content. |
 | Achievements table hardcoded | Distance, Calories, Active Minutes wiring deferred. Health Connect can now provide these via additional `readRecords` calls (Distance, TotalCaloriesBurned, ExerciseSession); iOS needs HealthKit later. |
@@ -987,27 +1127,33 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH MIDDLEWARE, SUPABASE SERVICE-ROLE CLIENT, `/me` PROVEN END-TO-END ✓ | PRISMA 7 INSTALLED + SCHEMA MIRRORS LIVE SUPABASE (12 MODELS) ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH, SUPABASE SERVICE-ROLE, PRISMA 7 WIRED VIA ADAPTER-PG ✓ | PLAYER MODULE FULLY ON PRISMA: GET /me + PATCH /me + POST /me/home-pin ✓ | TERRITORY GET LIVE (Supabase RPC pass-through) ✓ | TERRITORY ABANDON LIVE WITH FULL TRANSACTIONAL SIDE EFFECTS (history close + ownership clear + activity log write inside prisma.$transaction) ✓**
 
-**Immediate — wire Prisma into the player module and build the first write endpoints.**
+**Immediate — `POST /territories/:id/claim` — the meaty write endpoint.**
 
-Prisma 7.8 is installed, schema mirrors the live Supabase DB (12 models), client generated to `node_modules/@prisma/client`, typecheck passing. Three concrete steps to start Session 23:
+The abandon endpoint (Session 25) is the pattern. Claim is more complex because it has resource deduction, a free-tier rule at Level 1, and race conditions for simultaneous claimers. Concrete checklist for Session 26:
 
-1. **Create `src/shared/db/prisma.ts`** — singleton `PrismaClient` instance (the hot-reload-safe pattern: assign to `global` in dev, fresh instance in prod). Single import surface for every module.
-2. **Refactor `modules/player/queries.ts`** — replace the current Supabase JS call in `getPlayerByClerkId` with `prisma.players.findUnique({ where: { clerk_id }})`. `GET /me` becomes the proof-of-life for Prisma in production, same as it was for the original stack.
-3. **Build `PATCH /me` and `POST /me/home-pin`** — first real write paths on the backend. `PATCH /me` updates fields like `has_onboarded`, display name. `POST /me/home-pin` writes `home_pin_lat` + `home_pin_lng`. Validate end-to-end against Railway with a fresh Clerk JWT.
+1. **First spec decision:** race-condition strategy — `SELECT ... FOR UPDATE` row lock inside the transaction, OR optimistic update with a `WHERE owner_id IS NULL` guard (unique-write-wins). Decide before writing any code.
+2. **Validation:** territory must be unowned (`owner_id IS NULL`). If owned, that's the contest flow — separate endpoint, return a clear "use contest" error.
+3. **Resource deduction:** iron + gold per tier (see `formulas.js` — `CLAIM_COST_BY_TIER`).
+4. **First-3-territories-free rule:** at Level 1, Small + Medium claims are free for the first 3 territories the player ever claims (§7 of `dominia_mechanics_v6_10.md`). Check current owned count + tier before deducting.
+5. **Atomic transaction (`prisma.$transaction`):** deduct resources → set `territory.owner_id` + `territory.alliance_id` (if player has one) → INSERT new `territory_history` row (`claimed_at = now()`, `lost_at = null`) → INSERT `activity_log` row (`event_type='territory_claimed'` — already in CHECK constraint whitelist).
+6. **Test matrix:** 401 / 403 (already owned) / 400 (insufficient resources) / 400 (territory cap exceeded for level) / 200 (paid claim) / 200 (free claim under first-3 rule).
 
-Open sub-question for the start of Session 23:
-- After backend writes land, mobile `players.update()` calls become divergent state. Plan to migrate them: identify every direct `supabase.from('players').update(...)` call in the mobile repo, point them at the new backend endpoints. Can be its own session (Session 24 candidate).
-- Add `cors` to Fastify before the mobile app starts hitting the backend.
-- Decide whether `shared/supabase.ts` stays for non-`players` reads or gets removed entirely once Prisma covers the player module's read path.
+Open sub-questions for the start of Session 26:
+- Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over to backend `GET /territories` is still pending — decide whether to do it before or after the claim endpoint lands. Likely after, so claim flow has a wider test surface first.
+- Mobile direct `supabase.from('players').update(...)` calls are now divergent state since `PATCH /me` and `POST /me/home-pin` exist. Audit + migrate when next touching mobile.
+- Add `cors` to Fastify before the mobile app starts hitting the backend (still queued from Session 23).
+- Consider a Prisma migrations setup — the activity_log CHECK constraint pattern will become recurring pain (`territory_lost_in_contest`, `alliance_joined`, etc.) without one.
 
-**Backlog — after player writes land, pick next:**
+**Backlog — backend, after claim lands:**
 
-- **Territory module — `GET /territories/viewport`** — port the existing PostGIS RPC call from the mobile app to the backend, return GeoJSON FeatureCollection. First read-heavy endpoint, gets the PostGIS layer exercised on the server.
+- **`POST /territories/:id/contest`** — the contest initiation flow. More complex than claim because it's a multi-step state machine (initiate → defender notification → resolution window → outcome). Separate spec session.
 - **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit.
-- **Generate Supabase types** for the backend `Database` type. Currently `any`.
+- **Generate Supabase types** for the backend `Database` type. Currently `any` (only used by territory GET module now).
 - **Wire Ably** — add `shared/ably.ts` channel publisher, integrate with existing `handleTerritoriesRefetched(territoryId)` hook in mobile MapScreen.js.
+- **Mobile migration: `MapScreen` from direct RPC → backend `GET /territories`** — cut-over when claim endpoint has burned-in a few real flows.
+- **Mobile migration: direct `players.update()` calls → `PATCH /me` / `POST /me/home-pin`** — audit + cut-over.
 - **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap polish.
 - **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision.
 - **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls.
@@ -1223,6 +1369,19 @@ Open sub-question for the start of Session 23:
 | **Prisma generates to default `node_modules/@prisma/client` path (Session 22)** | Original scaffold (Session 21) tried a custom output path (`src/generated/prisma`) but `prisma db pull` rewrote the generator block to default. Kept the default — it's the conventional import path (`import { PrismaClient } from "@prisma/client"`) used in all Prisma docs and tutorials. No reason to customise. `.gitignore` keeps the (now-unused) `/src/generated/prisma` path ignored as defensive housekeeping. |
 | **Prisma is query-only — Supabase owns the schema, not Prisma (Session 22)** | Supabase manages the DB schema via its SQL editor + migrations. Prisma is used only for typed query access from the backend. The "unsupported" warnings on PostGIS geometry / RLS tables / check constraints don't matter because we never run `prisma migrate`. If a schema change is needed, it's done in Supabase first, then `prisma db pull` brings the schema back into sync. This avoids dual-source-of-truth conflicts. |
 | **Verify env vars with the dotenv diagnostic before debugging Prisma (Session 22)** | `node -e "require('dotenv').config(); console.log('VAR:', JSON.stringify(process.env.VAR_NAME))"` is the cheapest, most reliable check that an env var is reaching the runtime. Two issues in Session 22 (the `:` vs `=` typo and the `#` password truncation) would have been spotted in 5 seconds with this diagnostic instead of bouncing through three Prisma error messages. Make this the first move whenever a Prisma error mentions a malformed connection string. |
+| **Prisma 7 driver adapter (`@prisma/adapter-pg`) over `engineType="library"` (Session 23)** | Prisma 7's `prisma-client-js` provider defaults to engine type `"client"`, which requires either a driver adapter OR an Accelerate URL. Setting `engineType="library"` in the generator block has NO effect in 7.8 — it's silently ignored. Installed `@prisma/adapter-pg` + `pg` + `@types/pg`, wired `PrismaPg` into the singleton. The adapter reads `DATABASE_URL` directly via its own constructor — not via `PrismaClient`. Cost: 3 deps + ~10 lines in `src/shared/prisma.ts`. Benefit: latest patterns, native `pg` driver, no library-engine binary to ship. |
+| **`PrismaClientKnownRequestError` imports from `@prisma/client/runtime/client` in Prisma 7 (Session 23)** | The runtime subpath changed in Prisma 7. Old paths (`@prisma/client`, `@prisma/client/runtime/library`) no longer export the error class — `tsc --noEmit` passed locally but Railway's `tsc` build failed with "missing exports". Lesson: production `tsc` (which fully resolves imports) catches what `--noEmit` (type-only) doesn't. Always run `npm run build` locally before pushing, not just `npm run typecheck`. |
+| **`postinstall: "prisma generate"` in package.json (Session 23)** | Railway runs `npm ci` then `npm run build` on every deploy. `npm ci` does NOT run `prisma generate` automatically — the generated client is missing when `tsc` runs, so the build fails with hundreds of "Cannot find name 'PrismaClient'" errors. Adding `postinstall: "prisma generate"` to `package.json` makes the client generate as part of `npm ci`. Two-line change, fixes Railway forever. Local `tsx watch` doesn't need this because `node_modules/@prisma/client` already exists from manual `npx prisma generate`. |
+| **`PATCH /me` MVP fields are username + has_onboarded only; home_pin moved to dedicated `POST /me/home-pin` (Session 23)** | Two reasons. (1) Home pin sets are conceptually different from profile field updates — they're a coordinate write that may eventually be paid (monetisation: paid pin moves after first set). Keeping them in a separate endpoint means we can later add a `PUT /me/home-pin` for paid moves without touching the generic PATCH. (2) Validation for lat/lng is bounded numeric checks; validation for username is trimmed-string-length. Mixing them complicates the validation logic and the error surface. One endpoint per concern is the cleaner shape. |
+| **Prisma singleton is fine on Railway, revisit if we move to serverless (Session 23)** | Railway runs a persistent Node process per deploy — the singleton `prisma.ts` instance lives for the lifetime of the process and reuses connections via `pg`'s pool. If we ever move to serverless (Lambda, Vercel functions), each invocation spawns a fresh process and singletons become a thundering-herd connection problem. At that point we'd switch to per-request `PrismaClient` instantiation OR Prisma Data Proxy. Not a problem today; document the trigger condition. |
+| **`GET /territories` wraps the existing Supabase RPC, NOT Prisma `$queryRaw` (Session 24)** | Three considerations forced the decision. (1) PostGIS `geom` is `Unsupported("geometry")` in the Prisma schema — Prisma can't generate types for it, and `$queryRaw` would need manual type assertions on every result row. (2) The existing RPC `get_territories_in_viewport` already encodes hard-won fixes that took multiple sessions to land: CCW correction, `ST_IsValid` + `ST_NPoints >= 4` filter, zoom-aware `ST_SimplifyPreserveTopology` tolerance, and the exact 14-column flat shape that `MapScreen.js` consumes directly. Rewriting in `$queryRaw` would mean re-validating all of that. (3) Risk-adjusted, the RPC pass-through is zero-behaviour-drift from current production. Decision: use `supabase.rpc(...)` via the service-role client, pass through the response shape verbatim. Read-only RPCs are the right fit for Supabase JS; everything else uses Prisma. |
+| **5 viewport params (including zoom), not 4 (Session 24)** | The RPC signature is `get_territories_in_viewport(min_lon, min_lat, max_lon, max_lat, zoom)`. Zoom is required — it drives the `ST_SimplifyPreserveTopology` tolerance (tight at zoom 14+, loose at zoom 10-12). Source of truth is `MapScreen.js fetchTerritoriesForViewport` — the mobile call site is what the backend must match. Skipped zoom in the first pass, RPC threw "function not found" because parameter arity is part of the signature in Postgres. |
+| **Viewport size cap: 0.5° on each axis (Session 24)** | Without a cap, a malicious or buggy client could request `(-180, -90, 180, 90)` and force a full-world scan. 0.5° × 0.5° at the equator is ~55km × ~55km — vastly larger than any zoom level a player would actually be viewing (typical viewport at zoom 14 is ~3-5km). Generous for the legitimate use case, hard ceiling on abuse. Validation throws `{ statusCode: 400, message: "Viewport too large" }`. |
+| **All multi-table writes go through `prisma.$transaction` — atomicity is the rule (Session 25)** | The abandon endpoint touches three tables (territories, territory_history, activity_log). Without a transaction, a partial failure leaves the DB in an inconsistent state — territory shows abandoned but history row still open, or vice versa. The first abandon attempt actually hit this: the activity_log CHECK constraint rejected the new event_type, and the test confirmed both the territory and history were left untouched (rollback worked). Pattern: pre-transaction reads on singleton, in-transaction writes take `tx` arg, all writes inside one `prisma.$transaction(async (tx) => { ... })` block. This is the template for every write endpoint going forward (claim, contest, etc.). |
+| **Abandon side effects: close `territory_history` + clear `alliance_id` (not just `owner_id`) + write `activity_log` (Session 25)** | Three deliberate choices. (1) `territory_history` must close — open history rows (where `lost_at IS NULL`) represent the player's current claim; abandoning without closing leaves a phantom ownership record that breaks Legacy Rank calculations. (2) Clear `alliance_id` too, not just `owner_id` — alliance membership of a territory is tied to its owner. Leaving `alliance_id` set on an unowned territory creates an "alliance owns a territory with no player" state that the UI doesn't handle. (3) Write `activity_log` — the activity feed shows what happened; an abandon that doesn't show up in the feed is invisible to the player. NO player territory-count decrement because counts are computed live from `territories.owner_id`, no cached column. |
+| **Activity log event_type pattern: DROP + ADD CONSTRAINT for every new event_type, until a migrations tool lands (Session 25)** | The `activity_log_event_type_check` constraint is a hardcoded ARRAY whitelist. Adding `'territory_abandoned'` required: `ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check; ALTER TABLE activity_log ADD CONSTRAINT ... CHECK (event_type = ANY (ARRAY[..., 'territory_abandoned']));`. There is no migrations tool in this project yet — these schema changes live ONLY in Supabase, not in code or git. Every new event_type (`'territory_lost_in_contest'`, `'alliance_joined'`, etc.) will need the same pattern. Trade-off: zero migration tooling cost today, but every new event_type is a manual SQL step that must be noted in the session summary. Trigger to revisit: when this hits the 3rd or 4th occurrence, set up Prisma Migrate or Supabase Migrations CLI. |
+| **Fastify default content-type parser returns 415 on body-less POST — always send `-ContentType "application/json" -Body "{}"` in PowerShell tests (Session 25)** | Fastify's default parser expects a content-type header on any POST. `Invoke-WebRequest -Method POST` without a body sends no Content-Type, Fastify returns 415 Unsupported Media Type. No real fix needed on the server — mobile clients always send Content-Type via the fetch wrapper. The fix is at the test surface: PowerShell test commands must explicitly include `-ContentType "application/json" -Body "{}"` even for empty bodies. Documented in IMPORTANT COMMANDS. |
+| **Phantom git "modified" status on Cursor-opened files — verify with `git diff`, don't `git add` to clean (Session 25)** | When Cursor opens a file without changing it, the OS file-stat changes (atime, possibly mtime), and git's stat cache invalidates. `git status` shows the file as modified, but `git diff <file>` returns empty — content is byte-identical to HEAD. Adding the phantom-modified file to a commit pollutes the diff and creates noise. Rule: when `git status` shows a file as modified after a Cursor session, run `git diff <file>` first. If empty, leave it alone. Cosmetic only. |
 
 ---
 
