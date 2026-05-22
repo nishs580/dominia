@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 22, 2026 (Session 26 — second territory write endpoint LIVE: `POST /territories/:id/claim`. Full transactional side effects via `prisma.$transaction`: optimistic claim (`UPDATE ... WHERE owner_id IS NULL`, count===0 → 409) + gold deduction + insert open `territory_history` row + write `activity_log` row with `event_type='territory_claimed'`. Race condition strategy locked: optimistic UPDATE-with-WHERE-guard, not pessimistic SELECT FOR UPDATE — simpler, scales better, satisfies §14.4's "millisecond timestamp" rule via Postgres row lock at the UPDATE moment. Tier costs in dedicated `src/modules/territory/claim.costs.ts` (lowercase tier keys matching DB): Small 10, Medium 25, Large 60, Epic 120. Level gates per §7.2: Small/Med L1+, Large L4+, Epic L7+. Free-claim rule requires BOTH `level === 1` AND `count < 3` AND tier ∈ {small, medium}. Claim Gold REWARD (+10/+20/+50/+100) deferred until first-earn notification plumbing exists. `findPlayerAllianceId` stubbed `null` — no `alliance_members` model in Prisma yet, TODO left in place. Zero DB schema changes — `territory_claimed` was already in CHECK constraint whitelist from Session 25. All 5 status codes verified locally (401/404/409/200; 402 mechanically identical to 409, skipped). All 4 side effects verified via SQL. 1 backend commit, deployed cleanly to Railway. 0 mobile commits — [CLERK_TOKEN] diagnostic added + reverted once. Next session: `POST /territories/:id/contest` — needs Iron deduction, single-contest rule (§7.6), contests table check, event_type reconciliation.)
+Last updated: May 22, 2026 (Session 27 — third territory write endpoint LIVE: `POST /territories/:id/contest` (initiate only). Full transactional side effects via `prisma.$transaction`: insert `contests` row + iron deduction + write `activity_log` row with `event_type='contest_participated'`. Single-Contest Rule enforced BOTH in app code (pre-tx `findActiveContestForTerritory` check → 409) AND at DB level (partial unique index on `contests(territory_id) WHERE status='active'`). Validation pipeline: player exists → territory exists → tier valid → has owner → not own territory → level gate → time window 05:00–23:00 (via `Intl.DateTimeFormat` + `player.home_timezone`) → no active contest → iron balance. **Attack Day check (Wed/Sat/Sun) DEFERRED with TODO** to allow weekday testing. `required_walk_m` frozen at initiate via `calcRequiredContestWalk` ported into `contest.formulas.ts`. NEW: `players.home_timezone` (NOT NULL, IANA tz strings, backfilled via tz-lookup for existing 7 rows; `POST /me/home-pin` updated to auto-derive on every set). NEW: `contests` table with 16 columns + 4 indexes. NEW dep: `tz-lookup` + `@types/tz-lookup`. Long-term policy locked: **NO denormalised counters on `players` for events already in `activity_log`** — counts are queryable from `activity_log` via COUNT(event_type). All 5 status codes verified locally (401/404/400×2/200/409); 402 mechanically identical to 409, skipped. All 3 side effects verified via SQL. 1 backend commit, deployed cleanly to Railway. 0 mobile commits — [CLERK_TOKEN] diagnostic added + reverted twice. **Next session: INFRA — Redis + BullMQ + Ably setup (shared/redis.ts, shared/queue.ts, shared/ably.ts, jobs/), no new endpoints. Foundation for Session 29 (contest defend) and Session 30+ (distance ingestion + resolution).**)
 
 ---
 
@@ -60,7 +60,8 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Hosting | Railway (europe-west4 edge) | ✓ Deployed, auto-deploy on push to `main` |
 | Auth | `@clerk/backend` `verifyToken` (stateless, JWKS-verified) | ✓ Live (`requireAuth` Fastify preHandler) |
 | Database (server) | `@supabase/supabase-js` — **service role key** (full DB access, bypasses RLS) | ✓ Live |
-| ORM | Prisma 7.8 (`@prisma/client` + `prisma` CLI, schema introspected from live Supabase, 12 models) | ✓ Installed (Session 22) — singleton client + write paths next session |
+| ORM | Prisma 7.8 (`@prisma/client` + `prisma` CLI, schema introspected from live Supabase, **13 models** — `contests` added Session 27) | ✓ Live (singleton + adapter-pg). Write paths: player, abandon, claim, contest. |
+| Timezone derivation | `tz-lookup` 6.1 (pure JS, ~1MB, offline IANA lookup) + `@types/tz-lookup` | ✓ Live (Session 27) — derives `players.home_timezone` from home_pin_lat/lng on every set |
 | Real-time (planned) | Ably | ○ Not started |
 | Job queue (planned) | BullMQ + Redis | ○ Not started |
 | Push (planned) | Firebase Cloud Messaging | ○ Not started |
@@ -97,14 +98,18 @@ dominia-backend/
 │   │   │   ├── claim.service.ts     ✓ // full validation pipeline + prisma.$transaction
 │   │   │   ├── claim.queries.ts     ✓ // pre-tx reads + in-tx writes (attemptClaim is optimistic updateMany)
 │   │   │   ├── claim.costs.ts       ✓ // CLAIM_GOLD_COST, TIER_LEVEL_GATE, FREE_CLAIM_TIERS/LEVEL/LIMIT (lowercase tier keys)
-│   │   │   ├── contest.* (next)     // POST /contest/initiate, /defend — Session 27
-│   │   │   └── index.ts             // wrapper plugin registers GET + abandon + claim routes
+│   │   │   ├── contest.routes.ts    ✓ // POST /territories/:id/contest (Session 27 — initiate only)
+│   │   │   ├── contest.service.ts   ✓ // validation pipeline (Attack Day check DEFERRED w/ TODO) + prisma.$transaction
+│   │   │   ├── contest.queries.ts   ✓ // pre-tx reads + in-tx writes (insertContestRow, deductAttackerIron, writeContestInitiatedActivityLog)
+│   │   │   ├── contest.costs.ts     ✓ // CONTEST_IRON_COST (8/20/45/80), TIER_LEVEL_GATE (1/1/4/7), ContestTier guard
+│   │   │   ├── contest.formulas.ts  ✓ // TS port of calcRequiredContestWalk (self-contained — no external imports)
+│   │   │   └── index.ts             // wrapper plugin registers GET + abandon + claim + contest routes
 │   │   │
-│   │   ├── contest/                 ○ Not started
-│   │   │   ├── routes.ts            // POST /contest/initiate, POST /contest/defend
-│   │   │   ├── service.ts           // resolution logic (the critical write path)
-│   │   │   ├── resolver.ts          // atomic transaction: validate → multiply → transfer → notify
-│   │   │   ├── queries.ts           // SELECT FOR UPDATE, millisecond timestamp resolution
+│   │   ├── contest/                 ○ Not started as separate module — initiate lives in territory/. Defence + resolution will land here (Sessions 29, 30+).
+│   │   │   ├── routes.ts            // POST /contests/:id/defend, distance ingestion, resolution
+│   │   │   ├── service.ts           // defender response, resolution logic
+│   │   │   ├── resolver.ts          // atomic transaction: validate → resolve → transfer ownership → notify
+│   │   │   ├── queries.ts
 │   │   │   ├── types.ts
 │   │   │   └── index.ts
 │   │   │
@@ -200,7 +205,7 @@ dominia-backend/
 | SPB test home pin | Palace Square (jittered) for nish_s, Rubik, TINA, Alyona — reset 13 May for SPB testing |
 | KAD ring road | OSM relation 1861646 (Cyrillic 'А-118') — defines SPB playable envelope |
 | Backend live URL | https://dominia-backend-production.up.railway.app |
-| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...), `DATABASE_URL` (Supabase Transaction pooler, port 6543 — runtime queries), `DIRECT_URL` (Supabase Session pooler, port 5432, IPv4-proxied — Prisma CLI + migrations). On Railway, env values are pasted WITHOUT quotes (Railway stores as literal string); in local `.env` they MUST be wrapped in double quotes to survive dotenv parsing. |
+| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...), `DATABASE_URL` (Supabase Transaction pooler, port 6543 — runtime queries), `DIRECT_URL` (Supabase Session pooler, port 5432, IPv4-proxied — Prisma CLI + migrations). On Railway, env values are pasted WITHOUT quotes (Railway stores as literal string); in local `.env` they MUST be wrapped in double quotes to survive dotenv parsing. **Session 28 will add: `REDIS_URL`, `ABLY_API_KEY`.** |
 | Clerk instance | Single test instance shared between mobile (`pk_test_bGVu...`) and backend (`sk_test_...`). Backend must verify tokens issued by the same Clerk app the mobile bundle authenticates against. |
 
 ---
@@ -222,7 +227,9 @@ dominia-backend/
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins
+`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, **home_timezone (text, NOT NULL, IANA tz string — NEW Session 27, derived from home_pin_lat/lng via tz-lookup; backfilled for existing 7 rows; `POST /me/home-pin` auto-derives on every set)**
+
+`contests`: **NEW Session 27.** id, territory_id (FK→territories), attacker_id (FK→players), attacker_alliance_id (nullable, no FK yet), defender_id (FK→players, the territory owner at initiate time), defender_alliance_id (nullable, no FK yet), required_walk_m (int, frozen at initiate via calcRequiredContestWalk), attacker_walked_m (int, default 0), defender_player_id (FK→players, nullable — who tapped Defend, populated by Session 29 endpoint), defender_walked_m (int, default 0), defender_response_ratio (numeric(3,2), nullable), iron_cost_paid (int), status (text, CHECK in 'active'/'attacker_won'/'defender_won'/'expired'), initiated_at (timestamptz, default now()), resolved_at (timestamptz, nullable), attack_day_date (date, set from player.home_timezone at initiate).
 
 `territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type (text), geojson (jsonb), geom (postgis.geometry(Polygon, 4326)), **district (text, nullable, indexed — NEW Session 14)**, **territory_name_v1 (text, nullable — NEW Session 14, rollback backup on gap-fill rows only, drop after ~1 week of stable rendering)**
 
@@ -264,6 +271,11 @@ dominia-backend/
 - `idx_territory_history_owner_id` ON territory_history(owner_id)
 - `idx_territory_history_current_holder` partial index ON territory_history(territory_id) WHERE lost_at IS NULL
 - `territories_geom_idx` **GIST index** on territories(geom) — powers fast viewport intersection queries
+- **NEW Session 27 — contests table indexes:**
+  - `contests_pkey` (PK on id)
+  - `contests_territory_active_unique` — **PARTIAL UNIQUE** on `(territory_id) WHERE status = 'active'` (enforces Single-Contest Rule at DB level, race-condition guard for concurrent attackers)
+  - `contests_attacker_idx` on `(attacker_id)` — fast lookup of a player's contests
+  - `contests_status_attack_day_idx` on `(status, attack_day_date)` — used by future expiry job
 
 **Row Level Security (RLS):**
 - `players` table: **DISABLED** (manually via dashboard). Was causing 19-minute hangs because old policies referenced `auth.uid()` but project uses Clerk, not Supabase Auth.
@@ -1058,6 +1070,28 @@ These are bugs that have already cost significant debugging time. Learn the sign
   ```
 - **General lesson:** Schema constraints live in Supabase, not in code. Until a migrations tool lands, every new `activity_log` event_type is a two-step process: write code → run the DROP + ADD constraint SQL in Supabase before the code can succeed. Always check the current whitelist before introducing a new value. Current whitelist (Session 25): `challenge_completed`, `territory_claimed`, `territory_abandoned`, `contest_participated`, `km_walked`.
 
+**45. Supabase SQL editor "Success. No rows returned" is normal for DDL, not a failure (Session 27)**
+- **Signature:** You run a `CREATE TABLE` statement in Supabase SQL editor. The output panel says "Success. No rows returned". You interpret this as the statement failing — a verify SELECT confirms the table doesn't seem to exist.
+- **Cause:** Supabase's SQL editor returns "Success. No rows returned" for any DDL statement (CREATE TABLE, ALTER TABLE, CREATE INDEX, etc.) because there are no rows in the result set. It is NOT an error — it's the standard "DDL executed, no rows to display" response. The follow-up "verify" SELECT that also returned "Success. No rows returned" was likely a different issue (wrong table name, wrong schema, query timed out, etc.) and got conflated with the CREATE.
+- **Fix:** When testing whether a DDL statement succeeded, use a counting verify:
+  ```sql
+  SELECT COUNT(*) AS table_exists
+  FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'my_table';
+  ```
+  A row with `table_exists = 1` confirms creation. If the row says 0, THEN the DDL actually failed (re-run and watch the output panel for an error).
+- **General lesson:** "No rows" is the default response for any statement that doesn't return a result set. DDL, DML without `RETURNING`, and SELECTs that match zero rows all look identical in the output panel. Always verify DDL with a counting query against `information_schema`.
+
+**46. Cursor's schema reads can be wrong — verify the actual model block before acting on a "column missing" flag (Session 27)**
+- **Signature:** Cursor (or any agent) reports "column X doesn't exist on model Y" or "field X not on schema". You search the schema file and find a column named X — but it's on a different model. The flag was technically correct but misleading.
+- **Cause:** Schema files often have similarly-named columns on multiple tables (e.g. `contest_count` on both `players` and `activity_log`, `created_at` on every table). A grep-based read of the schema can confuse them. Cursor sometimes fast-reads with grep instead of viewing the actual `model X { ... }` block.
+- **Fix:** When an agent flags a column as missing, view the actual model block in `prisma/schema.prisma` directly:
+  ```
+  Select-String -Path prisma/schema.prisma -Pattern "^model <name>" -Context 0,80
+  ```
+  This shows the model header + the next 80 lines (covers any sensible model size). Then inspect that block for the column. Only act on the flag once you've verified what columns are actually on the target model.
+- **General lesson:** Agents make schema-read mistakes especially around polymorphic column names. The 30-second verification step (view the actual block) prevents minutes of confusion and bad fixes. Same pattern applies to any "this thing doesn't exist" claim from an agent.
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -1134,39 +1168,47 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH, SUPABASE SERVICE-ROLE, PRISMA 7 WIRED VIA ADAPTER-PG ✓ | PLAYER MODULE FULLY ON PRISMA: GET /me + PATCH /me + POST /me/home-pin ✓ | TERRITORY GET LIVE (Supabase RPC pass-through) ✓ | TERRITORY ABANDON LIVE WITH FULL TRANSACTIONAL SIDE EFFECTS ✓ | TERRITORY CLAIM LIVE WITH OPTIMISTIC RACE GUARD, GOLD DEDUCTION, FREE-CLAIM RULE, HISTORY INSERT, ACTIVITY LOG (all inside prisma.$transaction) ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH, SUPABASE SERVICE-ROLE, PRISMA 7 WIRED VIA ADAPTER-PG ✓ | PLAYER MODULE FULLY ON PRISMA: GET /me + PATCH /me + POST /me/home-pin (now auto-derives home_timezone via tz-lookup) ✓ | TERRITORY GET LIVE (Supabase RPC pass-through) ✓ | TERRITORY ABANDON LIVE WITH FULL TRANSACTIONAL SIDE EFFECTS ✓ | TERRITORY CLAIM LIVE WITH OPTIMISTIC RACE GUARD, GOLD DEDUCTION, FREE-CLAIM RULE, HISTORY INSERT, ACTIVITY LOG ✓ | TERRITORY CONTEST (INITIATE) LIVE WITH IRON DEDUCTION, FROZEN required_walk_m, SINGLE-CONTEST RULE (app + DB partial-unique-index), 05:00–23:00 TIME WINDOW, ACTIVITY LOG ✓**
 
-**Immediate — `POST /territories/:id/contest` — the contest initiation flow.**
+**Immediate — Session 28 — INFRA: Redis + BullMQ + Ably setup.**
 
-The claim endpoint (Session 26) is the pattern for transactional writes. Contest is more complex than claim because it's a multi-step state machine (initiate → defender notification → resolution window → outcome). Concrete checklist for Session 27:
+This is a foundation session. No new endpoints, no new game logic. Purpose: stand up the three deferred shared modules that the contest defence + resolution endpoints (Sessions 29, 30+) will depend on.
 
-1. **First investigation:** check `prisma/schema.prisma` for a `contests` (or similarly-named) table. If it doesn't exist, that's a schema-creation step in Supabase before any code.
-2. **First spec decision:** reconcile event_type naming. Current whitelist has `'contest_participated'` but the natural fit for initiation might be `'contest_initiated'` — decide which fits the lifecycle and whether the whitelist needs extending.
-3. **Validation:** territory must be owned by someone ELSE (`owner_id IS NOT NULL AND owner_id != attacker_id`). Level gate same as claim (§7.2): Small/Med L1+, Large L4+, Epic L7+.
-4. **Single-contest rule (§7.6):** only one contest active per territory at a time. Need to check for existing open contest row before allowing the new one.
-5. **Iron deduction:** Small 8, Medium 20, Large 45, Epic 80 (per `formulas.js` `CONTEST_IRON_COST`). 402 if insufficient.
-6. **Atomic transaction (`prisma.$transaction`):** validate single-contest constraint → deduct iron → insert contest row → write `activity_log` row.
-7. **Deferred for now:** defender notification (needs notification plumbing — same status as claim Gold reward), contest resolution (separate endpoint, separate session).
-8. **Test matrix:** 401 / 404 / 400 (own territory) / 400 (unowned — point to claim) / 400 (level too low) / 402 (insufficient iron) / 409 (existing open contest) / 200 (happy path).
+Concrete checklist for Session 28:
 
-Open sub-questions for the start of Session 27:
-- Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over to backend `GET /territories` still pending.
+1. **Add a Redis service in Railway.** Single instance, free-tier appropriate. Capture the `REDIS_URL` env var (Railway exposes a public + private URL — use the internal one to avoid egress charges).
+2. **Add an Ably account** (free tier — 3M monthly messages should be ample for testing). Generate an API key with publish + subscribe + presence scopes. Add `ABLY_API_KEY` to Railway env vars + local `.env`.
+3. **`src/shared/redis.ts`** — singleton ioredis client. Reads `REDIS_URL`. Healthcheck function (`PING` → expects `PONG`). Same singleton pattern as `src/shared/prisma.ts` — globalThis cached for tsx-watch survival.
+4. **`src/shared/queue.ts`** — BullMQ queue definitions. Decide upfront which named queues exist (likely `contest-expiry`, `defender-lapse-check`, `notification-dispatch`). Each queue has its own connection options pointing at the shared Redis singleton.
+5. **`src/shared/ably.ts`** — Ably REST client init (server-side publishing only for now; subscribers are the mobile app). Channel naming convention: `alliance:<id>`, `territory:<id>`, `player:<id>:notifications`. Helper for publishing typed events.
+6. **`src/jobs/` directory** — ONE canonical worker to validate the pattern. Pick the simplest of the queued jobs: probably `contest-expiry` (scheduled job that fires at 23:59 home-pin time per contest and resolves expired ones). Worker is thin — delegates to a service function.
+7. **Smoke tests** — one minimal exercise per shared module:
+   - Redis: `await redis.ping()` returns `'PONG'`.
+   - BullMQ: enqueue a dummy job, worker picks it up + ack, queue drains.
+   - Ably: publish a test message to a channel, manually verify in Ably dashboard.
+8. **Add `GET /healthcheck` extensions** (or a separate `/healthcheck/deep`) that pings Redis + Ably so deploy health checks can detect outages.
+
+**Carried open sub-questions for the start of Session 28:**
+- Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over to backend `GET /territories` still pending — defer until Ably realtime layer is wired so the migration ships with realtime invalidation in the same change.
 - Mobile direct `supabase.from('players').update(...)` calls are divergent state since `PATCH /me` and `POST /me/home-pin` exist. Audit + migrate when next touching mobile.
 - Add `cors` to Fastify before the mobile app starts hitting the backend (still queued from Session 23).
-- `findPlayerAllianceId` is still a stub in `claim.queries.ts` — when alliance schema lands, wire it for real and revisit the claim endpoint's `alliance_id` assignment.
-- Claim Gold reward (+10/+20/+50/+100 per tier) deferred until first-earn notification plumbing lands — one-line addition to `deductGold` UPDATE at that point.
-- 402 insufficient-gold path on claim was not tested (mechanically identical to 409, skipped). Worth one quick test when next touching this endpoint.
-- Consider a Prisma migrations setup — the activity_log CHECK constraint pattern will become recurring pain (`contest_initiated`, `contest_resolved`, `alliance_joined`, etc.) without one.
+- `findPlayerAllianceId` is still a stub in `claim.queries.ts` — wire when alliance module lands.
+- Claim Gold reward (+10/+20/+50/+100 per tier) deferred until first-earn notification plumbing lands.
+- 402 insufficient-resource path on claim + contest both untested (mechanically identical to 409, skipped). Worth one test when next touching the endpoints.
+- Attack Day check (Wed/Sat/Sun) on contest endpoint deferred with TODO. Wire when ready using `player.home_timezone` via `Intl.DateTimeFormat`.
+- Consider a Prisma migrations setup — activity_log CHECK constraint extensions (`contest_won`, `contest_lost`, `contest_expired`, `alliance_joined`, etc.) will become recurring pain without one. Currently at 5 event_types in the whitelist.
+- `home_timezone` is NOT NULL — confirm that the `lib/auth.js ensurePlayer()` pathway (mobile-side player row creation) sets it, otherwise new signups will fail the constraint.
 
-**Backlog — backend, after contest lands:**
+**Backlog — backend, after Session 28 infra lands:**
 
+- **Session 29: `POST /contests/:id/defend`** — defender taps Defend. Validation: contest active, defender is in defending alliance, optional 10 Stone activation. Sets `defender_player_id` + `defender_response_ratio` on the contests row. Defender lapse timer (15-min zero-step rule) is a BullMQ recurring job. Fires Ably push to alliance chat.
+- **Session 30+: Distance ingestion + contest resolution** — the critical write path. Continuous Walk Rule (15-min pause reset), vehicle speed filter (>25 km/h), real-time counter updates, resolution evaluation (whoever hits target first wins; 23:59 expiry as fallback). Architecture decision: ingestion via REST POST batches vs Ably channel.
 - **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit.
 - **Generate Supabase types** for the backend `Database` type. Currently `any` (only used by territory GET module now).
-- **Wire Ably** — add `shared/ably.ts` channel publisher, integrate with existing `handleTerritoriesRefetched(territoryId)` hook in mobile MapScreen.js.
-- **Mobile migration: `MapScreen` from direct RPC → backend `GET /territories`** — cut-over when claim + contest endpoints have burned-in a few real flows.
+- **Mobile migration: `MapScreen` from direct RPC → backend `GET /territories`** — cut-over when realtime invalidation via Ably is wired.
 - **Mobile migration: direct `players.update()` calls → `PATCH /me` / `POST /me/home-pin`** — audit + cut-over.
-- **First-earn notification plumbing** — unlocks claim Gold reward (+10/+20/+50/+100), contest defender alerts, and the §5.1 first-earn flow more broadly.
-- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names. Cheap polish.
+- **First-earn notification plumbing** — unlocks claim Gold reward, contest defender alerts, and the §5.1 first-earn flow more broadly.
+- **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names.
 - **Tests for `lib/streak.js` and `lib/territory.js`** — Supabase mocking strategy is the gating decision.
 - **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls.
 
@@ -1179,10 +1221,10 @@ Open sub-questions for the start of Session 27:
 - Drop `territory_name_v1` rollback column once gap-fill names verified stable (grace window expired — do at start of next clean session)
 - Drop 5 temp tables (`gap_fill_*`, `spb_*`) — grace window expired, do at start of next clean session
 - Flip `DIAG_CALIBRATION` to false (or remove) — keep on for now while still building new claim functionality
-- Flip `DEV_MODE_MANUAL` on ActivityScreen.js back to false when no longer needed for manual challenge testing (currently TRUE, left flipped after Session 20 idempotency testing)
+- Flip `DEV_MODE_MANUAL` on ActivityScreen.js back to false when no longer needed for manual challenge testing (currently TRUE)
 
-**Queued — Ably real-time integration (~1 hour when backend lands):**
-- Subscribe to `territory:updated` channel
+**Queued — Ably real-time integration (lands as part of Session 28 infra):**
+- Subscribe to `territory:updated` channel from mobile
 - On event, call `featureCacheRef.current.delete(territoryId)` and trigger re-render
 - Integrates cleanly with existing `handleTerritoriesRefetched(territoryId)` pattern already in MapScreen.js
 
@@ -1205,10 +1247,10 @@ Open sub-questions for the start of Session 27:
 - Territory tier audit across both Amsterdam and SPB.
 
 **Queued — frontend display helper:**
-- Write `formatTerritoryDisplayName(name)` — strip 'Near ' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic POI asset codes (e.g. `СО17-2873`). Wire when first touching a display surface that hits the long-name cases.
+- Write `formatTerritoryDisplayName(name)` — strip 'Near ' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic POI asset codes (e.g. `СО17-2873`).
 
 **Queued — housekeeping decision:**
-- Reconcile Jest version drift: state doc previously said "Jest 30, no jest-expo preset"; package.json is now Jest 29.7 + jest-expo (after `npx expo install --fix` in Session 19). Tests still 348/348 green — decide whether to revert package.json to 30 or accept 29.7 + jest-expo as the new baseline.
+- Reconcile Jest version drift: state doc previously said "Jest 30, no jest-expo preset"; package.json is now Jest 29.7 + jest-expo. Tests still 348/348 green — decide whether to revert to 30 or accept 29.7 + jest-expo as the new baseline.
 
 **Formula Build Phases:**
 - Phase 1 ✓ — XP, level, streak, contest distance, challenge XP
@@ -1236,7 +1278,7 @@ Open sub-questions for the start of Session 27:
 - Onboarding home pin 500m verification
 - Move hardcoded service role key in `retry-failed-polygons.js` to env var
 - Add Bengaluru territory dataset (rerun fetch-osm-polygons.js + gap-fill pipeline)
-- BullMQ + Redis + Ably + FCM — backend foundation lives, these layers still queued (see backend STACK table)
+- FCM (push notifications) — last layer to land in the backend foundation, sequenced after Ably
 
 ---
 
@@ -1401,6 +1443,18 @@ Open sub-questions for the start of Session 27:
 | **`findPlayerAllianceId` stubbed null in claim until alliance schema lands (Session 26)** | The claim endpoint needs to set `territory.alliance_id` if the player has one. No `alliance_members` (or equivalently-named) model exists in `prisma/schema.prisma` yet. Three options: (1) block claim endpoint on alliance schema, (2) guess the column names and write the query, (3) stub the function returning null. Picked option 3 because: the alliance assignment is a nice-to-have for solo testing, the actual alliance write path is non-trivial (active-membership semantics, multi-alliance edge cases), and the stub leaves a clear TODO. Wire when alliance module lands. Currently claimed territories will have `alliance_id = null` for all players, including those who will eventually have an alliance. |
 | **Multi-line `Invoke-WebRequest` backticks can break mid-token-expiry — use single-line form (Session 26)** | A multi-line PowerShell command with backtick line-continuations was pasted in Warp while a Clerk token was expiring. The backtick chain broke mid-paste, turning a `-Method POST` into an effective GET (no body, no auth header in the right position), and Fastify returned a misleading 404 "Route GET:..." error. Lesson: backtick continuations are fragile under interactive paste. For test commands, use a single-line `try { Invoke-WebRequest -Uri "..." -Method POST -ContentType "application/json" -Body "{}" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing } catch { ... }` form. Documented in IMPORTANT COMMANDS. |
 | **Anchor test-territory selection to a known player territory, not random UUIDs (Session 26)** | With 8,295 SPB territories in the DB, picking a random unowned one for endpoint testing returned coordinates the user didn't recognise. Better pattern: anchor SQL to one of the test player's existing territories (e.g. Рашетова улица for nish_s) and `ORDER BY postgis.ST_Distance(t.geom, anchor.geom)` to get the 10 nearest unowned. Recognisable neighbours surface immediately. Saved as a reusable query pattern in IMPORTANT COMMANDS. |
+| **Contest endpoint scope: INITIATE ONLY this session, lifecycle phased across Sessions 27–30 (Session 27)** | The full contest lifecycle (initiate → defender response → distance ingestion → resolution) is too large for one session, especially given that the resolution path needs Redis + BullMQ + Ably (none of which exist yet). Three options considered: (A) initiate only, (B) initiate + tracking, (C) full lifecycle in one session. Picked A. Reasons: (1) mirrors the claim endpoint discipline (narrow scope, predictable session), (2) defers the infra dependencies cleanly, (3) initiate is itself non-trivial — Single-Contest Rule + frozen `required_walk_m` + time window + tz derivation are enough surface area for one session. Phasing: Session 27 = initiate; Session 28 = infra; Session 29 = defend; Session 30+ = ingestion + resolution. |
+| **Single-Contest Rule enforced BOTH in app code (pre-tx check) AND DB (partial unique index) (Session 27)** | The Single-Contest Rule (§7.6) says only one active contest per territory at a time. App-only check has a TOCTOU window — two concurrent attackers could both see "no active contest" and both insert. DB-only enforcement (just rely on the unique index violation) returns an opaque Postgres error code that's awkward to map to a friendly 409. Picked both: pre-tx `findActiveContestForTerritory` produces a clean 409 with a readable message for the common case (no concurrent attacker), and the partial unique index `contests(territory_id) WHERE status='active'` is the race-condition guard for the rare case. Same belt-and-braces principle as the optimistic claim guard. |
+| **Buff snapshots NOT stored on contests row — only frozen `required_walk_m` is persisted (Session 27)** | The contest formula reads attacker streak, defender streak, dev level, Rally Cry, Siege Boost. Two storage options for these inputs: (A) snapshot them all on the contests row so resolution can recompute or audit, (B) compute `required_walk_m` once at initiate, freeze it, and don't persist the inputs. Picked B. Reasons: (1) the formula is deterministic from those inputs, and the frozen result is what actually matters for resolution, (2) snapshotting buffs introduces a "should this row reflect the buff state at initiate or at resolution" question that doesn't have a single right answer, (3) audit/replay isn't an MVP concern — we have activity_log for that. Trigger to revisit: when an in-game replay/audit feature is built, we'd need to either reconstruct from activity_log or add snapshot columns then. |
+| **Alliance FK columns nullable on `contests`, no FK constraint until alliance module lands (Session 27)** | Same call as the claim endpoint's `findPlayerAllianceId` stub. The `contests` table has `attacker_alliance_id` and `defender_alliance_id` columns but no FK constraint — the `alliance_members` (or equivalently-named) model still doesn't exist in Prisma. Stub them null at insert; wire when alliance module ships. The columns exist now so the schema doesn't need to grow when alliances land. |
+| **Long-term policy: NO denormalised counters on `players` for events already in `activity_log` (Session 27)** | Initial contest spec called for incrementing `players.contest_count` on initiation. Discovered `players.contest_count` doesn't exist — only `lifetime_contest_wins` and `lifetime_defence_wins` (outcome metrics, set on resolution). Dropped the counter entirely. Reasons: (1) activity_log is the source of truth — every initiation writes a row with full metadata, (2) denormalised counters drift from reality (admin deletes, voided rows), (3) each counter needs an increment in every write path AND backfill logic AND test coverage, (4) `SELECT COUNT(*) FROM activity_log WHERE player_id=X AND event_type='contest_participated'` is a fast indexed query that gives the same answer. Add counter columns ONLY when (a) a real read pattern needs the lookup at scale, and (b) the cost of inconsistency is acceptable. Applies to all future event-style data going forward. |
+| **`calcRequiredContestWalk` duplicated into backend `contest.formulas.ts` rather than shared module (Session 27)** | Same call as Session 26's tier-cost constants duplication. Mobile's `formulas.js` (CommonJS, ~1500 lines) has `calcRequiredContestWalk` and its dependencies (`calcStreakMultiplier`, `STREAK_TIER_THRESHOLDS`, `DEV_CONTEST_MULT`, etc.). Backend needs the same calculation. Three options: (A) shared npm package, (B) git submodule, (C) duplicate the function. Picked C: the formula is a 30-line pure function with no I/O, no external imports needed, and porting to TypeScript was a 10-minute task. The backend version uses lowercase tier keys to match the DB (mobile uses TitleCase). Trigger to revisit: when 3+ pieces of game math need to be shared, set up `dominia-shared` package. Currently at 2 (claim costs, contest formula). |
+| **Attack Day check (Wed/Sat/Sun) DEFERRED on contest endpoint to allow weekday testing (Session 27)** | The mechanics spec §7.9 says contests can only be initiated on Wed/Sat/Sun (Attack Days). Today was Friday during Session 27 build, and we needed to test the endpoint live. Decision: implement everything else (time window 05:00–23:00 IS enforced via Intl.DateTimeFormat + player.home_timezone), but stub Step 7 of validation with a TODO comment. Trade-off: the endpoint accepts contest initiations on Rest Days today; once enabled it'll reject them. Wiring is a 5-line addition using the same Intl.DateTimeFormat pattern. Trigger to wire: before any external playtest, or when the Attack Day calendar UX is built on mobile. |
+| **`tz-lookup` over `geo-tz` for home pin timezone derivation (Session 27)** | Need IANA timezone from lat/lng for player.home_timezone (drives contest time window and attack_day_date). Two pure-JS options: (A) `tz-lookup` ~1MB pure JS, instant lookups, fewer borderline-accuracy cases, (B) `geo-tz` ~30MB shapefile data, more accurate at country borders. Picked A. Reasons: (1) home pins are at city granularity — border accuracy is overkill, (2) 30MB bundle size matters on Railway (slower deploys), (3) startup time matters (in-memory lookup vs shapefile parse). |
+| **`players.home_timezone` is NOT NULL (with backfill) rather than nullable-with-fallback (Session 27)** | When adding the column, three options considered: (A) nullable, fallback to UTC when null, (B) nullable now, mark TODO, derive on next home-pin update, (C) NOT NULL with one-time backfill via tz-lookup. Picked C. Reasons: (1) home_timezone is required by contest endpoint (time window check needs a valid IANA tz), (2) nullable + fallback creates a silent bug surface (every UTC-treated player is effectively wrong by hours), (3) backfill is cheap — 7 rows. Cost: one extra step in the session (write a script that derives + prints UPDATE statements). Benefit: every future read of home_timezone is guaranteed valid. Trade-off for the future: any new player row created via SQL INSERT (bypassing POST /me/home-pin) must explicitly set home_timezone — surface area for future bugs, but small. |
+| **Backfill via a script that PRINTS UPDATE statements to stdout, not one that writes directly (Session 27)** | The home_timezone backfill needed to derive tz for each existing player. Two patterns: (A) script that calls `prisma.players.update()` in a loop directly, (B) script that prints the SQL UPDATE statements for human review + manual paste into Supabase. Picked B. Reasons: (1) review-before-mutate is safer for one-shot scripts that touch every row in a table, (2) the 7-row output was easy to eyeball-validate (4× Europe/Moscow matched SPB players, 3× Europe/Amsterdam matched NL players), (3) the script becomes a reusable audit tool rather than a one-shot ghost. Pattern worth reusing for any future small backfills. |
+| **Clerk token batching: assign `$token` once, run ALL test invocations in one Warp paste (Session 27)** | Clerk tokens expire in ~60s. In Session 27, the first attempt at testing the contest endpoint failed because `$token` was assigned, then individual test commands were pasted one at a time, and by the time the 2nd request fired the token had expired. Pattern that works: paste a single Warp block with `$token = "..."` at the top followed by all N `try { Invoke-WebRequest ... } catch { ... }` calls. The whole block executes in under 5 seconds. Documented in IMPORTANT COMMANDS. Same lesson applies to any short-lived bearer token testing. |
+| **For contest testing where attacker owns every territory: temporarily transfer ONE to a player in a DIFFERENT alliance (Session 27)** | nish_s owns all 7 claimed territories in the test DB. Testing the contest endpoint requires an enemy target. Three options: (A) test as a different player (needs that player's Clerk token), (B) use a player in the same alliance as nish_s (creates same-alliance edge case we're not testing), (C) temporarily transfer a territory to a player in a DIFFERENT alliance. Picked C. Reasons: (1) one UPDATE, fully reversible, (2) tests the realistic "attack an enemy" flow, (3) cross-alliance test data avoids the same-alliance edge case. Used Alyona (different alliance from nish_s) as the temporary owner of Рашетова улица. Restored after testing. Pattern worth reusing. |
 
 ---
 
