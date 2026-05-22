@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 22, 2026 (Session 27 — third territory write endpoint LIVE: `POST /territories/:id/contest` (initiate only). Full transactional side effects via `prisma.$transaction`: insert `contests` row + iron deduction + write `activity_log` row with `event_type='contest_participated'`. Single-Contest Rule enforced BOTH in app code (pre-tx `findActiveContestForTerritory` check → 409) AND at DB level (partial unique index on `contests(territory_id) WHERE status='active'`). Validation pipeline: player exists → territory exists → tier valid → has owner → not own territory → level gate → time window 05:00–23:00 (via `Intl.DateTimeFormat` + `player.home_timezone`) → no active contest → iron balance. **Attack Day check (Wed/Sat/Sun) DEFERRED with TODO** to allow weekday testing. `required_walk_m` frozen at initiate via `calcRequiredContestWalk` ported into `contest.formulas.ts`. NEW: `players.home_timezone` (NOT NULL, IANA tz strings, backfilled via tz-lookup for existing 7 rows; `POST /me/home-pin` updated to auto-derive on every set). NEW: `contests` table with 16 columns + 4 indexes. NEW dep: `tz-lookup` + `@types/tz-lookup`. Long-term policy locked: **NO denormalised counters on `players` for events already in `activity_log`** — counts are queryable from `activity_log` via COUNT(event_type). All 5 status codes verified locally (401/404/400×2/200/409); 402 mechanically identical to 409, skipped. All 3 side effects verified via SQL. 1 backend commit, deployed cleanly to Railway. 0 mobile commits — [CLERK_TOKEN] diagnostic added + reverted twice. **Next session: INFRA — Redis + BullMQ + Ably setup (shared/redis.ts, shared/queue.ts, shared/ably.ts, jobs/), no new endpoints. Foundation for Session 29 (contest defend) and Session 30+ (distance ingestion + resolution).**)
+Last updated: May 22, 2026 (Session 28 — REAL-TIME INFRASTRUCTURE LIVE. Three new shared modules deployed to Railway: `shared/redis.ts` (ioredis singleton, BullMQ-compatible config `maxRetriesPerRequest: null`, `enableReadyCheck: false`, `family: 0` for IPv6 on Railway public endpoint); `shared/queue.ts` (BullMQ `testQueue` + `testWorker`, side-effect imported in `server.ts`); `shared/ably.ts` (Ably REST singleton — server publishes only, no Realtime). `GET /healthcheck` extended to ping Redis and return `{ status: "ok", redis: "PONG" }`. New debug module `modules/debug/routes.ts` with `POST /debug/enqueue-test` + `POST /debug/publish-test`, both gated behind `NODE_ENV !== 'production'` (returns 404 on Railway). NEW infra: Railway Redis plugin (REDIS_URL via reference variable `${{Redis.REDIS_URL}}`); Ably free-tier account (Pub/Sub, 6M msg/month, single Root API key for backend). NEW deps: `ioredis`, `bullmq`, `ably`. CRITICAL ESM gotcha discovered: production crashed with `ERR_MODULE_NOT_FOUND` for `/app/dist/shared/queue` because compiled ESM requires explicit `.js` extensions in relative imports — `tsx` dev runtime is forgiving, Node prod is strict. Fixed by changing `"./shared/queue"` → `"./shared/queue.js"` (and same inside `queue.ts` for `./redis.js`). Pattern locked: ALL relative imports must use `.js` extension; `npm run build` catches before deploy. End-to-end verified: local enqueue triggers worker (`[worker] processing job 1 → completed`); local publish shows in Ably dashboard (Active channels: 1, Total inbound messages: 1). Prod healthcheck returns `redis: "PONG"`, debug routes correctly 404 (gate working). 3 backend commits + 1 hotfix. 0 mobile commits. **Next session (29): POST /contests/:id/defend — defender accepts active contest, snapshots starting walk distance from Health Connect, locks defender_response_ratio based on Stone buff. No resolution logic yet (Session 30+).**)
 
 ---
 
@@ -62,8 +62,10 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Database (server) | `@supabase/supabase-js` — **service role key** (full DB access, bypasses RLS) | ✓ Live |
 | ORM | Prisma 7.8 (`@prisma/client` + `prisma` CLI, schema introspected from live Supabase, **13 models** — `contests` added Session 27) | ✓ Live (singleton + adapter-pg). Write paths: player, abandon, claim, contest. |
 | Timezone derivation | `tz-lookup` 6.1 (pure JS, ~1MB, offline IANA lookup) + `@types/tz-lookup` | ✓ Live (Session 27) — derives `players.home_timezone` from home_pin_lat/lng on every set |
-| Real-time (planned) | Ably | ○ Not started |
-| Job queue (planned) | BullMQ + Redis | ○ Not started |
+| Redis client | `ioredis` 5.x — singleton in `shared/redis.ts`, config `maxRetriesPerRequest: null`, `enableReadyCheck: false` (BullMQ-required), `family: 0` (IPv6 support on Railway public endpoint) | ✓ Live (Session 28). Healthcheck pings on every `/healthcheck`. |
+| Redis (server) | Railway Redis plugin — REDIS_URL wired via reference variable `${{Redis.REDIS_URL}}` (private network, no egress) | ✓ Live (Session 28). Local dev uses `REDIS_PUBLIC_URL` (trivial egress for dev testing). |
+| Job queue | BullMQ 5.x — `testQueue` + `testWorker` scaffolded in `shared/queue.ts`, side-effect imported in `server.ts` so worker starts on boot. No real jobs yet — first real job lands Session 30+ (contest resolution scheduling). | ✓ Live infra (Session 28) |
+| Real-time | Ably (free tier — Pub/Sub, 6M msg/month). Backend uses `Ably.Rest` singleton in `shared/ably.ts` (stateless publish, no persistent connection). Mobile will use Realtime client for subscriptions (Session 30+). | ✓ Live (Session 28) — publish verified via dashboard |
 | Push (planned) | Firebase Cloud Messaging | ○ Not started |
 
 ---
@@ -83,8 +85,8 @@ dominia-backend/
 │   │   │   ├── types.ts             // Player (loose [key: string]: unknown)
 │   │   │   └── index.ts             // public exports only
 │   │   │
-│   │   ├── health/                  ✓ Scaffolded (Session 21)
-│   │   │   ├── routes.ts            // GET /healthcheck ✓
+│   │   ├── health/                  ✓ Scaffolded (Session 21), Redis ping added (Session 28)
+│   │   │   ├── routes.ts            // GET /healthcheck ✓ — returns `{ status: "ok", redis: "PONG" }`; on Redis error returns 503 `{ status: "degraded", redis: "error", error }`
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── territory/               ✓ LIVE — GET + abandon + claim (Sessions 24–26)
@@ -151,14 +153,17 @@ dominia-backend/
 │   │       ├── antiCheat.ts         // 30 km/h velocity threshold
 │   │       └── index.ts
 │   │
+│   │   └── debug/                   ✓ LIVE (Session 28) — scaffolding, removed when real BullMQ jobs + Ably publishes land in business logic
+│   │       └── routes.ts            // POST /debug/enqueue-test ✓ (adds test-job to testQueue) · POST /debug/publish-test ✓ (publishes to "test-channel"). Entire plugin gated behind `NODE_ENV !== 'production'` (early return).
+│   │
 │   ├── shared/
 │   │   ├── formulas.ts              // mobile formulas.js ported — pure functions, no module imports ○
 │   │   ├── prisma.ts                ✓ Singleton PrismaClient with `@prisma/adapter-pg` (Session 23). globalThis-cached for tsx-watch hot reload survival. Reads DATABASE_URL via the adapter.
 │   │   ├── supabase.ts              ✓ Service-role client (Session 21). Still used by territory GET module (PostGIS RPC); no longer used by player module.
 │   │   ├── auth.ts                  ✓ Clerk verifyToken middleware, per-route preHandler (Session 21)
-│   │   ├── redis.ts                 ○ Single Redis client
-│   │   ├── ably.ts                  ○ Channel publishers — territory:updated, alliance:*
-│   │   ├── queue.ts                 ○ BullMQ setup, repeatable job registration
+│   │   ├── redis.ts                 ✓ ioredis singleton (Session 28). BullMQ-compatible: `maxRetriesPerRequest: null`, `enableReadyCheck: false`. `family: 0` for IPv6 (Railway public endpoint). Logs `[redis] connected` on ready, `[redis] error` on error. Reads `REDIS_URL` from env, throws on missing.
+│   │   ├── ably.ts                  ✓ Ably.Rest singleton (Session 28). Server-side publishing only — no Realtime, no persistent connection. Reads `ABLY_API_KEY` from env, throws on missing. Use `ably.channels.get(name).publish(event, data)`.
+│   │   ├── queue.ts                 ✓ BullMQ infra (Session 28). Exports `testQueue` ("test-queue") + `testWorker` — both share the redis singleton. Worker logs `[worker] processing/completed/failed`. Side-effect imported in `server.ts` so worker starts on boot. Real queues land Session 30+.
 │   │   ├── quietHours.ts            ○ 23:00–05:00 local time check (used by notifications)
 │   │   └── errors.ts                ○ typed app errors
 │   │
@@ -205,7 +210,7 @@ dominia-backend/
 | SPB test home pin | Palace Square (jittered) for nish_s, Rubik, TINA, Alyona — reset 13 May for SPB testing |
 | KAD ring road | OSM relation 1861646 (Cyrillic 'А-118') — defines SPB playable envelope |
 | Backend live URL | https://dominia-backend-production.up.railway.app |
-| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...), `DATABASE_URL` (Supabase Transaction pooler, port 6543 — runtime queries), `DIRECT_URL` (Supabase Session pooler, port 5432, IPv4-proxied — Prisma CLI + migrations). On Railway, env values are pasted WITHOUT quotes (Railway stores as literal string); in local `.env` they MUST be wrapped in double quotes to survive dotenv parsing. **Session 28 will add: `REDIS_URL`, `ABLY_API_KEY`.** |
+| Backend env vars (Railway + local `.env`) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase **secret** key, not publishable), `CLERK_SECRET_KEY` (sk_test_... — same Clerk test instance as mobile pk_test_bGVu...), `DATABASE_URL` (Supabase Transaction pooler, port 6543 — runtime queries), `DIRECT_URL` (Supabase Session pooler, port 5432, IPv4-proxied — Prisma CLI + migrations), `REDIS_URL` (Railway: reference variable `${{Redis.REDIS_URL}}` private network; local: `REDIS_PUBLIC_URL` from Railway Redis service — NEW Session 28), `ABLY_API_KEY` (Ably Root key — full publish/subscribe/admin; NEW Session 28). On Railway, env values are pasted WITHOUT quotes (Railway stores as literal string); in local `.env` they MUST be wrapped in double quotes to survive dotenv parsing. |
 | Clerk instance | Single test instance shared between mobile (`pk_test_bGVu...`) and backend (`sk_test_...`). Backend must verify tokens issued by the same Clerk app the mobile bundle authenticates against. |
 
 ---
@@ -217,8 +222,9 @@ dominia-backend/
 | Supabase | Pro | Micro compute, ~$25/month all-in ($10 compute credit covers Micro). PostGIS 3.3.7 enabled in `postgis` schema. |
 | Mapbox | Free | 50,000 map loads/month |
 | Clerk | Free | 10,000 MAU |
-| Railway | Free trial / Hobby | **NEW Session 21.** Backend hosting. $5 in credits visible at sign-up. Auto-deploys on push to `main` of `dominia-backend` repo. Public domain: `dominia-backend-production.up.railway.app`. Single service so far (`dominia-backend`), no Postgres / Redis services yet — those come when Prisma and BullMQ land. |
-| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~18 Android used, ~12 remaining. No EAS builds in Session 21 (backend phase, no APK work).** |
+| Railway | Hobby | Backend hosting + Redis plugin (Session 28). Auto-deploys on push to `main` of `dominia-backend` repo. Public domain: `dominia-backend-production.up.railway.app`. Two services: `dominia-backend` (Node) + `Redis` (Railway Redis plugin, connected via reference variable `${{Redis.REDIS_URL}}` private network — no egress fees in prod). Local dev uses `REDIS_PUBLIC_URL` (negligible egress). |
+| Ably | Free tier (Pub/Sub) | **NEW Session 28.** 6,000,000 messages/month, 200 peak connections, 200 peak channels. Single app named "Dominia". Single Root API key in `ABLY_API_KEY` (full capabilities — backend only). Mobile will use a scoped key or token auth when subscription is added (Session 30+). |
+| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~18 Android used, ~12 remaining. No EAS builds in Session 28 (backend phase).** |
 | Cursor | Pro | No usage limits on AI edits |
 
 ---
@@ -426,21 +432,20 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 
 | File | Purpose |
 |---|---|
-| `package.json` | Node `>=22`, `type: "module"` (ESM), scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `typecheck` (tsc --noEmit), `postinstall` (`prisma generate` — required for Railway `npm ci`). Dependencies: `fastify`, `@supabase/supabase-js`, `@clerk/backend`, `dotenv`, `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg`. Dev deps: `typescript`, `tsx`, `@types/node`, `@types/pg`. |
+| `package.json` | Node `>=22`, `type: "module"` (ESM), scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `typecheck` (tsc --noEmit), `postinstall` (`prisma generate` — required for Railway `npm ci`). Dependencies: `fastify`, `@supabase/supabase-js`, `@clerk/backend`, `dotenv`, `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg`, `tz-lookup`, `ioredis` (Session 28), `bullmq` (Session 28), `ably` (Session 28). Dev deps: `typescript`, `tsx`, `@types/node`, `@types/pg`, `@types/tz-lookup`. |
 | `.nvmrc` | `22` — required for Railway Nixpacks to pick Node 22 (Node 20 crashes on boot because Supabase realtime-js needs native WebSocket). |
 | `tsconfig.json` | ES2022 target, ESNext module, Bundler resolution, strict, esModuleInterop, outDir `./dist`, rootDir `./src`, include `["src/**/*"]`. |
-| `.env` (local, gitignored) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL` (Transaction pooler, port 6543), `DIRECT_URL` (Session pooler, port 5432). Identical key set on Railway. **Never paste env values into chat — they are secrets.** Values must NOT be wrapped in angle brackets. |
+| `.env` (local, gitignored) | `PORT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL` (Transaction pooler, port 6543), `DIRECT_URL` (Session pooler, port 5432), `REDIS_URL` (= `REDIS_PUBLIC_URL` from Railway Redis service, Session 28), `ABLY_API_KEY` (Ably Root key, Session 28). Identical key set on Railway (where `REDIS_URL = ${{Redis.REDIS_URL}}` private network reference). **Never paste env values into chat — they are secrets.** Values must NOT be wrapped in angle brackets. |
 | `.env.example` | Same keys as `.env` with blank values, committed for documentation. |
 | `.gitignore` | `node_modules/`, `dist/`, `.env`, `.env.local`, `/src/generated/prisma`, OS junk. |
 | `README.md` | One-paragraph description + dev/build/start commands. |
 | `prisma.config.ts` | Prisma 7 config — dotenv-loaded, `env("DIRECT_URL")` as `datasource.url`. Used by Prisma CLI (db pull, generate) only — runtime uses the adapter. |
 | `prisma/schema.prisma` | 12 models introspected from live Supabase. Generator has `engineType="library"` (no-op with adapter, kept for documentation). PostGIS `geom` columns are `Unsupported("geometry")` — never queried via Prisma. |
-| `src/server.ts` | Entry point. Imports `buildApp` from `./app.js`, listens on `process.env.PORT \|\| 3000`, host `0.0.0.0`. Logs "ready" on success, exits 1 on startup error. |
-| `src/app.ts` | `buildApp()` async factory. Creates Fastify instance with logger enabled, registers health + player + territory modules. Every new module gets `await app.register(...)` here. |
+| `src/server.ts` | Entry point. Imports `dotenv/config`, then **side-effect import `"./shared/queue.js"`** (Session 28 — starts BullMQ worker on boot), then `buildApp` from `./app.js`. Listens on `process.env.PORT \|\| 3000`, host `0.0.0.0`. Logs "ready" on success, exits 1 on startup error. |
+| `src/app.ts` | `buildApp()` async factory. Creates Fastify instance with logger enabled, registers health + player + territory + debug modules. Every new module gets `await app.register(...)` here. |
 | `src/shared/prisma.ts` (Session 23) | Singleton `PrismaClient` with `PrismaPg` adapter. Adapter reads `DATABASE_URL` (Transaction pooler) directly. `globalThis` caching survives `tsx watch` hot reload. `log: ["error","warn"]` in dev, `["error"]` in prod. Import surface: `import { prisma } from "../shared/prisma.js"`. |
 | `src/shared/supabase.ts` | Service-role Supabase client. Used by territory GET module to call PostGIS RPC. No longer used by player module (replaced with Prisma in Session 23). |
 | `src/shared/auth.ts` | Clerk JWT verification middleware. Reads `CLERK_SECRET_KEY` at module load (throws if missing). Module augments `FastifyRequest` to add `clerkUserId?: string`. Exports `requireAuth(request, reply)` async function used as Fastify `preHandler` on protected routes — reads `Authorization: Bearer <token>`, calls `verifyToken` from `@clerk/backend`, attaches `payload.sub` to `request.clerkUserId`, returns 401 on missing/malformed header or invalid token. **Do not log token contents** — only log the verifier's error object if diagnostic logging is needed (temporary; revert before commit). |
-| `src/modules/health/routes.ts` + `index.ts` | `GET /healthcheck` — unauthenticated. Returns `{ ok: true, timestamp: <ISO> }`. Used by Railway probes and basic deploy verification. |
 | `src/modules/player/types.ts` | `Player` type — loose typing (`[key: string]: unknown`) until Supabase types are generated. |
 | `src/modules/player/queries.ts` (Session 23 — refactored to Prisma) | `getPlayerByClerkId(clerkId)` — `prisma.players.findUnique({ where: { clerk_id }})`. `updatePlayerByClerkId(clerkId, fields)` — Prisma update. `setPlayerHomePin(clerkId, lat, lng)` — Prisma update. All return `Player \| null` semantics (`update()` throws P2025 on not-found; service layer narrows the type). |
 | `src/modules/player/service.ts` (Session 23) | `getMe(clerkId)` — returns `{ clerkUserId, player }`. `updateMe(clerkId, body)` — validates username (trimmed, non-empty, ≤30 chars) and/or has_onboarded (strict boolean), throws 400 if no valid fields. `setHomePin(clerkId, lat, lng)` — validates finite numbers + lat/lng bounds, throws 400 on fail. All throw `{ statusCode: 404 }` on Prisma P2025. |
@@ -457,6 +462,17 @@ SELECT district, COUNT(*) FROM territories WHERE territory_name IS NOT NULL
 | `src/modules/territory/claim.queries.ts` (Session 26) | Pre-tx reads on singleton: `findPlayerByClerkIdForClaim` (selects id, level, gold; uses `clerk_id` actual column), `findTerritoryForClaim` (selects id, territory_name, tier, owner_id, alliance_id — no `geom`), `countPlayerTerritories`, `findPlayerAllianceId` (STUB returning null — TODO until alliance_members model lands in Prisma). In-tx writes take `tx` arg: `attemptClaim(tx, territoryId, playerId, allianceIdOrNull)` does `tx.territories.updateMany({ where: { id, owner_id: null }, data: { owner_id, alliance_id }})` — count===0 → throw 409, otherwise re-select with findUnique; `deductGold(tx, playerId, goldCost)` no-ops if goldCost===0; `insertTerritoryHistoryRow(tx, playerId, territoryId, allianceIdOrNull)` creates row with `claimed_at = new Date()`, `lost_at = null`, `owner_id` (actual column name); `writeClaimActivityLog(tx, playerId, territory, freeClaim, goldCost)` writes `event_type='territory_claimed'` with metadata `{ territory_id, territory_name, tier, free_claim, gold_cost }`. |
 | `src/modules/territory/claim.service.ts` (Session 26) | Full validation pipeline. Pre-tx order: find player (404) → find territory (404) → tier valid (400) → owner_id null check (409) → level gate (400) → compute freeClaim (level===1 AND count<3 AND tier∈{small,medium}) → gold balance check (402) → fetch allianceId (stub null). Transaction: `attemptClaim` → `deductGold` (if !freeClaim) → `insertTerritoryHistoryRow` → `writeClaimActivityLog`. Returns `{ territory, freeClaim, goldCost }`. `player.level` coerced via `?? FREE_CLAIM_LEVEL` (Int? in schema); `territory.tier` narrowed via `isClaimTier()` type guard (String? in schema). |
 | `src/modules/territory/claim.routes.ts` (Session 26) | `POST /territories/:id/claim` with `requireAuth` preHandler. Maps statusCode to 400/401/402/404/409/500. Response: `{ territory, freeClaim, goldCost }`. |
+| `src/modules/territory/contest.costs.ts` (Session 27) | `CONTEST_IRON_COST = { small: 8, medium: 20, large: 45, epic: 80 }`. `TIER_LEVEL_GATE = { small: 1, medium: 1, large: 4, epic: 7 }`. `ContestTier` type + `isContestTier()` guard. Lowercase tier keys match DB. |
+| `src/modules/territory/contest.formulas.ts` (Session 27) | TS port of `calcRequiredContestWalk` from mobile `formulas.js`. Self-contained — no external imports. Internal constants: `STREAK_TIER_THRESHOLDS`, `STREAK_MULT_TIER_CAP`, `DEV_CONTEST_MULT`, `RALLY_CRY_FACTOR`, `SIEGE_BOOST_DISTANCE_FACTOR`, `REQUIRED_WALK_HARD_CAP`, `CONTEST_WALK_ROUNDING_M`. Takes JS-flavoured input names; adapter in `contest.queries.ts` maps from DB column names (`perimeter_distance`, `development_level`, `current_streak`). |
+| `src/modules/territory/contest.queries.ts` (Session 27) | Pre-tx reads on singleton: `findPlayerByClerkIdForContest` (id, level, iron, current_streak, home_timezone), `findTerritoryForContest` (id, territory_name, tier, perimeter_distance, development_level, owner_id, alliance_id), `findActiveContestForTerritory` (returns active contest or null — friendly 409), `findPlayerStreakDays` (defender streak for formula). In-tx writes take `tx`: `insertContestRow` (16 cols including frozen `required_walk_m`, `attack_day_date` from player.home_timezone), `deductAttackerIron`, `writeContestInitiatedActivityLog` (event_type='contest_participated'). |
+| `src/modules/territory/contest.service.ts` (Session 27) | Validation pipeline: player exists (401/404) → territory exists (404) → tier valid (400) → has owner (400) → not own territory (400) → level gate (400) → time window 05:00–23:00 via `Intl.DateTimeFormat` + `player.home_timezone` (400) → **Attack Day check DEFERRED with TODO** (Wed/Sat/Sun, blocked because Session 27 build day was a Friday) → no active contest (409) → iron balance (402). Then `prisma.$transaction(tx => insertContestRow + deductAttackerIron + writeContestInitiatedActivityLog)`. Returns `{ contest, requiredWalkM, ironCost }`. |
+| `src/modules/territory/contest.routes.ts` (Session 27) | `POST /territories/:id/contest` with `requireAuth` preHandler. Maps statusCode to 400/401/402/404/409/500. Response: `{ contest, requiredWalkM, ironCost }`. |
+| `scripts/backfill-home-timezone.ts` (Session 27) | One-shot Node tsx script. Reads all players, derives IANA tz from `home_pin_lat/lng` via `tz-lookup`, prints `UPDATE players SET home_timezone = '<tz>' WHERE id = '<uuid>';` statements to stdout. Does NOT write to DB — output reviewed and applied manually in Supabase. 7 rows backfilled (4× Europe/Moscow, 3× Europe/Amsterdam). Pattern worth reusing for any small backfill. |
+| `src/shared/redis.ts` (Session 28) | ioredis singleton. Reads `REDIS_URL` from env, throws on missing. Config: `maxRetriesPerRequest: null`, `enableReadyCheck: false` (both required by BullMQ), `family: 0` (allows IPv6, needed for Railway public endpoint locally). Logs `[redis] connected` on ready, `[redis] error` on error. Import surface: `import { redis } from "../shared/redis.js"`. |
+| `src/shared/queue.ts` (Session 28) | BullMQ infra. Exports `testQueue` (named "test-queue") + `testWorker` — both share the redis singleton via `{ connection: redis }`. Worker handler logs `[worker] processing job <id> with data: ...`, returns `{ processed: true, jobId }`. Event listeners log `[worker] completed job <id>` / `[worker] failed job <id>: <err>`. Side-effect imported in `server.ts` (`import "./shared/queue.js"`) so the worker boots with the app. **Real production queues land Session 30+** — this is scaffolding to prove infra works. |
+| `src/shared/ably.ts` (Session 28) | Singleton `Ably.Rest` client. Reads `ABLY_API_KEY` from env, throws on missing. **REST not Realtime** — backend only publishes, no persistent WebSocket needed. Mobile will use the Realtime client for subscriptions (Session 30+). Import surface: `import { ably } from "../shared/ably.js"`. Usage: `await ably.channels.get("channel-name").publish("event-name", payload)`. |
+| `src/modules/health/routes.ts` (Session 21, extended Session 28) | `GET /healthcheck` — unauthenticated. Now pings Redis: returns `{ status: "ok", redis: "PONG" }` on success, 503 `{ status: "degraded", redis: "error", error }` on `redis.ping()` failure. |
+| `src/modules/debug/routes.ts` (Session 28) | Debug-only routes for verifying infra. `POST /debug/enqueue-test` — adds a `test-job` to `testQueue` with `{ message, timestamp }`, returns `{ enqueued: true, jobId }`. `POST /debug/publish-test` — publishes a `test-event` to `"test-channel"` via Ably, returns `{ published: true, channel, event }`. Entire plugin gated behind `NODE_ENV !== 'production'` (early return — registers no routes in prod, returns 404). Both routes are unauthenticated. **Remove once real BullMQ jobs and Ably publishes exist in business logic (Session 30+).** |
 | `src/{jobs,notifications}/.gitkeep` | Placeholder dirs that lock in the target module structure even before each module has real code. |
 
 ---
@@ -648,8 +664,22 @@ npm run build
 # Production start (what Railway runs)
 npm start
 
-# Test live healthcheck against Railway URL
+# Test live healthcheck against Railway URL — Session 28 now also pings Redis
 curl https://dominia-backend-production.up.railway.app/healthcheck
+# Expected: {"status":"ok","redis":"PONG"}
+
+# Session 28 — Test BullMQ enqueue (local only — debug routes 404 in prod)
+Invoke-WebRequest -Uri "http://localhost:3000/debug/enqueue-test" `
+  -Method POST -ContentType "application/json" -Body "{}" -UseBasicParsing `
+  | Select-Object -ExpandProperty Content
+# Expected: {"enqueued":true,"jobId":"<n>"}; dev server logs [worker] processing/completed
+
+# Session 28 — Test Ably publish (local only — debug routes 404 in prod)
+Invoke-WebRequest -Uri "http://localhost:3000/debug/publish-test" `
+  -Method POST -ContentType "application/json" -Body "{}" -UseBasicParsing `
+  | Select-Object -ExpandProperty Content
+# Expected: {"published":true,"channel":"test-channel","event":"test-event"};
+# verify in Ably dashboard → Overview → Live stats → "Total inbound messages" ticks up
 
 # Prisma (NEW Session 22) — schema is the live Supabase DB, mirrored via introspection
 npx prisma db pull --print           # Dry-run introspect, prints schema to stdout
@@ -1092,6 +1122,12 @@ These are bugs that have already cost significant debugging time. Learn the sign
   This shows the model header + the next 80 lines (covers any sensible model size). Then inspect that block for the column. Only act on the flag once you've verified what columns are actually on the target model.
 - **General lesson:** Agents make schema-read mistakes especially around polymorphic column names. The 30-second verification step (view the actual block) prevents minutes of confusion and bad fixes. Same pattern applies to any "this thing doesn't exist" claim from an agent.
 
+**47. ESM relative imports without `.js` extension crash on Railway but pass locally (Session 28)**
+- **Signature:** Local dev works fine. Push to Railway. Deploy logs show `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/app/dist/shared/queue' imported from /app/dist/server.js`. `npm run typecheck` was clean before push; the error only surfaces at production runtime.
+- **Cause:** The backend is `"type": "module"` (ESM). ESM resolution in Node.js requires explicit file extensions in relative imports — `./shared/queue.js`, not `./shared/queue`. The TS file is named `queue.ts` but post-compile the import target is `queue.js`. Dev runtime (`tsx`) uses TypeScript-style resolution and is forgiving; production (`node dist/server.js`) is strict and fails. `tsc --noEmit` doesn't catch this because it's a runtime resolution issue, not a type issue.
+- **Fix:** Add `.js` to every relative import between TS files: `import "./shared/queue.js"`, `import { redis } from "./redis.js"`, etc. Bare imports of npm packages (`from "ioredis"`, `from "bullmq"`) do NOT need the extension. Always run `npm run build` (not just `npm run typecheck`) before pushing — full `tsc` produces the same dist output Railway runs, surfacing this issue locally.
+- **General lesson:** Two preventive habits going forward. (1) Default to including `.js` in every new relative import — auto-pilot — even though the source file is `.ts`. (2) `npm run build` is the pre-push gate for backend changes that touch imports, not `npm run typecheck`. Same family as Pitfall #41 (Prisma 7 runtime subpath imports passing typecheck but failing build).
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -1154,11 +1190,11 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 - Real step tracking — Health Connect verified read-only foreground (Session 16); wired into ActivityScreen daily challenges with 10s poll + live weekly chart (Session 17); standalone APK end-to-end claim verified on a real outdoor walk (Session 19). Session C remaining: TaskManager-owned distance loop + foreground service GPS + live HC step reads for ActiveClaimScreen (Bug 1 — next session). Per-tick `DIAG_CALIBRATION` already in place to validate.
 - Background step reads (`READ_HEALTH_DATA_IN_BACKGROUND` permission) — granted in manifest, not yet requested from user. Only needed when app is closed; defer until "always-on tracking" feature
-- Defender flow — needs Ably real-time layer
+- ~~Defender flow — needs Ably real-time layer~~ → **Ably layer LIVE Session 28.** Defender endpoint is the immediate Session 29 task.
 - Alliance disband flow — no real gameplay use case
 - Alliance chat — post-MVP
 - Onboarding home pin 500m verification
-- ~~Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase~~ → **Fastify backend LAUNCHED Session 21** (live on Railway with `/healthcheck` + `/me` + Clerk auth + Supabase service-role client). BullMQ + Ably + FCM still queued — wire as features land.
+- ~~Backend (Fastify, BullMQ, Ably, FCM) — not started, separate phase~~ → **Fastify backend LIVE Session 21**; **Redis + BullMQ + Ably infra LIVE Session 28** (`shared/redis.ts`, `shared/queue.ts`, `shared/ably.ts`). FCM still queued — wire when push notifications land.
 - **Phase 2 of SPB territory pool** — merging existing sub-tier OSM-named SPB territories (485 of them) into the unified gap-fill pool. Phase 1 was greenfield gap-fill only; Phase 2 deferred.
 - **Amsterdam gap-fill pipeline** — expected ≤30 new fill blocks. Not run yet. Run after SPB nested-territories cleanup completes and pipeline is proven idempotent.
 - Custom Mapbox night style swap-back (currently `light-v11` for dev)
@@ -1168,41 +1204,43 @@ These are bugs that have already cost significant debugging time. Learn the sign
 
 ## WHAT'S NEXT
 
-**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH, SUPABASE SERVICE-ROLE, PRISMA 7 WIRED VIA ADAPTER-PG ✓ | PLAYER MODULE FULLY ON PRISMA: GET /me + PATCH /me + POST /me/home-pin (now auto-derives home_timezone via tz-lookup) ✓ | TERRITORY GET LIVE (Supabase RPC pass-through) ✓ | TERRITORY ABANDON LIVE WITH FULL TRANSACTIONAL SIDE EFFECTS ✓ | TERRITORY CLAIM LIVE WITH OPTIMISTIC RACE GUARD, GOLD DEDUCTION, FREE-CLAIM RULE, HISTORY INSERT, ACTIVITY LOG ✓ | TERRITORY CONTEST (INITIATE) LIVE WITH IRON DEDUCTION, FROZEN required_walk_m, SINGLE-CONTEST RULE (app + DB partial-unique-index), 05:00–23:00 TIME WINDOW, ACTIVITY LOG ✓**
+**MVP SCREENS BRANDED ✓ | GAME MATH ENGINE COMPLETE ✓ | RESOURCE ECONOMY ✓ | TERRITORY HISTORY + LEGACY RANK ✓ | 348 TESTS PASSING ✓ | SIEGE XP WIRED ✓ | POWER SECTION ✓ | WAR ROOM ACTIVATE WIRED ✓ | MORALE DONATION LIVE ✓ | POSTGIS VIEWPORT FETCH ✓ | SPB FULL CITY COVERAGE: 8,295 TERRITORIES, NAMED, DISAMBIGUATED, DISTRICT-ASSIGNED ✓ | MAP RENDER PERFORMANCE TILE-LIKE ✓ | HEALTH CONNECT READ-ONLY VERIFIED ✓ | ACTIVITY SCREEN LIVE STEP-DRIVEN ✓ | STANDALONE PREVIEW APK BUILT + END-TO-END CLAIM VERIFIED ON A REAL OUTDOOR WALK ✓ | CLAIM LOOP TASKMANAGER-OWNED, SCREEN-SLEEP RESILIENT ✓ | CHALLENGE CASCADE DB-LEVEL IDEMPOTENT ✓ | BACKEND LIVE: FASTIFY + TS ON RAILWAY, CLERK AUTH, SUPABASE SERVICE-ROLE, PRISMA 7 WIRED VIA ADAPTER-PG ✓ | PLAYER MODULE FULLY ON PRISMA: GET /me + PATCH /me + POST /me/home-pin (now auto-derives home_timezone via tz-lookup) ✓ | TERRITORY GET LIVE (Supabase RPC pass-through) ✓ | TERRITORY ABANDON LIVE WITH FULL TRANSACTIONAL SIDE EFFECTS ✓ | TERRITORY CLAIM LIVE WITH OPTIMISTIC RACE GUARD, GOLD DEDUCTION, FREE-CLAIM RULE, HISTORY INSERT, ACTIVITY LOG ✓ | TERRITORY CONTEST (INITIATE) LIVE WITH IRON DEDUCTION, FROZEN required_walk_m, SINGLE-CONTEST RULE (app + DB partial-unique-index), 05:00–23:00 TIME WINDOW, ACTIVITY LOG ✓ | REAL-TIME INFRA LIVE: REDIS + BULLMQ + ABLY ALL DEPLOYED, healthcheck pings Redis, debug routes verify enqueue + publish locally ✓**
 
-**Immediate — Session 28 — INFRA: Redis + BullMQ + Ably setup.**
+**Immediate — Session 29 — `POST /contests/:id/defend` (defender accepts active contest).**
 
-This is a foundation session. No new endpoints, no new game logic. Purpose: stand up the three deferred shared modules that the contest defence + resolution endpoints (Sessions 29, 30+) will depend on.
+The defender (territory owner — or fallback to any same-alliance member, TBD) taps Defend on an active contest. This endpoint locks in their participation and freezes their starting position for distance tracking. No resolution logic yet — that lands Session 30+ alongside distance ingestion.
 
-Concrete checklist for Session 28:
+Expected behaviour (subject to walkthrough at session start):
 
-1. **Add a Redis service in Railway.** Single instance, free-tier appropriate. Capture the `REDIS_URL` env var (Railway exposes a public + private URL — use the internal one to avoid egress charges).
-2. **Add an Ably account** (free tier — 3M monthly messages should be ample for testing). Generate an API key with publish + subscribe + presence scopes. Add `ABLY_API_KEY` to Railway env vars + local `.env`.
-3. **`src/shared/redis.ts`** — singleton ioredis client. Reads `REDIS_URL`. Healthcheck function (`PING` → expects `PONG`). Same singleton pattern as `src/shared/prisma.ts` — globalThis cached for tsx-watch survival.
-4. **`src/shared/queue.ts`** — BullMQ queue definitions. Decide upfront which named queues exist (likely `contest-expiry`, `defender-lapse-check`, `notification-dispatch`). Each queue has its own connection options pointing at the shared Redis singleton.
-5. **`src/shared/ably.ts`** — Ably REST client init (server-side publishing only for now; subscribers are the mobile app). Channel naming convention: `alliance:<id>`, `territory:<id>`, `player:<id>:notifications`. Helper for publishing typed events.
-6. **`src/jobs/` directory** — ONE canonical worker to validate the pattern. Pick the simplest of the queued jobs: probably `contest-expiry` (scheduled job that fires at 23:59 home-pin time per contest and resolves expired ones). Worker is thin — delegates to a service function.
-7. **Smoke tests** — one minimal exercise per shared module:
-   - Redis: `await redis.ping()` returns `'PONG'`.
-   - BullMQ: enqueue a dummy job, worker picks it up + ack, queue drains.
-   - Ably: publish a test message to a channel, manually verify in Ably dashboard.
-8. **Add `GET /healthcheck` extensions** (or a separate `/healthcheck/deep`) that pings Redis + Ably so deploy health checks can detect outages.
+1. Pre-tx validation: player exists (401/404) → contest exists + active (404/409) → player is defender_id (territory owner) OR same-alliance member (TBD) (403) → contest not already defended — `defender_player_id IS NULL` (409) → home_timezone time window check 05:00–23:00 (400) → optional Stone buff cost validation (402 if requested but insufficient).
+2. Compute `defender_response_ratio` — 1.0 with Stone active, 1.25 without. **Stone activation mechanics TBD** — either passed in request body, auto-detected from active buffs, or stubbed to always-without-Stone for first pass.
+3. Snapshot the defender's starting walk distance — **TBD** whether this comes from a `defender_starting_walk_m` column read from a separate "tracking session start" record, or from the contest row itself (add a column), or is computed at resolution time only.
+4. Transaction: update `contests` row with `defender_player_id`, `defender_response_ratio`, and any starting-distance snapshot. Optionally deduct Stone. Write `activity_log` row with new `event_type='contest_defended'` (will need DROP + ADD CONSTRAINT pattern — see pitfall ~46).
+5. Side effect (optional, can defer to Session 30): publish Ably event on `contest:<id>` channel so the attacker's app sees "defender accepted" in real time. First real use of `shared/ably.ts`.
 
-**Carried open sub-questions for the start of Session 28:**
-- Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over to backend `GET /territories` still pending — defer until Ably realtime layer is wired so the migration ships with realtime invalidation in the same change.
+**Open questions to resolve at the top of Session 29:**
+
+- **Who can defend?** Only the territory owner (defender_id), or any same-alliance member? Mechanics spec §7.4 implies any alliance member can step in — need to confirm before locking auth check.
+- **How is Stone activation signalled?** Client passes `{ useStone: true }` in body, server checks player's stone balance + deducts. Alternative: server checks if Stone was activated within last N minutes via a separate buffs table (which doesn't exist yet). Going with explicit body field is simpler.
+- **Defender starting-distance snapshot location** — new column on `contests` (`defender_starting_walk_m`) vs. computed at resolution. New column is simpler; matches the "freeze at initiate, not resolve" pattern from `required_walk_m`.
+- **Activity log event_type** — need to add `'contest_defended'` to the CHECK constraint whitelist. Same DROP + ADD CONSTRAINT migration pattern as Session 25's `'territory_abandoned'`.
+
+**Carried open sub-questions:**
+- Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over to backend `GET /territories` deferred until Ably realtime layer is wired so the migration ships with realtime invalidation in the same change.
 - Mobile direct `supabase.from('players').update(...)` calls are divergent state since `PATCH /me` and `POST /me/home-pin` exist. Audit + migrate when next touching mobile.
 - Add `cors` to Fastify before the mobile app starts hitting the backend (still queued from Session 23).
-- `findPlayerAllianceId` is still a stub in `claim.queries.ts` — wire when alliance module lands.
+- `findPlayerAllianceId` is still a stub in `claim.queries.ts` — wire when alliance module lands. **Session 29 will also need to read alliance membership for the "any alliance member can defend" check** — if that's the decision, the stub needs to be replaced first.
 - Claim Gold reward (+10/+20/+50/+100 per tier) deferred until first-earn notification plumbing lands.
 - 402 insufficient-resource path on claim + contest both untested (mechanically identical to 409, skipped). Worth one test when next touching the endpoints.
 - Attack Day check (Wed/Sat/Sun) on contest endpoint deferred with TODO. Wire when ready using `player.home_timezone` via `Intl.DateTimeFormat`.
-- Consider a Prisma migrations setup — activity_log CHECK constraint extensions (`contest_won`, `contest_lost`, `contest_expired`, `alliance_joined`, etc.) will become recurring pain without one. Currently at 5 event_types in the whitelist.
+- Consider a Prisma migrations setup — activity_log CHECK constraint extensions (`contest_defended`, `contest_won`, `contest_lost`, `contest_expired`, `alliance_joined`, etc.) will become recurring pain without one. Currently at 5 event_types in the whitelist; Session 29 will likely add a 6th.
 - `home_timezone` is NOT NULL — confirm that the `lib/auth.js ensurePlayer()` pathway (mobile-side player row creation) sets it, otherwise new signups will fail the constraint.
+- **Mobile Ably client not yet integrated.** First subscribe will land Session 30+ when there's a real channel to listen to (contest live distance updates). Decide scoped-key vs token auth before that session.
+- **Debug routes (`/debug/enqueue-test`, `/debug/publish-test`) still in repo.** Remove once real BullMQ jobs + Ably publishes exist in business logic — Session 30+ at latest.
 
-**Backlog — backend, after Session 28 infra lands:**
+**Backlog — backend, after Session 29 lands:**
 
-- **Session 29: `POST /contests/:id/defend`** — defender taps Defend. Validation: contest active, defender is in defending alliance, optional 10 Stone activation. Sets `defender_player_id` + `defender_response_ratio` on the contests row. Defender lapse timer (15-min zero-step rule) is a BullMQ recurring job. Fires Ably push to alliance chat.
-- **Session 30+: Distance ingestion + contest resolution** — the critical write path. Continuous Walk Rule (15-min pause reset), vehicle speed filter (>25 km/h), real-time counter updates, resolution evaluation (whoever hits target first wins; 23:59 expiry as fallback). Architecture decision: ingestion via REST POST batches vs Ably channel.
+- **Session 30+: Distance ingestion + contest resolution** — the critical write path. Continuous Walk Rule (15-min pause reset), vehicle speed filter (>25 km/h), real-time counter updates, resolution evaluation (whoever hits target first wins; 23:59 expiry as fallback). Architecture decision: ingestion via REST POST batches vs Ably channel. First real BullMQ job: 23:59 home-pin-time contest expiry. First real Ably channel: `contest:<id>` live distance updates.
 - **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit.
 - **Generate Supabase types** for the backend `Database` type. Currently `any` (only used by territory GET module now).
 - **Mobile migration: `MapScreen` from direct RPC → backend `GET /territories`** — cut-over when realtime invalidation via Ably is wired.
@@ -1223,10 +1261,12 @@ Concrete checklist for Session 28:
 - Flip `DIAG_CALIBRATION` to false (or remove) — keep on for now while still building new claim functionality
 - Flip `DEV_MODE_MANUAL` on ActivityScreen.js back to false when no longer needed for manual challenge testing (currently TRUE)
 
-**Queued — Ably real-time integration (lands as part of Session 28 infra):**
-- Subscribe to `territory:updated` channel from mobile
-- On event, call `featureCacheRef.current.delete(territoryId)` and trigger re-render
-- Integrates cleanly with existing `handleTerritoriesRefetched(territoryId)` pattern already in MapScreen.js
+**Queued — Ably real-time integration (mobile side — backend infra LIVE Session 28):**
+- Add Ably Realtime client to mobile (`ably` npm package, Realtime not REST). Decide scoped-key vs token auth before integration.
+- Subscribe to `territory:updated` channel from mobile.
+- On event, call `featureCacheRef.current.delete(territoryId)` and trigger re-render.
+- Integrates cleanly with existing `handleTerritoriesRefetched(territoryId)` pattern already in MapScreen.js.
+- First real subscribe will land Session 30+ (contest live distance updates on `contest:<id>`).
 
 **Queued — Amsterdam gap-fill:**
 - Rerun the SPB pipeline pattern on Amsterdam envelope. Expected ≤30 new fill blocks. Validate same pipeline is idempotent across cities before adding Bengaluru / other cities.
@@ -1455,6 +1495,12 @@ Concrete checklist for Session 28:
 | **Backfill via a script that PRINTS UPDATE statements to stdout, not one that writes directly (Session 27)** | The home_timezone backfill needed to derive tz for each existing player. Two patterns: (A) script that calls `prisma.players.update()` in a loop directly, (B) script that prints the SQL UPDATE statements for human review + manual paste into Supabase. Picked B. Reasons: (1) review-before-mutate is safer for one-shot scripts that touch every row in a table, (2) the 7-row output was easy to eyeball-validate (4× Europe/Moscow matched SPB players, 3× Europe/Amsterdam matched NL players), (3) the script becomes a reusable audit tool rather than a one-shot ghost. Pattern worth reusing for any future small backfills. |
 | **Clerk token batching: assign `$token` once, run ALL test invocations in one Warp paste (Session 27)** | Clerk tokens expire in ~60s. In Session 27, the first attempt at testing the contest endpoint failed because `$token` was assigned, then individual test commands were pasted one at a time, and by the time the 2nd request fired the token had expired. Pattern that works: paste a single Warp block with `$token = "..."` at the top followed by all N `try { Invoke-WebRequest ... } catch { ... }` calls. The whole block executes in under 5 seconds. Documented in IMPORTANT COMMANDS. Same lesson applies to any short-lived bearer token testing. |
 | **For contest testing where attacker owns every territory: temporarily transfer ONE to a player in a DIFFERENT alliance (Session 27)** | nish_s owns all 7 claimed territories in the test DB. Testing the contest endpoint requires an enemy target. Three options: (A) test as a different player (needs that player's Clerk token), (B) use a player in the same alliance as nish_s (creates same-alliance edge case we're not testing), (C) temporarily transfer a territory to a player in a DIFFERENT alliance. Picked C. Reasons: (1) one UPDATE, fully reversible, (2) tests the realistic "attack an enemy" flow, (3) cross-alliance test data avoids the same-alliance edge case. Used Alyona (different alliance from nish_s) as the temporary owner of Рашетова улица. Restored after testing. Pattern worth reusing. |
+| **Ably REST client on backend, not Realtime (Session 28)** | Two Ably client modes: `Ably.Rest` (stateless HTTP publish) and `Ably.Realtime` (persistent WebSocket, publish + subscribe + presence). Backend only needs to publish events — it doesn't subscribe to anything, doesn't track presence, and doesn't benefit from a persistent connection. Picked REST. Reasons: (1) stateless = no connection lifecycle to manage, (2) cheaper on the Ably side (one published msg vs maintained connection), (3) survives serverless / restart-heavy environments cleanly, (4) Mobile uses Realtime client to subscribe — that's where the persistent connection lives. Trigger to revisit: if backend ever needs to subscribe (e.g. mirror a mobile-published event into the DB). |
+| **Pub/Sub product selected at Ably signup — does not restrict the app (Session 28)** | Ably onboarding asks which product the app uses (Pub/Sub, Chat, LiveSync, LiveObjects, Spaces, AI Transport). All products are enabled on every app regardless of choice — the screen is for documentation recommendations, not feature gating. Picked Pub/Sub. Dominia uses pure pub/sub (contest channels, territory updates, alliance notifications). Chat would only matter if in-app player messaging were built; LiveSync is for DB→frontend sync which isn't this app's pattern. No migration cost if priorities change later. |
+| **Single Root API key for backend, decide mobile auth strategy at Session 30+ (Session 28)** | Ably gives one default "Root" API key with all capabilities (publish + subscribe + presence + admin). For the backend (server-side only), Root key is correct — never leaves the env var. For mobile, options are: (A) ship a scoped key with subscribe-only + specific channel patterns, (B) issue short-lived tokens via a backend endpoint (`/ably/token-request`) that mobile fetches before connecting. Option B is more secure (revocable per-user) but adds a backend endpoint. Decision deferred until Session 30+ when mobile actually needs to subscribe. Note: any debug routes that use Root capabilities (`/debug/publish-test`) are gated behind NODE_ENV !== 'production' for the same security reason — Root capabilities shouldn't be exposed in prod. |
+| **Redis env var via Railway reference variable, not pasted value (Session 28)** | Railway lets you wire env vars two ways: paste the literal value, or use a reference like `${{Redis.REDIS_URL}}` that auto-resolves. Picked reference. Reason: if Railway's Redis instance is ever recreated or credentials rotate, the backend service automatically picks up the new URL on next deploy — no manual env var update needed. Trade-off: only works within the same Railway project's private network (no egress). For local dev, `.env` uses `REDIS_PUBLIC_URL` because the reference variable is meaningless outside Railway's runtime. Cost: keeping two URL values in sync mentally; benefit: zero ops on credential rotation. |
+| **Debug routes (`/debug/*`) gated behind NODE_ENV !== 'production', not a separate admin auth layer (Session 28)** | The debug routes for testing BullMQ enqueue + Ably publish need to be unauthenticated for fast local testing (no Clerk token dance), but must NEVER be reachable in prod. Two options: (A) require an admin token + add a `/debug` auth layer, (B) just register no routes when `NODE_ENV === 'production'` (the gate is early-return in the plugin). Picked B. Reasons: (1) the routes are scaffolding — they'll be removed once real BullMQ jobs and Ably publishes exist in business logic; building an auth layer for code-to-be-deleted is waste, (2) Railway sets `NODE_ENV=production` automatically, so the gate is reliable, (3) verified via prod test: hitting `/debug/enqueue-test` returns 404 (route not registered). Trigger to remove gate entirely: when Session 30+ ships real publishes and the debug routes are deleted. |
+| **CRITICAL ESM gotcha — explicit `.js` extensions REQUIRED in relative imports for production (Session 28)** | The backend is configured `"type": "module"` in `package.json` and compiles TypeScript to ESM JavaScript. ESM resolution in Node.js is STRICT: relative imports must include the file extension (`./foo.js`), not just the bare name (`./foo`). The dev runtime (`tsx`) is forgiving and resolves bare paths via TypeScript-style resolution, but production (`node dist/server.js`) refuses to resolve them and crashes with `ERR_MODULE_NOT_FOUND`. Session 28's first BullMQ deploy crashed exactly this way — `import "./shared/queue"` worked locally but failed on Railway. Pattern locked: **ALL relative imports between TS files must end in `.js`** (the post-compile extension, not `.ts`). Bare imports of npm packages (`from "ioredis"`) do NOT need the extension. ALWAYS run `npm run build` (not just `npm run typecheck`) before pushing — `tsc --noEmit` doesn't catch this; full `tsc` does. Same family as the Session 23 `PrismaClientKnownRequestError` import path issue. |
 
 ---
 
@@ -1478,5 +1524,7 @@ Do not start coding immediately. Work conversationally:
 - **Filter / validate at the source, not at the client.** One bad row can silently break the whole UI. Server-side guards (PostGIS `ST_IsValid`, RPC argument checks, atomic transactions) are always cheaper than client-side defensive code.
 - **When Cursor proposes shell commands (node -e, PowerShell) for tasks that are file edits:** SKIP, don't allowlist, redirect to use file tools only.
 - **Never `git add .`** — always specify files. Local-only dev scripts and `.env` artefacts have already been kept out of the repo by this rule. **Especially critical with two repos** — `git add .` in the wrong repo could pull in unintended files.
+- **Always verify with `git diff --stat` before staging on Windows (Session 28).** Cursor opening files can cause CRLF/LF noise in `git status` — files appear modified but content is byte-identical. `git diff --stat` shows actual line changes; ignore any file with 0 inserts/deletes. Stage only the files with real changes.
+- **`npm run build` is the pre-push gate for backend changes that touch imports (Session 28).** `npm run typecheck` (`tsc --noEmit`) does NOT catch ESM `.js` extension issues or wrong runtime subpath imports — both of which crash on Railway. Full `tsc` produces the same `dist/` output Railway runs, so building locally surfaces these issues before push. Run after every Cursor edit that adds or modifies an import.
 - **When the same problem resists multiple targeted fixes, the fix isn't another tweak — it's the architecture.** Session 5's wedge-transport problem became moot in Session 6 once the architecture changed; Session 13's "no SPB territories" problem became moot once the gap-fill pipeline replaced one-by-one OSM curation.
 - **Crisp responses, recommend one option not pros/cons. No decisions without explicit user confirmation.**
