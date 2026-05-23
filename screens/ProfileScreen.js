@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
+import { clearFcmToken } from '../lib/fcm';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
 import {
@@ -70,7 +71,7 @@ function SettingsRow({ label }) {
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const today = useMemo(() => new Date(), []);
-  const { signOut, userId } = useAuth();
+  const { signOut, userId, getToken } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [playerRow, setPlayerRow] = useState(null);
@@ -465,6 +466,11 @@ export default function ProfileScreen() {
                         text: 'Sign out',
                         style: 'destructive',
                         onPress: async () => {
+                          try {
+                            await clearFcmToken({ clerkGetToken: getToken });
+                          } catch (err) {
+                            console.warn('[fcm] clear on sign-out failed:', err?.message);
+                          }
                           await signOut();
                           navigation.replace('SignIn');
                         },
