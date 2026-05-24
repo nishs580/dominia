@@ -10,7 +10,7 @@ import {
   readRecords,
 } from 'react-native-health-connect';
 import { supabase } from '../lib/supabase';
-import { updateStreakOnChallengeComplete } from '../lib/streak';
+import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
 
 function levelFromXp(xp) {
@@ -194,7 +194,7 @@ function WeeklyBarChart({ data }) {
 }
 
 export default function ActivityScreen() {
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -342,120 +342,60 @@ export default function ActivityScreen() {
     if (isCompleting.has(ch.key)) return;
 
     setIsCompleting((prev) => new Set([...prev, ch.key]));
-    const prevXp = playerXp;
-    const prevLevel = levelFromXp(prevXp);
-    const shouldUpdateStreak = completedKeys.size === 0;
 
-    // optimistic UI
+    // Snapshot pre-state for rollback on failure.
+    const prevXp = playerXp;
+    const prevLevel = playerLevel;
+    const prevStreak = currentStreak;
+
+    // Optimistic UI — mark done immediately, add expected XP optimistically.
     setCompletedKeys((prev) => new Set([...prev, ch.key]));
     setPlayerXp((prev) => Math.max(0, Number(prev) || 0) + ch.xp);
     setPlayerLevel(levelFromXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
 
     try {
-      // Idempotent insert — only proceed with payout if a NEW row was created
-      const { data: insertedRows, error: insertError } = await supabase
-        .from('player_challenges')
-        .insert({
-          player_id: playerId,
-          challenge_key: ch.key,
-          date: todayStr,
-        })
-        .select();
+      const result = await backendCompleteChallenge({
+        clerkGetToken: getToken,
+        challengeKey: ch.key,
+        tier: ch.key,
+        earnKey: ch.earnKey,
+      });
 
-      // 23505 = unique_violation. Treat as "already completed today" — bail silently.
-      // Also bail if insert returned no rows for any reason.
-      const isDuplicate =
-        insertError?.code === '23505' || !insertedRows || insertedRows.length === 0;
-
-      if (isDuplicate) {
-        // The challenge IS done — keep optimistic UI (completedKeys already has ch.key,
-        // playerXp already optimistically incremented). Do NOT roll back.
-        // Refetch authoritative XP from DB to correct any optimistic-vs-reality drift.
-        const { data: authoritative } = await supabase
-          .from('players')
-          .select('xp, current_streak')
-          .eq('id', playerId)
-          .maybeSingle();
-        if (authoritative) {
-          const xpInt = Math.max(0, Number(authoritative.xp) || 0);
-          setPlayerXp(xpInt);
-          setPlayerLevel(levelFromXp(xpInt));
-          setCurrentStreak(Math.max(0, Number(authoritative.current_streak) || 0));
-        }
+      if (!result.ok) {
+        // Revert optimistic UI.
+        console.log('[onCompleteChallenge] backend failed', result.status, result.error);
+        setCompletedKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(ch.key);
+          return next;
+        });
+        setPlayerXp(prevXp);
+        setPlayerLevel(prevLevel);
         return;
       }
 
-      if (insertError) {
-        throw insertError;
-      }
+      // Sync UI to authoritative backend state.
+      const d = result.data;
+      setPlayerXp(d.total_xp);
+      setPlayerLevel(levelFromXp(d.total_xp));
+      setCurrentStreak(d.streak.current);
 
-      await supabase
-        .from('players')
-        .update({ xp: (Math.max(0, Number(prevXp) || 0) + ch.xp) })
-        .eq('id', playerId);
+      // If backend says it was already completed, keep optimistic completedKeys mark
+      // (it's correct — challenge IS done) but ensure XP reflects authoritative total.
+      // If newly completed, completedKeys already has ch.key from the optimistic insert.
 
-      const { error: logError } = await supabase
-        .from('activity_log')
-        .insert({
-          player_id: playerId,
-          event_type: 'challenge_completed',
-          xp_amount: ch.xp,
-          challenge_count: 1,
-          metadata: {
-            challenge_key: ch.key,
-            difficulty: ch.key,
-          },
-        });
-      if (logError) {
-        console.warn('[activity_log] challenge_completed write failed:', logError);
-      }
-
-      const newXp = Math.max(0, Number(prevXp) || 0) + ch.xp;
-      const newLevel = levelFromXp(newXp);
-      if (newLevel.level > prevLevel.level) {
-        await supabase.from('players').update({ level: newLevel.level }).eq('id', playerId);
-      }
-
-      const earned = calcResourceEarn(ch.earnKey);
-      console.log('Earned resources:', earned);
-      const { data: currentResources, error: resourceFetchError } = await supabase
-        .from('players')
-        .select('iron, stone, gold, morale')
-        .eq('id', playerId)
-        .maybeSingle();
-      console.log('Current resources:', currentResources, 'Fetch error:', resourceFetchError);
-      if (currentResources) {
-        const { error: resourceUpdateError } = await supabase
-          .from('players')
-          .update({
-            iron: (currentResources.iron ?? 0) + (earned.iron ?? 0),
-            stone: (currentResources.stone ?? 0) + (earned.stone ?? 0),
-            gold: (currentResources.gold ?? 0) + (earned.gold ?? 0),
-            morale: (currentResources.morale ?? 0) + (earned.morale ?? 0),
-          })
-          .eq('id', playerId);
-        console.log('Resource update error:', resourceUpdateError);
-      }
-
-      if (shouldUpdateStreak) {
-        await updateStreakOnChallengeComplete(playerId, prevXp);
-        const { data: streakRow } = await supabase
-          .from('players')
-          .select('current_streak')
-          .eq('id', playerId)
-          .maybeSingle();
-        setCurrentStreak(Math.max(0, Number(streakRow?.current_streak) || 0));
-      }
+      return d;
     } catch (e) {
-      console.error('onCompleteChallenge failed:', e?.message ?? e);
-      // revert if something goes wrong
+      // Should not reach here — backendCompleteChallenge never throws — but defensive.
+      console.error('onCompleteChallenge unexpected throw:', e?.message ?? e);
       setCompletedKeys((prev) => {
         const next = new Set(prev);
         next.delete(ch.key);
         return next;
       });
       setPlayerXp(prevXp);
-      setPlayerLevel(levelFromXp(prevXp));
+      setPlayerLevel(prevLevel);
+      setCurrentStreak(prevStreak);
     } finally {
       setIsCompleting((prev) => {
         const next = new Set(prev);
