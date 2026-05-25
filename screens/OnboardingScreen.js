@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
+import { setHomePin as saveHomePin } from '../lib/homePinApi';
 import { supabase } from '../lib/supabase';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
@@ -137,7 +138,7 @@ function NumberedRow({ num, title, subtitle, last = false }) {
 
 export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
-  const { userId: clerkUserId } = useAuth();
+  const { userId: clerkUserId, getToken } = useAuth();
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
   const [step, setStep] = useState(0);
   const [requesting, setRequesting] = useState(false);
@@ -504,15 +505,17 @@ export default function OnboardingScreen({ route }) {
       }
       setSavingPin(true);
       try {
-        const { error } = await supabase
-          .from('players')
-          .update({ home_pin_lat: homePin[1], home_pin_lng: homePin[0] })
-          .eq('id', resolvedPlayerId);
-        if (error) throw error;
+        const result = await saveHomePin({
+          clerkGetToken: getToken,
+          lat: homePin[1],
+          lng: homePin[0],
+        });
+        if (!result.ok) {
+          console.error('Home pin save failed:', result.status, result.error);
+          Alert.alert('Could not save', result.error || 'Please check your connection and try again.');
+          return;
+        }
         setStep(4);
-      } catch (err) {
-        console.error('Home pin save failed:', err);
-        Alert.alert('Could not save', err?.message ?? 'Please check your connection and try again.');
       } finally {
         setSavingPin(false);
       }

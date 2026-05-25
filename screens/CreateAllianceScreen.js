@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
+import { foundAlliance } from '../lib/allianceApi';
 import { supabase } from '../lib/supabase';
 import THEME from '../lib/theme';
 
@@ -24,12 +24,37 @@ const CLAIM = THEME.colors.claim;
 const HAIRLINE = THEME.colors.hairline;
 const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
+function mapFoundAllianceError(error) {
+  const code = error?.code ?? null;
+  switch (code) {
+    case 'short_name_taken':
+      return 'That short name is already taken. Pick another.';
+    case 'invalid_short_name':
+      return 'Short name must be exactly 3 uppercase letters.';
+    case 'invalid_full_name':
+      return 'Alliance name must be 3-32 characters.';
+    case 'already_in_alliance':
+      return 'You are already in an alliance.';
+    case 'hq_not_owned':
+      return 'You must own the HQ territory.';
+    case 'hq_city_mismatch':
+      return 'HQ must be in your home city.';
+    case 'level_too_low':
+      return 'You must be Level 6 to found an alliance.';
+    case 'player_not_found':
+      return 'Account error. Try signing out and back in.';
+    default:
+      return 'Could not create alliance. Try again.';
+  }
+}
+
 export default function CreateAllianceScreen() {
   const navigation = useNavigation();
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
 
   const [step, setStep] = useState(1);
   const [playerId, setPlayerId] = useState(null);
+  const [homeCity, setHomeCity] = useState(null);
   const [playerLoading, setPlayerLoading] = useState(true);
 
   const [allianceName, setAllianceName] = useState('');
@@ -42,24 +67,28 @@ export default function CreateAllianceScreen() {
   const [selectedTerritoryId, setSelectedTerritoryId] = useState(null);
 
   const [createSaving, setCreateSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     async function loadPlayer() {
       if (!userId) {
         setPlayerId(null);
+        setHomeCity(null);
         setPlayerLoading(false);
         return;
       }
       setPlayerLoading(true);
       try {
-        const { data, error } = await supabase.from('players').select('id').eq('clerk_id', userId).maybeSingle();
+        const { data, error } = await supabase.from('players').select('id, home_city').eq('clerk_id', userId).maybeSingle();
         if (cancelled) return;
         if (error) {
           console.error('CreateAllianceScreen player fetch:', error);
           setPlayerId(null);
+          setHomeCity(null);
         } else {
           setPlayerId(data?.id ?? null);
+          setHomeCity(data?.home_city ?? null);
         }
       } finally {
         if (!cancelled) setPlayerLoading(false);
@@ -133,10 +162,7 @@ export default function CreateAllianceScreen() {
     const { data, error } = await supabase.from('alliances').select('id').eq('short_name', codeUpper).maybeSingle();
     if (error) {
       console.error('CreateAllianceScreen code check:', error);
-      Alert.alert('Could not verify code', error.message ?? 'Please try again.');
-      return;
-    }
-    if (data) {
+    } else if (data) {
       setCodeError('That code is taken.');
       return;
     }
@@ -148,45 +174,32 @@ export default function CreateAllianceScreen() {
   const selectedTerritory = territories.find((t) => t.id === selectedTerritoryId);
 
   const handleCreate = async () => {
-    if (!userId || !playerId || !selectedTerritory) return;
+    if (!userId || !playerId || !selectedTerritory || createSaving) return;
     setCreateSaving(true);
+    setSubmitError('');
     try {
-      const { data: inserted, error: insertError } = await supabase
-        .from('alliances')
-        .insert({
-          name: allianceName.trim(),
-          short_name: code.trim().toUpperCase(),
-          city: 'Amsterdam',
-          founder_id: playerId,
-        })
-        .select('id')
-        .single();
-
-      if (insertError) throw insertError;
-      const newAllianceId = inserted?.id;
-      if (!newAllianceId) throw new Error('No alliance id returned');
-
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ alliance_id: newAllianceId })
-        .eq('clerk_id', userId);
-
-      if (updateError) throw updateError;
-
-      await supabase
-        .from('territories')
-        .update({ alliance_id: newAllianceId })
-        .eq('owner_id', playerId);
-
-      navigation.replace('AllianceJoined', {
-        allianceName: allianceName.trim(),
+      const result = await foundAlliance({
+        clerkGetToken: getToken,
+        fullName: allianceName.trim(),
         shortName: code.trim().toUpperCase(),
-        city: 'Amsterdam',
-        memberCount: 1,
+        hqTerritoryId: selectedTerritory.id,
       });
+
+      if (result.ok) {
+        navigation.replace('AllianceJoined', {
+          allianceId: result.data.alliance_id,
+          allianceName: allianceName.trim(),
+          shortName: code.trim().toUpperCase(),
+          city: homeCity ?? '—',
+          memberCount: 1,
+        });
+        return;
+      }
+
+      setSubmitError(mapFoundAllianceError(result.error));
     } catch (err) {
       console.error('Create alliance failed:', err);
-      Alert.alert('Could not create alliance', err?.message ?? 'Please try again.');
+      setSubmitError('Could not create alliance. Try again.');
     } finally {
       setCreateSaving(false);
     }
@@ -404,7 +417,7 @@ export default function CreateAllianceScreen() {
             </View>
             <View style={styles.sumRow}>
               <Text style={styles.sumLabel}>City</Text>
-              <Text style={styles.sumValue}>Amsterdam</Text>
+              <Text style={styles.sumValue}>{homeCity ?? '—'}</Text>
             </View>
           </View>
 
@@ -429,6 +442,7 @@ export default function CreateAllianceScreen() {
               </>
             )}
           </Pressable>
+          {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
         </ScrollView>
       )}
     </View>
@@ -542,6 +556,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: -10,
     marginBottom: 18,
+  },
+  submitError: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: CLAIM,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    lineHeight: 14,
   },
   micro: {
     fontFamily: 'GeistMono_400Regular',

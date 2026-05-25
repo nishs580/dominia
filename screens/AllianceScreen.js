@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance } from '../lib/allianceApi';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 
@@ -15,6 +16,48 @@ const SLATE2 = '#8B8F98';
 const ALLIANCE_GREEN = '#3F8F4E';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+
+function formatAllianceRole(role) {
+  if (!role) return 'MEMBER';
+  if (role === 'founder') return 'FOUNDR';
+  return role.toUpperCase();
+}
+
+function mapJoinAllianceError(error) {
+  const code = error?.code ?? null;
+  switch (code) {
+    case 'already_in_alliance':
+      return 'You are already in an alliance.';
+    case 'not_same_city':
+      return 'This alliance is in a different city.';
+    case 'level_too_low':
+      return 'You must be Level 6 to join an alliance.';
+    case 'alliance_full':
+      return 'This alliance is at full strength.';
+    case 'alliance_disbanded':
+      return 'This alliance has disbanded.';
+    case 'alliance_not_found':
+      return 'Alliance no longer exists.';
+    case 'player_not_found':
+      return 'Account error. Try signing out and back in.';
+    default:
+      return 'Could not join. Try again.';
+  }
+}
+
+function mapLeaveAllianceError(error) {
+  const code = error?.code ?? error?.error ?? null;
+  switch (code) {
+    case 'founder_must_transfer_first':
+      return 'Transfer founder role first.';
+    case 'player_not_found':
+      return 'Account error. Try signing out and back in.';
+    case 'not_in_alliance':
+      return 'You are not in an alliance.';
+    default:
+      return 'Could not leave. Try again.';
+  }
+}
 
 function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
@@ -39,36 +82,37 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
 
 function NonMemberContent({
   alliances,
-  userId,
+  playerHomeCity,
   onRefreshAfterJoin,
   navigation,
-  playerRow,
   confirmAlliance,
   setConfirmAlliance,
   joinSaving,
   setJoinSaving,
+  getToken,
 }) {
+  const [joinError, setJoinError] = useState('');
 
   const handleConfirmJoin = async () => {
-    if (!userId || !confirmAlliance) return;
+    if (!confirmAlliance || joinSaving) return;
     setJoinSaving(true);
+    setJoinError('');
     try {
-      const { error } = await supabase
-        .from('players')
-        .update({ alliance_id: confirmAlliance.id })
-        .eq('clerk_id', userId);
-      if (error) throw error;
+      const result = await joinAlliance({
+        clerkGetToken: getToken,
+        allianceId: confirmAlliance.id,
+      });
 
-      await supabase
-        .from('territories')
-        .update({ alliance_id: confirmAlliance.id })
-        .eq('owner_id', playerRow.id);
+      if (result.ok) {
+        setConfirmAlliance(null);
+        await onRefreshAfterJoin();
+        return;
+      }
 
-      setConfirmAlliance(null);
-      await onRefreshAfterJoin();
+      setJoinError(mapJoinAllianceError(result.error));
     } catch (err) {
       console.error('Join alliance failed:', err);
-      Alert.alert('Could not join', err?.message ?? 'Please try again.');
+      setJoinError('Could not join. Try again.');
     } finally {
       setJoinSaving(false);
     }
@@ -84,11 +128,8 @@ function NonMemberContent({
       >
         <View style={styles.confirmWrap}>
           <Text style={styles.confirmKicker}>Join alliance</Text>
-          <Text style={styles.confirmTitle}>{confirmAlliance.name}</Text>
+          <Text style={styles.confirmTitle}>Join {confirmAlliance.name}?</Text>
           <Text style={styles.confirmTag}>[{confirmAlliance.short_name}]</Text>
-          <Text style={styles.confirmBody}>
-            Your Alliance territories will display in Alliance green. This decision is permanent until you leave the alliance.
-          </Text>
 
           <Pressable
             accessibilityRole="button"
@@ -101,23 +142,28 @@ function NonMemberContent({
             ]}
           >
             {joinSaving ? (
-              <ActivityIndicator color={BONE} />
-            ) : (
               <>
-                <Text style={styles.ctaStep}>Confirm</Text>
-                <Text style={styles.ctaAction}>Join {confirmAlliance.name} →</Text>
+                <ActivityIndicator color={BONE} />
+                <Text style={[styles.ctaAction, { marginTop: 8 }]}>JOINING…</Text>
               </>
+            ) : (
+              <Text style={styles.ctaAction}>JOIN</Text>
             )}
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
             disabled={joinSaving}
-            onPress={() => setConfirmAlliance(null)}
+            onPress={() => {
+              setJoinError('');
+              setConfirmAlliance(null);
+            }}
             style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.cancelLinkText}>← Back to list</Text>
+            <Text style={styles.cancelLinkText}>CANCEL</Text>
           </Pressable>
+
+          {joinError ? <Text style={styles.joinError}>{joinError}</Text> : null}
         </View>
       </ScrollView>
     );
@@ -129,7 +175,7 @@ function NonMemberContent({
       <View style={styles.scroll}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionLabelText}>Alliances in</Text>
-          <Text style={styles.sectionLabelAccent}> Amsterdam</Text>
+          <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
           <View style={styles.sectionHairline} />
         </View>
         <View style={styles.emptyListWrap}>
@@ -155,7 +201,7 @@ function NonMemberContent({
     <View style={styles.scroll}>
       <View style={styles.sectionRow}>
         <Text style={styles.sectionLabelText}>Alliances in</Text>
-        <Text style={styles.sectionLabelAccent}> Amsterdam</Text>
+        <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
         <View style={styles.sectionHairline} />
       </View>
 
@@ -170,7 +216,10 @@ function NonMemberContent({
           <Pressable
             key={a.id}
             accessibilityRole="button"
-            onPress={() => setConfirmAlliance(a)}
+            onPress={() => {
+              setJoinError('');
+              setConfirmAlliance(a);
+            }}
             style={({ pressed }) => [
               styles.aRow,
               i === 0 && styles.aRowFirst,
@@ -208,44 +257,127 @@ function NonMemberContent({
   );
 }
 
-function MemberContent({ myAlliance, playerId, territoryCount }) {
+function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave }) {
   const navigation = useNavigation();
-  const [roster, setRoster] = useState([]);
+  const [leaveConfirmCase, setLeaveConfirmCase] = useState(null);
+  const [leaveSaving, setLeaveSaving] = useState(false);
+  const [leaveError, setLeaveError] = useState('');
+
+  const myMember = roster.find((m) => m.player_id === playerId);
+  const isFounder = myMember?.role === 'founder';
+  const rosterSize = roster.length;
+
+  const openLeaveConfirm = () => {
+    setLeaveError('');
+    if (isFounder && rosterSize > 1) {
+      setLeaveConfirmCase('blocked');
+    } else if (isFounder && rosterSize === 1) {
+      setLeaveConfirmCase('disband');
+    } else {
+      setLeaveConfirmCase('leave');
+    }
+  };
+
+  const closeLeaveConfirm = () => {
+    if (leaveSaving) return;
+    setLeaveError('');
+    setLeaveConfirmCase(null);
+  };
+
+  const handleLeaveSubmit = async () => {
+    if (leaveSaving || leaveConfirmCase === 'blocked') return;
+    setLeaveSaving(true);
+    setLeaveError('');
+    try {
+      const result = await leaveAlliance({ clerkGetToken: getToken });
+      if (result.ok) {
+        setLeaveConfirmCase(null);
+        await onRefreshAfterLeave();
+        return;
+      }
+      setLeaveError(mapLeaveAllianceError(result.error));
+    } catch (err) {
+      console.error('Leave alliance failed:', err);
+      setLeaveError('Could not leave. Try again.');
+    } finally {
+      setLeaveSaving(false);
+    }
+  };
+
+  if (leaveConfirmCase) {
+    const allianceName = myAlliance?.name ?? 'this alliance';
+    const title =
+      leaveConfirmCase === 'blocked'
+        ? 'Cannot leave yet'
+        : leaveConfirmCase === 'disband'
+          ? `Disband ${allianceName}?`
+          : `Leave ${allianceName}?`;
+    const body =
+      leaveConfirmCase === 'blocked'
+        ? 'As Founder, transfer your role to another member before leaving. Use the alliance settings to promote a Marshal.'
+        : leaveConfirmCase === 'disband'
+          ? 'This alliance will be permanently disbanded. The HQ territory will become neutral and can be claimed by anyone. This cannot be undone.'
+          : 'You will lose access to alliance chat, missions, and HQ. You can join another alliance later.';
+    const primaryLabel =
+      leaveConfirmCase === 'disband' ? 'DISBAND' : leaveConfirmCase === 'leave' ? 'LEAVE' : 'GOT IT';
+    const loadingLabel = leaveConfirmCase === 'disband' ? 'DISBANDING…' : 'LEAVING…';
+
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.confirmWrap}>
+          <Text style={styles.confirmKicker}>Alliance</Text>
+          <Text style={styles.confirmTitle}>{title}</Text>
+          {leaveConfirmCase !== 'blocked' && myAlliance?.short_name ? (
+            <Text style={styles.confirmTag}>[{myAlliance.short_name}]</Text>
+          ) : null}
+          <Text style={styles.confirmBody}>{body}</Text>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={leaveSaving}
+            onPress={leaveConfirmCase === 'blocked' ? closeLeaveConfirm : handleLeaveSubmit}
+            style={({ pressed }) => [
+              styles.cta,
+              leaveSaving && styles.ctaDisabled,
+              pressed && !leaveSaving && { opacity: 0.9 },
+            ]}
+          >
+            {leaveSaving ? (
+              <>
+                <ActivityIndicator color={BONE} />
+                <Text style={[styles.ctaAction, { marginTop: 8 }]}>{loadingLabel}</Text>
+              </>
+            ) : (
+              <Text style={styles.ctaAction}>{primaryLabel}</Text>
+            )}
+          </Pressable>
+
+          {leaveConfirmCase !== 'blocked' ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={leaveSaving}
+              onPress={closeLeaveConfirm}
+              style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.cancelLinkText}>CANCEL</Text>
+            </Pressable>
+          ) : null}
+
+          {leaveError ? <Text style={styles.joinError}>{leaveError}</Text> : null}
+        </View>
+      </ScrollView>
+    );
+  }
+
   const TOP_CONTRIBUTORS = [
     { rank: '1.', name: 'NISH_S', role: 'FOUNDR', streak: 'UNBROKEN 30D', steps: '24,210' },
     { rank: '2.', name: 'RUBIK', role: 'MEMBER', streak: 'RELIABLE 14D', steps: '18,432' },
     { rank: '3.', name: 'MAYA-K', role: 'MEMBER', streak: 'COMMITTED 6D', steps: '12,104' },
   ];
-
-  useEffect(() => {
-    if (!myAlliance?.id) {
-      setRoster([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadMemberData() {
-      const playersRes = await supabase
-        .from('players')
-        .select('id, username, level')
-        .eq('alliance_id', myAlliance.id);
-
-      if (playersRes.error) {
-        console.error('AllianceScreen roster:', playersRes.error);
-      }
-
-      if (cancelled) return;
-
-      setRoster(playersRes.error ? [] : playersRes.data ?? []);
-    }
-
-    loadMemberData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [myAlliance?.id]);
 
   return (
     <>
@@ -306,10 +438,10 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
         </View>
         {roster.map((m, i) => (
           <RosterRow
-            key={m.id}
+            key={m.player_id}
             initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
             name={m.username ?? '—'}
-            role={m.id === myAlliance.founder_id ? 'FOUNDR' : 'MEMBER'}
+            role={formatAllianceRole(m.role)}
             steps="—"
             showBorder={i < roster.length - 1}
           />
@@ -326,6 +458,14 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
         >
           <Text style={styles.warRoomBtnText}>ENTER WAR ROOM →</Text>
         </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={openLeaveConfirm}
+          style={({ pressed }) => [styles.leaveLink, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.leaveLinkText}>LEAVE ALLIANCE</Text>
+        </Pressable>
       </ScrollView>
     </>
   );
@@ -333,159 +473,209 @@ function MemberContent({ myAlliance, playerId, territoryCount }) {
 
 export default function AllianceScreen() {
   const navigation = useNavigation();
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const hasLoadedOnceRef = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [playerRow, setPlayerRow] = useState(null);
   const [myAlliance, setMyAlliance] = useState(null);
+  const [roster, setRoster] = useState([]);
   const [allianceList, setAllianceList] = useState([]);
   const [territoryCount, setTerritoryCount] = useState(null);
   const [confirmAlliance, setConfirmAlliance] = useState(null);
   const [joinSaving, setJoinSaving] = useState(false);
 
-  const fetchPlayerAndContext = useCallback(
+  const loadAllianceList = useCallback(async (playerHomeCity) => {
+    console.log('[loadAllianceList] fetched at', Date.now());
+
+    if (!playerHomeCity) {
+      setAllianceList([]);
+      return;
+    }
+
+    const { data: alliances, error: listError } = await supabase
+      .from('alliances')
+      .select('id, name, short_name, city, founder_id')
+      .is('disbanded_at', null)
+      .eq('city', playerHomeCity);
+
+    if (listError) {
+      console.error('AllianceScreen alliances list:', listError);
+      setAllianceList([]);
+      return;
+    }
+
+    if (!alliances?.length) {
+      setAllianceList([]);
+      return;
+    }
+
+    const founderIds = Array.from(
+      new Set(alliances.map((a) => a.founder_id).filter(Boolean)),
+    );
+    let founderById = new Map();
+    if (founderIds.length) {
+      const foundersRes = await supabase
+        .from('players')
+        .select('id, username')
+        .in('id', founderIds);
+      if (!foundersRes.error && foundersRes.data?.length) {
+        founderById = new Map(foundersRes.data.map((f) => [f.id, f.username]));
+      }
+    }
+
+    const allianceIds = alliances.map((a) => a.id);
+    const { data: allMembers } = await supabase
+      .from('players')
+      .select('alliance_id')
+      .in('alliance_id', allianceIds);
+
+    const countById = {};
+    for (const m of allMembers ?? []) {
+      countById[m.alliance_id] = (countById[m.alliance_id] ?? 0) + 1;
+    }
+
+    const nextList = alliances.map((a) => ({
+      ...a,
+      memberCount: countById[a.id] ?? 0,
+      founder_username: founderById.get(a.founder_id) ?? null,
+    }));
+
+    setAllianceList(nextList);
+  }, []);
+
+  const fetchAllianceData = useCallback(
     async ({ silent = false } = {}) => {
-      console.log('[Alliance] effect fired, userId:', userId, 'at', Date.now());
-      const __allianceT0 = Date.now();
+      const clerkGetToken = () => getTokenRef.current();
+
       if (!userId) {
+        hasLoadedOnceRef.current = false;
         setPlayerRow(null);
         setMyAlliance(null);
+        setRoster([]);
         setAllianceList([]);
         setTerritoryCount(null);
+        setFetchError(null);
         if (!silent) setLoading(false);
         return;
       }
-      if (!silent) setLoading(true);
-      try {
-        const { data: player, error: playerError } = await supabase
-          .from('players')
-          .select('id, alliance_id')
-          .eq('clerk_id', userId)
-          .maybeSingle();
 
-        if (playerError) {
-          console.error('AllianceScreen player fetch:', playerError);
+      if (!silent) setLoading(true);
+      setFetchError(null);
+
+      try {
+        const [myResult, playerResult] = await Promise.all([
+          getMyAlliance({ clerkGetToken }),
+          supabase.from('players').select('id, alliance_id, home_city').eq('clerk_id', userId).maybeSingle(),
+        ]);
+
+        if (playerResult.error) {
+          console.error('AllianceScreen player fetch:', playerResult.error);
           setPlayerRow(null);
+        } else {
+          setPlayerRow((prev) =>
+            prev?.id === playerResult.data?.id &&
+            prev?.alliance_id === playerResult.data?.alliance_id &&
+            prev?.home_city === playerResult.data?.home_city
+              ? prev
+              : playerResult.data,
+          );
+        }
+
+        if (!myResult.ok) {
+          setFetchError('Could not load alliance');
           setMyAlliance(null);
-          setAllianceList([]);
+          setRoster([]);
+          setTerritoryCount(null);
           return;
         }
 
-        setPlayerRow(player);
-        console.log('[Alliance] player query done in', Date.now() - __allianceT0, 'ms');
-        const __allianceT1 = Date.now();
-
-        if (player?.alliance_id) {
-          const [allianceResult, memberCountResult] = await Promise.all([
-            supabase
-              .from('alliances')
-              .select('id, name, short_name, city, founder_id')
-              .eq('id', player.alliance_id)
-              .maybeSingle(),
-            supabase
-              .from('players')
-              .select('*', { count: 'exact', head: true })
-              .eq('alliance_id', player.alliance_id),
-          ]);
-
-          console.log('[Alliance] alliance+memberCount done in', Date.now() - __allianceT1, 'ms');
-          const __allianceT2 = Date.now();
-          if (allianceResult.error || !allianceResult.data) {
-            setMyAlliance(null);
-            setTerritoryCount(null);
-          } else {
-            setMyAlliance({ ...allianceResult.data, memberCount: memberCountResult.count ?? 0 });
-
-            const { count: terrCount, error: terrError } = await supabase
-              .from('territories')
-              .select('*', { count: 'exact', head: true })
-              .eq('alliance_id', player.alliance_id);
-            setTerritoryCount(terrError ? null : terrCount ?? 0);
-            console.log('[Alliance] territory count done in', Date.now() - __allianceT2, 'ms');
-            console.log('[Alliance] total (member path):', Date.now() - __allianceT0, 'ms');
-          }
-          setAllianceList([]);
-        } else {
+        if (myResult.data === null) {
           setMyAlliance(null);
+          setRoster([]);
           setTerritoryCount(null);
-          let alliances = null;
-          let listError = null;
-
-          const relRes = await supabase
-            .from('alliances')
-            .select('id, name, short_name, city, founder_id, founder:founder_id(username)');
-          alliances = relRes.data;
-          listError = relRes.error;
-
-          // If relation select fails (FK name mismatch), fall back to a batch founders query.
-          if (listError) {
-            const baseRes = await supabase
-              .from('alliances')
-              .select('id, name, short_name, city, founder_id');
-            alliances = baseRes.data;
-            listError = baseRes.error;
-
-            if (!listError && alliances?.length) {
-              const founderIds = Array.from(
-                new Set((alliances ?? []).map((a) => a.founder_id).filter(Boolean)),
-              );
-              if (founderIds.length) {
-                const foundersRes = await supabase
-                  .from('players')
-                  .select('id, username')
-                  .in('id', founderIds);
-                if (!foundersRes.error && foundersRes.data?.length) {
-                  const founderById = new Map(foundersRes.data.map((f) => [f.id, f.username]));
-                  alliances = (alliances ?? []).map((a) => ({
-                    ...a,
-                    founder: { username: founderById.get(a.founder_id) ?? null },
-                  }));
-                }
-              }
-            }
-          }
-
-          if (listError || !alliances?.length) {
-            if (listError) console.error('AllianceScreen alliances list:', listError);
-            setAllianceList([]);
-            return;
-          }
-
-          const allianceIds = alliances.map((a) => a.id);
-          const { data: allMembers } = await supabase
-            .from('players')
-            .select('alliance_id')
-            .in('alliance_id', allianceIds);
-
-          const countById = {};
-          for (const m of allMembers ?? []) {
-            countById[m.alliance_id] = (countById[m.alliance_id] ?? 0) + 1;
-          }
-
-          const withCounts = alliances.map((a) => ({
-            ...a,
-            memberCount: countById[a.id] ?? 0,
-            founder_username: a.founder?.username ?? null,
-          }));
-          setAllianceList(withCounts);
-          console.log('[Alliance] total (non-member path):', Date.now() - __allianceT0, 'ms');
+          await loadAllianceList(playerResult.data?.home_city ?? null);
+          return;
         }
+
+        const detailResult = await getAllianceById({
+          clerkGetToken,
+          allianceId: myResult.data.alliance_id,
+        });
+
+        if (!detailResult.ok) {
+          setFetchError('Could not load alliance');
+          setMyAlliance(null);
+          setRoster([]);
+          setTerritoryCount(null);
+          return;
+        }
+
+        const { alliance, members } = detailResult.data;
+        const nextAlliance = { ...alliance, memberCount: members.length };
+        setMyAlliance((prev) =>
+          prev?.id === nextAlliance.id &&
+          prev?.memberCount === nextAlliance.memberCount &&
+          prev?.name === nextAlliance.name &&
+          prev?.short_name === nextAlliance.short_name
+            ? prev
+            : nextAlliance,
+        );
+        setRoster((prev) => {
+          if (
+            prev.length === members.length &&
+            prev.every((m, i) => m.player_id === members[i].player_id && m.role === members[i].role)
+          ) {
+            return prev;
+          }
+          return members;
+        });
+        setAllianceList((prev) => (prev.length === 0 ? prev : []));
+
+        const { count: terrCount, error: terrError } = await supabase
+          .from('territories')
+          .select('*', { count: 'exact', head: true })
+          .eq('alliance_id', alliance.id);
+        const nextTerritoryCount = terrError ? null : terrCount ?? 0;
+        setTerritoryCount((prev) => (prev === nextTerritoryCount ? prev : nextTerritoryCount));
       } finally {
         if (!silent) setLoading(false);
+        hasLoadedOnceRef.current = true;
       }
     },
-    [userId],
+    [userId, loadAllianceList],
   );
 
-  useEffect(() => {
-    fetchPlayerAndContext();
-  }, [fetchPlayerAndContext]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAllianceData({ silent: hasLoadedOnceRef.current });
+    }, [fetchAllianceData]),
+  );
 
-  const isMember = Boolean(playerRow?.alliance_id);
+  const isMember = Boolean(myAlliance?.id);
 
   if (loading) {
     return (
-      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator color={SLATE2} />
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={SLATE2} />
+        <Text style={styles.loadingText}>LOADING…</Text>
+      </View>
+    );
+  }
+
+  if (fetchError && !isMember) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.errorText}>{fetchError}</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => fetchAllianceData()}
+          style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={styles.retryBtnText}>RETRY</Text>
+        </Pressable>
       </View>
     );
   }
@@ -532,18 +722,37 @@ export default function AllianceScreen() {
       )}
 
       {isMember ? (
-        <MemberContent myAlliance={myAlliance} playerId={playerRow?.id} territoryCount={territoryCount} />
+        fetchError ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{fetchError}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => fetchAllianceData()}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.retryBtnText}>RETRY</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <MemberContent
+            myAlliance={myAlliance}
+            playerId={playerRow?.id}
+            roster={roster}
+            getToken={getToken}
+            onRefreshAfterLeave={() => fetchAllianceData({ silent: true })}
+          />
+        )
       ) : (
         <NonMemberContent
           alliances={allianceList}
-          userId={userId}
-          onRefreshAfterJoin={() => fetchPlayerAndContext({ silent: true })}
+          playerHomeCity={playerRow?.home_city}
+          onRefreshAfterJoin={() => fetchAllianceData({ silent: true })}
           navigation={navigation}
-          playerRow={playerRow}
           confirmAlliance={confirmAlliance}
           setConfirmAlliance={setConfirmAlliance}
           joinSaving={joinSaving}
           setJoinSaving={setJoinSaving}
+          getToken={getToken}
         />
       )}
     </View>
@@ -554,6 +763,47 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: INK,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: SLATE2,
+    textTransform: 'uppercase',
+  },
+  errorBanner: {
+    margin: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    gap: 12,
+  },
+  errorText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: CLAIM,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  retryBtnText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: CLAIM,
+    textTransform: 'uppercase',
   },
   header: {
     paddingHorizontal: 16,
@@ -845,6 +1095,28 @@ const styles = StyleSheet.create({
   cancelLinkText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
+    letterSpacing: 1.6,
+    color: SLATE,
+    textTransform: 'uppercase',
+  },
+  joinError: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: CLAIM,
+    textTransform: 'uppercase',
+    marginTop: 16,
+    lineHeight: 14,
+  },
+  leaveLink: {
+    marginTop: 24,
+    marginBottom: 32,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  leaveLinkText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
     letterSpacing: 1.6,
     color: SLATE,
     textTransform: 'uppercase',
