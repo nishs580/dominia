@@ -469,9 +469,10 @@ export default function ProfileScreen() {
                           try {
                             await clearFcmToken({ clerkGetToken: getToken });
                           } catch (err) {
-                            console.warn('[fcm] clear on sign-out failed:', err?.message);
+                            console.warn('[logout] clearFcmToken error:', err?.message);
                           }
-                          await signOut();
+                          const signOutTimeout = new Promise((resolve) => setTimeout(resolve, 5000));
+                          await Promise.race([signOut(), signOutTimeout]);
                           navigation.replace('SignIn');
                         },
                       },
