@@ -1,18 +1,22 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { getAllianceById } from '../lib/allianceApi';
+import THEME from '../lib/theme';
 
 const INK = '#0E1014';
-const BONE = '#F2EEE6';
+const BONE = THEME.colors.bone;
 const SLATE = '#5C6068';
 const SLATE_2 = '#8B8F98';
-const CLAIM = '#D64525';
+const CLAIM = THEME.colors.claim;
 const ALLIANCE = '#3F8F4E';
 const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
@@ -29,7 +33,92 @@ const BENEFITS = [
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { allianceName, shortName, city, memberCount } = route.params ?? {};
+  const { allianceId } = route.params ?? {};
+  const { getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
+  const [{ loading, alliance, members, error }, setState] = useState({
+    loading: true,
+    alliance: null,
+    members: [],
+    error: null,
+  });
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchAlliance() {
+      if (!allianceId) {
+        if (!cancelled) {
+          setState({ loading: false, alliance: null, members: [], error: true });
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setState((prev) => ({ ...prev, loading: true, error: null }));
+      }
+
+      try {
+        const result = await getAllianceById({
+          clerkGetToken: () => getTokenRef.current(),
+          allianceId,
+        });
+
+        if (cancelled) return;
+
+        if (result.ok) {
+          const { alliance: fetchedAlliance, members: fetchedMembers } = result.data;
+          setState({
+            loading: false,
+            alliance: fetchedAlliance,
+            members: fetchedMembers ?? [],
+            error: null,
+          });
+        } else {
+          setState({ loading: false, alliance: null, members: [], error: true });
+        }
+      } catch (err) {
+        console.error('AllianceJoinedScreen fetch:', err);
+        if (!cancelled) {
+          setState({ loading: false, alliance: null, members: [], error: true });
+        }
+      }
+    }
+
+    fetchAlliance();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allianceId, retryCount]);
+
+  if (loading) {
+    return (
+      <View style={styles.fullScreenCentered}>
+        <ActivityIndicator size="large" color={CLAIM} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.fullScreenCentered}>
+        <Text style={styles.errorMessage}>Couldn't load alliance</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setRetryCount((c) => c + 1)}
+          style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const memberCount = members.length;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -44,8 +133,8 @@ export default function AllianceJoinedScreen() {
         </View>
 
         {/* Hero alliance name */}
-        <Text style={styles.allianceName}>{allianceName ?? 'Your Alliance'}</Text>
-        <Text style={styles.tag}>[{shortName ?? 'XXX'}]</Text>
+        <Text style={styles.allianceName}>{alliance?.name ?? 'Your Alliance'}</Text>
+        <Text style={styles.tag}>[{alliance?.short_name ?? 'XXX'}]</Text>
 
         {/* Milestone subtitle */}
         <Text style={styles.subtitle}>Ready for war.</Text>
@@ -54,11 +143,11 @@ export default function AllianceJoinedScreen() {
         <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>City</Text>
-            <Text style={styles.metaValue}>{city ?? '—'}</Text>
+            <Text style={styles.metaValue}>{alliance?.city ?? '—'}</Text>
           </View>
           <View style={[styles.metaCell, styles.metaCellLast]}>
             <Text style={styles.metaLabel}>Commanders</Text>
-            <Text style={styles.metaValue}>{memberCount ?? 1} / 20</Text>
+            <Text style={styles.metaValue}>{memberCount} / 20</Text>
           </View>
         </View>
 
@@ -97,6 +186,35 @@ export default function AllianceJoinedScreen() {
 }
 
 const styles = StyleSheet.create({
+  fullScreenCentered: {
+    flex: 1,
+    backgroundColor: BONE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  errorMessage: {
+    fontFamily: THEME.fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: THEME.colors.slate,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    borderWidth: 1,
+    borderColor: CLAIM,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  retryBtnText: {
+    fontFamily: THEME.fonts.monoMedium,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: CLAIM,
+    textTransform: 'uppercase',
+  },
   screen: {
     flex: 1,
     backgroundColor: INK,

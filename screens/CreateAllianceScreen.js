@@ -186,13 +186,7 @@ export default function CreateAllianceScreen() {
       });
 
       if (result.ok) {
-        navigation.replace('AllianceJoined', {
-          allianceId: result.data.alliance_id,
-          allianceName: allianceName.trim(),
-          shortName: code.trim().toUpperCase(),
-          city: homeCity ?? '—',
-          memberCount: 1,
-        });
+        navigation.navigate('AllianceJoined', { allianceId: result.data.alliance.id });
         return;
       }
 
