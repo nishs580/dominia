@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 25, 2026 (Session 31d)
+Last updated: May 26, 2026 (Session 36 — Alliance module feature-complete)
 
 ---
 
@@ -50,7 +50,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
 | Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` ^22.2.0 (namespaced API — v23 modular migration is a future task) | ✓ Working end to end |
-| Test runner | Jest 29.7 + jest-expo (mobile, 348 tests) · `tsx --test` (backend, 84 tests across 5 files) | ✓ All passing |
+| Test runner | Jest 29.7 + jest-expo (mobile, 348 tests) · `tsx --test` (backend, 118+ tests across 11 files) | ✓ All passing |
 
 **Backend (`dominia-backend` repo):**
 
@@ -81,12 +81,15 @@ dominia-backend/
 ├── src/
 │   ├── modules/
 │   │   ├── player/                  ✓ LIVE — all routes on Prisma
-│   │   │   ├── routes.ts            // GET /me ✓ · PATCH /me ✓ · POST /me/home-pin ✓
-│   │   │   ├── service.ts           // getMe ✓, updateMe ✓ (username + has_onboarded), setHomePin ✓
+│   │   │   ├── routes.ts            // GET /me ✓ · PATCH /me ✓
+│   │   │   ├── service.ts           // getMe ✓, updateMe ✓ (username + has_onboarded)
 │   │   │   ├── queries.ts           // Prisma-only
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── me/                      ✓ LIVE — sub-resource module for the authenticated player
+│   │   │   ├── home-pin.routes.ts   ✓ // POST /me/home-pin — returns { home_timezone, home_city }
+│   │   │   ├── home-pin.service.ts  ✓ // resolveHomeCityFromPin (PostGIS two-step: ST_Contains then nearest within 10km)
+│   │   │   ├── home-pin.test.ts     ✓ // 3 cases: inside / nearest fallback / miss
 │   │   │   ├── fcm-token.routes.ts  // PATCH /me/fcm-token ✓
 │   │   │   ├── fcm-token.queries.ts // updateFcmToken
 │   │   │   ├── challenge-complete.routes.ts ✓ // POST /me/challenge-complete
@@ -109,7 +112,18 @@ dominia-backend/
 │   │   │   ├── contest-expiry.{queries,worker}.ts ✓ // BullMQ worker, SELECT FOR UPDATE, idempotent
 │   │   │   └── index.ts             // wrapper plugin registers GET + abandon + claim + contest (initiate). NOTE: contest-defend + contest-walk registered DIRECTLY in app.ts
 │   │   │
-│   │   ├── alliance/                ○ Not started — routes, service, morale (donate_morale/deduct_alliance_morale RPCs)
+│   │   ├── alliance/                ✓ LIVE — full CRUD (found/join/leave/get) + membership management (kick/promote/demote)
+│   │   │   ├── alliance.formulas.ts ✓ // ALLIANCE_ROLES, ROLE_SLOTS, ROLE_RANK, MAX_ALLIANCE_MEMBERS=20, MIN_LEVEL_TO_JOIN=6, SHORT_NAME_REGEX
+│   │   │   ├── membership.helpers.ts ✓ // canFoundAlliance, canJoinAlliance, canLeaveAlliance, canKick, canPromote, canDemote (pure)
+│   │   │   ├── alliance.queries.ts  ✓ // setAllianceIdOnPlayerTerritories, transitionHqTerritoryToAlliance, disbandAlliance, fetchAllianceWithRoster
+│   │   │   ├── found.{service,routes,test}.ts ✓ // POST /alliances/found — returns full { alliance, members }
+│   │   │   ├── join.{service,routes,test}.ts ✓ // POST /alliances/:id/join — propagates territory.alliance_id
+│   │   │   ├── leave.{service,routes,test}.ts ✓ // POST /alliances/leave — founder-must-transfer guard + disband path
+│   │   │   ├── kick.{service,routes,test}.ts ✓ // POST /alliances/:id/members/:playerId/kick
+│   │   │   ├── promote.{service,routes,test}.ts ✓ // POST /alliances/:id/members/:playerId/promote (founder + marshal-up-to-officer)
+│   │   │   ├── demote.{service,routes,test}.ts ✓ // POST /alliances/:id/members/:playerId/demote (founder-only)
+│   │   │   ├── get.service.ts       ✓ // getAllianceById, getMyAlliance
+│   │   │   └── index.ts             ✓ // registers found + join + leave + kick + promote + demote + get routes
 │   │   ├── streak/                  ✓ LIVE — midnight rollover + 23:55 break-warning, both per-timezone BullMQ jobs
 │   │   │   ├── streak-rollover.helpers.ts ✓ // pure evaluateRollover + yesterdayOf
 │   │   │   ├── streak-rollover.queries.ts ✓ // fetchPlayersByTimezone, applyRolloverUpdate (optimistic concurrency), logStreakBroken
@@ -197,15 +211,17 @@ dominia-backend/
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city, alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, grace_days_banked (int NOT NULL DEFAULT 0 — bank capped at 3, granted at 7/30/60-day milestones, one consumed per missed day at local midnight), iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, home_timezone (text NOT NULL, IANA tz string — derived from home pin via tz-lookup), fcm_token (text nullable — Firebase Cloud Messaging device token; set via PATCH /me/fcm-token; cleared on sign-out and on FCM stale-token error)
+`players`: id, username, level, xp, home_city (text — DERIVED via PostGIS in POST /me/home-pin; Title Case canonical form), alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, grace_days_banked (int NOT NULL DEFAULT 0 — bank capped at 3, granted at 7/30/60-day milestones, one consumed per missed day at local midnight), iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, home_timezone (text NOT NULL DEFAULT 'UTC', IANA tz string — derived from home pin via tz-lookup), fcm_token (text nullable — Firebase Cloud Messaging device token; set via PATCH /me/fcm-token; cleared on sign-out and on FCM stale-token error)
 
 `contests`: id, territory_id (FK), attacker_id (FK), attacker_alliance_id (nullable, no FK yet), defender_id (FK, territory owner at initiate), defender_alliance_id (nullable, no FK), required_walk_m (int, frozen at initiate), attacker_walked_m (int default 0), defender_player_id (FK nullable — who tapped Defend), defender_walked_m (int default 0), defender_response_ratio (numeric(3,2) nullable — 1.00 with Stone, 1.25 without), iron_cost_paid (int), status (text, CHECK in 'active'/'attacker_won'/'defender_won'/'expired'), initiated_at (default now()), resolved_at (nullable), attack_day_date (date, set from player.home_timezone at initiate), defender_starting_walk_m (int NOT NULL default 0 — snapshot of defender's HC walk distance at /defend tap), attacker_first_walk_at (nullable — one-shot flag set on first non-zero attacker /walk; triggers defender_notify push), attacker_last_sample_at (nullable — last accepted attacker sample for CWR gap detection), defender_last_sample_at (nullable — same for defender)
 
 `contest_walk_samples`: id (uuid PK), contest_id (FK), player_id (FK), source_id (text — client-side idempotency key), sample_timestamp (timestamptz), distance_m (int), accepted (boolean), rejection_reason (text nullable — set when accepted=false, e.g. 'vehicle_speed', 'invalid_timestamp'), created_at. UNIQUE (contest_id, player_id, source_id). CHECK `accepted = (rejection_reason IS NULL)`. Composite index on (contest_id, player_id, sample_timestamp).
 
-`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type, geojson (jsonb), geom (postgis.geometry(Polygon, 4326)), district (text nullable, indexed), territory_name_v1 (nullable — rollback backup on gap-fill rows only)
+`territories`: id, territory_name, tier, perimeter_distance, owner_id, alliance_id, development_level, longitude, latitude, created_at, legacy_rank, upkeep_overdue, osm_id (bigint), osm_type, geojson (jsonb), geom (postgis.geometry(Polygon, 4326)), district (text nullable, indexed), territory_name_v1 (nullable — rollback backup on gap-fill rows only), city (text — NORMALISED to Title Case: 'Amsterdam', 'Saint Petersburg')
 
-`alliances`: id, name, short_name, city, created_at, founder_id, morale
+`alliances`: id, name, short_name (text + UNIQUE + CHECK `^[A-Z]{3}$`), city, created_at, founder_id, morale, hq_territory_id (FK nullable), hq_timezone (text), disbanded_at (timestamptz nullable)
+
+`alliance_members`: id, alliance_id (FK CASCADE), player_id (UNIQUE FK CASCADE — one alliance per player at DB level), role (CHECK in 'founder'/'marshal'/'officer'/'sergeant'/'soldier'/'recruit'), joined_at, recruit_streak_count, recruit_last_completion_date — indexes: `idx_alliance_members_alliance_id`, `idx_alliance_members_role`
 
 `player_challenges`: id, player_id, challenge_key, completed_at, date — UNIQUE on (player_id, challenge_key, date)
 
@@ -275,18 +291,18 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | Map screen | ~ Live data | PostGIS viewport fetch via `get_territories_in_viewport` RPC. Client-side feature cache + merge-on-fetch + age-gated abort. Debounce 150ms. styleURL `light-v11` for dev. Known bugs: zoom-level simplification hides small polygons at wide zoom; nested/overlapping territories. |
 | Activity screen | ✓ Live data | Health Connect wired end-to-end. 10s `useFocusEffect` poll. `onCompleteChallenge` REWRITTEN 31b: 6 direct Supabase writes → 1 `POST /me/challenge-complete` via `lib/challengeApi.js`. Pre-state snapshot for rollback. Optimistic UI applied immediately, reverted on failure, refreshed from backend response on success. Auto-complete cascade Easy → Med → Hard. DB-level idempotency via `player_challenges` UNIQUE inside backend tx. `challengesLoaded` gate. Real weekly chart with bone today-bar + Claim-red SVG trend curve. `DEV_MODE_MANUAL` flag (currently FALSE). |
 | Profile screen | ✓ Live data | POWER + Influence sections. Long-press commander name (1000ms) opens HealthConnectDebug. Logout calls `clearFcmToken` before `signOut`. |
-| Alliance screen | ✓ Branded | Join/create, roster, mission. War Room nav with allianceId/Name/shortName. |
+| Alliance screen | ✓ Live data | MemberContent + NonMemberContent on live backend reads. Real roster, role badges, headers. Loading + error + retry states. Leave flow (3 confirm cases: non-founder, founder-blocked, founder-disband). Member-management full-screen confirm view with flat-list action picker (PROMOTE/DEMOTE/KICK/CANCEL). Server-confirmed updates. Uses canonical `getTokenRef` pattern. |
 | War Room screen | ✓ Live data | All 6 abilities. ACTIVATE wired (Founder only) via `deduct_alliance_morale` RPC. |
 | Wallet screen | ✓ Live data | 4-resource view. Morale row → donate modal → `donate_morale` RPC. |
-| Onboarding screen | ✓ Branded | 5-step flow, typewriter animation, Mapbox dark-v11 home pin map |
+| Onboarding screen | ✓ Branded | 5-step flow, typewriter animation, Mapbox dark-v11 home pin map. Uses `lib/homePinApi.js` `setHomePin` (POST /me/home-pin — derives BOTH home_timezone AND home_city automatically). |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark |
 | Username screen | ✓ Branded | 2-char minimum |
 | Active Claim screen | ✓ Branded | DEV_MODE=true. TaskManager-owned distance loop (screen is pure consumer of `claimState`). `DIAG_CALIBRATION` writes to debug_events per tick. |
 | HealthConnectDebug screen | ✓ Live data | Hidden. SDK status, permission state, today's steps, raw JSON dump, 7-day breakdown, snapshot to `debug_events`. |
 | Claim Success screen | ✓ Live data | Atomic Gold + Siege XP write. |
 | Contest Result screen | ✓ Live data | 4 states. attack_won verified on device; defence states wired but not exercised end-to-end. |
-| Create Alliance screen | ✓ Branded | 3-step founding (identity → HQ → confirm) |
-| Alliance Joined screen | ✓ Branded | |
+| Create Alliance screen | ✓ Live data | 3-step founding wizard wired to POST /alliances/found. Body is `{full_name, short_name, hq_territory_id}`. Confirm step reads city from `player.home_city`. Short_name Supabase pre-check (silent fail-open). Inline error mapping for 8 backend codes. Navigates with only `{ allianceId }`. |
+| Alliance Joined screen | ✓ Live data | Fetches by allianceId on mount via `getAllianceById`. Three render states (loading spinner / error+retry / loaded). All display data sourced from fetched alliance + members. Uses `getTokenRef` pattern. |
 | AuthGate | ✓ Done | Checks isSignedIn + has_onboarded. Calls `registerFcmToken` inline in `runGate()` before navigation. |
 | Permissions | ~ Partial | Inline in onboarding step 2 — not a standalone screen |
 | Territory Detail (full screen) | ○ Not built | Currently a bottom sheet inside map. |
@@ -319,6 +335,9 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `lib/claimState.js` | Module-level shared state for active-claim flow + subscribe/emit API + AsyncStorage snapshot. Bridges TaskManager task (writer) and ActiveClaimScreen (reader). Survives screen sleep + app kill. |
 | `lib/api.js` | Exports `BACKEND_URL`. Single source of truth for backend base URL on mobile. |
 | `lib/challengeApi.js` | (31b) `completeChallenge({clerkGetToken, challengeKey, tier, earnKey})` → `POST /me/challenge-complete`. Mirrors `lib/fcm.js` pattern. Clerk-authed. Forces `Connection: close`. Never throws — returns `{ok, data} \| {ok:false, status, error}`. Single-shot (no retry); failed POST reverts optimistic UI in ActivityScreen. Sends lowercase `tier` (`easy`/`medium`/`hard`), NOT TitleCase `ch.difficulty`. |
+| `lib/allianceApi.js` | (32–36) `getMyAlliance`, `getAllianceById`, `foundAlliance`, `joinAlliance`, `leaveAlliance`, `kickMember`, `promoteMember`, `demoteMember`. All Clerk-authed, `Connection: 'close'` header, `{ ok, data \| error }` discriminant, never throw. Canonical pattern mirroring `lib/challengeApi.js`. |
+| `lib/alliancePermissions.js` | (36) Pure JS port of backend `membership.helpers.ts` — `ROLE_RANK`, `ROLE_SLOTS`, `canKick`, `canPromote`, `canDemote`, plus `getAvailableActions()` helper that returns all valid actions for an actor-target pair. Used by AllianceScreen's manage-member UI to decide whether a roster row is tappable. |
+| `lib/homePinApi.js` | (33) `setHomePin` via `POST /me/home-pin`. Returns `{ home_timezone, home_city }`. Mobile reads home_timezone but still ignores home_city (UI deferred). |
 | `lib/fcm.js` | Three exports: `registerFcmToken`, `clearFcmToken`, `patchFcmToken`. Uses namespaced `@react-native-firebase/messaging` API (v22 — v23 migration is a future task). All errors caught + logged, never thrown. |
 | `metro.config.js` | react-dom shim for @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
@@ -326,15 +345,17 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `screens/MapScreen.js` | PostGIS viewport fetch via RPC. Feature cache + merge-on-fetch + age-gated abort (see Decision Log: client-side feature cache). Diagnostic `[vp fetch]` logs still in place. |
 | `screens/ActivityScreen.js` | (MODIFIED 31b) `onCompleteChallenge` body now: pre-state snapshot → optimistic UI → `completeChallenge()` POST → revert on failure / refresh from backend on success. HC wired. 10s `useFocusEffect` poll. Auto-complete cascade. `challengesLoaded` boolean gates watcher. `DEV_MODE_MANUAL` (currently FALSE) gates COMPLETE buttons. Real 7-day weekly chart with SVG trend curve. `useAuth` destructure includes `getToken`. |
 | `screens/ProfileScreen.js` | POWER + Influence sections. Long-press commander name → HealthConnectDebug. Calls `clearFcmToken` then `signOut` on logout (order matters; see Decision Log: FCM auth-teardown ordering). |
-| `screens/AllianceScreen.js` | Join/create flow, roster, mission. |
+| `screens/AllianceScreen.js` | (32–36) MemberContent + NonMemberContent fully live. MemberContent: real roster via `GET /me/alliance` + `GET /alliances/:id`, role badges, loading/error/retry states. Leave flow with 3 confirm cases (non-founder, founder-blocked, founder-disband). Member-management full-screen confirm view with flat-list action picker (PROMOTE/DEMOTE/KICK). Server-confirmed updates via `onRefreshAfterLeave` callback. NonMemberContent: browse list filters on `.is('disbanded_at', null)` + `.eq('city', playerHomeCity)`, join flow via `POST /alliances/:id/join` with inline error mapping. Canonical `getTokenRef` pattern (Clerk getToken is a new ref every render — captured once). |
 | `screens/WarRoomScreen.js` | All 6 abilities. ACTIVATE wired (Founder only). |
 | `screens/WalletScreen.js` | 4 resources. Morale row → donate modal → `donate_morale` RPC. |
-| `screens/SignInScreen.js`, `UsernameScreen.js`, `OnboardingScreen.js` | Fully branded. |
+| `screens/SignInScreen.js`, `UsernameScreen.js` | Fully branded. |
+| `screens/OnboardingScreen.js` | (33) Uses `setHomePin` from `lib/homePinApi.js` (was direct Supabase update). POST /me/home-pin now derives both home_timezone AND home_city automatically. |
 | `screens/ActiveClaimScreen.js` | TaskManager-owned 10s claim loop. Screen rehydrates from AsyncStorage on mount, subscribes to `claimState` emits, watches `claimState.completed` for navigation. `DIAG_CALIBRATION` flag default true. See Decision Log: TaskManager owns claim loop. |
 | `screens/HealthConnectDebugScreen.js` | Hidden debug screen. SDK status, permission flow, today's steps + 7-day breakdown, snapshot writer. |
 | `screens/ClaimSuccessScreen.js` | Atomic Gold + Siege XP write. |
 | `screens/ContestResultScreen.js` | 4 states. attack_won verified on device. |
-| `screens/CreateAllianceScreen.js`, `AllianceJoinedScreen.js` | Fully branded. |
+| `screens/CreateAllianceScreen.js` | (32–35) 3-step founding wizard wired to `POST /alliances/found`. Body is `{full_name, short_name, hq_territory_id}`. Confirm step city reads from `player.home_city`. Short_name Supabase pre-check (silent fail-open on network error). Inline error mapping for 8 backend codes. Navigates with only `{ allianceId }` (no display props through nav). |
+| `screens/AllianceJoinedScreen.js` | (35) Receives only `{ allianceId }`. Calls `getAllianceById(allianceId)` on mount. Three render states (loading spinner in CLAIM colour / error+retry / loaded). All display data sourced from fetched alliance + members. Uses `getTokenRef` pattern. |
 | `app.config.js` | Dynamic config (replaces `app.json`). Expo only expands `process.env` in dynamic configs. `android.googleServicesFile = process.env.GOOGLE_SERVICES_JSON ?? './google-services.json'`. Plugins: expo-location, expo-sensors, expo-build-properties (minSdkVersion 26), `./plugins/withHealthConnect.js`. Android permissions: health.READ_STEPS, READ_HEALTH_DATA_IN_BACKGROUND, ACTIVITY_RECOGNITION, POST_NOTIFICATIONS (Android 13+, runtime). |
 | `google-services.json` | GITIGNORED. Firebase Android config. Local copy at `C:\Users\nisha\dominia-secrets\`. Uploaded to EAS as file env var `GOOGLE_SERVICES_JSON` (sensitive). |
 | `eas.json` | EAS build profiles. Preview profile: `developmentClient: false` + `MAPBOX_DOWNLOADS_TOKEN` env reference. |
@@ -364,7 +385,9 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/shared/prisma.ts` | Singleton PrismaClient with `PrismaPg` adapter. globalThis-cached for tsx-watch hot reload. |
 | `src/shared/supabase.ts` | Service-role client. Used only by territory GET (PostGIS RPC). |
 | `src/shared/auth.ts` | Clerk JWT verification — `requireAuth` Fastify preHandler. Reads `Authorization: Bearer`, calls `verifyToken`, attaches `payload.sub` to `request.clerkUserId`. **Never log token contents.** |
-| `src/modules/player/*` | GET/PATCH /me, POST /me/home-pin. All Prisma. `PrismaClientKnownRequestError` imported from `@prisma/client/runtime/client` (Prisma 7 subpath). |
+| `src/modules/player/*` | GET/PATCH /me. All Prisma. `PrismaClientKnownRequestError` imported from `@prisma/client/runtime/client` (Prisma 7 subpath). |
+| `src/modules/me/home-pin.routes.ts` | (34) POST /me/home-pin. Zod body `{lat: number, lng: number}`. requireAuth. Returns `{ home_timezone, home_city }` (home_city nullable). |
+| `src/modules/me/home-pin.service.ts` | (34) `resolveHomeCityFromPin` (PostGIS two-step lookup: ST_Contains on territories.geom → fallback nearest within 10km via ST_DWithin + KNN <-> operator. If both miss, home_city left unchanged). `ensurePostgisSearchPath()` helper using `set_config(..., true)` since Supabase puts PostGIS in the postgis schema. Wraps own `prisma.$transaction` when no tx passed so set_config + lookup share a pinned connection. `setHomePin` writes home_pin_lat/lng/home_timezone/home_city in one transaction. |
 | `src/modules/me/fcm-token.*` | PATCH /me/fcm-token. Zod body `{fcm_token: string(1..4096) \| null}`. requireAuth. |
 | `src/modules/me/challenge-complete.routes.ts` | (31a) POST /me/challenge-complete. Zod body validates `challenge_key`, `tier` (lowercase enum: easy/medium/hard), `earn_key`. requireAuth. |
 | `src/modules/me/challenge-complete.service.ts` | (31a) Orchestrates the entire flow inside ONE `prisma.$transaction`: idempotent player_challenges insert → streak advance → Grace Day grant at days 7/30/60 (capped at 3) → XP via `calcChallengeXp` → resources via `calcResourceEarn` flat table → level via `calcLevel` → single `activity_log` row. Returns `{leveled_up, grace_day_granted, ...}`. |
@@ -375,8 +398,20 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/modules/streak/streak-break-warning.*` | (31d) 23:55 warning push per-tz repeatable cron `55 23 * * *`. `evaluateWarning` + `formatWarningMessage` per spec §4.5.1. Copy: "You haven't completed today's challenge yet. You have 5 minutes before your streak resets. Grace Days: [N remaining / none]." Dispatched via `sendImmediately` (NOT `sendPush`) to bypass Quiet Hours queue — 23:55 IS inside 23:00–05:00 Quiet Hours and spec mandates the push fires. 13 helper tests. |
 | `src/modules/streak/bootstrap.ts` | (31c) `bootstrapStreakRolloverJobs` — registers Queue/Worker pair on startup, then upserts one repeatable job per distinct `home_timezone` in players. 2 jobs registered currently (Europe/Moscow, Europe/Amsterdam). |
 | `src/modules/streak/bootstrap-warning.ts` | (31d) `bootstrapStreakBreakWarningJobs` — same pattern for 23:55 warning. Separate file: each scheduled module gets its own bootstrap. |
+| `src/modules/alliance/alliance.formulas.ts` | (32) `ALLIANCE_ROLES` tuple, `AllianceRole` type, `ROLE_SLOTS` (founder:1, marshal:2, officer:4, sergeant:6, soldier:null, recruit:null), `ROLE_RANK` (founder=5 → recruit=0), `MAX_ALLIANCE_MEMBERS=20`, `MIN_LEVEL_TO_JOIN=6`, `SHORT_NAME_REGEX`, `FULL_NAME_MIN/MAX_LENGTH`, `isValidShortName`, `isValidFullName`. |
+| `src/modules/alliance/membership.helpers.ts` | (32, 36) `canFoundAlliance`, `canJoinAlliance`, `canLeaveAlliance`, `canKick`, `canPromote`, `canDemote` — all pure, return `{ok}\|{ok:false, reason}`. 34 helper tests. |
+| `src/modules/alliance/alliance.queries.ts` | (32–36) All transaction-safe queries: `fetchPlayerForFounding`, `fetchTerritoryForHq`, `findAllianceByShortName`, `createAllianceWithFounder`, `insertFounderMember`, `attachPlayerToAlliance`, `transitionHqTerritoryToAlliance`, `fetchAllianceForJoin`, `fetchAllianceWithRoster`, `fetchPlayerAllianceContext`, `fetchPlayerMembership`, `insertRecruitMember`, `removePlayerFromAlliance`, `disbandAlliance`, `setAllianceIdOnPlayerTerritories` (propagates territory.alliance_id on join/leave/kick — spec §2.3 + §3.8 + §8.4.2), log writers for founded/joined/left/kicked/promoted/demoted. |
+| `src/modules/alliance/found.service.ts` | (32, 35) Orchestrator inside one `prisma.$transaction`. Validates: full_name, short_name format, player level ≥ 6, no current alliance, HQ ownership, HQ city match, short_name unique. HQ transition per spec §3.4: `territories.owner_id → NULL`, `territories.alliance_id → allianceId`. Returns 201 `{ alliance, members }` matching `getAllianceById` exactly (deepEqual-verified). Status codes: 400/403/404/409/422/500. 3 tests including HQ invariant + post-disband re-found regression. |
+| `src/modules/alliance/join.service.ts` | (32, 36) Validates city + level + capacity + disbanded_at NULL. Inserts as 'recruit'. Calls `setAllianceIdOnPlayerTerritories` to propagate alliance_id to joiner's existing territories. 410 alliance_disbanded if applicable. 3 tests. |
+| `src/modules/alliance/leave.service.ts` | (32, 36) `founder_must_transfer_first` guard. If founder is last member, `disbandAlliance` fires: `alliances.disbanded_at=now()`, `territories.alliance_id=NULL` (HQ reverts neutral per spec §3.4), DELETE alliance_members rows. Non-founder leave calls `setAllianceIdOnPlayerTerritories` to clear alliance_id from leaver's territories. 3 tests. |
+| `src/modules/alliance/kick.service.ts` | (36) POST /alliances/:id/members/:playerId/kick. Permission check via `canKick`. Clears territory.alliance_id for kicked player. 6 tests including territory propagation. |
+| `src/modules/alliance/promote.service.ts` | (36) POST /alliances/:id/members/:playerId/promote with `{to_role}` body. Founder promotes anyone; Marshal promotes up to Officer. Target roles restricted to marshal/officer/sergeant/soldier (no founder via this endpoint; no recruit — starting state only). 11 tests including `role_slots_full` 409. |
+| `src/modules/alliance/demote.service.ts` | (36) POST /alliances/:id/members/:playerId/demote with `{to_role}` body. Founder-only per spec §3.3 literal reading. Same target-role restrictions as promote. 9 tests. |
+| `src/modules/alliance/get.service.ts` | (32) `getAllianceById` (alliance + roster — source of truth for `{ alliance, members }` shape), `getMyAlliance` (player context). |
+| `src/modules/alliance/index.ts` | (32–36) registers found + join + leave + kick + promote + demote + get routes. |
+| `scripts/backfill-home-city.ts` | (34) Idempotent backfill for `players.home_city` via `resolveHomeCityFromPin`. Logs per-player progress and final totals. Ran 10/10 successfully against Railway. |
 | `src/modules/debug/routes.ts` | Debug routes gated by `(NODE_ENV !== 'production' \|\| ALLOW_DEBUG_ROUTES === 'true')`. Active: POST /debug/streak-rollover, POST /debug/streak-break-warning, GET /debug/contest-expiry/:contestId. **`ALLOW_DEBUG_ROUTES` currently ON in Railway — flip OFF before any external playtest.** |
-| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. |
+| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. `claim.queries.ts findPlayerAllianceId` now reads `players.alliance_id` via tx (no longer a stub; unwired in 32). |
 | `src/shared/notifications/*` | FCM dispatch with Quiet Hours. `sendPush` (lookup token → quiet check → enqueue or immediate), `sendImmediately` (bypasses quiet check by design), `isStaleTokenError` matches 3 codes incl. `messaging/invalid-argument`. |
 | `src/shared/queues/contest-expiry.queue.ts` | jobId `expiry-${contestId}` (hyphens not colons). One-shot. |
 | `src/shared/queues/quiet-hours-push.queue.ts` | jobId `quiet-${playerId}-${kind}-${timestamp}`. Delayed dispatch to next 05:00 local. |
@@ -465,12 +500,20 @@ npm run dev                           # tsx watch
 npm run build                         # full tsc — pre-push gate (catches ESM .js extension issues that typecheck misses)
 npm run typecheck                     # tsc --noEmit — NOT sufficient as pre-push gate
 
-# Backend unit tests (84 tests across 5 files, native node test runner via tsx)
+# Backend unit tests (118+ tests across 11+ files, native node test runner via tsx)
 npx tsx --test src/modules/me/streak.helpers.test.ts
 npx tsx --test src/modules/me/challenge.formulas.test.ts
 npx tsx --test src/shared/timezone.test.ts
 npx tsx --test src/modules/streak/streak-rollover.helpers.test.ts
 npx tsx --test src/modules/streak/streak-break-warning.helpers.test.ts
+npx tsx --test src/modules/alliance/membership.helpers.test.ts
+npx tsx --test src/modules/alliance/found.service.test.ts
+npx tsx --test src/modules/alliance/join.service.test.ts
+npx tsx --test src/modules/alliance/leave.service.test.ts
+npx tsx --test src/modules/alliance/kick.service.test.ts
+npx tsx --test src/modules/alliance/promote.service.test.ts
+npx tsx --test src/modules/alliance/demote.service.test.ts
+npx tsx --test src/modules/me/home-pin.service.test.ts
 
 # Healthcheck
 curl https://dominia-backend-production.up.railway.app/healthcheck -UseBasicParsing
@@ -525,6 +568,44 @@ Invoke-WebRequest -Uri "https://dominia-backend-production.up.railway.app/debug/
 #   AND created_at::date = CURRENT_DATE
 # ORDER BY created_at;
 
+# === ALLIANCE TESTING ===
+
+# Inspect alliance state
+# SELECT a.short_name, p.username, am.role, am.joined_at FROM alliance_members am
+# JOIN alliances a ON a.id = am.alliance_id JOIN players p ON p.id = am.player_id
+# ORDER BY a.short_name, am.role;
+
+# Inspect disbanded alliances
+# SELECT short_name, name, disbanded_at FROM alliances WHERE disbanded_at IS NOT NULL;
+
+# Verify HQ invariant (after found): territory.alliance_id matches, owner_id null
+# SELECT a.short_name, t.territory_name, t.alliance_id, t.owner_id FROM alliances a
+# JOIN territories t ON t.id = a.hq_territory_id WHERE a.disbanded_at IS NULL;
+
+# Audit alliance event types in activity_log
+# SELECT event_type, metadata, created_at FROM activity_log
+# WHERE event_type LIKE 'alliance_%' ORDER BY created_at DESC LIMIT 20;
+
+# Fire alliance found (PowerShell — token expires ~60s, paste as ONE block):
+#   $token = "<jwt>"
+#   $body = '{"full_name":"X","short_name":"XYZ","hq_territory_id":"<uuid>"}'
+#   Invoke-WebRequest -Uri "https://dominia-backend-production.up.railway.app/alliances/found" `
+#     -Method POST -ContentType "application/json" -Body $body `
+#     -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing | Select-Object -ExpandProperty Content
+
+# Fire alliance join: POST /alliances/<id>/join with Body "{}"
+# Fire alliance leave: POST /alliances/leave with Body "{}"
+# Fire kick: POST /alliances/<id>/members/<playerId>/kick with Body "{}"
+# Fire promote/demote: POST /alliances/<id>/members/<playerId>/promote with Body '{"to_role":"marshal"}'
+
+# Run backfill script against Railway DB (no Railway CLI installed):
+#   $env:DATABASE_URL="<railway_db_url>"
+#   npx tsx scripts/backfill-home-city.ts
+#   # close terminal after — env var must not persist
+
+# CRITICAL: Supabase SQL editor returns "No rows" for any non-SELECT (UPDATE/DELETE/DDL) — NOT a failure.
+# ALWAYS verify writes with a follow-up SELECT.
+
 # === GIT WORKFLOW ===
 
 # Never `git add .` — always specify files. Especially critical with two repos.
@@ -574,9 +655,11 @@ FROM pg_constraint
 WHERE conname = 'activity_log_event_type_check';
 
 # Extend activity_log event_type whitelist (DROP + ADD pattern — every new event_type needs this).
-# Current whitelist (11): challenge_completed, territory_claimed, territory_abandoned,
+# Current whitelist (18): challenge_completed, territory_claimed, territory_abandoned,
 # contest_participated, km_walked, contest_defended, contest_won, contest_lost,
-# contest_held, contest_expired, streak_broken.
+# contest_held, contest_expired, streak_broken,
+# alliance_founded, alliance_joined, alliance_left, alliance_role_changed,
+# alliance_kicked, alliance_demoted, alliance_promoted.
 ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
 ALTER TABLE activity_log ADD CONSTRAINT activity_log_event_type_check
 CHECK (event_type = ANY (ARRAY[
@@ -584,6 +667,8 @@ CHECK (event_type = ANY (ARRAY[
   'contest_participated', 'km_walked', 'contest_defended',
   'contest_won', 'contest_lost', 'contest_held', 'contest_expired',
   'streak_broken',
+  'alliance_founded', 'alliance_joined', 'alliance_left', 'alliance_role_changed',
+  'alliance_kicked', 'alliance_demoted', 'alliance_promoted',
   '<new_event_type_here>'
 ]));
 
@@ -741,6 +826,24 @@ WHERE table_schema='public' AND table_name='<my_table>';
 - **Fix:** Use `sendImmediately` (already exists in `shared/notifications/send.ts`) — it bypasses the Quiet Hours queue and dispatches directly via FCM. Spec §4.5.1 explicitly mandates this push fires inside Quiet Hours.
 - **General lesson:** before inventing a new bypass flag, scan the existing API surface — `sendImmediately` was already there for exactly this case.
 
+**29. Clerk `getToken` is a new function reference on every render — useEffect infinite loop**
+- **Signature:** `Maximum update depth exceeded` error on a screen that fetches with a Clerk token. Metro spams the fetch. UI flashes.
+- **Cause:** `const { getToken } = useAuth()` — `getToken` is a fresh function reference every render. Including it in `useEffect` dep array causes infinite re-runs.
+- **Fix:** Capture once via ref. Pattern: `const getTokenRef = useRef(getToken); getTokenRef.current = getToken;` then call `() => getTokenRef.current()` inside the fetch. Exclude `getToken` from dep array.
+- **General lesson:** any value from a third-party hook that's a new reference on every render needs to be captured via ref before use in effects. AllianceScreen.js is the canonical example in this codebase.
+
+**30. Supabase PostGIS lives in `postgis` schema, not on default search_path — ST_Contains/ST_DWithin fail silently**
+- **Signature:** Prisma `$queryRaw` for `ST_Contains(geom, ST_SetSRID(ST_MakePoint($lng, $lat), 4326))` returns empty or errors with "function does not exist".
+- **Cause:** Supabase puts PostGIS in a dedicated `postgis` schema. Default Postgres search_path doesn't include it.
+- **Fix:** Run `set_config('search_path', 'postgis, public', true)` at the start of every transaction that touches PostGIS. The `true` flag scopes it to the current tx — does not leak across connections. Wrap helper as `ensurePostgisSearchPath(tx)`. When called without a tx (e.g. backfill scripts), wrap in own `prisma.$transaction` so set_config + lookup share a pinned connection.
+- **General lesson:** for any Postgres extension on a non-default schema, set search_path per transaction. Schema-qualifying every function call (`postgis.ST_Contains`) works too but is noisier.
+
+**31. Stale session-summary observations masquerading as code bugs**
+- **Signature:** Session summary lists a bug. New session opens to fix it. Reading current code shows the bug is already fixed — the original observation was stale data from before a prior fix, or test debris from a crashed cleanup hook.
+- **Cause:** Session summaries are written at the end of a session and capture a snapshot. By the next session, behaviour may have changed via other commits, or the "bug" was always a data issue rather than a code issue.
+- **Fix:** Before scheduling a fix session, read the current code directly — the actual source file, not the session summary. If the code is correct, the right move is a regression test that locks the behaviour, not a rebuild. Two suspected bugs in S35 (founding HQ link, disband member cleanup) turned out to be already-fixed in current code at S36.
+- **General lesson:** session summaries are notes, not source of truth. When in doubt, `view` the file. Particularly suspect: bugs filed against data state (those are usually one-off cleanups, not code fixes).
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -781,7 +884,15 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | Onboarding home pin verification not implemented | 500m proximity check deferred. |
 | Auth flow order wrong | New users hit sign-up before seeing any game content. |
 | Achievements table hardcoded | Distance, Calories, Active Minutes wiring deferred. HC can provide via additional `readRecords` calls. |
-| Marshal role not tracked | Founder-only currently. Marshal needs `players.role` column. |
+| **Sign-out hangs for multiple minutes (mobile, possibly pre-existing)** | (36) User had to clear app storage to switch accounts. Likely Clerk `signOut()` awaiting a network call without the `Connection: 'close'` workaround used elsewhere. Diagnose in `AuthGate.js` or wherever `signOut()` is invoked. Priority: medium — affects multi-account device testing. |
+| **4 pre-HQ-feature alliances have NULL hq_territory_id** | (36) KAI, GGG, SNW, BUD founded before HQ designation existed. Not a bug in current code. Resolve by either leaving them, adding a "designate HQ retroactively" endpoint, or forcing re-founding. Defer. |
+| **Slot-cap error (role_slots_full 409) not device-verified** | (36) KAI doesn't have enough members to fill slots. Backend test #8 in `promote.service.test.ts` covers it; client error path is identical to join-error path which is device-verified. |
+| **GET /alliances?city=X endpoint not built** | (32+) Mobile browse list works via direct Supabase reads with `.is('disbanded_at', null)` + `.eq('city', playerHomeCity)`. Cleanup, not blocker. |
+| **Mobile "TOP CONTRIBUTORS" and "MISSION" cards on MemberContent still stub UI** | (34+) Neither endpoint exists yet. |
+| **Mobile post-join landing on AllianceJoinedScreen not wired** | (36) Screen already fetches by id, just needs nav glue from join wizard. ~45 min. |
+| **Mobile "Detected city: X — correct?" UI in onboarding not wired** | (34+) `POST /me/home-pin` now returns home_city; mobile still ignores. Low priority since derivation is reliable. |
+| **Spec §3.1 still describes "Home District" 5-nearest picker** | (33+) Columns dropped in S33, derivation auto-resolves in S34. Spec rewrite still pending (Home District = home city, not a territory). |
+| **short_name re-use after disband not addressed in spec** | (32+) Currently blocked by UNIQUE constraint on alliances.short_name. Decide before launch: free up on disband_at OR keep permanent (Hall of Holders attribution). |
 | Legacy Titles on Profile hardcoded | Needs Supabase wiring once real title data exists. |
 | ProfileScreen colour constants not on theme tokens | Refactor to lib/theme.js. |
 | TERRITORY_CAP_BY_LEVEL duplicated | In MapScreen.js + ProfileScreen.js. Move to formulas.js. |
@@ -791,7 +902,6 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | Siege XP constants exist with no writers | XP_PER_DEFENCE_WIN, XP_RECONQUEST, XP_PER_DEV_TIER_REACHED, XP_ALLIANCE_MISSION, XP_STREAK_MILESTONE. |
 | Legacy Power inputs partial | titlesEarned + championshipWins hardcoded to 0. |
 | Draggable bottom sheet deferred | gorhom/bottom-sheet — batch into next EAS build. |
-| Home District mechanic incomplete | CreateAlliance HQ picker uses player-owned only. Spec: 5 nearest OSM. |
 | Invite non-player flow missing | No share/invite link flow yet. |
 | POI icons on Standard night basemap | Currently overridden by `light-v11` dev style. Will resurface at polish phase. |
 | `formatTerritoryDisplayName()` not yet written | Frontend display formatter — strip 'Near' prefix on tight surfaces, truncate long Cyrillic names, hide bureaucratic asset codes. |
@@ -807,14 +917,13 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | **City Event detection stubbed (`isCityEvent=false`) in calcChallengeXp** | Spec §6.4.3. Deferred until City Event infrastructure exists. |
 | **Daily/weekly earn cap stubbed (`capFactor=1.0`) in calcChallengeXp** | Spec §13. Deferred. |
 | **Resource earn uses flat table, not canonical earn** | Spec §5 +10% Committed-tier bonus not applied. Matches existing mobile behaviour for backend cut-over parity. Spec-alignment task deferred. |
-| **Marshal-granted Grace Day not implemented** | Alliance-module dependency. |
+| **Marshal-granted Grace Day not implemented** | (32–36) Marshal role now exists via `alliance_members.role`. Endpoint `POST /alliances/:id/grant-grace` not built; spec §4 mentions Marshal can grant. Deferred. |
 
 ---
 
 ## DEFERRED / OUT OF SCOPE
 
 - Background step reads (`READ_HEALTH_DATA_IN_BACKGROUND` permission) — granted in manifest, not yet requested from user. Defer until "always-on tracking" feature.
-- Alliance disband flow — no real gameplay use case.
 - Alliance chat — post-MVP.
 - Onboarding home pin 500m verification.
 - **Phase 2 of SPB territory pool** — merging existing 485 sub-tier OSM-named SPB territories into the unified gap-fill pool.
@@ -826,30 +935,32 @@ WHERE table_schema='public' AND table_name='<my_table>';
 
 ## WHAT'S NEXT
 
-**Immediate — Session 32 — Build the Alliance module (~3 hours).**
+**Immediate — Next session — Fix the sign-out hang bug (~20–30 min).**
 
-Solo-play streak system is now fully closed (challenge-complete endpoint, midnight rollover, 23:55 break warning all live and verified on Railway). The biggest remaining gap is the Alliance module — it unblocks `findPlayerAllianceId` (currently stubbed null in `claim.queries.ts`), wires the Marshal role, and lights up the FK columns already sitting on `contests`.
+Alliance module is feature-complete for MVP. The next highest-leverage fix is the sign-out hang: when the user signs out, the app hangs for multiple minutes before completing, forcing app-storage clearing to switch accounts. Likely a missing `Connection: 'close'` header on Clerk's `signOut()` network call, matching the dead-TCP workaround used elsewhere in the codebase. Unblocks future multi-account device testing without storage-clear workarounds.
 
 **Scope:**
+1. Reproduce on device — note exactly which screen is open at sign-out and how long the hang lasts.
+2. Inspect `components/AuthGate.js` (or wherever `signOut()` is invoked) for a missing `Connection: 'close'` header.
+3. Mirror the pattern used in `lib/supabase.js` fetch wrapper (see Pitfall: dead TCP pool).
+4. Verify on device: sign in → sign out → sign in as different user, no app-storage clear required.
 
-1. **Schema audit.** Confirm `alliances` columns (`id, name, short_name, city, founder_id, morale, created_at`) cover MVP. Add `members` join table or `players.role` column for Founder/Marshal/Member tier.
-2. **Founding flow — `POST /alliances`.** Body: `{name, short_name, city, hq_territory_id}`. Validates founder owns the HQ territory, creates alliance, sets `players.alliance_id` + role=Founder, writes `activity_log` event `alliance_founded` (new event_type — DROP+ADD constraint).
-3. **Membership semantics — `POST /alliances/:id/join`, `DELETE /alliances/:id/leave`.** Membership cap of 20. Single alliance per player at a time. Leave clears `players.alliance_id`.
-4. **Wire `findPlayerAllianceId` in `claim.queries.ts`.** Replace stub null with real lookup. Backfill `territories.alliance_id` at claim time. Updates `contests.attacker_alliance_id` + `defender_alliance_id` similarly.
-5. **Marshal role.** New `players.role` column (CHECK in 'Founder'/'Marshal'/'Member'/null). Founder can promote one member to Marshal. Wires ACTIVATE-on-War-Room (currently Founder-only).
-
-**Open questions to resolve at top of Session 32:**
-
-- **Membership as `players.alliance_id` direct FK vs `alliance_members` join table?** Direct FK matches current schema, 20-member cap is small. Join table is cleaner for future roles/permissions/history. Recommend: keep direct FK + add `players.role` column. Trigger to refactor: when membership audit history becomes a requirement.
-- **Marshal-grant Grace Day mechanic — wire now or defer?** Spec §4 mentions Marshal can grant Grace Days. Backend needs `POST /alliances/:id/grant-grace`. Recommend: defer to Session 33 (alliance polish session) — keep Session 32 focused on schema + CRUD + claim integration.
-- **Cross-player defender_notify push test (carried over from 30c/31)** — needs second device + Clerk account. Phone 2 attempted in 31b but didn't connect. Acceptable to defer one more session.
+**Alternative picks if deferring the bug fix:**
+- (b) Founder voluntary transfer endpoint + UI — ~60 min. Closes last alliance leadership gap. Unblocks the "founder-must-transfer-first" leave path properly.
+- (c) Mobile post-join landing on AllianceJoinedScreen + territory refetch (spec §8.4.2) — ~45 min. Joiner's territories visually update to alliance colour within 60s of join.
+- (d) Notifications for kick/demote/promote/join/leave — backend FCM plumbing exists, copy and triggers not wired. Spec has exact copy.
 
 ---
 
 ## BACKLOG
 
 **Backend modules to land:**
-- **Alliance module** (NEXT) — schema, founding, membership, Marshal role. Unblocks `findPlayerAllianceId` stub.
+- **Founder voluntary transfer endpoint + UI** — closes last alliance leadership gap. Unblocks founder-must-transfer-then-leave path. ~60 min total.
+- **Inactive-Founder auto-succession (30+7 day rule, spec §3.3)** — needs scheduled BullMQ job. Defer.
+- **Recruit auto-promote on 3 consecutive challenges (§3.3 probation)** — lives in `challenge-complete.service.ts`, not alliance module.
+- **HQ contest adjacency-first rules (§3.4)** — gated on contest spec re-read.
+- **Weekly alliance missions (§3.10)** — post-promote endpoints session.
+- **GET /alliances?city=X endpoint** — cleanup, not blocker. Mobile browse list works via direct Supabase reads.
 - **Cross-player contest stress-test.** With Ably mobile client + push subscriber both wired, run a multi-player attack scenario end-to-end on two real devices.
 - **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit. Distinct from contest `/walk`.
 - **`territory:updated` Ably channel** — publish from claim / abandon / contest resolve so mobile MapScreen can invalidate `featureCacheRef`. Gating the MapScreen GET /territories cut-over.
@@ -857,6 +968,11 @@ Solo-play streak system is now fully closed (challenge-complete endpoint, midnig
 - **Leaderboard module** — Redis Sorted Set reads, ZADD on contest resolution.
 
 **Mobile migrations / hardening:**
+- **Sign-out hang fix** (NEXT) — likely missing `Connection: 'close'` on Clerk `signOut()`.
+- **Mobile post-join landing on AllianceJoinedScreen** — screen already fetches by id, just needs nav glue from join wizard. ~45 min. Includes territory refetch (spec §8.4.2: joiner's territories visually update to alliance colour within 60s).
+- **Mobile "Detected city: X — correct?" UI in onboarding** — `POST /me/home-pin` now returns home_city; mobile still ignores. Low priority since derivation is reliable.
+- **Notifications for kick/demote/promote/join/leave** — backend FCM plumbing exists, copy and triggers not wired. Spec has exact copy.
+- **Mobile "TOP CONTRIBUTORS" and "MISSION" cards on Alliance MemberContent** — stub UI, no endpoints yet.
 - **MapScreen from direct RPC → backend `GET /territories`** — cut-over when realtime invalidation via Ably is wired.
 - **Direct `players.update()` calls → `PATCH /me` / `POST /me/home-pin`** — audit + cut-over.
 - **Delete dead code: `lib/streak.js` + `updateStreakOnChallengeComplete`** — dedicated dead-code pass.
@@ -870,22 +986,27 @@ Solo-play streak system is now fully closed (challenge-complete endpoint, midnig
 - **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names.
 - **Tests for `lib/territory.js`** — Supabase mocking strategy is the gating decision.
 - **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls.
+- **Master Project State doc** — was last updated S31d before this S32–S36 sweep. Re-cadence: update every 1–2 sessions, not every 5.
 
 **Backend hardening:**
 - **Attack Day check** (Wed/Sat/Sun) on `/contests` initiate + `/walk` — both deferred with TODO. Wire together using `player.home_timezone` via `Intl.DateTimeFormat`.
 - **Flip `ALLOW_DEBUG_ROUTES` OFF on Railway before external playtest.**
 - **New-timezone hot-registration** — trigger `bootstrapStreakRolloverJobs` re-scan on `POST /me/home-pin` if tz is new.
-- **Prisma migrations setup** — activity_log CHECK constraint at 11 event_types; every new module adds more.
+- **Prisma migrations setup** — activity_log CHECK constraint at 18 event_types; every new module adds more.
 - **Generate Supabase types** for backend `Database` type. Currently `any` (only used by territory GET module now).
 - **Add `cors` to Fastify** before mobile starts hitting backend cross-origin browser-side.
 - **402 insufficient-resource path on claim + contest-initiate + defend (Stone)** all untested.
-- **`home_timezone` NOT NULL** — confirm `lib/auth.js ensurePlayer()` pathway sets it on signups bypassing onboarding.
 - **Spec-alignment: Resource earn through canonical-earn (Committed-tier +10% bonus)** — currently flat table on backend. Mobile already uses flat too.
 - **`lib/challengeApi.js` retry logic** — currently single-shot. Acceptable for MVP, revisit if flaky-network reports.
+- **4 pre-HQ-feature alliances (KAI, GGG, SNW, BUD) with NULL hq_territory_id** — resolve by leaving them, adding a "designate HQ retroactively" endpoint, or forcing re-founding.
 
 **Carried open sub-questions (mobile):**
 - Mobile MapScreen still calls `supabase.rpc('get_territories_in_viewport')` directly. Cut-over deferred until mobile Ably realtime layer is wired.
 - Mobile direct `supabase.from('players').update(...)` calls are divergent state since `PATCH /me` and `POST /me/home-pin` exist.
+
+**Spec rewrites:**
+- **Spec §3.1 still describes "Home District" 5-nearest picker** — columns dropped in S33, derivation auto-resolves in S34. Spec needs rewrite (Home District = home city, not a separate territory).
+- **short_name re-use after disband policy** — spec doesn't address. Currently blocked by UNIQUE constraint. Decide before launch.
 
 **Map polish (queued):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `ST_Overlaps` / `ST_Contains` pairs.
@@ -1101,6 +1222,37 @@ Solo-play streak system is now fully closed (challenge-complete endpoint, midnig
 | **Stale UI state on Metro reload → force-stop + reopen, not just reload** | (31b) Metro reload alone doesn't always trigger full re-mount + re-hydration. Force-stop + reopen is the reliable reset. |
 | **84 backend tests across 5 files via native `tsx --test` (Node test runner)** | (31a + 31c + 31d) No Jest dependency on backend. `npx tsx --test <file>` runs one suite. Mobile keeps Jest for formulas.js (348 tests). |
 | **`streak_broken` activity_log row written in same tx as player rollover update** | (31c) Metadata: `{previous_streak, grace_day_used, new_current_streak, new_grace_days_banked}`. Audit trail for every streak transition. |
+| **Alliance schema: short_name as text + UNIQUE + CHECK regex, not character(3)** | (32) character(n) pads with spaces and breaks comparisons. text + CHECK `^[A-Z]{3}$` enforces the same constraint cleanly. |
+| **Alliance membership: separate `alliance_members` join table with UNIQUE on player_id, not just `players.alliance_id`** | (32) DB-level "one alliance per player" enforcement. Join table cleanly supports per-member role, joined_at, recruit_streak_count, recruit_last_completion_date without polluting players. `players.alliance_id` retained as denormalised mirror for fast joins. |
+| **ROLE_SLOTS uses `null` for unlimited (soldier, recruit); cap-checks gate on `!= null`** | (32) Cleaner than sentinel values like Infinity. Helpers test `cap != null` then `count < cap`. |
+| **Service-layer transaction pattern: services take `tx` as first arg, called inside `prisma.$transaction` in service layer** | (32) Mirrors challenge-complete pattern. Every alliance write goes through one tx. |
+| **HQ transition on found: `owner_id=NULL` + `alliance_id=set`, in same tx as alliance insert** | (32) Per spec §3.4. Founder's HQ territory becomes alliance-owned, not personally owned. Reverse on disband. |
+| **Disband behaviour: alliance row persists (`disbanded_at` set), HQ reverts neutral, `alliance_members` rows deleted** | (32) Keeps disbanded alliances in history for audit. short_name NOT freed — UNIQUE holds the row. Decide before launch: free up on disband OR keep permanent (Hall of Holders attribution). |
+| **`/me/alliance` lives in alliance module despite `/me` path prefix** | (32) URL convention is not module boundary. Keeps all alliance code in one place. |
+| **Skipped tz-lookup for hq_timezone derivation — used `player.home_timezone` directly** | (32) Founder + HQ are same-city by city-match rule. One fewer dep call. |
+| **`findPlayerAllianceId` reads `players.alliance_id` via tx, not via membership table join** | (32) Denormalised mirror is the fast path for claim/contest. Membership table is source of truth on writes. |
+| **Schema correction: Home District = home city itself (text on player), HQ = territory player owns IN that city** | (33) S32 added `alliances.home_district` + `home_district_territory_id` FK in a misreading of spec §3.1. Both dropped. Home District is the city; HQ is the seat. Two concepts, two columns — no separate "home district territory". |
+| **Mobile founding flow: pre-check short_name uniqueness in Supabase before submit; fail open on network error** | (33) UX > one source of truth at the wizard step. Backend remains authoritative. Network failure shouldn't block submission — let the backend reject if needed. |
+| **`getTokenRef` pattern for Clerk-authed fetches inside `useEffect`** | (33, 35) Clerk's `getToken` is a new function reference on every render. Including it in `useEffect` deps causes infinite re-runs. Capture via `useRef`, exclude from deps, call `() => getTokenRef.current()` inside the fetch. Adopted as codebase convention. |
+| **Browse list filters on both `.is('disbanded_at', null)` AND `.eq('city', playerHomeCity)`** | (33) Disbanded alliances must not appear (rejoin would 410). City filter matches game rule (same-city only). |
+| **home_city derivation via PostGIS two-step: ST_Contains then ST_DWithin within 10km** | (34) Fast path for pins inside a territory; nearest-fallback for residential/sparse areas. 10km cap prevents cross-country wrong assignments. If both miss, home_city left unchanged. |
+| **`ensurePostgisSearchPath()` runs `set_config(..., true)` per transaction** | (34) Supabase puts PostGIS in `postgis` schema, not on default search_path. Without set_config, ST_Contains/ST_DWithin fail to resolve. Local `set_config` is tx-scoped, so it doesn't leak to other connections. |
+| **`resolveHomeCityFromPin` wraps own `prisma.$transaction` when no tx passed** | (34) set_config + lookup queries must share a pinned connection. Backfill script calls without tx — needed own internal tx to keep search_path consistent. |
+| **`territories.city` canonical form: Title Case ('Amsterdam', 'Saint Petersburg')** | (34) Was mixed casing ('amsterdam' lowercase, 'Saint Petersburg' Title Case). Normalised DB + test fixtures. Title Case matches UI display, avoids transform on read. |
+| **`/alliances/found` returns full `{ alliance, members }` matching `getAllianceById` exactly (deepEqual-verified)** | (35) Consistency > micro-optimisation. Single shape for both fetch-by-id and post-create. Test asserts deepEqual so they can't drift. |
+| **Mobile AllianceJoinedScreen fetches by id on mount, doesn't receive object via nav params** | (35) Single code path. Screen always reflects backend state. ~200ms cost invisible behind founding celebration copy. Same path will serve future join flow. |
+| **Loading/error/retry as canonical 3-state pattern for fetch-by-id screens** | (35) ActivityIndicator in CLAIM colour, minimal mono error message with CLAIM-bordered Retry button. Re-fetch via `retryCount` state increment. Adopted from AllianceScreen.js, applied to AllianceJoinedScreen.js. |
+| **Demote is Founder-only per spec §3.3 literal reading** | (36) Spec lists "promote/demote all roles" only under Founder. Keeps permission graph simple and matches "Built this alliance. Full authority." framing. |
+| **Promote/demote target roles restricted to marshal/officer/sergeant/soldier (no founder, no recruit)** | (36) Founder transfer is a separate flow (voluntary transfer endpoint, deferred). Recruit is starting state only — entered via join, exited via auto-promote after 3 streak days. |
+| **Mobile manage-member UI: full-screen confirm view + flat-list action picker (no nested role-picker, no bottom sheet)** | (36) Same pattern as leave-confirm. "Type is the hierarchy" — flat list ordered by destructive-ness. Consistency with existing patterns wins. |
+| **Mobile manage actions are server-confirmed, not optimistic** | (36) Matches existing leave/join flow. No rollback complexity. Backend tx is the source of truth. |
+| **Did NOT pre-check slot caps client-side; backend rejects with role_slots_full 409, rendered in error band** | (36) Slot state is edge case + client mirror adds state complexity. Backend already enforces. Same pattern as join error path. |
+| **Distinct event types per action (`alliance_promoted` / `alliance_demoted`) over generic `alliance_role_changed`** | (36) Symmetric, more grep-able, audit-friendly. One more constraint ALTER on prod is cheap. |
+| **Territory propagation on join/leave/kick via `setAllianceIdOnPlayerTerritories`; disband path skips (already bulk-clears via `disbandAlliance`)** | (36) Spec §2.3 + §3.8 + §8.4.2. Joiner's existing territories adopt alliance_id; leaver/kicked-player's territories release it. Disband already clears all alliance territories in one bulk update — no double-clear needed. |
+| **Bug-verification before fix-scheduling: read current code directly, do not trust stale session-summary observations** | (36) Two suspected bugs from S35 (founding HQ link, disband member cleanup) turned out to be already fixed in current code. S35 observations were stale data, not code bugs. Locked correctness with regression tests instead of rebuilding. |
+| **Every new activity_log event_type requires SQL ALTER on BOTH dev AND prod constraints** | (32, 36) Cursor modified dev DB directly when adding new event types without notifying. Caught twice — applied same ALTER to prod before pushing. Pattern: keep dev + prod constraint diff at zero. |
+| **Supabase SQL editor returns "No rows" for any non-SELECT (UPDATE/DELETE/DDL) — always verify writes with follow-up SELECT** | (35, 36) Editor's "no rows" is not a failure signal; it's the default for non-SELECT. Multiple data cleanups went un-verified before this was internalised. |
+| **Confirm backend deploys reached Railway with `git log -1 --oneline` before assuming changes shipped** | (35) Cursor's "tests green" report only verifies local changes. Files were modified-but-not-committed for a long stretch. Final commit was what triggered Railway redeploy. |
 
 ---
 
