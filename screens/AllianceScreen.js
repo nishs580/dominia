@@ -2,7 +2,8 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance } from '../lib/allianceApi';
+import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember } from '../lib/allianceApi';
+import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 
@@ -59,13 +60,47 @@ function mapLeaveAllianceError(error) {
   }
 }
 
+function mapManageError(error) {
+  const code = error?.error ?? error?.code ?? null;
+  switch (code) {
+    case 'role_slots_full': return 'Role is at capacity.';
+    case 'insufficient_permission': return 'You cannot perform that action.';
+    case 'only_founder_can_demote': return 'Only the Founder can demote members.';
+    case 'cannot_kick_founder': return 'The Founder cannot be removed.';
+    case 'cannot_promote_founder': return 'The Founder cannot be promoted.';
+    case 'cannot_demote_self': return 'You cannot demote yourself.';
+    case 'cannot_promote_self': return 'You cannot promote yourself.';
+    case 'cannot_kick_self': return 'You cannot kick yourself.';
+    case 'invalid_target_role': return 'Invalid target role.';
+    case 'new_role_not_higher': return 'New role must be higher.';
+    case 'new_role_not_lower': return 'New role must be lower.';
+    case 'actor_not_in_alliance': return 'You are not in this alliance.';
+    case 'target_not_in_alliance': return 'Member not found in alliance.';
+    default: return 'Action failed. Try again.';
+  }
+}
+
+function actionLabel(action) {
+  if (action.type === 'kick') return 'KICK';
+  if (action.type === 'promote') return `PROMOTE TO ${action.toRole.toUpperCase()}`;
+  if (action.type === 'demote') return `DEMOTE TO ${action.toRole.toUpperCase()}`;
+  return '';
+}
+
+function actionLoadingLabel(action) {
+  if (action.type === 'kick') return 'KICKING…';
+  if (action.type === 'promote') return 'PROMOTING…';
+  if (action.type === 'demote') return 'DEMOTING…';
+  return 'WORKING…';
+}
+
 function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
 }
 
-function RosterRow({ initials, name, role, steps, showBorder }) {
-  return (
-    <View style={[styles.rosterRow, showBorder && styles.rosterRowBorder]}>
+function RosterRow({ initials, name, role, steps, showBorder, onPress }) {
+  const inner = (
+    <>
       <View style={styles.rosterLeft}>
         <View style={styles.rosterAvatar}>
           <Text style={styles.rosterInitials}>{initials}</Text>
@@ -76,6 +111,28 @@ function RosterRow({ initials, name, role, steps, showBorder }) {
         </View>
       </View>
       <Text style={styles.rosterSteps}>{steps}</Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.rosterRow,
+          showBorder && styles.rosterRowBorder,
+          pressed && { opacity: 0.6 },
+        ]}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[styles.rosterRow, showBorder && styles.rosterRowBorder]}>
+      {inner}
     </View>
   );
 }
@@ -262,8 +319,13 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const [leaveConfirmCase, setLeaveConfirmCase] = useState(null);
   const [leaveSaving, setLeaveSaving] = useState(false);
   const [leaveError, setLeaveError] = useState('');
+  const [manageTarget, setManageTarget] = useState(null); // { player_id, username, role }
+  const [manageActionInFlight, setManageActionInFlight] = useState(null); // the action object currently submitting
+  const [manageError, setManageError] = useState('');
 
   const myMember = roster.find((m) => m.player_id === playerId);
+  const myRole = myMember?.role ?? null;
+  const myPlayerId = playerId;
   const isFounder = myMember?.role === 'founder';
   const rosterSize = roster.length;
 
@@ -303,6 +365,134 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       setLeaveSaving(false);
     }
   };
+
+  const handleRosterRowTap = (member) => {
+    if (!myRole || !myPlayerId) return;
+    const actions = getAvailableActions({
+      actorRole: myRole,
+      actorPlayerId: myPlayerId,
+      targetRole: member.role,
+      targetPlayerId: member.player_id,
+    });
+    if (actions.length === 0) return; // not tappable
+    setManageError('');
+    setManageActionInFlight(null);
+    setManageTarget({ player_id: member.player_id, username: member.username, role: member.role });
+  };
+
+  const closeManage = () => {
+    if (manageActionInFlight) return;
+    setManageError('');
+    setManageTarget(null);
+  };
+
+  const submitManageAction = async (action) => {
+    if (!manageTarget || manageActionInFlight) return;
+    setManageActionInFlight(action);
+    setManageError('');
+    try {
+      let result;
+      if (action.type === 'kick') {
+        result = await kickMember({
+          clerkGetToken: getToken,
+          allianceId: myAlliance.id,
+          playerId: manageTarget.player_id,
+        });
+      } else if (action.type === 'promote') {
+        result = await promoteMember({
+          clerkGetToken: getToken,
+          allianceId: myAlliance.id,
+          playerId: manageTarget.player_id,
+          toRole: action.toRole,
+        });
+      } else if (action.type === 'demote') {
+        result = await demoteMember({
+          clerkGetToken: getToken,
+          allianceId: myAlliance.id,
+          playerId: manageTarget.player_id,
+          toRole: action.toRole,
+        });
+      }
+
+      if (result?.ok) {
+        setManageTarget(null);
+        setManageError('');
+        await onRefreshAfterLeave(); // existing refetch prop — reuse, do not rename
+        return;
+      }
+      setManageError(mapManageError(result?.error));
+    } catch (err) {
+      console.error('Manage action failed:', err);
+      setManageError('Action failed. Try again.');
+    } finally {
+      setManageActionInFlight(null);
+    }
+  };
+
+  if (manageTarget) {
+    const availableActions = getAvailableActions({
+      actorRole: myRole,
+      actorPlayerId: myPlayerId,
+      targetRole: manageTarget.role,
+      targetPlayerId: manageTarget.player_id,
+    });
+
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.confirmWrap}>
+          <Text style={styles.confirmKicker}>Manage member</Text>
+          <Text style={styles.confirmTitle}>{(manageTarget.username ?? '—').toUpperCase()}</Text>
+          <Text style={styles.confirmTag}>{formatAllianceRole(manageTarget.role)}</Text>
+
+          {availableActions.map((action, idx) => {
+            const isThisInFlight =
+              manageActionInFlight &&
+              manageActionInFlight.type === action.type &&
+              manageActionInFlight.toRole === action.toRole;
+            const isAnyInFlight = manageActionInFlight !== null;
+            return (
+              <Pressable
+                key={`${action.type}-${action.toRole ?? 'x'}`}
+                accessibilityRole="button"
+                disabled={isAnyInFlight}
+                onPress={() => submitManageAction(action)}
+                style={({ pressed }) => [
+                  styles.cta,
+                  idx > 0 && { marginTop: 10 },
+                  isAnyInFlight && styles.ctaDisabled,
+                  pressed && !isAnyInFlight && { opacity: 0.9 },
+                ]}
+              >
+                {isThisInFlight ? (
+                  <>
+                    <ActivityIndicator color={BONE} />
+                    <Text style={[styles.ctaAction, { marginTop: 8 }]}>{actionLoadingLabel(action)}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.ctaAction}>{actionLabel(action)}</Text>
+                )}
+              </Pressable>
+            );
+          })}
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={manageActionInFlight !== null}
+            onPress={closeManage}
+            style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.cancelLinkText}>CANCEL</Text>
+          </Pressable>
+
+          {manageError ? <Text style={styles.joinError}>{manageError}</Text> : null}
+        </View>
+      </ScrollView>
+    );
+  }
 
   if (leaveConfirmCase) {
     const allianceName = myAlliance?.name ?? 'this alliance';
@@ -436,16 +626,28 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <View style={styles.sectionHairline} />
           <Text style={styles.sectionLabelRight}>RESETS MON 00:00</Text>
         </View>
-        {roster.map((m, i) => (
-          <RosterRow
-            key={m.player_id}
-            initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
-            name={m.username ?? '—'}
-            role={formatAllianceRole(m.role)}
-            steps="—"
-            showBorder={i < roster.length - 1}
-          />
-        ))}
+        {roster.map((m, i) => {
+          const actions =
+            myRole && myPlayerId
+              ? getAvailableActions({
+                  actorRole: myRole,
+                  actorPlayerId: myPlayerId,
+                  targetRole: m.role,
+                  targetPlayerId: m.player_id,
+                })
+              : [];
+          return (
+            <RosterRow
+              key={m.player_id}
+              initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
+              name={m.username ?? '—'}
+              role={formatAllianceRole(m.role)}
+              steps="—"
+              showBorder={i < roster.length - 1}
+              onPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
+            />
+          );
+        })}
 
         <Pressable
           style={({ pressed }) => [styles.warRoomBtn, pressed && { opacity: 0.7 }]}
