@@ -22,18 +22,26 @@ const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
-const BENEFITS = [
+const BENEFITS_FOUNDED = [
   { title: 'Collective defence', sub: 'Alliance members can defend your territories.' },
   { title: 'Shared War Chest', sub: 'Pool resources to fund alliance abilities.' },
   { title: 'Alliance colour', sub: 'Alliance-held territories now display in Alliance green.' },
   { title: 'Alliance missions', sub: 'Weekly shared goals. Complete together for resources.' },
   { title: 'Recruit up to 19 Commanders', sub: "Invite by username. Bring in players who haven't joined yet." },
 ];
+const BENEFITS_JOINED = [
+  { title: 'Collective defence', sub: 'Alliance members can defend your territories.' },
+  { title: 'Shared War Chest', sub: 'Pool resources to fund alliance abilities.' },
+  { title: 'Alliance colour', sub: 'Your territories now display in Alliance green.' },
+  { title: 'Alliance missions', sub: 'Weekly shared goals. Complete together for resources.' },
+  { title: 'Welcome the Commander', sub: 'Existing members will see you in their roster.' },
+];
 
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { allianceId } = route.params ?? {};
+  const { allianceId, context } = route.params ?? {};
+  const isJoined = context === 'joined';
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -128,7 +136,7 @@ export default function AllianceJoinedScreen() {
 
         {/* Kicker */}
         <View style={styles.kickerRow}>
-          <Text style={styles.kickerText}>Alliance founded</Text>
+          <Text style={styles.kickerText}>{isJoined ? 'Alliance joined' : 'Alliance founded'}</Text>
           <View style={styles.kickerRule} />
         </View>
 
@@ -137,7 +145,7 @@ export default function AllianceJoinedScreen() {
         <Text style={styles.tag}>[{alliance?.short_name ?? 'XXX'}]</Text>
 
         {/* Milestone subtitle */}
-        <Text style={styles.subtitle}>Ready for war.</Text>
+        <Text style={styles.subtitle}>{isJoined ? "You're no longer alone on this map." : 'Ready for war.'}</Text>
 
         {/* Meta grid: city + commanders */}
         <View style={styles.metaGrid}>
@@ -159,7 +167,7 @@ export default function AllianceJoinedScreen() {
 
         {/* Benefit rows */}
         <View style={styles.bList}>
-          {BENEFITS.map((b, i) => (
+          {(isJoined ? BENEFITS_JOINED : BENEFITS_FOUNDED).map((b, i) => (
             <View key={i} style={[styles.bRow, i === 0 && styles.bRowFirst]}>
               <Text style={styles.bNum}>{String(i + 1).padStart(2, '0')}</Text>
               <View style={styles.bText}>

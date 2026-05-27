@@ -297,7 +297,7 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation, Mapbox dark-v11 home pin map. Uses `lib/homePinApi.js` `setHomePin` (POST /me/home-pin — derives BOTH home_timezone AND home_city automatically). |
 | Sign In screen | ✓ Branded | DOMINIA wordmark + ▪ claim mark |
 | Username screen | ✓ Branded | 2-char minimum |
-| Active Claim screen | ✓ Branded | DEV_MODE=true. TaskManager-owned distance loop (screen is pure consumer of `claimState`). `DIAG_CALIBRATION` writes to debug_events per tick. |
+| Active Claim screen | ✓ Branded | Real TaskManager + Health Connect path (screen is pure consumer of `claimState`). `DEV_MODE_MANUAL=false` hides manual COMPLETE button. `DIAG_CALIBRATION=true` emits per-tick debug rows. |
 | HealthConnectDebug screen | ✓ Live data | Hidden. SDK status, permission state, today's steps, raw JSON dump, 7-day breakdown, snapshot to `debug_events`. |
 | Claim Success screen | ✓ Live data | Atomic Gold + Siege XP write. |
 | Contest Result screen | ✓ Live data | 4 states. attack_won verified on device; defence states wired but not exercised end-to-end. |

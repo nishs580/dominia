@@ -528,6 +528,7 @@ export default function MapScreen() {
   // New fetches merge into this map; render derives FeatureCollection from it.
   // Bounded to ~3000 entries — when exceeded, evict features outside last viewport.
   const featureCacheRef = useRef(new Map());
+  const previousAllianceIdRef = useRef(undefined);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
@@ -731,6 +732,28 @@ export default function MapScreen() {
     fetchPlayer();
   }, [fetchPlayer]);
 
+  useEffect(() => {
+    const currentAllianceId = myPlayer?.alliance_id ?? null;
+    const previous = previousAllianceIdRef.current;
+    if (previous !== undefined && previous !== currentAllianceId) {
+      // Alliance affiliation changed (joined, left, or kicked). Invalidate full cache and refetch.
+      featureCacheRef.current.clear();
+      if (lastBoundsRef.current) {
+        (async () => {
+          let zoom = 14;
+          if (mapRef.current) {
+            try {
+              const z = await mapRef.current.getZoom();
+              if (z != null) zoom = z;
+            } catch {}
+          }
+          fetchTerritoriesForViewport(lastBoundsRef.current, zoom);
+        })();
+      }
+    }
+    previousAllianceIdRef.current = currentAllianceId;
+  }, [myPlayer?.alliance_id, fetchTerritoriesForViewport]);
+
   const onCameraChanged = useCallback((state) => {
     if (state?.gestures?.isGestureActive === true) {
       return;
@@ -784,7 +807,8 @@ export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchResourceBanner();
-    }, [fetchResourceBanner])
+      fetchPlayer();
+    }, [fetchResourceBanner, fetchPlayer])
   );
 
   const fillStyle = useMemo(
