@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: May 27, 2026 (Session 38 — claim progress race fix + founder voluntary transfer)
+Last updated: May 29, 2026 (Sessions 40–44 — **Progression module CORE COMPLETE**, slices 1–5 shipped)
 
 ---
 
@@ -50,7 +50,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
 | Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` ^22.2.0 (namespaced API — v23 modular migration is a future task) | ✓ Working end to end |
-| Test runner | Jest 29.7 + jest-expo (mobile, 348 tests) · `tsx --test` (backend, 126+ tests across 12 files — alliance suite at 77) | ✓ All passing |
+| Test runner | Jest 29.7 + jest-expo (mobile, 348 tests) · `tsx --test` (backend, **193+ tests across 14+ files** — 55 progression + 12 shared/formulas + 54 me/ + 77 alliance) | ✓ All passing |
 
 **Backend (`dominia-backend` repo):**
 
@@ -138,12 +138,40 @@ dominia-backend/
 │   │   ├── debug/                   ✓ Live — routes gated by (NODE_ENV !== 'production' || ALLOW_DEBUG_ROUTES === 'true')
 │   │   │   └── routes.ts            // POST /debug/streak-rollover ✓ · POST /debug/streak-break-warning ✓ · /debug/contest-expiry/:contestId ✓
 │   │   │
-│   │   ├── progression/             ○ Not started — XP, levels, Siege XP, solo protection tiers
+│   │   ├── progression/             ✓ LIVE — Siege XP + Levels + Solo Protection (CORE COMPLETE S44)
+│   │   │   ├── progression.formulas.ts  ✓ // LEVEL_XP_FLOORS, LEVEL_TITLES, TerritoryTier,
+│   │   │   │                            //   XP_PER_CLAIM/CONTEST_WIN/DEFENCE_WIN,
+│   │   │   │                            //   isTerritoryTier, calcLevel, calcLevelProgress,
+│   │   │   │                            //   getLevelTitle, calcClaimXp, calcContestWinXp,
+│   │   │   │                            //   calcDefenceWinXp (multiplier-aware), XpMultiplierOpts
+│   │   │   ├── progression.queries.ts   ✓ // grantSiegeXp(tx, playerId, delta) — atomic Prisma
+│   │   │   │                            //   {increment} + conditional 2nd UPDATE for level recompute.
+│   │   │   │                            //   Returns {newXp, previousLevel, newLevel, leveledUp}.
+│   │   │   │                            //   Null guard throws (loud-failure for data integrity).
+│   │   │   ├── progression.helpers.ts   ✓ // (S44) canContestTerritory(attacker, target) — pure §8.1
+│   │   │   │                            //   protection check. Returns discriminated union
+│   │   │   │                            //   {ok:true} | {ok:false, reason}. 3 reasons:
+│   │   │   │                            //   attacker_level_too_low / target_solo_protected /
+│   │   │   │                            //   target_alliance_protected_from_solo.
+│   │   │   ├── progression.test.ts             ✓ // 20 tests: 8 formulas + 3 grantSiegeXp DB + 9 multiplier
+│   │   │   ├── progression.helpers.test.ts     ✓ // (S44) 21 protection-matrix tests (full §8.1 cross-product)
+│   │   │   ├── progression-integration.test.ts ✓ // 14 wiring tests: S41 callsites + S42 multipliers
+│   │   │   │                            //   + S43 milestone + S44 protection enforcement
+│   │   │   └── index.ts                 ✓ // Library + helpers only — no routes registered.
+│   │   │
 │   │   ├── leaderboard/             ○ Not started — Redis Sorted Set (ZADD on resolution, ZREVRANGE on read)
 │   │   ├── realm/                   ○ Not started — realm assignment, saturation monitoring
 │   │   └── activity/                ○ Not started — POST /activity/steps, 30 km/h velocity check
 │   │
 │   ├── shared/
+│   │   ├── formulas/                ✓ (S42/S43) Cross-module pure math — single source of truth
+│   │   │   ├── canonical-earn.ts        ✓ // calcCanonicalEarn, BONUS_PRODUCT_CAP=3.0. One impl of
+│   │   │   │                            //   buff stacking across modules.
+│   │   │   ├── streak.ts                ✓ // STREAK_TIER_THRESHOLDS, STREAK_MULT_TIER_CAP,
+│   │   │   │                            //   STREAK_MILESTONE_DAYS=[7,14,21,30,60,90],
+│   │   │   │                            //   STREAK_MILESTONE_XP=250, getStreakTier,
+│   │   │   │                            //   calcStreakMultiplier, isStreakMilestone.
+│   │   │   └── streak.test.ts           ✓ // 12 unit tests (isStreakMilestone boundaries + sanity)
 │   │   ├── prisma.ts                ✓ Singleton PrismaClient with `@prisma/adapter-pg`. globalThis-cached for tsx-watch hot reload survival.
 │   │   ├── supabase.ts              ✓ Service-role client. Used only by territory GET (PostGIS RPC).
 │   │   ├── auth.ts                  ✓ Clerk verifyToken middleware, per-route preHandler.
@@ -393,11 +421,11 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/modules/me/home-pin.service.ts` | (34) `resolveHomeCityFromPin` (PostGIS two-step lookup: ST_Contains on territories.geom → fallback nearest within 10km via ST_DWithin + KNN <-> operator. If both miss, home_city left unchanged). `ensurePostgisSearchPath()` helper using `set_config(..., true)` since Supabase puts PostGIS in the postgis schema. Wraps own `prisma.$transaction` when no tx passed so set_config + lookup share a pinned connection. `setHomePin` writes home_pin_lat/lng/home_timezone/home_city in one transaction. |
 | `src/modules/me/fcm-token.*` | PATCH /me/fcm-token. Zod body `{fcm_token: string(1..4096) \| null}`. requireAuth. |
 | `src/modules/me/challenge-complete.routes.ts` | (31a) POST /me/challenge-complete. Zod body validates `challenge_key`, `tier` (lowercase enum: easy/medium/hard), `earn_key`. requireAuth. |
-| `src/modules/me/challenge-complete.service.ts` | (31a) Orchestrates the entire flow inside ONE `prisma.$transaction`: idempotent player_challenges insert → streak advance → Grace Day grant at days 7/30/60 (capped at 3) → XP via `calcChallengeXp` → resources via `calcResourceEarn` flat table → level via `calcLevel` → single `activity_log` row. Returns `{leveled_up, grace_day_granted, ...}`. |
-| `src/modules/me/challenge-complete.queries.ts` | (31a, RACE-FIXED 31b) Monetary fields (xp, iron, stone, gold, morale) use Prisma `{increment}` (atomic Postgres `column = column + N`) — fixes race where 3 concurrent POSTs from auto-complete watcher all read same pre-state and last-commit-wins lost easy+medium XP. Streak fields stay absolute SET (safe because `computeNewStreak` is idempotent for same-day repeats + gated by player_challenges UNIQUE). Level recomputed in second UPDATE inside same tx, gated by `calcLevel(newXp) !== currentLevel`. |
-| `src/modules/me/challenge.formulas.ts` | (31a) Ported subset of root `formulas.js` — CHALLENGE_TIERS, STREAK_TIER_THRESHOLDS, calcChallengeXp, RESOURCE_EARN flat table, calcLevel, validators. Centralise rule: 3+ modules needing same math (currently 2). |
+| `src/modules/me/challenge-complete.service.ts` | (31a, S43) Orchestrates the entire flow inside ONE `prisma.$transaction`: idempotent player_challenges insert → streak advance → Grace Day grant at days 7/30/60 (capped at 3) → XP via `calcChallengeXp` → resources via `calcResourceEarn` flat table → level via `calcLevel` → single `activity_log` row. **(S43)** After `updatePlayerOnChallengeComplete` returns, checks `isStreakMilestone(newStreak) && snapshot.current_streak < newStreak` — on crossing 7/14/21/30/60/90, calls `grantSiegeXp(tx, playerId, 250)` AFTER the challenge XP increment (so milestone row's `level_before` reflects post-challenge state), then `logStreakMilestone` writes a second activity_log row. Two activity_log rows per milestone-day completion, one per non-milestone. Idempotent via existing `player_challenges` UNIQUE. Returns `{leveled_up, grace_day_granted, ...}`. |
+| `src/modules/me/challenge-complete.queries.ts` | (31a, RACE-FIXED 31b, S43) Monetary fields (xp, iron, stone, gold, morale) use Prisma `{increment}` (atomic Postgres `column = column + N`) — fixes race where 3 concurrent POSTs from auto-complete watcher all read same pre-state and last-commit-wins lost easy+medium XP. Streak fields stay absolute SET (safe because `computeNewStreak` is idempotent for same-day repeats + gated by player_challenges UNIQUE). Level recomputed in second UPDATE inside same tx, gated by `calcLevel(newXp) !== currentLevel`. **(S43)** Adds `logStreakMilestone(tx, playerId, payload)` writer — inserts `streak_milestone` activity_log row with metadata `{streak_days, streak_tier, is_milestone:true, xp_awarded, level_before, level_after, leveled_up}`. Domain-local: NOT imported from territory's `XpGrant`/`StreakMetadata` types (cross-module type import would be wrong-direction). |
+| `src/modules/me/challenge.formulas.ts` | (31a, S40 shim) Ported subset of root `formulas.js` — CHALLENGE_TIERS, STREAK_TIER_THRESHOLDS, calcChallengeXp, RESOURCE_EARN flat table, validators. **(S40)** `LEVEL_XP_FLOORS` and `calcLevel` now re-exported from `progression/progression.formulas.js` (backwards-compat shim; zero call-site change). |
 | `src/modules/me/streak.helpers.ts` | (31a) Pure functions — `computeNewStreak`, `yesterdayOf`, `isGraceDayMilestone`, `applyGraceDayGrant`. |
-| `src/modules/streak/streak-rollover.*` | (31c) Midnight rollover. Per-tz repeatable cron `0 0 * * *`. `evaluateRollover` decides per player: consume_grace / reset_streak / no_op. Optimistic-concurrency UPDATE-with-WHERE-guard (`WHERE id=? AND last_active_date=expected`). Sequential per-player processing inside batch (not Promise.all). `activity_log streak_broken` row written in same tx. 12 helper tests. |
+| `src/modules/streak/streak-rollover.*` | (31c, audit-clarified S43) Midnight rollover. Per-tz repeatable cron `0 0 * * *`. `evaluateRollover` decides per player: consume_grace / reset_streak / no_op. Optimistic-concurrency UPDATE-with-WHERE-guard (`WHERE id=? AND last_active_date=expected`). Sequential per-player processing inside batch (not Promise.all). `activity_log streak_broken` row written in same tx. **(S43 audit clarification)** No XP writes happen here — rollover only handles missed-day paths. Streak ADVANCEMENT happens in `challenge-complete.service.ts` (which is also where the milestone +250 XP fires, alongside `applyGraceDayGrant`). 12 helper tests. |
 | `src/modules/streak/streak-break-warning.*` | (31d) 23:55 warning push per-tz repeatable cron `55 23 * * *`. `evaluateWarning` + `formatWarningMessage` per spec §4.5.1. Copy: "You haven't completed today's challenge yet. You have 5 minutes before your streak resets. Grace Days: [N remaining / none]." Dispatched via `sendImmediately` (NOT `sendPush`) to bypass Quiet Hours queue — 23:55 IS inside 23:00–05:00 Quiet Hours and spec mandates the push fires. 13 helper tests. |
 | `src/modules/streak/bootstrap.ts` | (31c) `bootstrapStreakRolloverJobs` — registers Queue/Worker pair on startup, then upserts one repeatable job per distinct `home_timezone` in players. 2 jobs registered currently (Europe/Moscow, Europe/Amsterdam). |
 | `src/modules/streak/bootstrap-warning.ts` | (31d) `bootstrapStreakBreakWarningJobs` — same pattern for 23:55 warning. Separate file: each scheduled module gets its own bootstrap. |
@@ -415,7 +443,13 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/modules/alliance/index.ts` | (32–38) registers found + join + leave + kick + promote + demote + transfer + get routes. |
 | `scripts/backfill-home-city.ts` | (34) Idempotent backfill for `players.home_city` via `resolveHomeCityFromPin`. Logs per-player progress and final totals. Ran 10/10 successfully against Railway. |
 | `src/modules/debug/routes.ts` | Debug routes gated by `(NODE_ENV !== 'production' \|\| ALLOW_DEBUG_ROUTES === 'true')`. Active: POST /debug/streak-rollover, POST /debug/streak-break-warning, GET /debug/contest-expiry/:contestId. **`ALLOW_DEBUG_ROUTES` currently ON in Railway — flip OFF before any external playtest.** |
-| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. `claim.queries.ts findPlayerAllianceId` now reads `players.alliance_id` via tx (no longer a stub; unwired in 32). |
+| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. `claim.queries.ts findPlayerAllianceId` now reads `players.alliance_id` via tx (no longer a stub; unwired in 32). **(S41/S42/S44 progression hooks):** `claim.service.ts` grants `calcClaimXp(tier, {streakDays, isSupplyLineActive:false, isCityEvent:false})` via `grantSiegeXp` inside tx (S42 multiplier-aware). `contest.service.ts` initiate runs `canContestTerritory(attacker, target)` between self-contest guard and tier level gate (S44 §8.1 enforcement); 403 with `CONTEST_REJECT_MESSAGES[reason]`. `contest-walk.service.ts` grants `calcContestWinXp` (attacker_won) or `calcDefenceWinXp` (defender_won) — both multiplier-aware (S42). `contest-expiry.worker.ts` grants `calcDefenceWinXp` to `defender_player_id ?? defender_id`. All four use `findPlayerStreakDays(tx, ...)` to read streak inside tx. `abandon` correctly grants NO XP (Siege XP cannot diminish). Query extensions: `findPlayerByClerkIdForContest` selects `alliance_id`; `findTerritoryForContest` includes `players: {select: {level: true}}` (S44); `findContestForWalk`/`findContestForExpiry` include `tier` (S41). `contest.routes.ts CLIENT_ERROR_CODES` extended to include 403 (S44). |
+| `src/modules/progression/progression.formulas.ts` | (S40) Pure math. `LEVEL_XP_FLOORS` (10 levels), `LEVEL_TITLES`, `TerritoryTier` type, `isTerritoryTier`, `calcLevel`, `calcLevelProgress`, `getLevelTitle`, `calcClaimXp`, `calcContestWinXp`, `calcDefenceWinXp` — all three earn formulas accept optional `XpMultiplierOpts` (S42) for streak/supply-line/city-event stacking. Backwards-compat: omit `opts` → flat base XP. Tier keys lowercase to match wire format. |
+| `src/modules/progression/progression.queries.ts` | (S40) `grantSiegeXp(tx, playerId, delta)` — THE single XP-write primitive. Atomic Prisma `{increment}` on `players.xp` + conditional 2nd UPDATE for level recompute (gated by `calcLevel(newXp) !== currentLevel`). Returns `{newXp, previousLevel, newLevel, leveledUp}`. Null guard throws `serviceError(500)` with player ID + actual values — loud failure for data integrity, never silent 0/1 fallback. Used by all 4 XP-granting callsites + S43's milestone path. |
+| `src/modules/progression/progression.helpers.ts` | (S44) `canContestTerritory(attacker, target): {ok:true} \| {ok:false, reason}` — pure §8.1 protection check, no DB. Discriminated union over 3 reasons: `attacker_level_too_low` (L1–3), `target_solo_protected` (L1–3 solo target), `target_alliance_protected_from_solo` (L4–5 solo attacker vs alliance territory). Pattern mirrors `alliance/membership.helpers.ts`. Reason codes are domain; player-facing copy lives at the callsite (`contest.service.ts CONTEST_REJECT_MESSAGES` map). |
+| `src/shared/formulas/canonical-earn.ts` | (S42) `calcCanonicalEarn`, `BONUS_PRODUCT_CAP = 3.0`. Single source of truth for buff stacking — was previously duplicated across modules. Lifted to shared/ to end the drift trap. |
+| `src/shared/formulas/streak.ts` | (S42/S43) `STREAK_TIER_THRESHOLDS`, `STREAK_MULT_TIER_CAP` (tier-specific multiplier cap, e.g. ×1.15 on Epic), `STREAK_MILESTONE_DAYS = [7,14,21,30,60,90]`, `STREAK_MILESTONE_XP = 250`, `getStreakTier`, `calcStreakMultiplier` (unified — pre-S42 had two definitions in two files), `isStreakMilestone(streakDays)`. The single source of truth for streak math; previously split between contest and progression modules. |
+| `prisma/migrations-manual/20260528-add-streak-milestone-event-type.sql` | (S43) First migration committed under the new `migrations-manual/` convention. Extends `activity_log_event_type_check` constraint via DROP + ADD pattern to whitelist `streak_milestone`. Idempotent against known pre-state. Project uses `prisma db pull` introspection, not `prisma migrate` — hand-written SQL committed for replay/audit, applied via Supabase SQL Editor + verified with `pg_get_constraintdef`. Sets precedent for all future hand-written SQL migrations. |
 | `src/shared/notifications/*` | FCM dispatch with Quiet Hours. `sendPush` (lookup token → quiet check → enqueue or immediate), `sendImmediately` (bypasses quiet check by design), `isStaleTokenError` matches 3 codes incl. `messaging/invalid-argument`. |
 | `src/shared/queues/contest-expiry.queue.ts` | jobId `expiry-${contestId}` (hyphens not colons). One-shot. |
 | `src/shared/queues/quiet-hours-push.queue.ts` | jobId `quiet-${playerId}-${kind}-${timestamp}`. Delayed dispatch to next 05:00 local. |
@@ -504,12 +538,16 @@ npm run dev                           # tsx watch
 npm run build                         # full tsc — pre-push gate (catches ESM .js extension issues that typecheck misses)
 npm run typecheck                     # tsc --noEmit — NOT sufficient as pre-push gate
 
-# Backend unit tests (118+ tests across 11+ files, native node test runner via tsx)
+# Backend unit tests (193+ tests across 14+ files, native node test runner via tsx)
 npx tsx --test src/modules/me/streak.helpers.test.ts
 npx tsx --test src/modules/me/challenge.formulas.test.ts
 npx tsx --test src/shared/timezone.test.ts
+npx tsx --test src/shared/formulas/streak.test.ts          # (S43) 12 tests — isStreakMilestone + boundaries
 npx tsx --test src/modules/streak/streak-rollover.helpers.test.ts
 npx tsx --test src/modules/streak/streak-break-warning.helpers.test.ts
+npx tsx --test src/modules/progression/progression.test.ts                # (S40/S42) 20 — formulas + grantSiegeXp + multipliers
+npx tsx --test src/modules/progression/progression.helpers.test.ts        # (S44) 21 — full §8.1 protection matrix
+npx tsx --test src/modules/progression/progression-integration.test.ts    # (S41-S44) 14 — all XP grants + protection enforcement
 npx tsx --test src/modules/alliance/membership.helpers.test.ts
 npx tsx --test src/modules/alliance/found.service.test.ts
 npx tsx --test src/modules/alliance/join.service.test.ts
@@ -662,9 +700,9 @@ FROM pg_constraint
 WHERE conname = 'activity_log_event_type_check';
 
 # Extend activity_log event_type whitelist (DROP + ADD pattern — every new event_type needs this).
-# Current whitelist (18): challenge_completed, territory_claimed, territory_abandoned,
+# Current whitelist (19): challenge_completed, territory_claimed, territory_abandoned,
 # contest_participated, km_walked, contest_defended, contest_won, contest_lost,
-# contest_held, contest_expired, streak_broken,
+# contest_held, contest_expired, streak_broken, streak_milestone,
 # alliance_founded, alliance_joined, alliance_left, alliance_role_changed,
 # alliance_kicked, alliance_demoted, alliance_promoted.
 ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
@@ -673,11 +711,17 @@ CHECK (event_type = ANY (ARRAY[
   'challenge_completed', 'territory_claimed', 'territory_abandoned',
   'contest_participated', 'km_walked', 'contest_defended',
   'contest_won', 'contest_lost', 'contest_held', 'contest_expired',
-  'streak_broken',
+  'streak_broken', 'streak_milestone',
   'alliance_founded', 'alliance_joined', 'alliance_left', 'alliance_role_changed',
   'alliance_kicked', 'alliance_demoted', 'alliance_promoted',
   '<new_event_type_here>'
 ]));
+
+# (S43) For new SCHEMA changes (CHECK constraints, columns, etc): the project uses
+# `prisma db pull` introspection, NOT `prisma migrate`. Hand-written SQL goes in
+# `prisma/migrations-manual/<YYYYMMDD>-<description>.sql`, then is applied via
+# Supabase SQL Editor + verified with pg_get_constraintdef. The migration file is
+# committed to the repo for audit/replay. Example: `20260528-add-streak-milestone-event-type.sql`.
 
 # Verify DDL ran (Supabase SQL editor returns "No rows" for DDL — NOT a failure):
 SELECT COUNT(*) AS table_exists FROM information_schema.tables
@@ -871,6 +915,42 @@ WHERE table_schema='public' AND table_name='<my_table>';
 - **Fix:** When a position-sensitive diff fails twice, skip "diff instructions" and go straight to "replace this entire function with exactly this code, character for character." Whole-function replacements land reliably on the first try.
 - **General lesson:** when Cursor keeps missing a subtle edit, switch from describing the delta to providing the full target shape. (S38)
 
+**35. "Code-complete + green-tests + closed-IDE ≠ shipped" — uncommitted slices look identical to live ones**
+- **Signature:** PROJECT_STATE marks a slice as shipped. Next session's Step 5 file-audit (`git log --oneline -10`) shows the latest commit is from a previous slice, with all the "shipped" files unstaged in working tree. Tests are still green because they ran locally against the uncommitted code.
+- **Cause:** Closing the IDE / wrapping the session before running `git push`. Local green tests don't imply upstream deployment. S42 was marked shipped May 28; surfaced May 29 in S43.
+- **Fix:** Every slice's final step explicitly requires: (1) `git status` clean, (2) commit pushed to `main`, (3) Railway healthcheck returns 200 against the new commit hash. "Shipped" is a three-condition state, not a feeling. Burned into S44's plan structure onward.
+- **General lesson:** the only valid "shipped" signal is upstream verification. Before declaring a slice done, paste `git log -1 --oneline` + a `curl /healthcheck` result into the session record. (S43)
+
+**36. Top-level imports of contest/Redis-backed services hang Windows test runners on open handles**
+- **Signature:** `tsx --test` tests pass on Windows but the runner never exits. CI hangs. Test that imports `initiateContest` from `contest.service.js` at the top of the file is the trigger.
+- **Cause:** Top-level `import { initiateContest } from 'contest.service.js'` transitively loads BullMQ + ioredis singletons (`shared/redis.ts`, queue files). On Windows, those open handles prevent the Node test runner from exiting after tests complete.
+- **Fix:** Two changes: (1) dynamic `await import(...)` inside the helper that needs the service, NOT at the top of the file. (2) Explicit `await redis.quit()` in a file-level `after()` hook. Pattern applies to ANY test that exercises contest-initiate, contest-walk, or any service that transitively loads queue/Redis singletons.
+- **General lesson:** if a test that should pass-and-exit hangs on Windows, suspect top-level imports of services with persistent connections. Convert to dynamic import + explicit teardown. (S44)
+
+**37. Prisma relation names aren't always auto-generated — read schema.prisma before using them**
+- **Signature:** Test or service code uses a Prisma relation name like `players_territories_owner_idToplayers` (the multi-FK auto-generation pattern). Prisma errors: "Unknown field `players_territories_owner_idToplayers` on model Territory."
+- **Cause:** Prisma only generates the disambiguated relation name when there are MULTIPLE FKs from the same source model to the same target model. With only one FK from `territories` to `players`, the relation is just `players` — not the verbose auto-name.
+- **Fix:** Always grep `schema.prisma` for the exact relation field name before referencing it in includes/selects. Audit step explicitly: "find the literal relation name used in schema.prisma" before writing any Prisma include.
+- **General lesson:** don't guess Prisma relation names from convention — read the schema. The autonaming rules only apply on collision. (S44)
+
+**38. Spec contradictions must be resolved BEFORE building, not during**
+- **Signature:** Step 3 of building a slice surfaces a contradiction between spec sections (e.g. §8.1's "Solo-vs-Solo Only" heading vs a conflicting bullet allowing L4–5 solos to attack alliance territory). Tests start to bake in one interpretation; unwinding is expensive.
+- **Cause:** Spec drift — different sections edited at different times with different mental models. Catching this mid-build means choosing while in code-writing mode, which biases toward whatever's easier to keep coding.
+- **Fix:** A "decisions-locking" step BEFORE Step 1 audit. Read the relevant spec sections cold; flag every contradiction; pick one interpretation explicitly and queue a spec correction. Build proceeds against the locked interpretation. Step 1 audit confirms the locked decision is still right against the current code.
+- **General lesson:** spec contradictions are real. Resolve them in planning, not in coding. The cost of an unwind is much higher than the cost of an extra read-through. (S44)
+
+**39. Domain-locality discipline for writer helpers and helper module placement**
+- **Signature:** Tempted to import `XpGrant`/`StreakMetadata` types from `territory/xp-grant.types.ts` into `me/challenge-complete.queries.ts` to write a milestone log row. Cross-module type import for ONE writer creates wrong-direction module dependency (challenge-complete → territory).
+- **Cause:** Reusing types because they share a shape, not because they share a domain. Territory's `StreakMetadata` carries multiplier-specific fields (`streak_multiplier`) that don't apply to flat 250 milestones.
+- **Fix:** Add a domain-local writer (`logStreakMilestone` in `me/challenge-complete.queries.ts`) with an INLINE metadata signature mirroring `logChallengeCompleted` in the same file. New function, no cross-module imports. Helper modules for pure rule-checks live with the DOMAIN of the rule, not the domain of the caller: `progression.helpers.ts` for `canContestTerritory`, even though the only caller is `territory/contest.service.ts`.
+- **General lesson:** module ownership is by domain (whose rule is this?), not by call site (who needs to call it?). Same applies to keeping player-facing copy at the callsite (`CONTEST_REJECT_MESSAGES`) while reason codes stay in the helper. (S43/S44)
+
+**40. Discriminated-union return shapes beat thrown errors for pure rule helpers**
+- **Signature:** A pure rule-check helper throws on failure. Every test wraps it in try/catch and inspects `error.message`. Tests are noisy; multiple-reason rejections require string matching on the error message.
+- **Cause:** Throwing is fine for "this should never happen" guards but wrong for "this is one of N legitimate outcomes." Throwing forces every caller to do exception inspection where they could be doing a switch on a reason code.
+- **Fix:** Return `{ok: true} | {ok: false; reason: ReasonCode}`. Tests assert on `result.reason` directly. Service layer maps reason codes to wire errors (HTTP status + player-facing message). The HELPER stays pure: no knowledge of HTTP, no string copy. The SERVICE owns the wire mapping (`CONTEST_REJECT_MESSAGES`). Mirrors `alliance/membership.helpers.ts` pattern.
+- **General lesson:** if a function has multiple legitimate failure outcomes that the caller needs to discriminate, return a discriminated union, not a thrown error. Reserve throws for invariant violations. (S44)
+
 **Debugging playbook — when something is slow or broken:**
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
@@ -924,7 +1004,11 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | lib/streak.js DEAD CODE awaiting deletion | (31b) `updateStreakOnChallengeComplete` superseded by backend `POST /me/challenge-complete`. Deferred to dedicated dead-code pass. |
 | lib/territory.js has no unit tests | Does Supabase I/O — mocking strategy is the gating decision. |
 | player_number hardcoded as #0001 | Sequential column not yet added. |
-| Siege XP constants exist with no writers | XP_PER_DEFENCE_WIN, XP_RECONQUEST, XP_PER_DEV_TIER_REACHED, XP_ALLIANCE_MISSION, XP_STREAK_MILESTONE. |
+| Siege XP constants — partial coverage | (S40-S44) **WRITERS NOW LIVE** for XP_PER_CLAIM (S41/S42), XP_PER_CONTEST_WIN (S41/S42), XP_PER_DEFENCE_WIN (S41/S42), and STREAK_MILESTONE (S43, +250 at days 7/14/21/30/60/90). Still no writers: XP_RECONQUEST (depends on reconquest tracking; schema is ready), XP_PER_DEV_TIER_REACHED (depends on Territory Development), XP_ALLIANCE_MISSION (depends on Alliance Missions module), XP_WEEKLY_BONUS (depends on weekly challenge system). Each unwired source is now a one-line hook at an existing callsite when its dependency ships. |
+| **`total_xp` field in `/me/challenge-complete` response is stale on milestone days** | (S43, cosmetic) When a milestone fires, the HTTP response's `total_xp` is computed BEFORE the milestone `grantSiegeXp` so it lags by +250. DB state and activity_log rows are correct; response is one grant behind. One-line fix: `milestoneGrant?.newXp ?? updateResult.new_xp` when building the response payload. Deferred — out of S43 scope. |
+| **Spec §8.1 internal contradiction (Solo-vs-Solo Only heading vs L4-5-can-attack-alliance bullet)** | (S44) Section §8.1 heading reads "Solo-vs-Solo Only" and L4 unlock copy says *"Alliance forces still can't touch you"* — implying symmetric protection. A conflicting bullet allows L4-5 solos to attack alliance territory. S44 locked Option A (stricter mirror-symmetric) in code; spec correction queued. Build behaviour: L4-5 solo attacker vs alliance territory → 403 `target_alliance_protected_from_solo`. |
+| **§7.7 reconquest XP (+400 within 72h) not wired** | (S44) Backlog. Schema is ready: `territory_history.owner_id` (prior holder FK) + `lost_at` (nullable timestamptz). `flipTerritoryToAttacker` already sets `lost_at` on flip. Detection query: `territory_history WHERE owner_id = attacker_id AND lost_at > now() - interval '72 hours'`. Hook into `contest-walk.service.ts` attacker_won branch. Multiplier-aware path is live (S42) — slots into the same `calcContestWinXp(tier, opts)` shape. One-day slice. |
+| **Stubs `isSupplyLineActive: false` / `isCityEvent: false` at 4 callsites** | (S42) Hardcoded literals at every claim/contest-walk/contest-expiry XP grant. Flip when Alliance Abilities (Supply Line, ×1.20 Siege XP) and City Events (×1.5 Siege XP) modules ship. One-line change per callsite. |
 | Legacy Power inputs partial | titlesEarned + championshipWins hardcoded to 0. |
 | Draggable bottom sheet deferred | gorhom/bottom-sheet — batch into next EAS build. |
 | Invite non-player flow missing | No share/invite link flow yet. |
@@ -934,7 +1018,7 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | Attack Day check (Wed/Sat/Sun) still DEFERRED with TODO on contest.service.ts (inherited by /walk) | A player CAN currently post /contests AND /walk on a non-Attack-Day if a contest is somehow active. Wiring is a 5-line addition using `Intl.DateTimeFormat` + player.home_timezone. Wire before any external playtest. |
 | **ALLOW_DEBUG_ROUTES=true still ON in Railway** | (31c) Enables `/debug/*` in prod. Flip OFF before any external playtest. |
 | **lib/challengeApi.js has no retry logic** | (31b) Single-shot POST — failed call reverts optimistic UI and returns. Player can re-tap or auto-complete refires on next liveSteps tick. Acceptable for MVP; revisit if flaky-network reports surface. |
-| **Milestone push notifications (Day 3/7/14/21/30/60) not wired** | FCM plumbing LIVE since 30b/30c. Only needs trigger logic in challenge-complete.service.ts + `sendPush` calls. Highest-value mobile push surface still missing. |
+| **Milestone push notifications (Day 7/14/21/30/60/90) not wired** | (S43 update) **Backend milestone XP +250 + `streak_milestone` activity_log row NOW LIVE** in challenge-complete.service.ts. FCM plumbing also LIVE since 30b/30c. What's missing is only the mobile push trigger + in-app celebration UI. Both deferred to notifications consolidation session. |
 | **Level-up + Grace-Day UI surfaces on mobile not wired** | `POST /me/challenge-complete` already returns `leveled_up` + `grace_day_granted` booleans in response. Mobile reads them but doesn't surface a UI moment. Spec §4.5 (Grace Day grant banner) + level-up animation deferred. |
 | **Spec §4.5.2 break confirmation message** | "In-app message on next app open after streak break" — mobile UI not built. Backend writes `streak_broken` to `activity_log`; mobile needs to detect on first read after break. |
 | **Spec §4.5.3 re-entry framing** | "Back. That's what matters." copy on first challenge after a break. Mobile UI not built. |
@@ -960,35 +1044,39 @@ WHERE table_schema='public' AND table_name='<my_table>';
 
 ## WHAT'S NEXT
 
-**Immediate — Next session — Progression module scoping (planning only, NO CODE).**
+**Immediate — Next session — Activity module scoping (planning only, NO CODE).**
 
-Alliance module is now feature-complete (found / join / leave / kick / promote / demote / transfer / get all live, 77 backend tests green). The next big build is the Progression module — XP, levels, Siege XP, solo protection tiers — and it touches XP writers scattered across challenge-complete, contest resolution, claim, defend, abandon. Treat next session as scoping only.
+Progression module is now CORE COMPLETE (S40-S44). All 11 Siege XP earn sources in the module's independent surface are live: claim, contest_won, contest_held, contest_expired, streak milestones. Six remaining earn sources (reconquest, dev tier, alliance mission, weekly bonus, supply line, city event) are now one-line hooks at existing callsites — they ship when their dependent modules ship, not as Progression-module work.
 
-**Scope:**
-1. Read spec §4–§7 carefully.
-2. List every existing XP writer: `challenge-complete.service.ts`, contest resolution, claim service, defend service. Plus constants needing module homes: `XP_PER_DEFENCE_WIN`, `XP_RECONQUEST`, `XP_PER_DEV_TIER_REACHED`, `XP_ALLIANCE_MISSION`, `XP_STREAK_MILESTONE`.
-3. Draft the `progression/` module file structure the same way `alliance/` was scoped in S32.
-4. Identify the smallest first slice — probably just `players.xp` + `players.level` reads/writes with a single endpoint, leaving Siege XP and Legacy Power for follow-up sessions.
-5. **Output:** a session plan document + a draft module structure ready to build from in the session after.
+The next big build is the **Activity module** — `POST /activity/steps` with backend-side velocity-check anti-cheat (30 km/h threshold). Single source of truth for step credit. Distinct from contest `/walk`. Leaderboard module is gated on this (it reads from Activity's verified step credit).
+
+**Scope (Activity scoping session):**
+1. Read spec §6 (challenges) and §13 (anti-cheat / daily caps) carefully.
+2. Audit existing step-credit paths: mobile's Health Connect read, contest `/walk` ingest pattern, `challenge-complete` flow. Identify the seam where step credit should be centralised.
+3. Draft the `activity/` module structure: `routes.ts`, `service.ts`, `queries.ts`, `velocity.helpers.ts` (30 km/h check). Decide how it composes with existing challenge-complete + contest-walk endpoints.
+4. Identify the smallest first slice — probably the velocity-check helper + `POST /activity/steps` endpoint with player-anchored window, leaving daily cap enforcement and integration with challenges for follow-up.
+5. **Output:** a session plan document + a draft module structure ready to build from in the session after. Same pattern as S32 (alliance) and the implicit pre-S40 progression scoping.
 
 **Also do at the start of next session, before scoping:**
-- Mark transfer endpoint as ✓ LIVE in the alliance module structure (already done in this update).
-- Mark claim progress race as solved (already done in this update).
-- Consolidate all notification deferrals into a single "notifications consolidation" bucket so the future notifications session has a clean list.
+- Verify Progression module is marked CORE COMPLETE in this doc (done in this update).
+- Confirm `total_xp` stale-response bug from S43 is on the backlog (done).
+- Confirm §8.1 spec contradiction is queued for correction (done).
 
-**Alternative picks if deferring progression:**
-- (a) Spec §7.8 rewording — current literal text says "all alliance-affiliated territories display in the same faction colour" but actual design is own=red, alliance members=green, other=blue-grey. Spec-alignment task, ~15 min.
-- (b) GET /alliances?city=X backend endpoint — cleanup, not blocker. Mobile browse works via direct Supabase reads. ~30 min.
-- (c) Inactive-Founder auto-succession (30+7 day rule, spec §3.3) — scheduled BullMQ job, multi-session. Spec has exact copy.
+**Alternative picks if deferring Activity scoping:**
+- (a) **Wire reconquest +400 XP** — §7.7. Schema is ready, hook into contest-walk attacker_won branch, one-line `calcContestWinXp(tier, opts)` call. ~half-day slice.
+- (b) **Fix `total_xp` stale response on milestone days** — one-line fix in challenge-complete response payload. ~15 min.
+- (c) **Spec §7.8 rewording** — own=red, alliance=green, other=blue-grey alignment. ~15 min.
+- (d) **GET /alliances?city=X backend endpoint** — mobile browse cleanup. ~30 min.
+- (e) **Inactive-Founder auto-succession** (30+7 day rule, spec §3.3) — scheduled BullMQ job, multi-session.
 
 ---
 
 ## BACKLOG
 
 **Backend modules to land:**
-- **Progression module** ⭐ NEXT — XP, levels, Siege XP, solo protection tiers. Currently writers exist for some constants (XP_PER_DEFENCE_WIN, XP_RECONQUEST, XP_PER_DEV_TIER_REACHED, XP_ALLIANCE_MISSION, XP_STREAK_MILESTONE). Multi-session: scoping session first, then 2-3 build sessions.
-- **Activity module — `POST /activity/steps`** — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit. Distinct from contest `/walk`. Lands after Progression.
-- **Notifications consolidation session** — see "Deferred to notifications consolidation session" bucket below. Lands after Progression + Activity.
+- **Progression module** ✅ **CORE COMPLETE (S40-S44)** — Siege XP grants live across claim/contest_won/contest_held/contest_expired; streak milestone +250 XP at 7/14/21/30/60/90; solo protection enforced at contest initiate. 55 progression tests + 12 shared/formulas tests + 54 me/ tests green. Six earn sources (reconquest, dev tier, alliance mission, weekly bonus, supply line, city event) remain as one-line hooks at existing callsites, gated on their dependent modules shipping.
+- **Activity module — `POST /activity/steps`** ⭐ NEXT — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit. Distinct from contest `/walk`.
+- **Notifications consolidation session** — see "Deferred to notifications consolidation session" bucket below. Lands after Activity.
 - **Leaderboard module** — Redis Sorted Set reads, ZADD on contest resolution. Lands after Activity (depends on Activity's verified step credit).
 - **Realm module** — realm assignment, saturation monitoring.
 - **Inactive-Founder auto-succession (30+7 day rule, spec §3.3)** — needs scheduled BullMQ job. Defer.
@@ -1012,7 +1100,10 @@ Alliance module is now feature-complete (found / join / leave / kick / promote /
 
 **Deferred to notifications consolidation session** (a single future session that wires all notification triggers + UI surfaces at once, so the foreground push handler and in-app notification surface get designed once across everything):
 - Kick / demote / promote / join / leave triggers — backend FCM plumbing LIVE, copy + triggers not wired.
-- Milestone push triggers (Day 3/7/14/21/30/60) — backend FCM plumbing LIVE since 30b/c. Needs trigger logic in `challenge-complete.service.ts` + `sendPush` calls.
+- **Streak milestone celebration UI** (spec §4.5.2 — "Day 7. Proven streak.") — backend `streak_milestone` activity_log row + +250 XP grant LIVE since S43. Mobile push trigger + in-app moment deferred to this session.
+- **Level-up notifications and mobile UI** — backend writes `leveled_up:true`, `level_before:N`, `level_after:N` to `activity_log.metadata` from S41 onward (also returned in `/me/challenge-complete` response). Mobile UI deferred to this session.
+- **Streak XP bonus UI** (e.g. "Proven streak: +15%" on claim/contest screens) — backend writes `streak_multiplier` to metadata from S42 onward. Mobile UI deferred.
+- **403 reject-message mobile mapping** (S44) — mobile currently displays the wire payload `{error:"<message>"}` verbatim. Future work may map machine-readable reason codes to localized strings — backend already supplies the reason internally, just not on the wire today.
 - First-earn notification plumbing — push infra LIVE; needs the actual first-earn detection + dispatch.
 - Level-up + Grace-Day UI surfaces on mobile — `POST /me/challenge-complete` returns booleans, mobile doesn't show them.
 - Spec §4.5.2 break confirmation + §4.5.3 "Back. That's what matters." re-entry framing — mobile UI on next app open after a break.
@@ -1301,6 +1392,33 @@ Alliance module is now feature-complete (found / join / leave / kick / promote /
 | **Roadmap order: Progression → Activity → Notifications consolidation → Leaderboard → Realm** | (38) Progression is the foundation everything reads from (XP, levels, Siege XP, solo protection tiers). Activity owns step credit + anti-cheat. Notifications consolidation needs both. Leaderboard reads from Progression + Activity. Realm last. |
 | **Action ordering in alliance member-management: promote → demote → transfer_founder → kick (ascending in irreversibility)** | (38) Kick is last because it removes the member; transfer_founder is above kick because it's irreversible from the founder's perspective without the new founder cooperating. Consistent with destructive-last pattern across the codebase. |
 | **Transfer endpoint returns `{ alliance, members }` matching `getAllianceById` exactly (deepEqual-verified)** | (38) Same consistency pattern as found/promote/demote. Test asserts deepEqual so the shapes can't drift across endpoints. |
+| **`grantSiegeXp(tx, playerId, delta)` is THE single XP-write primitive — atomic `{increment}` + conditional 2nd UPDATE** | (S40) One canonical writer for every XP grant. Atomic Prisma `{increment}` on players.xp inside the passed tx + a conditional 2nd UPDATE for level recompute, gated by `calcLevel(newXp) !== currentLevel`. Returns `{newXp, previousLevel, newLevel, leveledUp}` so callers can write metadata without re-reading. Loud-failure null guard throws on data-integrity violation rather than silently fallback to 0/1. Used by all 4 XP-granting callsites + S43's milestone path. |
+| **Helper naming matches root `formulas.js`: `calcClaimXp`, `calcContestWinXp`, `calcDefenceWinXp`** | (S40) Drift in naming between backend and the canonical formulas file makes future ports harder. Root `formulas.js` is the spec for backend formulas — naming alignment is non-negotiable. |
+| **Tier keys lowercase in backend, TitleCase in root — documented inline at top of progression.formulas.ts** | (S40) Backend matches wire format (DB representation). Root matches its own legacy. Drift is real but explicit and commented. |
+| **Backwards-compat shim via re-export, not duplication: `me/challenge.formulas.ts` re-exports `LEVEL_XP_FLOORS` + `calcLevel` from progression module** | (S40) Zero call-site change in challenge-complete service/queries. Re-export driven by import graph, not spec grouping — only re-export what's actually imported externally. |
+| **Lift-and-share over re-implement for cross-module math: `shared/formulas/canonical-earn.ts` + `shared/formulas/streak.ts`** | (S42) Two `calcStreakMultiplier` definitions in two files was a drift trap waiting to happen. The S42 lift to `shared/formulas/` ended that risk for streak and canonical-earn math forever. Same pattern when a 3rd module ever needs `calcChallengeXp` math. |
+| **Optional `XpMultiplierOpts` parameter on calcClaimXp/calcContestWinXp/calcDefenceWinXp for backwards compatibility** | (S42) Adding the param as optional meant zero break for tests/callers that didn't yet supply multipliers. S41 metadata shape unchanged for streak=0 players (the streak_* keys ABSENT — not falsy — from JSON). When `opts` omitted, formulas return flat base XP. |
+| **`streak_tier` in metadata reflects RAW streak; `streak_multiplier` reflects APPLIED (post-cap) value** | (S42) A Legendary streak (60 days, raw ×1.5) on Epic territory caps the multiplier to ×1.15. Player UI shows "Legendary" badge (tier is achievement state) but XP grant uses ×1.15 (multiplier is applied effect). Separating these in activity_log metadata makes mobile UI lookup-free. Locked by integration test + device test. |
+| **Streak read happens INSIDE the tx (`findPlayerStreakDays(tx, playerId)`), not pre-tx** | (S42) Avoids stale read if streak-rollover fires mid-action. Tx-pinned read = consistent snapshot. Same reasoning as S41's player select inside tx. |
+| **Stubs `isSupplyLineActive: false` and `isCityEvent: false` literally hardcoded at all 4 callsites** | (S42) Pattern matches challenge-complete service. When the underlying modules ship, single-line change at each callsite. No premature abstraction. |
+| **Milestone grant lives in `challenge-complete.service.ts`, NOT `streak-rollover.worker.ts`** | (S43) Original plan was wrong: rollover doesn't advance `current_streak`, it only handles missed-day paths. Streak advance happens in challenge-complete. The "day a player hits N" is the day they complete a challenge that crosses N, not the next midnight. Co-locates milestone XP with existing `applyGraceDayGrant` (which shares identical trigger semantics — Grace Day grants at 7/30/60 also fire on the crossing completion). Caught at Step 1 audit before any code. |
+| **Milestone XP is FLAT 250, NOT multiplied** | (S43) Spec §5.7 lists "Streak milestone (Days 7, 14, 21, 30, 60, 90)" as its own line in the Siege XP earn table. The streak XP modifier (×1.10 at Reliable+) already amplifies daily challenge XP throughout the streak — stacking on milestone would double-dip the same buff in one tx. Milestone is a "reach a state" reward, not an activity-based earn event. One-line revert path: route through `calcCanonicalEarn` if spec re-read contradicts. |
+| **Milestone grant via separate `grantSiegeXp` call, NOT folded into challenge XP `{increment}`** | (S43) One XP grant = one activity_log row with clean `level_before`/`level_after` attribution. Folding +250 into the challenge XP increment would make level-up attribution ambiguous (which delta caused it?). Separate calls give clean audit trail. Locked by integration test on level-up attribution. |
+| **Tx ordering: challenge XP increment → milestone grantSiegeXp → log challenge_completed → log streak_milestone** | (S43) Milestone row's `level_before` reflects post-challenge-XP state. If player at xp=1800 completes hard challenge (+400, still L2) and it's day 7 (+250, crosses L3 floor), milestone row correctly shows `level_before:2, level_after:3, leveled_up:true` — attributing the boundary crossing to the milestone, not the challenge. |
+| **Idempotency: FREE via existing `player_challenges` UNIQUE; no new lookup or de-dup needed** | (S43) Same-day re-POST hits `!inserted` early-return at the top of `completeChallenge`, never reaches the milestone grant. Originally considered an `activity_log` lookup before milestone grant — audit revealed the UPSTREAM constraint already prevents the issue. Free was better than designed. |
+| **Two activity_log rows on milestone-day completion (one `challenge_completed` + one `streak_milestone`)** | (S43) Each event_type is independently queryable by mobile activity feed, leaderboards, future achievement systems. Separate rows = clean attribution per event_type. Slight cost (2 inserts on milestone days) is worth it. |
+| **CHECK constraint migration via hand-written SQL in `prisma/migrations-manual/`, NOT `prisma migrate`** | (S43) Project uses `prisma db pull` introspection, not `prisma migrate`. `prisma migrate dev` against introspected schema would attempt a destructive baseline ritual for one constraint change. Hand-written SQL committed to `prisma/migrations-manual/<YYYYMMDD>-<description>.sql` + applied via Supabase SQL Editor matches convention, is replayable, is auditable. First migration sets the precedent for all future schema changes. |
+| **`is_milestone: true` in activity_log metadata is defensive denormalisation** | (S43) Even though `event_type='streak_milestone'` already implies it, `is_milestone` in metadata is cheap and downstream-friendly for filters that scan metadata without joining on event_type. |
+| **"Shipped" requires commit pushed AND Railway healthcheck 200 — code-complete + green-tests + closed-IDE is NOT shipped** | (S43) S42 was marked shipped May 28 with code uncommitted. Surfaced May 29 in S43 Step 5 file-changed audit. Burned in as Step 6 of every slice from S44 onward: explicit upstream-verification before declaring done. Paste `git log -1 --oneline` + curl /healthcheck result into the session record. |
+| **Helper module placement: NEW `progression.helpers.ts` for pure rule-checks (distinct from `.formulas.ts` for pure math)** | (S44) `canContestTerritory` is a pure helper — no DB, no Prisma types. Lives in `progression/` (domain locality: protection is a level-driven rule, even though territory imports it), not in `progression.formulas.ts` (math) or territory (caller). New `.helpers.ts` file sets a per-module convention. Mirrors `alliance/membership.helpers.ts` exactly, including the discriminated-union return shape. |
+| **Discriminated union `{ok:true} \| {ok:false, reason}` for pure rule helpers, NOT thrown errors** | (S44) Helper is pure — no knowledge of HTTP semantics. Service maps `reason` to `serviceError(403, ...)`. Tests assert on `result.reason` directly without try/catch noise. Mirrors alliance helper pattern. Reserve throws for invariant violations only. |
+| **Player-facing copy lives at the callsite (`CONTEST_REJECT_MESSAGES` in contest.service.ts), NOT in the pure helper** | (S44) Reasons are DOMAIN (progression — what rule was violated); messages are UX/WIRE (territory/contest — how we tell the player). Separation lets future endpoints reuse `canContestTerritory` with their own copy. Single grep-able location for copywriter pass. |
+| **Wire payload shape unchanged: `{ error: "<player-facing string>" }`** | (S44) Mobile expects this shape today. Adding a machine-readable `reason` code on the wire would be an unrelated breaking change. Reason stays internal; mobile maps message → display copy. Future Notifications Consolidation can plumb reason through if needed. |
+| **Check-chain ordering in contest initiate: identity → entitlement-to-attack-this-target → state → economy** | (S44) Protection check inserted between self-contest guard and tier level gate (position 4 of 9). Protection is a free in-memory check; iron is a DB read. Fail-fast on cheapest rejections. Tier level gate (per-tier minimums) remains separate from protection check (cross-product of attacker × target levels) — different concepts. |
+| **§8.1 contradiction resolved in favour of Option A (stricter "Solo-vs-Solo Only")** | (S44) §8.1 heading + L4 unlock copy imply symmetric mirror rule. Conflicting bullet allowing L4-5 solos to attack alliance territory reads as editorial drift. Roadmap wins. L4-5 solo attacker hitting alliance territory → 403 `target_alliance_protected_from_solo`. Conflicting bullet queued for spec correction. |
+| **No grace-period for newly-leveled players** | (S44) Spec §8.1 has no transition rule. Protection state is a pure function of current level at the moment of contest initiate. Snapshot read inside the request, no decay window. |
+| **Defensive `serviceError(500, "Territory owner level unavailable")` when owner_id non-null but Prisma include returns no player record** | (S44) Loud failure for data integrity violation rather than silent fallback to level=0. Same discipline as `grantSiegeXp`'s null guard from S40. Loud failures are diagnostically cheap; silent fallbacks are diagnostic poison. |
+| **Module is "done" when its independent surface is complete, NOT when every spec'd earn source is wired** | (S44) Six feature-dependent earn sources remain unwired at end of S44 — but they're no longer "Progression module work." They're one-line hooks at existing callsites that ship when their respective modules ship (Reconquest, Dev tier, Alliance Missions, Weekly Challenges, Alliance Abilities, City Events). The Progression module has shipped everything it owns. |
 
 ---
 
