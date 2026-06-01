@@ -20,6 +20,7 @@ import {
 } from 'react-native-health-connect';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
+import { STEPS_READ_PERM, hasForegroundStepsRead, hasBackgroundStepsRead } from '../lib/healthConnect';
 import { colors, spacing, text } from '../lib/theme';
 
 const CLAIM = colors.claim;
@@ -29,8 +30,6 @@ const SLATE2 = colors.slate2;
 const HAIRLINE = colors.hairline;
 const HAIRLINE_STRONG = colors.hairlineStrong;
 const ERROR_RED = '#E05A5A';
-
-const STEPS_READ_PERM = { accessType: 'read', recordType: 'Steps' };
 
 const SDK_STATUS_NAMES = {
   [SdkAvailabilityStatus.SDK_AVAILABLE]: 'SDK_AVAILABLE',
@@ -42,22 +41,6 @@ const SDK_STATUS_NAMES = {
 function sdkStatusLabel(status) {
   if (status == null) return '—';
   return SDK_STATUS_NAMES[status] ?? String(status);
-}
-
-function isBackgroundPermission(p) {
-  return p?.background === true || p?.backgroundRead === true || p?.isBackground === true;
-}
-
-function hasStepsRead(granted) {
-  return (granted ?? []).some(
-    (p) => p.recordType === 'Steps' && p.accessType === 'read' && !isBackgroundPermission(p),
-  );
-}
-
-function hasStepsBackgroundRead(granted) {
-  return (granted ?? []).some(
-    (p) => p.recordType === 'Steps' && p.accessType === 'read' && isBackgroundPermission(p),
-  );
 }
 
 function startOfLocalDay(d = new Date()) {
@@ -413,7 +396,7 @@ export default function HealthConnectDebugScreen() {
           <SectionLabel label="PERMISSIONS" />
           <Text style={styles.permLine}>
             Steps (read){' '}
-            {hasStepsRead(granted) ? (
+            {hasForegroundStepsRead(granted) ? (
               <Text style={styles.granted}>✓ granted</Text>
             ) : (
               <Text style={styles.denied}>✗ not granted</Text>
@@ -421,7 +404,7 @@ export default function HealthConnectDebugScreen() {
           </Text>
           <Text style={styles.permLine}>
             Steps (background read){' '}
-            {hasStepsBackgroundRead(granted) ? (
+            {hasBackgroundStepsRead(granted) ? (
               <Text style={styles.granted}>✓ granted</Text>
             ) : (
               <Text style={styles.denied}>✗ not granted</Text>

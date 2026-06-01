@@ -12,6 +12,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
+import { STEPS_READ_PERM, hasForegroundStepsRead } from '../lib/healthConnect';
+import * as activityProducer from '../lib/activity';
 
 function levelFromXp(xp) {
   const xpInt = Math.max(0, Math.floor(Number(xp) || 0));
@@ -55,19 +57,6 @@ function localDayKey(date) {
 }
 
 const WEEK_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-const STEPS_READ_PERM = { accessType: 'read', recordType: 'Steps' };
-
-function hasStepsRead(granted) {
-  return (granted ?? []).some(
-    (p) =>
-      p.recordType === 'Steps' &&
-      p.accessType === 'read' &&
-      p.background !== true &&
-      p.backgroundRead !== true &&
-      p.isBackground !== true,
-  );
-}
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -289,7 +278,7 @@ export default function ActivityScreen() {
         setHcReady(true);
         const granted = await getGrantedPermissions();
         if (cancelled) return;
-        setHasStepsPerm(hasStepsRead(granted));
+        setHasStepsPerm(hasForegroundStepsRead(granted));
       } catch (e) {
         console.warn('[HC] init failed:', e?.message ?? e);
       }
@@ -487,7 +476,9 @@ export default function ActivityScreen() {
     try {
       await requestPermission([STEPS_READ_PERM]);
       const granted = await getGrantedPermissions();
-      setHasStepsPerm(hasStepsRead(granted));
+      const hasIt = hasForegroundStepsRead(granted);
+      setHasStepsPerm(hasIt);
+      if (hasIt) activityProducer.onPermissionGranted();
     } catch (e) {
       console.warn('[HC] permission request failed:', e?.message ?? e);
     } finally {
