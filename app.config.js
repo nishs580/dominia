@@ -29,7 +29,6 @@ module.exports = {
         'ACCESS_BACKGROUND_LOCATION',
         'POST_NOTIFICATIONS',
         'android.permission.health.READ_STEPS',
-        'android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND',
         'android.permission.ACTIVITY_RECOGNITION',
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_LOCATION',
