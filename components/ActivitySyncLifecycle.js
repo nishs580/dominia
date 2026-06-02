@@ -10,6 +10,11 @@ export default function ActivitySyncLifecycle() {
   const [playerId, setPlayerId] = useState(null);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const startedRef = useRef(false);
+  const getTokenRef = useRef(getToken);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +56,7 @@ export default function ActivitySyncLifecycle() {
     let netInfoUnsub = null;
 
     (async () => {
-      await producer.start(playerId, getToken);
+      await producer.start(playerId, () => getTokenRef.current());
       startedRef.current = true;
 
       try {
@@ -77,7 +82,7 @@ export default function ActivitySyncLifecycle() {
         startedRef.current = false;
       }
     };
-  }, [isLoaded, isSignedIn, userId, playerId, hasOnboarded, getToken]);
+  }, [isLoaded, isSignedIn, userId, playerId, hasOnboarded]);
 
   return null;
 }
