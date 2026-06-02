@@ -161,7 +161,7 @@ dominia-backend/
 │   │   │
 │   │   ├── leaderboard/             ○ Not started — Redis Sorted Set (ZADD on resolution, ZREVRANGE on read)
 │   │   ├── realm/                   ○ Not started — realm assignment, saturation monitoring
-│   │   └── activity/                ○ Not started — POST /activity/steps, 30 km/h velocity check
+│   │   └── activity/                ○ Not started — POST /activity/steps, 25 km/h velocity check
 │   │
 │   ├── shared/
 │   │   ├── formulas/                ✓ (S42/S43) Cross-module pure math — single source of truth
@@ -1048,12 +1048,12 @@ WHERE table_schema='public' AND table_name='<my_table>';
 
 Progression module is now CORE COMPLETE (S40-S44). All 11 Siege XP earn sources in the module's independent surface are live: claim, contest_won, contest_held, contest_expired, streak milestones. Six remaining earn sources (reconquest, dev tier, alliance mission, weekly bonus, supply line, city event) are now one-line hooks at existing callsites — they ship when their dependent modules ship, not as Progression-module work.
 
-The next big build is the **Activity module** — `POST /activity/steps` with backend-side velocity-check anti-cheat (30 km/h threshold). Single source of truth for step credit. Distinct from contest `/walk`. Leaderboard module is gated on this (it reads from Activity's verified step credit).
+The next big build is the **Activity module** — `POST /activity/steps` with backend-side velocity-check anti-cheat (25 km/h threshold). Single source of truth for step credit. Distinct from contest `/walk`. Leaderboard module is gated on this (it reads from Activity's verified step credit).
 
 **Scope (Activity scoping session):**
 1. Read spec §6 (challenges) and §13 (anti-cheat / daily caps) carefully.
 2. Audit existing step-credit paths: mobile's Health Connect read, contest `/walk` ingest pattern, `challenge-complete` flow. Identify the seam where step credit should be centralised.
-3. Draft the `activity/` module structure: `routes.ts`, `service.ts`, `queries.ts`, `velocity.helpers.ts` (30 km/h check). Decide how it composes with existing challenge-complete + contest-walk endpoints.
+3. Draft the `activity/` module structure: `routes.ts`, `service.ts`, `queries.ts`, `velocity.helpers.ts` (25 km/h check). Decide how it composes with existing challenge-complete + contest-walk endpoints.
 4. Identify the smallest first slice — probably the velocity-check helper + `POST /activity/steps` endpoint with player-anchored window, leaving daily cap enforcement and integration with challenges for follow-up.
 5. **Output:** a session plan document + a draft module structure ready to build from in the session after. Same pattern as S32 (alliance) and the implicit pre-S40 progression scoping.
 
@@ -1075,7 +1075,7 @@ The next big build is the **Activity module** — `POST /activity/steps` with ba
 
 **Backend modules to land:**
 - **Progression module** ✅ **CORE COMPLETE (S40-S44)** — Siege XP grants live across claim/contest_won/contest_held/contest_expired; streak milestone +250 XP at 7/14/21/30/60/90; solo protection enforced at contest initiate. 55 progression tests + 12 shared/formulas tests + 54 me/ tests green. Six earn sources (reconquest, dev tier, alliance mission, weekly bonus, supply line, city event) remain as one-line hooks at existing callsites, gated on their dependent modules shipping.
-- **Activity module — `POST /activity/steps`** ⭐ NEXT — backend-side velocity-check anti-cheat (30 km/h threshold), single source of truth for step credit. Distinct from contest `/walk`.
+- **Activity module — `POST /activity/steps`** ⭐ NEXT — backend-side velocity-check anti-cheat (25 km/h threshold), single source of truth for step credit. Distinct from contest `/walk`.
 - **Notifications consolidation session** — see "Deferred to notifications consolidation session" bucket below. Lands after Activity.
 - **Leaderboard module** — Redis Sorted Set reads, ZADD on contest resolution. Lands after Activity (depends on Activity's verified step credit).
 - **Realm module** — realm assignment, saturation monitoring.
