@@ -23,6 +23,9 @@ import WarRoomScreen from './screens/WarRoomScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
+import { navigationRef, onNavigationReady } from './lib/navigation';
+import Toast from 'react-native-toast-message';
+import NotificationCard from './components/notifications/NotificationCard';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -209,7 +212,7 @@ export default function App() {
     >
       <ActivitySyncLifecycle />
       <FcmLifecycle />
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AuthGate" component={AuthGate} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
@@ -239,6 +242,8 @@ export default function App() {
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>
+      <NotificationCard />
+      <Toast />
     </ClerkProvider>
   );
 }
