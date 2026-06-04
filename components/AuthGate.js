@@ -1,11 +1,10 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { registerFcmToken } from '../lib/fcm';
 import { supabase } from '../lib/supabase';
 
 export default function AuthGate({ navigation }) {
-  const { isSignedIn, isLoaded, userId, getToken } = useAuth();
+  const { isSignedIn, isLoaded, userId } = useAuth();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   const showSpinner = !isLoaded || (isSignedIn && (!userId || checkingOnboarding));
@@ -48,9 +47,6 @@ export default function AuthGate({ navigation }) {
       }
 
       if (data?.has_onboarded === true) {
-        registerFcmToken({ clerkGetToken: getToken }).catch((err) => {
-          console.warn('[fcm] register on gate failed:', err?.message);
-        });
         navigation.replace('MainTabs');
       } else {
         navigation.replace('Onboarding');
@@ -62,7 +58,7 @@ export default function AuthGate({ navigation }) {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, userId, navigation, getToken]);
+  }, [isLoaded, isSignedIn, userId, navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' }}>

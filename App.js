@@ -22,6 +22,7 @@ import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
+import FcmLifecycle from './components/FcmLifecycle';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -207,6 +208,7 @@ export default function App() {
       tokenCache={tokenCache}
     >
       <ActivitySyncLifecycle />
+      <FcmLifecycle />
       <NavigationContainer>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AuthGate" component={AuthGate} />
