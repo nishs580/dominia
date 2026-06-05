@@ -1,8 +1,11 @@
+// Component: NotificationCard — foreground push card
+// Brand rule applied: 0px radius on card and buttons (non-negotiable), no shadow/glow. DISMISS uses ghost-button treatment. Card body itself is tappable (no decorative chrome).
+
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { subscribe, hideCard, getCurrentCard } from '../../lib/notifications/cardController';
+import { navigateTo } from '../../lib/navigation';
 
-// Minimal default titles per kind. Bodies left blank — copy iteration is a separate pass.
 const DEFAULT_TITLES = {
   streak_milestone: 'Proven streak.',
   contest_won: 'Territory held.',
@@ -19,14 +22,20 @@ export default function NotificationCard() {
 
   if (!card) return null;
 
-  const { kind, data } = card;
+  const { kind, data, target } = card;
   const title = data?.title || DEFAULT_TITLES[kind] || 'Notification';
   const body = data?.body || '';
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={hideCard}>
       <Pressable style={styles.backdrop} onPress={hideCard}>
-        <Pressable style={styles.card} onPress={() => { /* swallow body taps */ }}>
+        <Pressable
+          style={styles.card}
+          onPress={() => {
+            if (target) navigateTo(target);
+            hideCard();
+          }}
+        >
           <Text style={styles.title}>{title}</Text>
           {body ? <Text style={styles.body}>{body}</Text> : null}
           <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
@@ -52,7 +61,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1014',
     borderWidth: 1,
     borderColor: 'rgba(242,238,230,0.16)',
-    borderRadius: 4,
+    borderRadius: 0,
     padding: 24,
     alignItems: 'flex-start',
   },

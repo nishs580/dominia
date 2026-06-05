@@ -20,6 +20,7 @@ import HealthConnectDebugScreen from './screens/HealthConnectDebugScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
+import ActivityLogScreen from './screens/ActivityLogScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
@@ -219,6 +220,7 @@ export default function App() {
           <Stack.Screen name="Username" component={UsernameScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
           <Stack.Screen
             name="WarRoom"
             component={WarRoomScreen}

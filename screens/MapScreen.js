@@ -21,6 +21,7 @@ import {
   GoldGlyph,
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
+import ActivityLogSideRail from '../components/ActivityLogSideRail';
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
@@ -935,6 +936,7 @@ export default function MapScreen() {
         onResourceBannerRefresh={fetchResourceBanner}
         myPlayer={myPlayer}
       />
+      <ActivityLogSideRail hidden={selected != null} />
     </View>
   );
 }
