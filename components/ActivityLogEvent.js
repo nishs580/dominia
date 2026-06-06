@@ -10,6 +10,7 @@
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
 const CLAIM = '#D64525';
@@ -18,15 +19,6 @@ const ENEMY = '#4A6B8A';
 const SLATE = '#5C6068';
 const BONE = '#F2EEE6';
 const SLATE2 = '#8B8F98';
-
-function getMeta(event, ...keys) {
-  if (!event?.metadata) return null;
-  for (const k of keys) {
-    const v = event.metadata[k];
-    if (v !== undefined && v !== null) return v;
-  }
-  return null;
-}
 
 function RowHeader({ label, labelColor, event }) {
   return (

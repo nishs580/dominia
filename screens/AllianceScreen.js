@@ -2,7 +2,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import AllianceLogEvent from '../components/AllianceLogEvent';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
+import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
@@ -340,6 +342,13 @@ function NonMemberContent({
 
 function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave }) {
   const navigation = useNavigation();
+  const allianceId = myAlliance?.id;
+  const [events, setEvents] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [feedError, setFeedError] = useState(null);
+  const hasFetchedOnce = useRef(false);
   const [leaveConfirmCase, setLeaveConfirmCase] = useState(null);
   const [leaveSaving, setLeaveSaving] = useState(false);
   const [leaveError, setLeaveError] = useState('');
@@ -356,6 +365,59 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const myPlayerId = playerId;
   const isFounder = myMember?.role === 'founder';
   const rosterSize = roster.length;
+
+  const fetchFirstPage = useCallback(async () => {
+    setIsLoading(true);
+    setFeedError(null);
+    const result = await getAllianceActivityLog({
+      clerkGetToken: getToken,
+      allianceId,
+      limit: 30,
+    });
+    if (result.ok) {
+      setEvents(result.data.events);
+      setNextCursor(result.data.nextCursor);
+    } else {
+      setFeedError(result.error || 'unknown_error');
+    }
+    setIsLoading(false);
+  }, [getToken, allianceId]);
+
+  const fetchNextPage = useCallback(async () => {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    const result = await getAllianceActivityLog({
+      clerkGetToken: getToken,
+      allianceId,
+      limit: 30,
+      cursor: nextCursor,
+    });
+    if (result.ok) {
+      setEvents((prev) => [...prev, ...result.data.events]);
+      setNextCursor(result.data.nextCursor);
+    }
+    setIsLoadingMore(false);
+  }, [getToken, allianceId, nextCursor, isLoadingMore]);
+
+  const handleWireScroll = useCallback((e) => {
+    if (isLoadingMore || !nextCursor) return;
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    if (distanceFromBottom < 80) {
+      fetchNextPage();
+    }
+  }, [isLoadingMore, nextCursor, fetchNextPage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      markAllianceActivityLogRead({ clerkGetToken: getToken, allianceId }).catch(() => {});
+
+      if (!hasFetchedOnce.current) {
+        hasFetchedOnce.current = true;
+        fetchFirstPage();
+      }
+    }, [getToken, allianceId, fetchFirstPage]),
+  );
 
   const openLeaveConfirm = () => {
     setLeaveError('');
@@ -747,6 +809,52 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             <View style={[styles.progressFill, { width: '60%' }]} />
           </View>
           <Text style={styles.missionReward}>REWARD — +40 GOLD EACH · +300 XP</Text>
+        </View>
+
+        <View style={styles.sectionLabelRow}>
+          <Text style={styles.sectionLabelText}>ALLIANCE MESSAGES</Text>
+          <Text style={styles.sectionLabelAccent}> · WIRE</Text>
+          <View style={styles.sectionHairline} />
+        </View>
+
+        <View style={styles.wireContainer}>
+          <View style={styles.wireHeaderStrip}>
+            <Text style={styles.wireStatusText}>▌ LIVE</Text>
+          </View>
+          <ScrollView
+            style={styles.wireScroll}
+            contentContainerStyle={events.length === 0 ? styles.wireEmptyContent : null}
+            onScroll={handleWireScroll}
+            scrollEventThrottle={400}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
+            {events.length === 0 && !isLoading && !feedError && (
+              <Text style={styles.wireEmptyText}>▸ NO TRANSMISSIONS.</Text>
+            )}
+            {events.map((item) => (
+              <AllianceLogEvent key={item.id} event={item} />
+            ))}
+            {isLoadingMore && (
+              <ActivityIndicator style={styles.wireLoadingMore} color={SLATE} />
+            )}
+            {!isLoadingMore && !nextCursor && events.length > 0 && (
+              <Text style={styles.wireEndOfList}>—— END OF WIRE ——</Text>
+            )}
+          </ScrollView>
+          {isLoading && (
+            <View style={styles.wireOverlay}>
+              <ActivityIndicator color={SLATE2} />
+            </View>
+          )}
+          {!isLoading && feedError && (
+            <View style={styles.wireOverlay}>
+              <Text style={styles.wireErrorText}>▸ WIRE LOST.</Text>
+              <Pressable onPress={fetchFirstPage} style={styles.wireRetryButton}>
+                <Text style={styles.wireRetryText}>RETRY</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <View style={styles.sectionLabelRow}>
@@ -1698,6 +1806,87 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#D64525',
     letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  wireContainer: {
+    marginTop: 12,
+    height: 320,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: '#08090C',
+    borderRadius: 0,
+  },
+  wireHeaderStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    backgroundColor: INK,
+  },
+  wireStatusText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: ALLIANCE_GREEN,
+    textTransform: 'uppercase',
+  },
+  wireScroll: {
+    flex: 1,
+  },
+  wireEmptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wireEmptyText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE,
+    textTransform: 'uppercase',
+  },
+  wireLoadingMore: {
+    paddingVertical: 16,
+  },
+  wireEndOfList: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    letterSpacing: 1.8,
+    color: SLATE,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
+  wireOverlay: {
+    position: 'absolute',
+    top: 35,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#08090C',
+  },
+  wireErrorText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  wireRetryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  wireRetryText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: SLATE2,
     textTransform: 'uppercase',
   },
 });
