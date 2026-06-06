@@ -4,7 +4,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 export default function AuthGate({ navigation }) {
-  const { isSignedIn, isLoaded, userId } = useAuth();
+  const { isSignedIn, isLoaded, userId, getToken } = useAuth();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   const showSpinner = !isLoaded || (isSignedIn && (!userId || checkingOnboarding));
@@ -14,6 +14,21 @@ export default function AuthGate({ navigation }) {
       navigation.replace('SignIn');
     }
   }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getToken();
+      if (cancelled) return;
+      if (__DEV__) {
+        console.log('[DEV JWT]', token);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, getToken]);
 
   useEffect(() => {
     if (!isLoaded) return;
