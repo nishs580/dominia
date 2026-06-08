@@ -24,6 +24,7 @@ import ActivityLogScreen from './screens/ActivityLogScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
+import StreakBreakLifecycle from './components/StreakBreakLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
@@ -213,6 +214,7 @@ export default function App() {
     >
       <ActivitySyncLifecycle />
       <FcmLifecycle />
+      <StreakBreakLifecycle />
       <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AuthGate" component={AuthGate} />

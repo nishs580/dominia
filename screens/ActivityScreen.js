@@ -9,6 +9,7 @@ import {
   requestPermission,
   readRecords,
 } from 'react-native-health-connect';
+import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
 import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
@@ -368,6 +369,14 @@ export default function ActivityScreen() {
       setPlayerXp(d.total_xp);
       setPlayerLevel(levelFromXp(d.total_xp));
       setCurrentStreak(d.streak.current);
+
+      if (d.streak_re_entry === true) {
+        Toast.show({
+          type: 'info',
+          text1: "Back. That's what matters.",
+          position: 'top',
+        });
+      }
 
       // If backend says it was already completed, keep optimistic completedKeys mark
       // (it's correct — challenge IS done) but ensure XP reflects authoritative total.

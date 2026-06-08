@@ -8,6 +8,7 @@ import { navigateTo } from '../../lib/navigation';
 
 const DEFAULT_TITLES = {
   streak_milestone: 'Proven streak.',
+  streak_broken: 'Your streak reset.',
   contest_won: 'Territory held.',
   contest_lost: 'Territory lost.',
   streak_break_warning: 'Streak at risk.',
