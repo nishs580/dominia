@@ -89,6 +89,7 @@ export default function FcmLifecycle() {
           text1: title,
           text2: body,
           position: 'top',
+          onPress: () => navigateTo(route.target),
         });
       } else if (route.surface === SURFACES.BANNER_ROUTE) {
         // Banner component not yet built; interim is a longer toast with tap-route.
