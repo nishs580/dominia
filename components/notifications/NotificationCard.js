@@ -14,11 +14,14 @@ const DEFAULT_TITLES = {
   streak_break_warning: 'Streak at risk.',
   alliance_kicked: 'Removed from alliance.',
   alliance_demoted: 'Role updated.',
-  first_earn: 'First resources.',
   level_up_4: 'The map just got real.',
   level_up_5: 'The city knows your name.',
   level_up_6: 'Level 6. Alliance phase begins.',
   level_up_10: 'Dominator.',
+  first_claim: 'First claim.',
+  first_contest_win: 'First conquest.',
+  first_reconquest: 'First reconquest.',
+  first_alliance_mission: 'First alliance mission complete.',
 };
 
 export default function NotificationCard() {
