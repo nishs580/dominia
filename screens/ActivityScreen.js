@@ -12,6 +12,7 @@ import {
 import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
 import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
+import { showCard } from '../lib/notifications/cardController';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
 import { STEPS_READ_PERM, hasForegroundStepsRead } from '../lib/healthConnect';
 import * as activityProducer from '../lib/activity';
@@ -375,6 +376,25 @@ export default function ActivityScreen() {
           type: 'info',
           text1: "Back. That's what matters.",
           position: 'top',
+        });
+      }
+
+      if (d.grace_day_granted === true) {
+        Toast.show({
+          type: 'info',
+          text1: 'Grace Day banked.',
+          position: 'top',
+        });
+      }
+
+      if (d.leveled_up === true && d.level_after === 4) {
+        showCard({
+          kind: 'level_up_4',
+          data: {
+            title: 'The map just got real.',
+            body: "Other Commanders can challenge your territories now — but Alliance forces still can't touch you. Walk more. Hold more.",
+          },
+          target: 'Map',
         });
       }
 

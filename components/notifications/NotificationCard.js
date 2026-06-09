@@ -12,9 +12,13 @@ const DEFAULT_TITLES = {
   contest_won: 'Territory held.',
   contest_lost: 'Territory lost.',
   streak_break_warning: 'Streak at risk.',
-  alliance_kick: 'Removed from alliance.',
-  alliance_demote: 'Role updated.',
+  alliance_kicked: 'Removed from alliance.',
+  alliance_demoted: 'Role updated.',
   first_earn: 'First resources.',
+  level_up_4: 'The map just got real.',
+  level_up_5: 'The city knows your name.',
+  level_up_6: 'Level 6. Alliance phase begins.',
+  level_up_10: 'Dominator.',
 };
 
 export default function NotificationCard() {

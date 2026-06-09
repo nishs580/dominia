@@ -1,4 +1,4 @@
-// Component: ActivityLogEvent — per-event_type renderer (17 event_types: 7 styled, 10 stubs)
+// Component: ActivityLogEvent — per-event_type renderer (17 event_types: 8 styled, 10 stubs)
 // Surfaces: transparent rows on Ink #0E1014, 1px hairline-standard divider between rows
 // Typography: Geist Mono 500 10px labels, Inter 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
 // Territory colors used (one per row max — accent bar only, never fills):
@@ -56,6 +56,16 @@ function StreakMilestoneRow({ event }) {
     <RowShell accentColor={CLAIM} label="STREAK MILESTONE" labelColor={CLAIM} event={event}>
       <Text style={styles.heroNumber}>{days}</Text>
       <Text style={styles.supporting}>DAY STREAK</Text>
+    </RowShell>
+  );
+}
+
+function LeveledUpRow({ event }) {
+  const levelAfter = getMeta(event, 'level_after', 'levelAfter') ?? '—';
+  return (
+    <RowShell accentColor={CLAIM} label="LEVELED UP" labelColor={CLAIM} event={event}>
+      <Text style={styles.heroNumber}>{levelAfter}</Text>
+      <Text style={styles.supporting}>LEVEL REACHED</Text>
     </RowShell>
   );
 }
@@ -172,6 +182,8 @@ export default function ActivityLogEvent({ event }) {
       return <ContestExpiredRow event={event} />;
     case 'contest_defended':
       return <ContestDefendedRow event={event} />;
+    case 'leveled_up':
+      return <LeveledUpRow event={event} />;
     default: {
       const title = STUB_TITLES[event.event_type] ?? 'ACTIVITY';
       return <GenericRow event={event} title={title} />;
