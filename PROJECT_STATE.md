@@ -1,5 +1,5 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: June 1, 2026 (Sessions 45–52a — **Activity module: backend track COMPLETE + mobile producer LIVE on beta**, slices 1–6 shipped + S52a hotfixes)
+Last updated: June 10, 2026 (Sessions 53–61b — **Notifications module COMPLETE & CLOSED**: foundation S53–S56, trigger wires S57–S60, nav race fix S61a, full device matrix verified S61b. 7/8 §B items shipped; §B-7 + §B-15 cross-module-deferred to Activity Slice 7 carrier)
 
 ---
 
@@ -18,7 +18,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Terminal | Warp — PowerShell syntax. Run commands one at a time. `&&` does not work. |
 | Warp tabs | Ctrl+T = new tab. Never stop the Expo tab. Open new tab for everything else. |
 | Editor | Cursor — Agent chat (Ctrl+L). Claude writes directly to files. Always check phone after Cursor makes changes. **Cursor remembers a stale working directory if a folder moves on disk — always `File → Open Folder` on the right repo before pasting a prompt.** |
-| Device | OnePlus Android |
+| Devices | **OnePlus 12** (primary dev client, Metro-tethered, player `nish_s`) + **OnePlus 7t** (standalone EAS preview build, player "Alyona" — autonomous G2 data collection + release-mode smoke; only device that can verify killed-state Effect 5 paths) |
 | Screen mirror | scrcpy — run `scrcpy` to mirror phone to PC for sharing errors |
 | Mobile GitHub | github.com/nishs580/dominia |
 | Mobile local path | `C:\Users\nisha\dominia` |
@@ -49,10 +49,10 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Animations | react-native-svg | ✓ Installed |
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
-| Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` ^22.2.0 (namespaced API — v23 modular migration is a future task) | ✓ Working end to end |
+| Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` **^23.0.0 (modular API — migrated S53)** + `react-native-toast-message` ^2.3.3. Foreground/background/killed-state all handled via `FcmLifecycle` Effects 3/4/5; D1 routing table in `lib/notifications/route.js` (19 entries) | ✓ Working end to end (12/12 device matrix S61b) |
 | Network status | `@react-native-community/netinfo` (Expo SDK 54-compat, native — added S51 for Activity producer) | ✓ Installed |
 | Activity producer | `expo-crypto` (SHA-256 sourceId) + `react-native-health-connect@^3.5.0` (Android-only) | ✓ Live on beta |
-| Test runner | Jest 29.7 + jest-expo (mobile, **411 tests** — 348 formulas + 63 activity.helpers) · `tsx --test` (backend, **336 tests** — 55 progression + 12 shared/formulas + 73 activity + 54 me/ + 77 alliance + 65 streak) | ✓ All passing |
+| Test runner | Jest 29.7 + jest-expo (mobile, **411 tests** — 348 formulas + 63 activity.helpers; 411/411 × 4 baseline clean post-S61a) · `tsx --test` / `node --test --import tsx` (backend; full suite carries **79 pre-existing Supabase statement-timeout failures** — verify via narrow-scope module file sets at 4-run zero-flake instead, e.g. S60 baseline 93/0/0 × 4) | ✓ Green at module scope |
 
 **Backend (`dominia-backend` repo):**
 
@@ -70,7 +70,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Job queue | BullMQ 5.x — **4 queues LIVE**: `contestExpiryQueue` (one-shot, 23:59 home_pin expiry), `quietHoursPushQueue` (delayed FCM dispatch at next 05:00 local), `streakRolloverQueue` (repeatable cron `0 0 * * *` per distinct home_timezone), `streakBreakWarningQueue` (repeatable cron `55 23 * * *` per distinct home_timezone). jobIds use hyphens not colons; for tz-based jobs: `streak-rollover-${tz.replace(/\//g, '-')}` so `Europe/Moscow` → `streak-rollover-Europe-Moscow`. | ✓ Live |
 | Real-time | Ably (free tier — Pub/Sub, 6M msg/month). `Ably.Rest` singleton in `shared/ably.ts`. 4 events live on `contest:<id>` channel: `contest_attacker_started_walking`, `contest_progress`, `contest_resolved`, `contest_expired`. Mobile Realtime client not yet wired. | ✓ Live |
 | Validation | `zod` | ✓ Live |
-| Push notifications | **Firebase Admin (FCM)** — `firebase-admin` v12+ singleton in `shared/firebase.ts`. 4 push kinds: `defender_notify`, `contest_won`, `contest_lost`, `streak_break_warning`. Quiet Hours 23:00–05:00 in player.home_timezone enforced at send site (enqueues delayed BullMQ job). `streak_break_warning` uses `sendImmediately` (not `sendPush`) to deliberately bypass Quiet Hours since 23:55 IS inside the window and spec mandates the push fires. Stale-token cleanup matches 3 error codes. | ✓ Live end to end |
+| Push notifications | **Firebase Admin (FCM)** — `firebase-admin` v12+ singleton in `shared/firebase.ts`. `PushNotificationKind` union now **21 kinds** (S53→S60): contest lifecycle (defender_notify, contest_won, contest_lost), streak_break_warning, streak_milestone, 7 alliance lifecycle kinds (S57, `_broadcast` suffix convention), level_up_5/6/10 (S59), first_claim / first_contest_win / first_reconquest / first_alliance_mission (S60). Dispatch via per-domain **post-tx push composers** (see Decision Log). Quiet Hours 23:00–05:00 enforced at send site; `sendImmediately` bypasses for 23:55 streak warning. Stale-token cleanup matches 3 error codes. | ✓ Live end to end |
 
 ---
 
@@ -95,11 +95,15 @@ dominia-backend/
 │   │   │   ├── fcm-token.routes.ts  // PATCH /me/fcm-token ✓
 │   │   │   ├── fcm-token.queries.ts // updateFcmToken
 │   │   │   ├── challenge-complete.routes.ts ✓ // POST /me/challenge-complete
-│   │   │   ├── challenge-complete.service.ts ✓ // orchestrator inside one prisma.$transaction
-│   │   │   ├── challenge-complete.queries.ts ✓ // RACE-FIXED — Prisma {increment} for monetary fields
+│   │   │   ├── challenge-complete.service.ts ✓ // orchestrator inside one prisma.$transaction; S58 streak_re_entry response field; S59 leveled_up row + level-up push trigger capture (post-tx emit)
+│   │   │   ├── challenge-complete.queries.ts ✓ // RACE-FIXED — Prisma {increment}; S59 logLeveledUp writer
 │   │   │   ├── challenge.formulas.ts ✓ // ported subset of root formulas.js (tiers, XP, resource earn, level)
 │   │   │   ├── streak.helpers.ts    ✓ // pure: computeNewStreak, isGraceDayMilestone, applyGraceDayGrant
-│   │   │   └── index.ts             // registerMeRoutes wires fcmTokenRoutes + challengeCompleteRoutes
+│   │   │   ├── activity-log.*       ✓ // (S54) GET /me/activity-log cursor-paginated + PATCH .../read
+│   │   │   ├── streak-break-status.* ✓ // (S58) GET /me/streak-break-status + POST /me/streak-break/acknowledge
+│   │   │   ├── level-up-push.composer.ts ✓ // (S59) §B-10 — LEVEL_COPY for 5/6/10, SKIP_LEVEL_UP_PUSH_EMIT
+│   │   │   ├── first-earn-push.composer.ts ✓ // (S60) §B-14 — FIRST_EARN_COPY all 4 spec §5.1 sources, SKIP_FIRST_EARN_PUSH_EMIT
+│   │   │   └── index.ts             // registerMeRoutes wires fcmTokenRoutes + challengeCompleteRoutes + activity-log + streak-break routes
 │   │   │
 │   │   ├── health/                  ✓ Scaffolded, Redis ping included
 │   │   │   └── routes.ts            // GET /healthcheck ✓ — returns `{ status, redis: "PONG" }`; 503 on Redis error
@@ -126,7 +130,9 @@ dominia-backend/
 │   │   │   ├── demote.{service,routes,test}.ts ✓ // POST /alliances/:id/members/:playerId/demote (founder-only)
 │   │   │   ├── transfer.{service,routes,test}.ts ✓ // (38) POST /alliances/:id/members/:playerId/transfer — founder ↔ marshal/officer role swap, role counts conserved, no 409
 │   │   │   ├── get.service.ts       ✓ // getAllianceById, getMyAlliance
-│   │   │   └── index.ts             ✓ // registers found + join + leave + kick + promote + demote + transfer + get routes
+│   │   │   ├── alliance-push.composer.ts ✓ // (S57) emitAllianceLifecyclePushes — discriminated union for 5 events / 7 wires (kicked+left = subject+broadcast; joined = broadcast-only; promoted+demoted = subject-only). SKIP_ALLIANCE_PUSH_EMIT bypass
+│   │   │   ├── activity-log.*       ✓ // (S56) GET /alliances/:id/activity-log + PATCH .../read — alliance feed, separate read cursor, username enrichment
+│   │   │   └── index.ts             ✓ // registers found + join + leave + kick + promote + demote + transfer + get + activity-log routes
 │   │   ├── streak/                  ✓ LIVE — midnight rollover + 23:55 break-warning, both per-timezone BullMQ jobs
 │   │   │   ├── streak-rollover.helpers.ts ✓ // pure evaluateRollover + yesterdayOf
 │   │   │   ├── streak-rollover.queries.ts ✓ // fetchPlayersByTimezone, applyRolloverUpdate (optimistic concurrency), logStreakBroken
@@ -135,6 +141,7 @@ dominia-backend/
 │   │   │   ├── streak-break-warning.helpers.ts ✓ // pure evaluateWarning + formatWarningMessage per spec §4.5.1
 │   │   │   ├── streak-break-warning.queries.ts ✓ // fetchEligibleWarningPlayers via tagged $queryRaw
 │   │   │   ├── streak-break-warning.service.ts ✓ // processPlayerWarning (sendImmediately bypasses Quiet Hours) + batch
+│   │   │   ├── streak-milestone-push.composer.ts ✓ // (S58) §B-6 — 6 tier copies days 7/14/21/30/60/90 (Day 60 amended S59: third Grace Day banked). SKIP_STREAK_PUSH_EMIT bypass
 │   │   │   └── bootstrap-warning.ts ✓ // registers cron '55 23 * * *' per distinct home_timezone
 │   │   │
 │   │   ├── debug/                   ✓ Live — routes gated by (NODE_ENV !== 'production' || ALLOW_DEBUG_ROUTES === 'true')
@@ -193,7 +200,8 @@ dominia-backend/
 │   │   ├── firebase.ts              ✓ Firebase Admin singleton — `admin.initializeApp` from `FIREBASE_SERVICE_ACCOUNT_JSON`.
 │   │   ├── timezone.ts              ✓ `resolveLocalDateTimeToUtc`, `isQuietHours`, `computeNextQuietHoursDispatchUtc`, `getLocalDateInTz`, `getLocalHour`, `isMondayInTz` (S50 — pure over already-tz-local YMD string, DST-irrelevant).
 │   │   ├── queues/                  ✓ Real BullMQ queues — contest-expiry, quiet-hours-push, streak-rollover, streak-break-warning.
-│   │   ├── notifications/           ✓ FCM dispatch with Quiet Hours — send.ts, quiet-hours.worker.ts, types.ts (PushNotificationKind union, 4 kinds).
+│   │   ├── notifications/           ✓ FCM dispatch with Quiet Hours — send.ts, quiet-hours.worker.ts, types.ts (PushNotificationKind union, **21 kinds** as of S60).
+│   │   ├── constants/activityLog.ts ✓ (S54/S59) PLAYER_FEED_EVENT_TYPES + ALLIANCE_FEED_EVENT_TYPES whitelists for the feed endpoints.
 │   │   └── errors.ts                ○ typed app errors
 │   │
 │   ├── jobs/                        ○ Folder scaffolded — real workers currently live inside their modules.
@@ -244,7 +252,7 @@ dominia-backend/
 | Railway | Hobby | Backend hosting + Redis plugin. Auto-deploys on push to `main`. Two services: `dominia-backend` (Node) + `Redis` (private network ref var, no egress in prod; `REDIS_PUBLIC_URL` for local dev). |
 | Ably | Free tier (Pub/Sub) | 6M messages/month, 200 peak connections, 200 peak channels. Single app "Dominia". Single Root API key (backend only). Mobile will use scoped key or token auth when subscription is added. Currently publishes 4 events on `contest:<id>` channels. |
 | Firebase | Free (Spark plan) | Cloud Messaging only. No quota limits on dev-tier FCM sends. |
-| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~22 Android used, ~8 remaining.** Failed builds DO NOT count against the cap. |
+| EAS Build | Free | 30 builds/month (15 Android + 15 iOS). **~23 Android used, ~7 remaining** (preview rebuild #2 consumed in S61b — carried S57–S61a mobile deltas to Alyona in one artifact). Failed builds DO NOT count against the cap. |
 | Cursor | Pro | No usage limits on AI edits |
 
 ---
@@ -253,7 +261,7 @@ dominia-backend/
 
 **Tables:**
 
-`players`: id, username, level, xp, home_city (text — DERIVED via PostGIS in POST /me/home-pin; Title Case canonical form), alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, grace_days_banked (int NOT NULL DEFAULT 0 — bank capped at 3, granted at 7/30/60-day milestones, one consumed per missed day at local midnight), iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, home_timezone (text NOT NULL DEFAULT 'UTC', IANA tz string — derived from home pin via tz-lookup), fcm_token (text nullable — Firebase Cloud Messaging device token; set via PATCH /me/fcm-token; cleared on sign-out and on FCM stale-token error), **daily_steps (int NOT NULL DEFAULT 0 — S48; incremented per accepted activity sample, zeroed at midnight local-tz via streak-rollover S50)**, **daily_calories (int NOT NULL DEFAULT 0 — S48; incremented only when kcal present, mobile sends in Slice 8)**, **weekly_steps_total (int NOT NULL DEFAULT 0 — S48; incremented per accepted sample, zeroed Mondays only)**, **longest_session_min (int NOT NULL DEFAULT 0 — S48; recomputed inside ingest tx via computeLongestSessionMin when acceptedCount > 0; zeroed daily)**
+`players`: id, username, level, xp, home_city (text — DERIVED via PostGIS in POST /me/home-pin; Title Case canonical form), alliance_id, created_at, clerk_id, has_onboarded, home_pin_lat, home_pin_lng, current_streak, longest_streak, last_active_date, grace_days_banked (int NOT NULL DEFAULT 0 — bank capped at 3, granted at 7/30/60-day milestones, one consumed per missed day at local midnight), iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, home_timezone (text NOT NULL DEFAULT 'UTC', IANA tz string — derived from home pin via tz-lookup), fcm_token (text nullable — Firebase Cloud Messaging device token; set via PATCH /me/fcm-token; cleared on sign-out and on FCM stale-token error), **daily_steps (int NOT NULL DEFAULT 0 — S48; incremented per accepted activity sample, zeroed at midnight local-tz via streak-rollover S50)**, **daily_calories (int NOT NULL DEFAULT 0 — S48; incremented only when kcal present, mobile sends in Slice 8)**, **weekly_steps_total (int NOT NULL DEFAULT 0 — S48; incremented per accepted sample, zeroed Mondays only)**, **longest_session_min (int NOT NULL DEFAULT 0 — S48; recomputed inside ingest tx via computeLongestSessionMin when acceptedCount > 0; zeroed daily)**, **player-feed read cursor (S54 — advanced via `PATCH /me/activity-log/read`)**, **alliance_feed_last_read_at (S56 — separate read cursor for the alliance feed)**, **streak_broken_acknowledged_at (timestamptz nullable — S58, §B-8 break-confirmation acknowledgement; paired UP/DOWN folder migration)**
 
 `activity_samples` (S48): id (uuid PK, gen_random_uuid), player_id (uuid FK), source_id (text — deterministic SHA-256 UUID-shaped from `playerId|windowStartMs|windowEndMs` per Q-D), window_start (timestamptz), window_end (timestamptz), steps (int), distance_m (int), kcal (int nullable — D9 phase 1), avg_gps_speed_ms (numeric nullable — D10 scalar speed only, no coordinates), bucket_ymd (varchar(10) — YYYY-MM-DD in player tz at write time, denormalised per D5), accepted (boolean), rejection_reason (text nullable — `velocity_capped` / `window_too_short` / `future_timestamp` / `past_day` / `duplicate` etc., app-layer validated against `CreditSampleRejectionReason` union), created_at. **UNIQUE (player_id, source_id)** for D6 idempotency. Covering indexes: `(player_id, bucket_ymd)` for daily aggregate reads, `(player_id, window_end)` for chronology queries. No DB-level CHECK on `accepted XOR rejection_reason` — app-layer enforced + T9 runtime invariant test. **Append-only audit log; never updated.**
 
@@ -334,10 +342,11 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | Screen | Status | Notes |
 |---|---|---|
 | Navigation (4 bottom tabs) | ✓ Branded | Geist Mono uppercase, hairline-strong top border, Bone active / Slate inactive |
-| Map screen | ~ Live data | PostGIS viewport fetch via `get_territories_in_viewport` RPC. Client-side feature cache + merge-on-fetch + age-gated abort. Debounce 150ms. styleURL `light-v11` for dev. (S37) useFocusEffect also calls fetchPlayer; new useEffect tracks `myPlayer?.alliance_id` transitions via previousAllianceIdRef, clears featureCacheRef + refetches viewport on change (so joiner's territories visually update to alliance colour within seconds of join). Colour priority: own=red, alliance members=green, other=blue-grey. Known bugs: zoom-level simplification hides small polygons at wide zoom; nested/overlapping territories. |
-| Activity screen | ✓ Live data | Health Connect wired end-to-end. 10s `useFocusEffect` poll. `onCompleteChallenge` REWRITTEN 31b: 6 direct Supabase writes → 1 `POST /me/challenge-complete` via `lib/challengeApi.js`. Pre-state snapshot for rollback. Optimistic UI applied immediately, reverted on failure, refreshed from backend response on success. Auto-complete cascade Easy → Med → Hard. DB-level idempotency via `player_challenges` UNIQUE inside backend tx. `challengesLoaded` gate. Real weekly chart with bone today-bar + Claim-red SVG trend curve. `DEV_MODE_MANUAL` flag (currently FALSE). **(S51)** Refactored to import `STEPS_READ_PERM` + `hasForegroundStepsRead` from shared `lib/healthConnect.js`. One-line addition `activityProducer.onPermissionGranted()` after successful foreground Steps grant in `handleRequestStepsPerm`. UX surface unchanged. |
+| Map screen | ~ Live data | PostGIS viewport fetch via `get_territories_in_viewport` RPC. Client-side feature cache + merge-on-fetch + age-gated abort. Debounce 150ms. styleURL `light-v11` for dev. (S37) useFocusEffect also calls fetchPlayer; alliance_id transition tracking clears featureCacheRef + refetches. Colour priority: own=red, alliance members=green, other=blue-grey. **(S55)** Player activity-feed **side-rail lives on the Map tab only** (D2 revised); hidden while TerritorySheet is open. Known bugs: zoom-level simplification hides small polygons at wide zoom; nested/overlapping territories. |
+| Activity screen | ✓ Live data | Health Connect wired end-to-end. 10s `useFocusEffect` poll. `onCompleteChallenge` REWRITTEN 31b: 6 direct Supabase writes → 1 `POST /me/challenge-complete` via `lib/challengeApi.js`. Pre-state snapshot for rollback. Optimistic UI applied immediately, reverted on failure, refreshed from backend response on success. Auto-complete cascade Easy → Med → Hard. DB-level idempotency via `player_challenges` UNIQUE inside backend tx. `challengesLoaded` gate. Real weekly chart with bone today-bar + Claim-red SVG trend curve. `DEV_MODE_MANUAL` flag (currently FALSE). **(S51)** Refactored to import `STEPS_READ_PERM` + `hasForegroundStepsRead` from shared `lib/healthConnect.js`; `activityProducer.onPermissionGranted()` after grant. **(S58/S59)** Post-challenge success branch fires response-side triggers in order: §B-9 streak re-entry Toast → §B-11 grace-day Toast (`grace_day_granted: true`) → §B-10 Level 4 in-app CARD (`leveled_up && level_after === 4`). Rule: response-side trigger ONLY when no push channel exists for the moment. |
 | Profile screen | ✓ Live data | POWER + Influence sections. Long-press commander name (1000ms) opens HealthConnectDebug. Logout calls `clearFcmToken` before `signOut`, both now wrapped in Promise.race timeouts (3s/5s respectively). Sign-out completes in 2-3s on device (was hanging for minutes). |
-| Alliance screen | ✓ Live data | MemberContent + NonMemberContent on live backend reads. Real roster, role badges, headers. Loading + error + retry states. Leave flow (3 confirm cases: non-founder, founder-blocked, founder-disband). Member-management full-screen confirm view with flat-list action picker (PROMOTE/DEMOTE/TRANSFER ALLIANCE/KICK/CANCEL). Server-confirmed updates. Uses canonical `getTokenRef` pattern. Transfer Alliance row (Founder→Marshal/Officer) has TYPE-TRANSFER text-gate. (S37) handleConfirmJoin navigates to AllianceJoined with `context: 'joined'` on success. |
+| Alliance screen | ✓ Live data | MemberContent + NonMemberContent on live backend reads. Real roster, role badges, headers. Loading + error + retry states. Leave flow (3 confirm cases). Member-management full-screen confirm view (PROMOTE/DEMOTE/TRANSFER ALLIANCE/KICK/CANCEL). Canonical `getTokenRef` pattern. Transfer Alliance row has TYPE-TRANSFER text-gate. **(S56)** Inline "Alliance messages" wire section — 320px terminal-aesthetic container with "▌ LIVE" header, 6 styled alliance-lifecycle renderers, backed by `GET /alliances/:id/activity-log`. |
+| Activity Log screen | ✓ Live data | **(S55)** Full player feed: FlatList cursor pagination against `GET /me/activity-log`, per-event renderer matrix in `components/ActivityLogEvent.js` (incl. S59 `LeveledUpRow`), mark-read on mount. Also the DEFAULT_ROUTE target for unknown push kinds (forward-compat verified S61b). |
 | War Room screen | ✓ Live data | All 6 abilities. ACTIVATE wired (Founder only) via `deduct_alliance_morale` RPC. |
 | Wallet screen | ✓ Live data | 4-resource view. Morale row → donate modal → `donate_morale` RPC. |
 | Onboarding screen | ✓ Branded | 5-step flow, typewriter animation, Mapbox dark-v11 home pin map. Uses `lib/homePinApi.js` `setHomePin` (POST /me/home-pin — derives BOTH home_timezone AND home_city automatically). |
@@ -349,7 +358,7 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | Contest Result screen | ✓ Live data | 4 states. attack_won verified on device; defence states wired but not exercised end-to-end. |
 | Create Alliance screen | ✓ Live data | 3-step founding wizard wired to POST /alliances/found. Body is `{full_name, short_name, hq_territory_id}`. Confirm step reads city from `player.home_city`. Short_name Supabase pre-check (silent fail-open). Inline error mapping for 8 backend codes. Navigates with only `{ allianceId }`. |
 | Alliance Joined screen | ✓ Live data | (S37) Now context-aware: reads `context` from route.params. Conditional kicker ('Alliance joined' vs 'Alliance founded'), conditional subtitle ("You're no longer alone on this map." vs "Ready for war."), conditional benefits list (BENEFITS_FOUNDED vs BENEFITS_JOINED). Create flow passes no context → falls through to founded copy. Join flow passes `context: 'joined'`. Single screen, two copy paths. Still fetches by allianceId on mount via `getAllianceById`. Three render states (loading spinner / error+retry / loaded). Uses `getTokenRef` pattern. |
-| AuthGate | ✓ Done | Checks isSignedIn + has_onboarded. Calls `registerFcmToken` inline in `runGate()` before navigation. |
+| AuthGate | ✓ Done | Checks isSignedIn + has_onboarded. **(S53, D5)** FCM registration REMOVED — AuthGate is navigation-only; `FcmLifecycle` owns all FCM concerns. |
 | Permissions | ~ Partial | Inline in onboarding step 2 — not a standalone screen |
 | Territory Detail (full screen) | ○ Not built | Currently a bottom sheet inside map. |
 | Defender flow | ○ Deferred | Backend lifecycle live; mobile UI not built. |
@@ -361,8 +370,18 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 
 | File | Purpose |
 |---|---|
-| `App.js` | Root stack navigator, font loading, ClerkProvider, all screen registrations. **(S51)** `<ActivitySyncLifecycle />` added inside `<ClerkProvider>`, before `<NavigationContainer>` — survives all routing, accesses `useAuth().getToken`. |
-| `components/AuthGate.js` | Checks isSignedIn + has_onboarded. Calls `registerFcmToken` inline in `runGate()` (fire-and-forget) BEFORE `navigation.replace('MainTabs')`. See Decision Log: FCM AuthGate ordering. **(S52a `9c97fe7`, B20 closed)** Removed an uncommitted-from-S41 temp `useEffect` that emitted the raw Clerk JWT via `console.log` — never reached HEAD but would have leaked to logcat if pushed. Net diff to repo HEAD: zero. |
+| `App.js` | Root stack navigator, font loading, ClerkProvider, all screen registrations. **(S51)** `<ActivitySyncLifecycle />` inside `<ClerkProvider>`. **(S53)** `navigationRef` + `<FcmLifecycle />` + `<NotificationCard />` + `<Toast />` mounted inside `<ClerkProvider>`. **(S58)** `<StreakBreakLifecycle />` mounted. |
+| `index.js` | **(S53)** `setBackgroundMessageHandler` no-op at boot (silences "no background handler" warning; B-S53-3 tracks future AsyncStorage replay). |
+| `components/AuthGate.js` | Checks isSignedIn + has_onboarded. **(S53, D5)** FCM registration REMOVED — navigation-only. Its parameterless `navigation.replace('MainTabs')` is the race partner the S61a `navigateToAfterAuthGate` deferral was built against. |
+| `components/FcmLifecycle.js` | **(S53)** Null-render component owning ALL FCM concerns: registration, `onTokenRefresh` cleanup (`useRef` pattern for getToken), and 3 push handlers — Effect 3 foreground `onMessage`, Effect 4 background tap `onNotificationOpenedApp`, Effect 5 killed-state `getInitialNotification`. **(S61a)** Effect 5 calls `navigateToAfterAuthGate` (not `navigateTo`) to survive the AuthGate replace race. |
+| `components/notifications/NotificationCard.js` | **(S53/S55)** Full-screen modal subscribed to `cardController`; foreground tap → route nav (S55 fix). `DEFAULT_TITLES` safety-net map (15 entries post-S60). FCM-delivered cards use payload `notification.*` fields; locally-invoked cards (L4 level-up, §B-8 break confirmation) control `data` fully. |
+| `components/StreakBreakLifecycle.js` | **(S58)** §B-8 break confirmation: cold-start + AppState 'active' re-fetch of `GET /me/streak-break-status`, nav-route-gate, acknowledge POST on dismiss via cardController `onDismiss`. Known: fires 401 `no_token` on cold start before Clerk ready (B-S61-X1); nav-listener cleanup style differs from `lib/navigation.js` (B-S58-Q2). |
+| `components/ActivityLogEvent.js` | **(S55/S59)** Per-event-type renderer matrix for the feed (styled rows + stubs; `LeveledUpRow` inline after `StreakMilestoneRow`, hero=level_after, accent CLAIM). `getMeta(event, ...keys)` dual-fallback absorbs camelCase/snake_case emitter drift. Header comment count is one off (B-S59-X2, doc nit). |
+| `lib/navigation.js` | **(S53/S61a)** `navigationRef` + `navigateTo` + `onNavigationReady` with `pendingTarget` + state-listener deferral machinery (`tryDispatch` / `armStateListener` lifted to module scope in S61a). **(S61a)** `navigateToAfterAuthGate()` — defers killed-state push routing until current root route is MainTabs, eliminating the AuthGate replace clobber window. |
+| `lib/notifications/route.js` | **(S53/S57–S60)** D1 routing table: pure `routeForPush(kind)` → `{ kind, type, route?, payload? }`. 19 entries post-S60 (aggregate `first_earn`→Wallet placeholder deleted; 4 per-source first_* entries added). Unknown kinds fall to DEFAULT_ROUTE (toast + ActivityLog). **Audit this file before constructing any push test — never guess kind names.** |
+| `lib/notifications/cardController.js` | **(S53/S58)** Imperative singleton: `showCard` / `hideCard` / `subscribe`; `hideCard` takes optional `onDismiss` callback (S58). |
+| `screens/ActivityLogScreen.js` | **(S55)** Player feed screen: FlatList cursor pagination, mark-read on mount. |
+| `lib/streakBreakApi.js` | **(S58)** Clerk-authed wrappers for streak-break status + acknowledge endpoints, canonical `{ok, data}` discriminant. |
 | `components/ResourceGlyphs.js` | 6 SVG glyph components: Stone, Iron, Gold, Shield, Morale, Influence |
 | `components/ProgressBar.js` | 5 horizontal segments (28×2px), 0px radius |
 | `components/PrimaryButton.js` | Claim red, 0px radius, Geist Mono |
@@ -390,7 +409,7 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `lib/allianceApi.js` | (32–38) `getMyAlliance`, `getAllianceById`, `foundAlliance`, `joinAlliance`, `leaveAlliance`, `kickMember`, `promoteMember`, `demoteMember`, `transferFounder` (S38). All Clerk-authed, `Connection: 'close'` header, `{ ok, data \| error }` discriminant, never throw. Canonical pattern mirroring `lib/challengeApi.js`. |
 | `lib/alliancePermissions.js` | (36, 38) Pure JS port of backend `membership.helpers.ts` — `ROLE_RANK`, `ROLE_SLOTS`, `canKick`, `canPromote`, `canDemote`, `canTransferFounder` (S38), plus `getAvailableActions()` helper that returns all valid actions for an actor-target pair. Action ordering: promote → demote → transfer_founder → kick (ascending in irreversibility). Used by AllianceScreen's manage-member UI to decide whether a roster row is tappable. |
 | `lib/homePinApi.js` | (33) `setHomePin` via `POST /me/home-pin`. Returns `{ home_timezone, home_city }`. Mobile reads home_timezone but still ignores home_city (UI deferred). |
-| `lib/fcm.js` | Three exports: `registerFcmToken`, `clearFcmToken`, `patchFcmToken`. Uses namespaced `@react-native-firebase/messaging` API (v22 — v23 migration is a future task). All errors caught + logged, never thrown. **(S37) `patchFcmToken` now sends `Connection: close` header (matches `lib/supabase.js` pattern). `clearFcmToken` body wrapped in `Promise.race` against 3s timeout — best-effort cleanup, never blocks the caller.** |
+| `lib/fcm.js` | `registerFcmToken`, `clearFcmToken`, `patchFcmToken` + **(S53)** v23 modular wrappers `onForegroundMessage`, `onBackgroundTap`, `getInitialPushPayload`. All errors caught + logged, never thrown. `patchFcmToken` sends `Connection: close`; `clearFcmToken` raced against 3s timeout. Note: `getInitialPushPayload` returns null in Metro dev mode (bundle race) — killed-state paths verify only on release-mode EAS builds. |
 | `metro.config.js` | react-dom shim for @clerk/clerk-react bundling |
 | `shims/react-dom-shim.js` | Empty module.exports shim |
 | `plugins/withHealthConnect.js` | Custom Expo config plugin. Injects `HealthConnectPermissionDelegate.setPermissionDelegate(this)` into MainActivity.kt onCreate. Anchor regex `/super\.onCreate\(.+?\)/` matches both `savedInstanceState` and `null` forms. Re-check anchor every Expo SDK upgrade. |
@@ -471,7 +490,7 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/modules/alliance/index.ts` | (32–38) registers found + join + leave + kick + promote + demote + transfer + get routes. |
 | `scripts/backfill-home-city.ts` | (34) Idempotent backfill for `players.home_city` via `resolveHomeCityFromPin`. Logs per-player progress and final totals. Ran 10/10 successfully against Railway. |
 | `src/modules/debug/routes.ts` | Debug routes gated by `(NODE_ENV !== 'production' \|\| ALLOW_DEBUG_ROUTES === 'true')`. Active: POST /debug/streak-rollover, POST /debug/streak-break-warning, GET /debug/contest-expiry/:contestId. **`ALLOW_DEBUG_ROUTES` currently ON in Railway — flip OFF before any external playtest.** |
-| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. `claim.queries.ts findPlayerAllianceId` now reads `players.alliance_id` via tx (no longer a stub; unwired in 32). **(S41/S42/S44 progression hooks):** `claim.service.ts` grants `calcClaimXp(tier, {streakDays, isSupplyLineActive:false, isCityEvent:false})` via `grantSiegeXp` inside tx (S42 multiplier-aware). `contest.service.ts` initiate runs `canContestTerritory(attacker, target)` between self-contest guard and tier level gate (S44 §8.1 enforcement); 403 with `CONTEST_REJECT_MESSAGES[reason]`. `contest-walk.service.ts` grants `calcContestWinXp` (attacker_won) or `calcDefenceWinXp` (defender_won) — both multiplier-aware (S42). `contest-expiry.worker.ts` grants `calcDefenceWinXp` to `defender_player_id ?? defender_id`. All four use `findPlayerStreakDays(tx, ...)` to read streak inside tx. `abandon` correctly grants NO XP (Siege XP cannot diminish). Query extensions: `findPlayerByClerkIdForContest` selects `alliance_id`; `findTerritoryForContest` includes `players: {select: {level: true}}` (S44); `findContestForWalk`/`findContestForExpiry` include `tier` (S41). `contest.routes.ts CLIENT_ERROR_CODES` extended to include 403 (S44). |
+| `src/modules/territory/*` | Full CRUD + contest lifecycle. See BACKEND ARCHITECTURE for file breakdown. `claim.queries.ts findPlayerAllianceId` now reads `players.alliance_id` via tx (no longer a stub; unwired in 32). **(S41/S42/S44 progression hooks):** `claim.service.ts` grants `calcClaimXp(tier, {streakDays, isSupplyLineActive:false, isCityEvent:false})` via `grantSiegeXp` inside tx (S42 multiplier-aware). `contest.service.ts` initiate runs `canContestTerritory(attacker, target)` between self-contest guard and tier level gate (S44 §8.1 enforcement); 403 with `CONTEST_REJECT_MESSAGES[reason]`. `contest-walk.service.ts` grants `calcContestWinXp` (attacker_won) or `calcDefenceWinXp` (defender_won) — both multiplier-aware (S42). `contest-expiry.worker.ts` grants `calcDefenceWinXp` to `defender_player_id ?? defender_id`. All four use `findPlayerStreakDays(tx, ...)` to read streak inside tx. `abandon` correctly grants NO XP (Siege XP cannot diminish). Query extensions: `findPlayerByClerkIdForContest` selects `alliance_id`; `findTerritoryForContest` includes `players: {select: {level: true}}` (S44); `findContestForWalk`/`findContestForExpiry` include `tier` (S41). `contest.routes.ts CLIENT_ERROR_CODES` extended to include 403 (S44). **(S60 §B-14):** `claim.service.ts` — first-claim detection via `tx.activity_log.findFirst` on prior `territory_claimed` rows inside tx, outer-scope `let firstEarnTrigger = null` capture, post-tx `emitFirstEarnPush` (this slice introduced claim.service's post-tx phase). `contest-walk.service.ts` — pre-tx `players.findUnique({select:{lifetime_contest_wins}})` (`findContestForWalk` does NOT return attacker fields), `isFirstContestWin = wins === 0` (race-safe: single-active-contest rule), post-tx emit on `attacker_won`. |
 | `src/modules/progression/progression.formulas.ts` | (S40) Pure math. `LEVEL_XP_FLOORS` (10 levels), `LEVEL_TITLES`, `TerritoryTier` type, `isTerritoryTier`, `calcLevel`, `calcLevelProgress`, `getLevelTitle`, `calcClaimXp`, `calcContestWinXp`, `calcDefenceWinXp` — all three earn formulas accept optional `XpMultiplierOpts` (S42) for streak/supply-line/city-event stacking. Backwards-compat: omit `opts` → flat base XP. Tier keys lowercase to match wire format. |
 | `src/modules/progression/progression.queries.ts` | (S40) `grantSiegeXp(tx, playerId, delta)` — THE single XP-write primitive. Atomic Prisma `{increment}` on `players.xp` + conditional 2nd UPDATE for level recompute (gated by `calcLevel(newXp) !== currentLevel`). Returns `{newXp, previousLevel, newLevel, leveledUp}`. Null guard throws `serviceError(500)` with player ID + actual values — loud failure for data integrity, never silent 0/1 fallback. Used by all 4 XP-granting callsites + S43's milestone path. |
 | `src/modules/progression/progression.helpers.ts` | (S44) `canContestTerritory(attacker, target): {ok:true} \| {ok:false, reason}` — pure §8.1 protection check, no DB. Discriminated union over 3 reasons: `attacker_level_too_low` (L1–3), `target_solo_protected` (L1–3 solo target), `target_alliance_protected_from_solo` (L4–5 solo attacker vs alliance territory). Pattern mirrors `alliance/membership.helpers.ts`. Reason codes are domain; player-facing copy lives at the callsite (`contest.service.ts CONTEST_REJECT_MESSAGES` map). |
@@ -483,8 +502,18 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `src/shared/queues/quiet-hours-push.queue.ts` | jobId `quiet-${playerId}-${kind}-${timestamp}`. Delayed dispatch to next 05:00 local. |
 | `src/shared/queues/streak-rollover.queue.ts` | (31c) Queue + Worker. Repeatable jobId pattern: `streak-rollover-${tz.replace(/\//g, '-')}` (Europe/Moscow → `streak-rollover-Europe-Moscow`). Worker calls `runRolloverForTimezone(tz, todayYmd)`. |
 | `src/shared/queues/streak-break-warning.queue.ts` | (31d) Queue + Worker. Same jobId pattern. Worker calls `runWarningForTimezone(tz, todayYmd)`. |
-| `src/shared/notifications/types.ts` | (MODIFIED 31d) `PushNotificationKind` union — 4 kinds: `defender_notify`, `contest_won`, `contest_lost`, `streak_break_warning`. |
-| `src/shared/notifications/send.ts` | `sendPush` — lookup token → Quiet Hours check → enqueue delayed or dispatch. `sendImmediately` — bypasses Quiet Hours queue by design (used by `streak_break_warning` at 23:55). `isStaleTokenError` matches 3 codes incl. `messaging/invalid-argument`. |
+| `src/shared/notifications/types.ts` | `PushNotificationKind` union — **21 kinds** post-S60 (4 original + streak_milestone + 7 alliance S57 + 3 level_up S59 + 4 first_* S60). |
+| `src/shared/notifications/send.ts` | `sendPush` — lookup token → Quiet Hours check → enqueue delayed or dispatch. `sendImmediately` — bypasses Quiet Hours queue by design. `isStaleTokenError` matches 3 codes. ⚠️ Importing this at test-module load cascades into Firebase + BullMQ + ioredis and keeps the event loop alive — composers use `SKIP_*_EMIT` env bypass + dynamic imports (Pitfall #47). |
+| `src/shared/constants/activityLog.ts` | (S54/S59) `PLAYER_FEED_EVENT_TYPES` (incl. `leveled_up`) + `ALLIANCE_FEED_EVENT_TYPES` whitelists for the feed endpoints. |
+| `src/modules/me/activity-log.*` | (S54) `GET /me/activity-log` cursor-paginated player feed + `PATCH /me/activity-log/read`. Cursor codec: base64url `{ occurred_at, id }`. |
+| `src/modules/alliance/activity-log.*` | (S56) `GET /alliances/:id/activity-log` + `PATCH .../read` — alliance feed, separate `alliance_feed_last_read_at` cursor, username enrichment. |
+| `src/modules/me/streak-break-status.*` | (S58) `GET /me/streak-break-status` + `POST /me/streak-break/acknowledge` (action-shaped POST, not cursor PATCH). Backed by `players.streak_broken_acknowledged_at`. |
+| `src/modules/alliance/alliance-push.composer.ts` | (S57) First of the composer quartet. `emitAllianceLifecyclePushes(trigger)` — discriminated-union trigger over 5 events / 7 wires, `_broadcast` suffix convention, `SKIP_ALLIANCE_PUSH_EMIT` bypass, Promise.allSettled fanout, try/catch+console.error swallow around sendPush. |
+| `src/modules/streak/streak-milestone-push.composer.ts` | (S58) §B-6 — `MILESTONE_COPY` for days 7/14/21/30/60/90; Day 60 amended S59 ("Your third Grace Day is banked."). `SKIP_STREAK_PUSH_EMIT` bypass. |
+| `src/modules/me/level-up-push.composer.ts` | (S59) §B-10 — `LEVEL_COPY` keyed by levelAfter with entries for 5/6/10 only (`if (!copy) return` gating; L4 is mobile in-app CARD only). `[X,XXX]` interpolation via `toLocaleString`. `SKIP_LEVEL_UP_PUSH_EMIT` bypass. |
+| `src/modules/me/first-earn-push.composer.ts` | (S60) §B-14 — `FIRST_EARN_COPY` scaffolds all 4 spec §5.1 sources (claim, contest_win, reconquest, alliance_mission) with verbatim copy; only claim + contest_win invoked from live writers — reconquest + alliance_mission emit calls are one-line additions when those writers ship. Push-only per Q-C C3 (no activity_log row). `SKIP_FIRST_EARN_PUSH_EMIT` bypass. Em-dash in contest_win body is real Unicode. |
+| `prisma/migrations-manual/<YYYYMMDD>-<desc>/` | **Folder-per-migration convention (S58 Q-J)** — paired `up.sql`/`down.sql` per change (S43 flat file is the outlier). Live examples: `20260609-add-leveled-up-event-type/` (S59), the S58 `streak_broken_acknowledged_at` column-add. Applied via Supabase SQL Editor, verified with `pg_get_constraintdef` / follow-up SELECT. |
+| `scripts/sendTestPush.ts` | (S53) Layer 1 push smoke CLI: `npx tsx scripts/sendTestPush.ts <fcm_token> [kind] [title] [body]` against Railway prod. Layer 1 = route mapping + render + tap nav; Layer 2 = real writer → detection → post-tx emit (opportunistic, rides natural gameplay). |
 | `src/shared/timezone.ts` | (EXTENDED 31a, **S50**) `resolveLocalDateTimeToUtc`, `isQuietHours`, `computeNextQuietHoursDispatchUtc`, `getLocalDateInTz(tz, now?)` — returns YYYY-MM-DD in IANA tz, `getLocalHour`, **`isMondayInTz(todayYmd: string): boolean`** (S50 — pure over already-tz-local YMD string, DST-irrelevant by construction). Anchors all streak date arithmetic + activity aggregate rollover to `player.home_timezone`. 8 tests. |
 
 ---
@@ -727,12 +756,15 @@ SELECT conname, pg_get_constraintdef(oid) AS definition
 FROM pg_constraint
 WHERE conname = 'activity_log_event_type_check';
 
-# Extend activity_log event_type whitelist (DROP + ADD pattern — every new event_type needs this).
-# Current whitelist (19): challenge_completed, territory_claimed, territory_abandoned,
+# Extend activity_log event_type whitelist (DROP + ADD pattern — every new event_type needs this;
+# prefer the folder-per-migration convention: prisma/migrations-manual/<YYYYMMDD>-<desc>/{up,down}.sql).
+# Current whitelist (20): challenge_completed, territory_claimed, territory_abandoned,
 # contest_participated, km_walked, contest_defended, contest_won, contest_lost,
 # contest_held, contest_expired, streak_broken, streak_milestone,
 # alliance_founded, alliance_joined, alliance_left, alliance_role_changed,
-# alliance_kicked, alliance_demoted, alliance_promoted.
+# alliance_kicked, alliance_demoted, alliance_promoted, leveled_up (S59).
+# NOTE: CHECK-constraint-only changes do NOT require prisma generate; column adds need
+# BOTH `prisma db pull` AND `prisma generate` (two-step sync).
 ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
 ALTER TABLE activity_log ADD CONSTRAINT activity_log_event_type_check
 CHECK (event_type = ANY (ARRAY[
@@ -741,7 +773,7 @@ CHECK (event_type = ANY (ARRAY[
   'contest_won', 'contest_lost', 'contest_held', 'contest_expired',
   'streak_broken', 'streak_milestone',
   'alliance_founded', 'alliance_joined', 'alliance_left', 'alliance_role_changed',
-  'alliance_kicked', 'alliance_demoted', 'alliance_promoted',
+  'alliance_kicked', 'alliance_demoted', 'alliance_promoted', 'leveled_up',
   '<new_event_type_here>'
 ]));
 
@@ -754,6 +786,42 @@ CHECK (event_type = ANY (ARRAY[
 # Verify DDL ran (Supabase SQL editor returns "No rows" for DDL — NOT a failure):
 SELECT COUNT(*) AS table_exists FROM information_schema.tables
 WHERE table_schema='public' AND table_name='<my_table>';
+
+# === NOTIFICATIONS (S53–S61b) ===
+
+# Layer 1 push smoke against Railway prod (verifies route mapping + render + tap nav).
+# ALWAYS audit lib/notifications/route.js for the exact kind string FIRST — wrong kinds
+# silently fall to DEFAULT_ROUTE and mask what the test proves.
+npx tsx scripts/sendTestPush.ts <fcm_token> <kind> "<title>" "<body>"
+
+# Test env bypasses — set when running tests that import services wired to push composers
+# (prevents Firebase/BullMQ/ioredis from loading and hanging the runner):
+# SKIP_ALLIANCE_PUSH_EMIT=true · SKIP_STREAK_PUSH_EMIT=true
+# SKIP_LEVEL_UP_PUSH_EMIT=true · SKIP_FIRST_EARN_PUSH_EMIT=true
+
+# Backend narrow-scope baseline (full suite carries 79 pre-existing Supabase
+# statement-timeout failures — run the relevant module files instead, 4-run zero-flake):
+node --test --import tsx \
+  src/modules/me/home-pin.service.test.ts \
+  src/modules/me/streak-break-status.service.test.ts \
+  src/modules/me/challenge.formulas.test.ts \
+  src/modules/me/activity-log.service.test.ts \
+  src/modules/me/streak.helpers.test.ts \
+  src/modules/progression/progression-integration.test.ts
+
+# Layer 2 first_contest_win smoke setup (B-S60-X1, opportunistic — when nish_s next walks a contest):
+# UPDATE players SET lifetime_contest_wins = 0 WHERE username = 'nish_s';
+# Then walk + win any contest → expect BOTH contest_won + first_contest_win pushes
+# (lifetime_contest_wins auto-restores to 1 via the contest-walk tx).
+
+# === GIT COMMIT HYGIENE (PowerShell) ===
+
+# Default: ASCII-only messages via multi -m flags (no tempfile, no editor):
+git commit -a -m "subject" -m "body line 1" -m "body line 2"
+# Messages needing § / em-dash / Cyrillic: PowerShell -m mangles them to '?'.
+# Write a UTF-8 NO-BOM tempfile, then: git commit -F <tempfile>
+# Cursor agent commits inject a "Co-authored-by: Cursor" trailer — project convention is
+# single-author; strip with git commit-tree plumbing + git push --force-with-lease origin main.
 ```
 
 ---
@@ -1015,7 +1083,38 @@ WHERE table_schema='public' AND table_name='<my_table>';
 - **Fix:** Bug-1 (B13) was filed and shipped around: data integrity was unaffected (Q-D deterministic sourceId absorbed all 3 race occurrences), behaviour was correct under the bug (producer cleaned up + restarted, just twice in a row), patch could land in any follow-up session at zero risk. S52a closed it cleanly in commit `9c97fe7` (`useRef` for getToken, drop from Effect 2 deps).
 - **General lesson:** when a discovered bug has zero data-integrity impact AND a separate primitive (idempotency in this case) is absorbing the consequences AND the fix is a clean follow-up, "ship + file backlog" is the right call. Not every discovered bug earns same-session fix. (S51 → S52a)
 
-**Debugging playbook — when something is slow or broken:**
+**47. Importing push-composer-adjacent modules at test load cascades into Firebase/BullMQ/ioredis and hangs the runner**
+- **Signature:** Tests that import a service wired to a push composer pass but the runner never exits (extends Pitfall #36 to the notifications surface). Importing `send.ts` at module load is the trigger.
+- **Cause:** `send.ts` transitively initializes Firebase Admin, BullMQ Queue, and ioredis singletons — open handles keep the Node event loop alive.
+- **Fix:** Three-part pattern (S57): `SKIP_<DOMAIN>_PUSH_EMIT` env bypass at composer entry, `lazyConnect: true` on Redis, dynamic `await import()` for Firebase/queue modules. Every new composer inherits all three.
+
+**48. tx-callback discriminated unions broaden to `boolean` without explicit return type annotations**
+- **Signature:** A `prisma.$transaction(async (tx) => {...})` callback returns `{ok: true, ...} | {ok: false, reason}`; TypeScript broadens `ok` to `boolean`, downstream narrowing fails, or Railway's full `tsc` throws TS2322 that local `tsx` (type-stripping) never surfaced.
+- **Fix:** Annotate the callback explicitly: `prisma.$transaction(async (tx): Promise<XxxResult> => {...})`. Project pattern since S57. Corollary (S58): run `npm run build` after EVERY Cursor prompt that touches a `.ts` file — including tests and types — not just implementation prompts.
+
+**49. JSONB metadata key drift — lock field names via SQL diagnostic BEFORE writing any renderer**
+- **Signature:** Feed renderer shows blanks for one event_type. Renderer guessed `streakDays`/`streak_days`; real key is `previous_streak`. Burned a smoke iteration (S55).
+- **Cause:** camelCase/snake_case emitter drift across backend writers is the default, not the exception.
+- **Fix:** Run `jsonb_object_keys` across all in-scope event_types FIRST, then write renderers. Defensive `getMeta(event, ...keys)` dual-fallback absorbs residual drift.
+
+**50. Never guess FCM kind names or routing targets — audit `lib/notifications/route.js` before constructing any push test**
+- **Signature:** S61a burned 3 of 4 verifications sending pushes with wrong kind strings (`alliance_member_promoted` vs actual `alliance_promoted`; `streak_re_entry` which has NO FCM kind — it's a response-side toast). All fell silently to DEFAULT_ROUTE, masking what the test proved.
+- **Fix:** Kind-name audit precedes test command construction, even when "pretty sure" from memory. A surface rendering as the DEFAULT toast when a specific surface was expected = wrong kind string, not a routing bug.
+
+**51. Killed-state cold-start has TWO independent failure modes — Metro payload race AND AuthGate nav clobber**
+- **Signature:** (a) Metro dev mode: `getInitialPushPayload` returns null (bundle race) — push routing never dispatches; (b) release mode: routing dispatches correctly, then AuthGate's async parameterless `navigation.replace('MainTabs')` clobbers the push-driven tab selection milliseconds later ("brief correct flash → Map override").
+- **Fix:** (a) is Metro-only — killed-state Effect 5 paths can ONLY be verified on a release-mode EAS build (Alyona). (b) fixed in S61a: `navigateToAfterAuthGate` defers dispatch via the existing `pendingTarget` + state-listener machinery until the root route is MainTabs.
+- **General lesson:** when an existing deferral mechanism almost covers a new case, lift its helpers to module scope and add a second entry point — don't build parallel deferral logic. And distinguish "fix verified on one device/runtime" from "fix shipped to all environments."
+
+**52. Pre-existing scaffolding placeholders may be mis-targeted — re-verify against spec at adoption time**
+- **Signature:** S53 scaffolded an aggregate `first_earn` → Wallet route entry. S60 spec audit showed per-source copy registers pointing at Map/Alliance — the Wallet target was a placeholder guess, not a locked decision. Adopting it would have shipped wrong tap targets.
+- **Fix:** Placeholders ≠ locked decisions. When wiring a previously-scaffolded entry, re-run the copy/spec audit before adopting the scaffold's choices. S60 deleted the aggregate entry and added 4 per-source entries.
+
+**53. Audits must verify the slice's PREREQUISITES, not just its code surface — architectural drift hides outside the diff**
+- **Signature:** §B-7 ("Proven streak: +15%" label) was framed as mobile-only UI polish. The S60 bundle audit revealed mobile bypasses backend `/territories/:id/claim` + `/contests/:id/walk` entirely — direct Supabase writes with FLAT XP; the S42 multiplier logic is live but unreached (B-S60-X2). Shipping the label would have been dishonest UI.
+- **Fix:** Bundle audits extend to the premises the slice depends on. When the audit invalidates a premise, DEFER and bundle with the architectural fix (Activity Slice 7 carrier). Honest carry-forward beats dishonest ship.
+
+
 1. **PowerShell-from-PC test** — if fast on PC + slow on phone, it's the dead-pool bug or a client-side issue
 2. **Fetch wrapper logs** — `[supabase fetch]` timing tells you whether the network call is slow
 3. **EXPLAIN ANALYZE in SQL editor** — tells you if the database query is slow
@@ -1036,9 +1135,15 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | **BigInt JSON serialization for `osm_id` (masked)** | Typecheck passes but runtime serialization may need a Fastify JSON serializer if `osm_id` ever lands in an outgoing payload. Currently masked because test territories have `osm_id = null`. |
 | **Cross-player defender_notify FCM real-device test still deferred** | Server-side defender_notify trigger verified via temp debug route (now removed). The real flow (second player attacks nish_s, attacker_first_walk_at sets, defender_notify push lands on nish_s's device) NOT verified end-to-end. Requires second device + second Clerk account, or another tester. Same surface verifies the deferred defender-role /walk test. |
 | **403 not_a_participant on /walk untested** | Code path for "player is neither attacker nor defender_player_id" is straightforward but untested via real third-player token. Defer until a third Clerk account is in physical reach. |
-| **React Native Firebase v22 namespaced API deprecation warnings** | Logs deprecation warnings on every call. Modular API migration required before v23 ships. Cosmetic for now. |
-| **`onTokenRefresh` listener not cleaned up at unmount** | FCM listener registered in `registerFcmToken` lives for app lifetime — no cleanup at AuthGate unmount (deliberately moved away from useEffect, see Pitfall #24). Idempotent: re-subscribing on next gate run would duplicate calls. Only matters if session lifecycle ever changes (e.g. account switching without app restart). |
-| **Mobile FCM foreground push handler not wired** | Notifications only display when app backgrounded — Android system tray handles those automatically. Foreground delivery (in-app banner) requires `messaging().onMessage(...)`. |
+| **B-S61-X1: StreakBreakLifecycle 401 `no_token` on cold start** | Status check fires before Clerk token is ready. Likely fix: gate on `isLoaded && isSignedIn` or adopt FcmLifecycle's `useRef(getToken)` pattern. Low priority; bundles with B-S58-Q2 as a StreakBreakLifecycle hardening micro-slice (S62b candidate). |
+| **B-S58-Q2: nav-listener cleanup style inconsistency** | `StreakBreakLifecycle` (`return unsubscribe;`) vs `lib/navigation.js` (`removeListener`). Both work; inconsistency invites drift. Bundles with B-S61-X1. |
+| **B-S60-X1: Layer 2 first_contest_win smoke pending (opportunistic)** | SQL reset `lifetime_contest_wins = 0` for nish_s → walk + win any contest → expect contest_won + first_contest_win pushes. Setup SQL in IMPORTANT COMMANDS. Rides natural gameplay, does not gate anything. |
+| **B-S60-X2: mobile bypasses backend claim/contest endpoints (ARCHITECTURAL)** | `ClaimSuccessScreen.js` + `ContestResultScreen.js` write directly to Supabase with FLAT XP — backend S42 streak-multiplier logic is live but unreached. Resolution carrier: Activity Slice 7 / CC enforcement (which needs backend authority anyway). Gates §B-7 + §B-15. |
+| **B-S59-X1: `leveled_up` attribution is challenge-XP-driven only** | Streak-milestone XP grants that also cross a level threshold don't get a `leveled_up` activity_log row. Pre-existing semantic, documented. |
+| **B-S59-X2: ActivityLogEvent.js header comment count off by one** | Pure doc nit, no functional drift. |
+| **B-S53-2: Railway cold-start anomaly** | Idle service → 26s/128s/250s response times + intermittent 401 from JWT TTL expiring mid-wait. |
+| **B-S53-3: `setBackgroundMessageHandler` is a no-op** | Silences the warning only. Future: log killed-state events to AsyncStorage for replay. |
+| **§B-12 Layer 2 alliance broadcast smoke pending (opportunistic)** | Alyona-side push receipt for the 3 S57 broadcast wires. Alyona is on the S57+ build, so only the alliance-action trigger is opportunistic. |
 | **Nested / overlapping SPB territories** | Spotted on phone visual test after gap-fill propagation. Some gap-fill blocks overlap each other and/or existing OSM-named SPB territories. Root cause unknown. Diagnostic query needed: find pairs where `postgis.ST_Overlaps(a.geom, b.geom)` or `postgis.ST_Contains(a.geom, b.geom)` is true beyond a tiny tolerance. |
 | **Zoom-level rendering: some small polygons missing at wide zoom** | At Mapbox scale ~500m/750m, some territories that exist in DB don't render; at tighter zoom they show. Hypothesis: `ST_SimplifyPreserveTopology` tolerance collapses small polygons below `ST_NPoints >= 4`. |
 | **37 SPB gap-fill blocks flagged_oversize = true** | Perim > 8000m, manual visual review deferred. |
@@ -1082,10 +1187,6 @@ WHERE table_schema='public' AND table_name='<my_table>';
 | Attack Day check (Wed/Sat/Sun) still DEFERRED with TODO on contest.service.ts (inherited by /walk) | A player CAN currently post /contests AND /walk on a non-Attack-Day if a contest is somehow active. Wiring is a 5-line addition using `Intl.DateTimeFormat` + player.home_timezone. Wire before any external playtest. |
 | **ALLOW_DEBUG_ROUTES=true still ON in Railway** | (31c) Enables `/debug/*` in prod. Flip OFF before any external playtest. |
 | **lib/challengeApi.js has no retry logic** | (31b) Single-shot POST — failed call reverts optimistic UI and returns. Player can re-tap or auto-complete refires on next liveSteps tick. Acceptable for MVP; revisit if flaky-network reports surface. |
-| **Milestone push notifications (Day 7/14/21/30/60/90) not wired** | (S43 update) **Backend milestone XP +250 + `streak_milestone` activity_log row NOW LIVE** in challenge-complete.service.ts. FCM plumbing also LIVE since 30b/30c. What's missing is only the mobile push trigger + in-app celebration UI. Both deferred to notifications consolidation session. |
-| **Level-up + Grace-Day UI surfaces on mobile not wired** | `POST /me/challenge-complete` already returns `leveled_up` + `grace_day_granted` booleans in response. Mobile reads them but doesn't surface a UI moment. Spec §4.5 (Grace Day grant banner) + level-up animation deferred. |
-| **Spec §4.5.2 break confirmation message** | "In-app message on next app open after streak break" — mobile UI not built. Backend writes `streak_broken` to `activity_log`; mobile needs to detect on first read after break. |
-| **Spec §4.5.3 re-entry framing** | "Back. That's what matters." copy on first challenge after a break. Mobile UI not built. |
 | **New-timezone hot-registration not implemented** | (31c/31d) Player setting a new home pin in a tz nobody else uses won't get rollover/warning jobs until next backend restart. `bootstrapStreakRolloverJobs` runs once on Fastify ready. Acceptable for MVP — only matters when first player in a new tz signs up between restarts. Real fix: trigger bootstrap re-scan when `POST /me/home-pin` writes a tz not already in the registered set. |
 | **City Event detection stubbed (`isCityEvent=false`) in calcChallengeXp** | Spec §6.4.3. Deferred until City Event infrastructure exists. |
 | **Daily/weekly earn cap stubbed (`capFactor=1.0`) in calcChallengeXp** | Spec §13. Deferred. |
@@ -1098,6 +1199,7 @@ WHERE table_schema='public' AND table_name='<my_table>';
 
 - Background step reads (`READ_HEALTH_DATA_IN_BACKGROUND` permission) — **REMOVED from manifest in S52a (B15)**. Producer scope is foreground only; revisit if "always-on tracking" feature lands.
 - **iOS HealthKit integration** — Slice 6 producer is Android-only (`react-native-health-connect@3.5.0`). iOS deferred to Slice 8+ (concurrent with kcal Phase 2). No HealthKit library installed yet.
+- **iOS push parity** — Notifications module shipped Android-only; revisit post-MVP alongside the first iOS slice.
 - **kcal collection from mobile** — backend accepts the field since S49 (`daily_calories` increments conditionally). Mobile producer omits `kcal`/`avgGpsSpeedMs` per S51 scope; reads in Slice 8.
 - **CC enforcement (reading `daily_steps` to gate challenge completion)** — D7 phase 2, Slice 7. Gated on ≥1 week of beta sample-data review (P-5 query).
 - **Activity-type classification (walking vs running vs cycling)** — out of Activity-module scope forever. §5.2 "Run 2km" challenge handled by separate GPS-verified path (deferred).
@@ -1117,28 +1219,18 @@ WHERE table_schema='public' AND table_name='<my_table>';
 
 ## WHAT'S NEXT
 
-**Immediate — Slice 7 (CC enforcement) — GATED on ≥1 week of G2 beta sample-data review.**
+**Module sequence (locked): Progression ✅ → Activity ✅ (through Slice 6 + S52a) → Notifications ✅ (S53–S61b, CLOSED) → Leaderboard → Realm.**
 
-Activity module backend track is **COMPLETE** (S46–S50): `POST /activity/steps` accepts 60s-windowed samples, validates per D3/D4/D5, idempotent via `@@unique(player_id, source_id)`, atomic aggregate bumps, midnight aggregate reset via streak-rollover. Mobile producer **LIVE on beta** since S51 (commit `f2f74b6`): autonomous 60s windowing, AsyncStorage-buffered, SHA-256 deterministic sourceId, seven flush triggers, eight-stage device smoke against production Railway PASSED including idempotency under three real-world races. S52a closed B13 (Effect 2 race), B15 (manifest cleanup), B20 (JWT debug log) — EAS preview build infra established; standalone producer running on **Player Alyona / OnePlus 7t** for autonomous G2 data accumulation.
+**Immediate — pick the S62 slice (selection deferred to user):**
 
-**Slice 7 — CC enforcement (backend).** `me/challenge-complete` currently trusts mobile-claimed tier. Slice 7 reads `players.daily_steps` and verifies against tier threshold before crediting rewards. Mobile calls `activityProducer.flushNow()` (exposed per Q-E.9) before posting challenge completion. D7 phase 2.
+- **S62a — Activity Slice 7 / CC enforcement.** ⭐ The gate has PASSED: ≥7 days of G2 producer data accumulated on Alyona's standalone build. `me/challenge-complete` currently trusts mobile-claimed tier; Slice 7 reads `players.daily_steps` and verifies against tier threshold before crediting (D7 phase 2). Mobile calls `activityProducer.flushNow()` before posting completion. **Bundles the B-S60-X2 carrier** — migrating mobile claim/contest from direct Supabase writes to backend endpoints — which unblocks §B-7 (streak XP bonus UI) and §B-15 (403 reject-message mapping) from the Notifications backlog. Multi-session slice. Pre-work: P-5 rejection-breakdown query review (velocity threshold tuning decision) + confirm `daily_steps` midnight-tz resets held across both active timezones for the full week.
+- **S62b — StreakBreakLifecycle hardening micro-slice.** Bundles B-S58-Q2 + B-S61-X1. Small single-session polish pass on notifications-adjacent code.
+- **S62c — Leaderboard module.** Still gated on Activity Slice 7 consumer half (CC-verified step credit) + sufficient beta data.
+- **S62d — Spec corrections + roadmap maintenance polish** (velocity 25-vs-30 km/h doc inconsistency, §3.1/§7.8/§8.1 rewrites, short_name re-use policy).
 
-**Pre-slice-7 gates:**
-1. **≥1 week of G2 beta sample flow on production Railway.** Currently accumulating from Player Alyona's OnePlus 7t standalone producer. Tracks volume, rejection breakdown (P-5 query in roadmap), and false-positive rate.
-2. **P-5 rejection-breakdown query review** — feeds enforcement-gate decision: keep velocity at 25 km/h, tune to 30, or split into walk-only vs run-allowed thresholds. Diagnostic only until that review.
-3. **Confirm `daily_steps` resets reliably at midnight tz** across the 2 active timezones (Europe/Moscow, Europe/Amsterdam) over a full week.
+**Slice 8 — kcal Phase 2 (mobile + iOS HealthKit)** remains queued behind Slice 7: HC ActiveCaloriesBurned read on Android + first iOS slice. Backend accepts `kcal` since S49; mobile producer omits it per S51 scope.
 
-**Slice 8 — Kcal Phase 2 (mobile + iOS HealthKit).** Backend accepts `kcal` field since S49 (`daily_calories` aggregate increments conditional on presence). Mobile producer currently omits the field (S51-scope `kcal`/`avgGpsSpeedMs` omission in `buildPostBody`). Slice 8 adds:
-- HC ActiveCaloriesBurned read on Android.
-- iOS HealthKit integration (no HealthKit library installed yet; first iOS slice for Activity).
-
-**Alternative picks if Slice 7 is gated longer than expected:**
-- (a) **Fix `total_xp` stale response on milestone days** — one-line fix in challenge-complete response payload. ~15 min.
-- (b) **Spec §7.8 rewording** — own=red, alliance=green, other=blue-grey alignment. ~15 min.
-- (c) **GET /alliances?city=X backend endpoint** — mobile browse cleanup. ~30 min.
-- (d) **Wire reconquest +400 XP** — §7.7. Schema is ready, hook into contest-walk attacker_won branch, one-line `calcContestWinXp(tier, opts)` call. ~half-day slice.
-- (e) **Inactive-Founder auto-succession** (30+7 day rule, spec §3.3) — scheduled BullMQ job, multi-session.
-- (f) **Notifications consolidation session** — explicitly queued post-Activity per S38 roadmap order.
+**Quick alternative picks if all S62 slices are blocked:** (a) `total_xp` stale-response one-liner on milestone days (~15 min); (b) GET /alliances?city=X endpoint (~30 min); (c) reconquest +400 XP writer — §7.7, schema ready, hooks into contest-walk attacker_won; **must also call `emitFirstEarnPush({source:'reconquest'})` — the composer entry is pre-staged from S60** (~half-day); (d) Inactive-Founder auto-succession (30+7 day rule, multi-session).
 
 ---
 
@@ -1147,8 +1239,8 @@ Activity module backend track is **COMPLETE** (S46–S50): `POST /activity/steps
 **Backend modules to land:**
 - **Progression module** ✅ **CORE COMPLETE (S40-S44)** — Siege XP grants live across claim/contest_won/contest_held/contest_expired; streak milestone +250 XP at 7/14/21/30/60/90; solo protection enforced at contest initiate.
 - **Activity module** ✅ **BACKEND TRACK COMPLETE (S46–S50), MOBILE PRODUCER LIVE (S51)** — `POST /activity/steps` ingests 60s-windowed samples, validates D3/D4/D5, idempotent via `@@unique`, atomic aggregate bumps. Midnight rollover zeros aggregates per player tz; Monday zeros `weekly_steps_total`. Mobile producer autonomous on Android via Health Connect; deterministic SHA-256 sourceId, seven flush triggers, AsyncStorage buffer. S52a closed B13/B15/B20. **Remaining:** Slice 7 (CC enforcement reading `daily_steps`, gated on ≥1wk beta data) and Slice 8 (kcal Phase 2 + iOS HealthKit).
-- **Notifications consolidation session** ⭐ NEXT (post-Slice 7) — see "Deferred to notifications consolidation session" bucket below.
-- **Leaderboard module** — Redis Sorted Set reads, ZADD on contest resolution. Reads from Activity's verified step credit (now available).
+- **Notifications module** ✅ **COMPLETE & CLOSED (S53–S61b)** — foundation (FcmLifecycle, D1 routing table, NotificationCard/Toast/cardController, v23 migration, player + alliance feed endpoints and surfaces) + 7/8 §B trigger wires (alliance lifecycle, streak milestone/break/re-entry, level-up, grace-day, first-earn) + S61a killed-state nav race fix + full 12/12 device matrix on Alyona EAS preview. **§B-7 + §B-15 cross-module-deferred to Activity Slice 7 per B-S60-X2 carrier — not module incompleteness.** Reconquest + alliance_mission first-earn emits are pre-staged one-liners in the S60 composer for when those writers ship.
+- **Leaderboard module** — Redis Sorted Set reads, ZADD on contest resolution. Gated on Activity Slice 7 / CC enforcement (reads verified step credit).
 - **Realm module** — realm assignment, saturation monitoring.
 - **Inactive-Founder auto-succession (30+7 day rule, spec §3.3)** — needs scheduled BullMQ job. Defer.
 - **Recruit auto-promote on 3 consecutive challenges (§3.3 probation)** — lives in `challenge-complete.service.ts`, not alliance module.
@@ -1164,30 +1256,17 @@ Activity module backend track is **COMPLETE** (S46–S50): `POST /activity/steps
 - **MapScreen from direct RPC → backend `GET /territories`** — cut-over when realtime invalidation via Ably is wired.
 - **Direct `players.update()` calls → `PATCH /me` / `POST /me/home-pin`** — audit + cut-over.
 - **Delete dead code: `lib/streak.js` + `updateStreakOnChallengeComplete`** — dedicated dead-code pass.
-- **RN Firebase v22 → v23 migration** — namespaced → modular API. Migrate before v22 deprecation hits.
 - **`formatTerritoryDisplayName` helper** — clean up bureaucratic POI asset codes, strip `Near ` prefix on tight surfaces, truncate long Cyrillic names.
 - **Tests for `lib/territory.js`** — Supabase mocking strategy is the gating decision.
 - **Daily Achievements live data** — wire Distance, Calories Burnt, Active Minutes via additional `readRecords` calls.
 
-**Deferred to notifications consolidation session** (a single future session that wires all notification triggers + UI surfaces at once, so the foreground push handler and in-app notification surface get designed once across everything):
-- Kick / demote / promote / join / leave triggers — backend FCM plumbing LIVE, copy + triggers not wired.
-- **Streak milestone celebration UI** (spec §4.5.2 — "Day 7. Proven streak.") — backend `streak_milestone` activity_log row + +250 XP grant LIVE since S43. Mobile push trigger + in-app moment deferred to this session.
-- **Level-up notifications and mobile UI** — backend writes `leveled_up:true`, `level_before:N`, `level_after:N` to `activity_log.metadata` from S41 onward (also returned in `/me/challenge-complete` response). Mobile UI deferred to this session.
-- **Streak XP bonus UI** (e.g. "Proven streak: +15%" on claim/contest screens) — backend writes `streak_multiplier` to metadata from S42 onward. Mobile UI deferred.
-- **403 reject-message mobile mapping** (S44) — mobile currently displays the wire payload `{error:"<message>"}` verbatim. Future work may map machine-readable reason codes to localized strings — backend already supplies the reason internally, just not on the wire today.
-- First-earn notification plumbing — push infra LIVE; needs the actual first-earn detection + dispatch.
-- Level-up + Grace-Day UI surfaces on mobile — `POST /me/challenge-complete` returns booleans, mobile doesn't show them.
-- Spec §4.5.2 break confirmation + §4.5.3 "Back. That's what matters." re-entry framing — mobile UI on next app open after a break.
-- Spec §8.4.2 alliance system message to all existing Alliance members on join.
-- Foreground push handler — wire `messaging().onMessage(...)` to surface in-app banner or route to relevant screen.
-- `onTokenRefresh` listener cleanup — unsubscribe pattern so AuthGate re-mounts don't stack listeners.
-- In-app notification center / inbox screen — doesn't exist yet.
+**Resolved: the former “deferred to notifications consolidation session” bucket shipped in S53–S61b.** Only two items survive it, both gated on the B-S60-X2 carrier (Activity Slice 7): §B-7 streak XP bonus UI and §B-15 403 reject-message mapping.
 
 **Backend hardening:**
 - **Attack Day check** (Wed/Sat/Sun) on `/contests` initiate + `/walk` — both deferred with TODO. Wire together using `player.home_timezone` via `Intl.DateTimeFormat`.
 - **Flip `ALLOW_DEBUG_ROUTES` OFF on Railway before external playtest.**
 - **New-timezone hot-registration** — trigger `bootstrapStreakRolloverJobs` re-scan on `POST /me/home-pin` if tz is new.
-- **Prisma migrations setup** — activity_log CHECK constraint at 18 event_types; every new module adds more.
+- **Prisma migrations setup** — activity_log CHECK constraint at 20 event_types and growing; folder-per-migration convention (S58) covers the need for now, revisit a real tool if churn accelerates.
 - **Generate Supabase types** for backend `Database` type. Currently `any` (only used by territory GET module now).
 - **Add `cors` to Fastify** before mobile starts hitting backend cross-origin browser-side.
 - **402 insufficient-resource path on claim + contest-initiate + defend (Stone)** all untested.
@@ -1204,6 +1283,7 @@ Activity module backend track is **COMPLETE** (S46–S50): `POST /activity/steps
 - **Spec §7.8 needs rewording** — (S37) current literal text says "all alliance-affiliated territories display in the same faction colour" but actual design is: own = red, alliance members = green, other = blue-grey. The current design lets a player instantly see which territories are theirs vs their alliance's — more useful than uniform green. Spec text to match design.
 - **Spec §3.3 amended in S38** — outgoing Founder takes incoming Founder's previous role (not always Marshal). Already updated in `dominia_mechanics_v6_10.md` by user.
 - **short_name re-use after disband policy** — spec doesn't address. Currently blocked by UNIQUE constraint. Decide before launch.
+- **Velocity threshold inconsistency** — 30 km/h stated in three docs vs canonical 25 km/h in §14.1 (carried from Notifications close-out).
 
 **Map polish (queued):**
 - Nested / overlapping SPB territories investigation — diagnostic query for `ST_Overlaps` / `ST_Contains` pairs.
@@ -1517,6 +1597,26 @@ Activity module backend track is **COMPLETE** (S46–S50): `POST /activity/steps
 | **Surgical Prisma `$transaction({timeout: 30_000})` bump over `createMany` refactor — fix in the slice that surfaces the failure** | (S51 hotfix, B14 deferred) 58-sample recovery batch hit P2028 default 5s timeout. Bump to 30s safely covers worst-case 100-sample batch at ~90ms/sample with margin. Deeper refactor (`createMany` + batched aggregate update) deferred to B14 — not urgent at current scale. Lesson: when a default-config limit surfaces under real load, prefer the surgical config fix; refactor when the surgical fix stops covering. |
 | **Bug-discovered-mid-smoke decision matrix: cost-of-discovery + cost-of-deferral + cost-of-fix-now** | (S51 B13 deferred to S52a `9c97fe7`) Effect 2 race generated concurrent flushes in 3 of 8 smoke stages. Q-D absorbed all 3 — data integrity unaffected. Fix-now would have cost 30 min mid-smoke; ship-and-file cost nothing. S52a closed it in one targeted commit. Lesson: not every discovered bug earns same-session fix; data-integrity-protected cosmetic bugs can ship + backlog cleanly. |
 | **Activity track sequencing: backend complete → mobile producer → CC enforcement gated on real beta data** | (S45–S52a) Slices 1–5 (S46–S50) shipped backend track to "ready and waiting" state. Slice 6 (S51) added mobile producer. S52a hardened it (B13/B15/B20). Slice 7 (CC enforcement) gates on ≥1 week of G2 beta sample-data review (P-5 query). Module enters consumer-flip stage only after producer proves stable. Lesson: when a backend module's full lifecycle ships before its producer integrates, "ready and waiting" is a valid state — the next slice can be externally triggered without backend coordination overhead. |
+| **Notifications D1: channel routing table (kind → render) designed once for ALL kinds** | (S53) Pure `routeForPush(kind)` in `lib/notifications/route.js` over 4 outcomes: full-screen CARD, top TOAST, banner-with-route, feed-only DEFAULT. Every future push kind is a table row, not a new handler. Unknown kinds fall to DEFAULT — forward-compat verified end-to-end S61b. |
+| **Notifications D4: feed = inbox = notification center, single surface** | (S53) No separate inbox screen. The persistent `activity_log` feed (player side-rail on Map + ActivityLogScreen; inline alliance wire in AllianceScreen) is the structural fallback for every push — dismissed/missed/killed-state pushes are still recoverable from the feed. |
+| **Notifications D5: FcmLifecycle owns ALL FCM concerns; AuthGate is navigation-only** | (S53) Registration, onTokenRefresh cleanup, and the 3 push handlers (foreground/background/killed-state) live in one null-render component. Supersedes the S30-era "registerFcmToken inline in runGate" decision. |
+| **D2 revised: player feed side-rail on Map tab ONLY, not all MainTabs** | (S55, B-S55-4) Original D2 put the side-rail on every tab; revised to Map-only. Hidden while TerritorySheet is open. |
+| **Foundation-vs-consumption layering for cross-repo notification work** | (S53) Ship routing infrastructure first with synthetic smoke (`sendTestPush.ts` verified all routing outcomes BEFORE any real emitter existed), then surfaces, then real triggers. Each layer independently verifiable; doing all three at once tangles failure modes. |
+| **Post-tx push composer pattern (S57/S58/S59/S60 quartet)** | One composer file per trigger domain (`alliance/`, `streak/`, `me/` for player-level meta-events); COPY table keyed by domain value; `if (!copy) return` gating; discriminated-union trigger type; trigger captured in outer-scope `let` inside the tx, emitted AFTER tx commit; `SKIP_<DOMAIN>_PUSH_EMIT` env bypass at entry; try/catch + `console.error` swallow around sendPush (push failure never breaks the game write); Promise.allSettled for multi-recipient fanout. Composer stays a dumb dispatcher — detection logic is the caller's. |
+| **Activity_log event_type decision per trigger — three patterns, closest-sibling-by-shape wins** | (S57–S60) New event_type when the moment is a distinct feed-worthy row (streak_milestone, leveled_up); push-only with NO row when the moment rides on an existing event (streak_re_entry, all first-earn — the underlying territory_claimed/contest_won row preserves D4's feed-fallback); metadata flag on an existing row (least established, avoided). |
+| **Distinct push kinds per source over aggregate kinds** | (S60 Q-B B2) `first_claim`/`first_contest_win`/`first_reconquest`/`first_alliance_mission` instead of one `first_earn`. Per-source Firebase delivery stats + per-source route targets justify distinct kinds even when render shape is shared. Route targets follow the COPY REGISTER (territorial copy → Map; alliance copy → Alliance), not placeholder guesses. |
+| **Scaffold-all-sources / wire-live-writers-only for multi-source composers** | (S60 Q-A A2) FIRST_EARN_COPY holds all 4 spec §5.1 sources; only claim + contest_win have live writers. Reconquest + alliance_mission emits are one-line additions in those features' future writer slices. Sibling: S59 LEVEL_COPY with `if (!copy) return`. |
+| **Response-side trigger fires ONLY when no push channel exists for the moment** | (S59 Q-E E1, cemented) §B-9 re-entry Toast + §B-11 grace-day Toast are response-side because no push exists; level-up 5/6/10 have pushes so NO response-side duplicate (double-render when push delivers foreground). L4 is the deliberate exception: in-app CARD via mobile direct invoke, no push at all. |
+| **Mixed first-earn detection per source — use the cheapest correct primitive available** | (S60 Q-D D1) Claim: `tx.activity_log.findFirst` on prior `territory_claimed` inside tx (no counter column exists). Contest win: pre-tx `lifetime_contest_wins === 0` read (column exists since S40; race-safe via single-active-contest rule). Don't invent a uniform mechanism when per-source primitives differ. |
+| **Detection-only for §B-8 break confirmation (in-app, NOT push)** | (S58, Q-A B1→B2-i revised after spec §4.5.2 verbatim audit) New `streak_broken_acknowledged_at` column + GET/POST endpoints + StreakBreakLifecycle component. Action-shaped POST for one-shot acknowledgement vs cursor-shaped PATCH for read positions. |
+| **`xp_amount: 0` for meta-events, never null** | (S59) `leveled_up` rows are consequences of XP, not XP grants — write 0 (schema is non-nullable anyway) and put attribution in metadata. |
+| **Folder-per-migration: `prisma/migrations-manual/<YYYYMMDD>-<desc>/{up,down}.sql`** | (S58 Q-J) Paired UP/DOWN per change; S43's flat file is the outlier, not the precedent. CHECK-constraint-only changes need no `prisma generate`; column adds need `db pull` + `generate` (two-step). |
+| **No composer unit tests — Layer 1 smoke + 4-run regression baseline of existing suite is the verification bar** | (S60 Q-H H2, consistent S57–S59) Push-only composers have no DB delta to assert; copy drift is caught by device smoke. Service wiring verified via Layer 2 smoke OR code review + sibling-precedent confidence. |
+| **Layer 2 smokes are opportunistic by design, not gating** | (S60 Q-K K1, S61b) Backend-writer→FCM verifications that need multi-step game state (alliance broadcast receipt, first_contest_win) ride on natural gameplay, never staged sessions. Module close-out criterion is the routing-surface matrix, which is structurally separate and fully verifiable. |
+| **§B-7 deferred over dishonest UI** | (S60 Q-L L1) Showing "Proven streak: +15%" without backend authority over the actual XP grant (mobile writes flat XP via direct Supabase) would lie to the player. The label ships with the mobile→backend claim/contest migration (Activity Slice 7 / B-S60-X2 carrier). Honest carry-forward beats dishonest ship. |
+| **Killed-state nav: reuse the existing `pendingTarget` deferral, don't build parallel machinery** | (S61a) `navigateToAfterAuthGate` lifts `tryDispatch`/`armStateListener` to module scope and adds a second entry point covering the "nav ready but stack still on AuthGate" gap. Effects 3+4 verifiable on OP12 Metro; Effect 5 ONLY on release-mode EAS (Alyona). |
+| **Bundle EAS rebuilds with module close-out, not per-slice** | (S55/S61b) Preview rebuild #2 carried five sessions of mobile deltas (S57–S61a) to Alyona in one artifact. In-place install preserved Clerk session, HC permission, AsyncStorage buffer, and 7+ days of G2 data — rebuild/verify cycles don't disrupt accumulating producer state. When a module accumulates mobile deltas across sessions, plan one rebuild + full device matrix into close-out so killed-state never stays unverified. |
+| **Single-author commits; ASCII multi `-m` default, UTF-8 tempfile `-F` only when needed** | (S60/S61) PowerShell `-m` mangles § and → to `?`. Default path: ASCII-only messages via `git commit -m "subject" -m "body"`. Unicode messages: UTF-8 no-BOM tempfile + `git commit -F`. Cursor's `Co-authored-by: Cursor` trailer is stripped via `git commit-tree` + `--force-with-lease` (single-developer repo). |
 
 ---
 
@@ -1553,3 +1653,8 @@ Do not start coding immediately. Work conversationally:
 - **`tier` enums on the wire: lowercase, normalised at API boundary.** Display strings (`'Easy'`/`'Medium'`/`'Hard'`) belong to UI; wire format is `'easy'`/`'medium'`/`'hard'`. Mobile sends `ch.key`, not `ch.difficulty`.
 - **Always confirm Cursor's open repo BEFORE pasting a prompt that creates files.** `dir <expected-path>` after Cursor reports success — `Move-Item` is the fix when it lands in the wrong repo.
 - **Crisp responses, recommend one option not pros/cons. No decisions without explicit user confirmation.**
+- **4-run zero-flake test baseline before any commit.** A single clean run is not sufficient. When the full backend suite carries pre-existing flake/timeouts, run the narrow-scope file set 4× instead — confirms the new work without conflating with known noise.
+- **Resolve spec contradictions via decision locks BEFORE any code is written.** Spec verbatim audit across ALL sections that mention the moment (not just the most-cited one), flag every contradiction, lock one interpretation, queue the spec correction.
+- **`npm run build` after EVERY Cursor prompt that touches a `.ts` file** — including tests, helpers, and types. Local `tsx` is type-stripping; only full `tsc` catches what Railway will reject.
+- **Never guess FCM kind names or metadata keys.** Audit `lib/notifications/route.js` before constructing push tests; run `jsonb_object_keys` before writing feed renderers. Wrong kinds fall silently to DEFAULT_ROUTE and mask what the test proves.
+- **Require Step 0 shape-verification in every Cursor implementation prompt.** Cursor's audit catches planning assumptions that don't match actual code shape (file layout AND data shape) — when it flags a mismatch, PAUSE and revise the prompt before proceeding.
