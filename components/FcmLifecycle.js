@@ -10,7 +10,7 @@ import {
 } from '../lib/fcm';
 import { routeForPush, SURFACES } from '../lib/notifications/route';
 import { showCard } from '../lib/notifications/cardController';
-import { navigateTo } from '../lib/navigation';
+import { navigateTo, navigateToAfterAuthGate } from '../lib/navigation';
 
 export default function FcmLifecycle() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
@@ -123,7 +123,7 @@ export default function FcmLifecycle() {
       if (cancelled || !remoteMessage) return;
       const kind = remoteMessage?.data?.kind;
       const route = routeForPush(kind);
-      navigateTo(route.target); // pendingTarget mechanism handles not-yet-ready nav
+      navigateToAfterAuthGate(route.target); // navigateToAfterAuthGate defers until current route is MainTabs (race-safe vs AuthGate.replace)
     });
     return () => { cancelled = true; };
   }, []);
