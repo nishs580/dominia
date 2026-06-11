@@ -345,6 +345,13 @@ export default function ActivityScreen() {
     setPlayerLevel(levelFromXp(Math.max(0, Number(prevXp) || 0) + ch.xp));
 
     try {
+      // Slice 7 (S63): force a producer flush so backend sees fresh daily_steps/daily_calories
+      // aggregates before CC enforcement runs. flushNow is non-throwing (lib/activity.js R.3);
+      // if the producer is not started, the buffer is empty, or shouldFlush gates the call,
+      // it resolves as a no-op and CC proceeds. The 403 daily_*_under_threshold path remains
+      // a valid outcome — §B-15 will surface it in a later session.
+      await activityProducer.flushNow();
+
       const result = await backendCompleteChallenge({
         clerkGetToken: getToken,
         challengeKey: ch.key,
