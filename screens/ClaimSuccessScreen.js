@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
-import * as F from '../lib/formulas';
+import { useAuth } from '@clerk/clerk-expo';
+import { completeClaim } from '../lib/claimApi';
 
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
@@ -18,115 +18,68 @@ function formatMeters(m) {
   return `${v}m`;
 }
 
+function completeErrorShowsRetry(code) {
+  return !['intent_expired', 'territory_already_claimed', 'no_token', 'unauthorized'].includes(code);
+}
+
 export default function ClaimSuccessScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId } = route?.params ?? {};
+  const {
+    territoryName = 'Territory',
+    perimeterDistance = 0,
+    territoryId,
+    playerId,
+    goldPaid = 0,
+    freeClaim = false,
+  } = route?.params ?? {};
 
   const fade = useRef(new Animated.Value(0)).current;
   const pop = useRef(new Animated.Value(0.96)).current;
-  const [goldEarned, setGoldEarned] = useState(null);
-  const [xpEarned, setXpEarned] = useState(null);
+  const [envelope, setEnvelope] = useState(null);
+  const [completeError, setCompleteError] = useState(null);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
-
+    let cancelled = false;
     (async () => {
-      const { data: updatedTerritory, error: updateError } = await supabase
-        .from('territories')
-        .update({ owner_id: playerId })
-        .eq('id', territoryId)
-        .select('tier')
-        .single();
-
-      if (updateError) {
-        console.error('ClaimSuccess territory update:', updateError);
-        return;
-      }
-
-      const { data: playerForHistory } = await supabase
-        .from('players')
-        .select('alliance_id')
-        .eq('id', playerId)
-        .maybeSingle();
-
-      const { error: historyInsertError } = await supabase
-        .from('territory_history')
-        .insert([
-          {
-            territory_id: territoryId,
-            owner_id: playerId,
-            alliance_id: playerForHistory?.alliance_id ?? null,
-          },
-        ])
-        .select();
-
-      if (historyInsertError) {
-        console.warn('[territory_history] claim insert failed:', historyInsertError);
-      }
-
-      try {
-        const tier = F.normaliseTier(updatedTerritory?.tier);
-        const goldEarned = F.CLAIM_GOLD_REWARD[tier];
-        const xpEarned = F.calcClaimXp(tier);
-
-        const { data: playerRow, error: playerFetchError } = await supabase
-          .from('players')
-          .select('gold, xp')
-          .eq('id', playerId)
-          .single();
-        if (playerFetchError) throw playerFetchError;
-
-        const currentGold = Number(playerRow?.gold) || 0;
-        const currentXp = Number(playerRow?.xp) || 0;
-
-        const { error: writeRewardError } = await supabase
-          .from('players')
-          .update({
-            gold: currentGold + goldEarned,
-            xp: currentXp + xpEarned,
-          })
-          .eq('id', playerId)
-          .select();
-        if (writeRewardError) throw writeRewardError;
-
-        const { error: logError } = await supabase
-          .from('activity_log')
-          .insert({
-            player_id: playerId,
-            event_type: 'territory_claimed',
-            xp_amount: xpEarned,
-            metadata: {
-              territory_id: territoryId,
-              territory_name: territoryName,
-            },
-          });
-        if (logError) {
-          console.warn('[activity_log] territory_claimed write failed:', logError);
-        }
-
-        setGoldEarned(goldEarned);
-        setXpEarned(xpEarned);
-      } catch (goldError) {
-        // TODO: make ownership + reward writes transactional in phase 4.
-        console.error('[ClaimSuccess] gold reward update failed:', goldError);
-      }
-
-      const { data: playerFull } = await supabase
-        .from('players')
-        .select('alliance_id')
-        .eq('id', playerId)
-        .maybeSingle();
-
-      if (playerFull?.alliance_id) {
-        await supabase
-          .from('territories')
-          .update({ alliance_id: playerFull.alliance_id })
-          .eq('id', territoryId);
+      const result = await completeClaim({
+        clerkGetToken: () => getTokenRef.current(),
+        territoryId,
+      });
+      if (cancelled) return;
+      if (result.ok) {
+        setEnvelope(result.data);
+      } else {
+        setCompleteError({ code: result.code, context: result.context, status: result.status });
       }
     })();
+    return () => { cancelled = true; };
   }, [territoryId, playerId]);
+
+  const handleRetry = async () => {
+    setCompleteError(null);
+    setEnvelope(null);
+    setIsRetrying(true);
+    try {
+      const result = await completeClaim({
+        clerkGetToken: () => getTokenRef.current(),
+        territoryId,
+      });
+      if (result.ok) {
+        setEnvelope(result.data);
+      } else {
+        setCompleteError({ code: result.code, context: result.context, status: result.status });
+      }
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -153,34 +106,90 @@ export default function ClaimSuccessScreen() {
     [fade, pop],
   );
 
+  const showRewardBeats = envelope != null && envelope.already_completed === false;
+
+  const completeErrorMessage = completeError
+    ? (() => {
+        const { code } = completeError;
+        switch (code) {
+          case 'intent_expired':
+            return freeClaim
+              ? 'Your claim expired.'
+              : `Your claim expired. ${goldPaid} gold has been forfeited.`;
+          case 'territory_already_claimed':
+            return freeClaim
+              ? 'Another player claimed this territory while you walked.'
+              : `Another player claimed this territory while you walked. ${goldPaid} gold forfeited.`;
+          case 'intent_not_found':
+            return "Couldn't find your claim. Tap to retry.";
+          case 'network_error':
+            return 'Lost connection — your claim may have completed. Tap to retry.';
+          case 'no_token':
+          case 'unauthorized':
+            return 'Please sign in again.';
+          case 'player_not_found':
+          case 'territory_not_found':
+          case 'unknown_error':
+          default:
+            return 'Something went wrong. Tap to retry.';
+        }
+      })()
+    : null;
+
+  const completeErrorRetry = completeError && completeErrorShowsRetry(completeError.code);
+
   return (
     <View style={styles.screen}>
       <View style={{ flex: 1 }} />
 
-      <Animated.View style={[styles.center, animatedStyle]}>
-        <View style={styles.iconSquare} />
+      {completeError ? (
+        <Animated.View style={[styles.center, animatedStyle]}>
+          <Text style={styles.errorMessage}>{completeErrorMessage}</Text>
+          {completeErrorRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isRetrying}
+              onPress={handleRetry}
+              style={({ pressed }) => [
+                styles.retryBtn,
+                pressed && { opacity: 0.9 },
+                isRetrying && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={styles.retryBtnText}>{isRetrying ? 'Retrying…' : 'Retry'}</Text>
+            </Pressable>
+          ) : null}
+        </Animated.View>
+      ) : (
+        <Animated.View style={[styles.center, animatedStyle]}>
+          <View style={styles.iconSquare} />
 
-        <Text style={styles.territory}>{territoryName}</Text>
-        <Text style={styles.territoryCaption}>is yours.</Text>
-        {xpEarned != null ? (
-          <Text style={styles.goldEarnedBeat}>+{xpEarned} SIEGE XP EARNED</Text>
-        ) : null}
-        {goldEarned != null ? (
-          <Text style={styles.goldEarnedBeat}>+{goldEarned} GOLD EARNED</Text>
-        ) : null}
-        <Text style={styles.message}>Defend it.</Text>
+          <Text style={styles.territory}>{territoryName}</Text>
+          <Text style={styles.territoryCaption}>is yours.</Text>
+          {showRewardBeats ? (
+            <>
+              <Text style={styles.goldEarnedBeat}>+{envelope.xp_awarded} SIEGE XP EARNED</Text>
+              <Text style={styles.goldEarnedBeat}>+{envelope.resources_awarded.gold} GOLD EARNED</Text>
+              {envelope.leveled_up === true ? (
+                // TODO: level-up celebration card when design is ready
+                null
+              ) : null}
+            </>
+          ) : null}
+          <Text style={styles.message}>Defend it.</Text>
 
-        <View style={styles.cardsRow}>
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>PERIMETER</Text>
-            <Text style={styles.cardValue}>{formatMeters(perimeterDistance)}</Text>
+          <View style={styles.cardsRow}>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>PERIMETER</Text>
+              <Text style={styles.cardValue}>{formatMeters(perimeterDistance)}</Text>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>STATUS</Text>
+              <Text style={[styles.cardValue, { color: ALLIANCE }]}>Owned</Text>
+            </View>
           </View>
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>STATUS</Text>
-            <Text style={[styles.cardValue, { color: ALLIANCE }]}>Owned</Text>
-          </View>
-        </View>
-      </Animated.View>
+        </Animated.View>
+      )}
 
       <View style={{ flex: 1 }} />
 
@@ -327,6 +336,33 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  errorMessage: {
+    fontFamily: 'Inter_400Regular',
+    color: BONE,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: 18,
+    marginBottom: 20,
+  },
+
+  retryBtn: {
+    backgroundColor: CLAIM,
+    borderRadius: 0,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  retryBtnText: {
+    fontFamily: 'GeistMono_500Medium',
+    color: BONE,
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+
   cardsRow: {
     marginTop: 24,
     flexDirection: 'row',
@@ -418,4 +454,3 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 });
-

@@ -3,6 +3,7 @@ import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-nativ
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { startClaim } from '../lib/claimApi';
 import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
@@ -46,13 +47,24 @@ const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, allFeatures = [] }) {
+function liveCountdown(expiresAtIso) {
+  const remainingMs = Math.max(0, new Date(expiresAtIso).getTime() - Date.now());
+  const totalSec = Math.floor(remainingMs / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min > 0) return `${min} min`;
+  return `${sec} sec`;
+}
+
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, allFeatures = [] }) {
   const navigation = useNavigation();
   const [expanded, setExpanded] = useState(false);
   const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
   const [contestMode, setContestMode] = useState(false);
+  const [startError, setStartError] = useState(null);
   const [deductionError, setDeductionError] = useState(false);
   const [isDeducting, setIsDeducting] = useState(false);
+  const [, tickClock] = useState(0);
   const [legacyRank, setLegacyRank] = useState(null);
   const [historyStats, setHistoryStats] = useState({
     heldDays: null,
@@ -64,9 +76,17 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   useEffect(() => {
     setSheetState('info');
     setContestMode(false);
+    setStartError(null);
     setDeductionError(false);
     setIsDeducting(false);
   }, [territory?.id]);
+
+  useEffect(() => {
+    if (startError?.code === 'territory_being_claimed' || startError?.code === 'active_claim_in_progress') {
+      const id = setInterval(() => tickClock((n) => n + 1), 1000);
+      return () => clearInterval(id);
+    }
+  }, [startError?.code]);
 
   useEffect(() => {
     if (!territory?.id) {
@@ -183,34 +203,56 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const ironBalanceAfter = currentIron - ironCost;
   const canAffordContest = currentIron >= ironCost;
 
+  const startErrorMessage = startError
+    ? (() => {
+        const { code, context } = startError;
+        switch (code) {
+          case 'level_too_low':
+            return `Reach level ${context.required_level} to claim ${tier} territories`;
+          case 'insufficient_gold':
+            return `Need ${context.required_gold - context.player_gold} more gold`;
+          case 'territory_already_claimed':
+            return 'This territory was just claimed';
+          case 'territory_being_claimed':
+            return `Available in ${liveCountdown(context.expires_at)} - another player is claiming`;
+          case 'active_claim_in_progress':
+            return `You're walking for another territory. Finish or wait ${liveCountdown(context.expires_at)} for expiry.`;
+          case 'network_error':
+            return 'Lost connection. Tap to retry.';
+          case 'no_token':
+          case 'unauthorized':
+            return 'Please sign in again.';
+          default:
+            return "Couldn't start claim. Tap to retry.";
+        }
+      })()
+    : null;
+
+  const startErrorAllowsRetry = startError
+    && !['level_too_low', 'insufficient_gold', 'territory_already_claimed', 'active_claim_in_progress', 'no_token', 'unauthorized'].includes(startError.code);
+
   const handleAcceptClaim = async () => {
     setIsDeducting(true);
-    setDeductionError(false);
+    setStartError(null);
     try {
-      const newGold = currentGold - goldCost;
-      const { error } = await supabase
-        .from('players')
-        .update({ gold: newGold })
-        .eq('id', myPlayer.id)
-        .select();
-      if (error) throw error;
-
-      // Refresh banner immediately (don't wait for useFocusEffect)
-      onResourceBannerRefresh?.();
-
-      // Close sheet and navigate to claim flow
-      onClose();
-      navigation.navigate('ActiveClaim', {
-        territoryName: selectedTerritory.name,
-        perimeterDistance: selectedTerritory.perimeter,
+      const result = await startClaim({
+        clerkGetToken: () => getTokenRef.current(),
         territoryId: territory.id,
-        playerId: myPlayer?.id,
       });
-    } catch (err) {
-      console.error('[ClaimDeduct]', err);
-      setDeductionError(true);
-      // TODO: Phase 4 will add proper transactional integrity.
-      // For now, if deduction fails the player stays on confirm screen and can retry.
+      if (result.ok) {
+        setMyPlayer((prev) => (prev ? { ...prev, gold: result.data.gold_balance_after } : prev));
+        onClose?.();
+        navigation.navigate('ActiveClaim', {
+          territoryName: selectedTerritory.name,
+          perimeterDistance: selectedTerritory.perimeter,
+          territoryId: territory.id,
+          playerId: myPlayer?.id,
+          goldPaid: result.data.gold_paid,
+          freeClaim: result.data.free_claim,
+        });
+      } else {
+        setStartError({ code: result.code, context: result.context, status: result.status });
+      }
     } finally {
       setIsDeducting(false);
     }
@@ -446,28 +488,48 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 </View>
               </View>
 
-              {deductionError && (
+              {contestMode && deductionError && (
                 <Text style={styles.sheetConfirmError}>Couldn't process. Try again.</Text>
               )}
 
-              <Pressable
-                accessibilityRole="button"
-                disabled={isDeducting}
-                style={({ pressed }) => [
-                  styles.sheetAction,
-                  pressed && { opacity: 0.92 },
-                  isDeducting && { opacity: 0.6 },
-                ]}
-                onPress={contestMode ? handleAcceptContest : handleAcceptClaim}
-              >
-                <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Accept and continue'}</Text>
-              </Pressable>
+              {!contestMode && startError && (
+                <Text style={styles.sheetConfirmError}>{startErrorMessage}</Text>
+              )}
+
+              {!contestMode && startError && startErrorAllowsRetry ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isDeducting}
+                  style={({ pressed }) => [
+                    styles.sheetAction,
+                    pressed && { opacity: 0.92 },
+                    isDeducting && { opacity: 0.6 },
+                  ]}
+                  onPress={handleAcceptClaim}
+                >
+                  <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Retry'}</Text>
+                </Pressable>
+              ) : !(!contestMode && startError && !startErrorAllowsRetry) ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isDeducting}
+                  style={({ pressed }) => [
+                    styles.sheetAction,
+                    pressed && { opacity: 0.92 },
+                    isDeducting && { opacity: 0.6 },
+                  ]}
+                  onPress={contestMode ? handleAcceptContest : handleAcceptClaim}
+                >
+                  <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Accept and continue'}</Text>
+                </Pressable>
+              ) : null}
 
               <Pressable
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
                 onPress={() => {
                   setSheetState('info');
+                  setStartError(null);
                   setDeductionError(false);
                 }}
               >
@@ -535,7 +597,9 @@ export default function MapScreen() {
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
   const [myAllianceName, setMyAllianceName] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
   const resourcePlayerId = myPlayer?.id;
 
   const fetchResourceBanner = useCallback(async () => {
@@ -935,6 +999,8 @@ export default function MapScreen() {
         onTerritoriesRefetched={handleTerritoriesRefetched}
         onResourceBannerRefresh={fetchResourceBanner}
         myPlayer={myPlayer}
+        setMyPlayer={setMyPlayer}
+        getTokenRef={getTokenRef}
       />
       <ActivityLogSideRail hidden={selected != null} />
     </View>

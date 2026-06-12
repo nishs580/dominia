@@ -270,7 +270,7 @@ export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId, mode = 'claim' } = route?.params ?? {};
+  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId, mode = 'claim', goldPaid, freeClaim } = route?.params ?? {};
   const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
 
   const progress = useRef(new Animated.Value(0)).current;
@@ -461,6 +461,8 @@ export default function ActiveClaimScreen() {
         perimeterDistance: perimeterM,
         territoryId,
         playerId,
+        goldPaid,
+        freeClaim,
       });
     }
   }
