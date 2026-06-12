@@ -200,11 +200,27 @@ export default function ClaimSuccessScreen() {
             accessibilityRole="button"
             onPress={() =>
               navigation.navigate('ContestResultScreen', {
-                contestState: 'attack_won',
-                territoryName: 'Vondelpark West',
-                myDistance: 1240,
-                opponentDistance: 890,
-                opponentName: 'attacker_x',
+                outcome: 'attacker_won',
+                role: 'attacker',
+                territoryName: 'Test Territory',
+                territoryId: 'test-id',
+                playerId: 'test-player',
+                opponentName: 'Test Opponent',
+                attackerAlliance: null,
+                myDistance: 1000,
+                opponentDistance: 0,
+                resourcesAwarded: { iron: 15, stone: 0, gold: 25, morale: 8 },
+                xpGained: 300,
+                balances: {
+                  iron_after: 100,
+                  stone_after: 50,
+                  gold_after: 200,
+                  morale_after: 50,
+                  xp_after: 1500,
+                  level_after: 5,
+                },
+                leveledUp: false,
+                firstContestWin: false,
               })
             }
             style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
@@ -215,11 +231,27 @@ export default function ClaimSuccessScreen() {
             accessibilityRole="button"
             onPress={() =>
               navigation.navigate('ContestResultScreen', {
-                contestState: 'attack_lost',
-                territoryName: 'Vondelpark West',
+                outcome: 'defender_won',
+                role: 'attacker',
+                territoryName: 'Test Territory',
+                territoryId: 'test-id',
+                playerId: 'test-player',
+                opponentName: 'Test Opponent',
+                attackerAlliance: null,
                 myDistance: 890,
                 opponentDistance: 1240,
-                opponentName: 'attacker_x',
+                resourcesAwarded: { iron: 0, stone: 0, gold: 0, morale: 0 },
+                xpGained: 0,
+                balances: {
+                  iron_after: 100,
+                  stone_after: 50,
+                  gold_after: 200,
+                  morale_after: 50,
+                  xp_after: 1500,
+                  level_after: 5,
+                },
+                leveledUp: false,
+                firstContestWin: false,
               })
             }
             style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
@@ -233,11 +265,27 @@ export default function ClaimSuccessScreen() {
             accessibilityRole="button"
             onPress={() =>
               navigation.navigate('ContestResultScreen', {
-                contestState: 'defend_won',
-                territoryName: 'Vondelpark West',
+                outcome: 'defender_won',
+                role: 'defender',
+                territoryName: 'Test Territory',
+                territoryId: 'test-id',
+                playerId: 'test-player',
+                opponentName: 'Test Opponent',
+                attackerAlliance: null,
                 myDistance: 1240,
                 opponentDistance: 890,
-                opponentName: 'attacker_x',
+                resourcesAwarded: { iron: 0, stone: 20, gold: 15, morale: 8 },
+                xpGained: 200,
+                balances: {
+                  iron_after: 100,
+                  stone_after: 50,
+                  gold_after: 200,
+                  morale_after: 50,
+                  xp_after: 1500,
+                  level_after: 5,
+                },
+                leveledUp: false,
+                firstContestWin: false,
               })
             }
             style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}
@@ -248,11 +296,27 @@ export default function ClaimSuccessScreen() {
             accessibilityRole="button"
             onPress={() =>
               navigation.navigate('ContestResultScreen', {
-                contestState: 'defend_lost',
-                territoryName: 'Vondelpark West',
+                outcome: 'attacker_won',
+                role: 'defender',
+                territoryName: 'Test Territory',
+                territoryId: 'test-id',
+                playerId: 'test-player',
+                opponentName: 'Test Opponent',
+                attackerAlliance: null,
                 myDistance: 890,
                 opponentDistance: 1240,
-                opponentName: 'attacker_x',
+                resourcesAwarded: { iron: 0, stone: 0, gold: 0, morale: 0 },
+                xpGained: 0,
+                balances: {
+                  iron_after: 100,
+                  stone_after: 50,
+                  gold_after: 200,
+                  morale_after: 50,
+                  xp_after: 1500,
+                  level_after: 5,
+                },
+                leveledUp: false,
+                firstContestWin: false,
               })
             }
             style={({ pressed }) => [styles.testBtn, pressed && { opacity: 0.85 }]}

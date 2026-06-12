@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
-import * as F from '../lib/formulas';
+import { mobileStateFromOutcome } from '../lib/contestResultHelpers';
 
 const STATE_CONFIG = {
   attack_won: {
@@ -60,13 +59,6 @@ function formatMetres(m) {
   return Math.max(0, Math.round(clampNumber(m, 0))).toLocaleString();
 }
 
-/** Metadata `outcome` uses v6.10 spelling (defence_*). */
-function contestOutcomeForActivityLog(contestState) {
-  if (contestState === 'defend_won') return 'defence_won';
-  if (contestState === 'defend_lost') return 'defence_lost';
-  return contestState;
-}
-
 function consequenceLine(cfg, myM, oppM, opponentName) {
   const diff = Math.abs(myM - oppM);
   if (cfg.outcome === 'won' && cfg.role === 'attacker') {
@@ -86,249 +78,21 @@ export default function ContestResultScreen() {
   const route = useRoute();
 
   const {
-    contestState = 'attack_won',
+    outcome = 'attacker_won',
+    role = 'attacker',
     territoryName = 'Territory',
     territoryPerimeter,
     myDistance = 0,
     opponentDistance = 0,
     opponentName = 'opponent',
-    territoryId,
-    playerId,
-    attackerAlliance,
+    resourcesAwarded = { iron: 0, stone: 0, gold: 0, morale: 0 },
+    xpGained = 0,
+    leveledUp = false,
+    firstContestWin = false,
   } = route?.params ?? {};
-  const [earned, setEarned] = useState(null);
 
-  useEffect(() => {
-    if (contestState === 'attack_won' && territoryId && playerId) {
-      (async () => {
-        const { error: historyCloseOutError } = await supabase
-          .from('territory_history')
-          .update({ lost_at: new Date().toISOString() })
-          .eq('territory_id', territoryId)
-          .is('lost_at', null)
-          .select();
-
-        if (historyCloseOutError) {
-          console.warn('[territory_history] contest close-out failed:', historyCloseOutError);
-        }
-
-        supabase
-          .from('territories')
-          .update({ owner_id: playerId, alliance_id: attackerAlliance ?? null })
-          .eq('id', territoryId)
-          .select('tier')
-          .single()
-          .then(async ({ data: updatedTerritory, error }) => {
-            if (error) {
-              console.error('Contest win write failed:', error);
-              return;
-            }
-
-            const { error: historyInsertError } = await supabase
-              .from('territory_history')
-              .insert([
-                {
-                  territory_id: territoryId,
-                  owner_id: playerId,
-                  alliance_id: attackerAlliance ?? null,
-                },
-              ])
-              .select();
-
-            if (historyInsertError) {
-              console.warn('[territory_history] contest insert failed:', historyInsertError);
-            }
-
-            // Increment lifetime_contest_wins for the attacker
-            const { data: currentPlayer, error: fetchErr } = await supabase
-              .from('players')
-              .select('lifetime_contest_wins')
-              .eq('id', playerId)
-              .single();
-
-            if (!fetchErr && currentPlayer) {
-              const newCount = (currentPlayer.lifetime_contest_wins ?? 0) + 1;
-              const { error: writeErr } = await supabase
-                .from('players')
-                .update({ lifetime_contest_wins: newCount })
-                .eq('id', playerId)
-                .select();
-              if (writeErr) {
-                console.warn('[ContestResult] failed to increment lifetime_contest_wins:', writeErr.message);
-              }
-            } else if (fetchErr) {
-              console.warn('[ContestResult] failed to fetch lifetime_contest_wins:', fetchErr.message);
-            }
-
-            try {
-              const contestEarned = F.calcResourceEarn('contest_win');
-              const { data: playerResources, error: playerResourcesError } = await supabase
-                .from('players')
-                .select('iron, gold, morale, xp')
-                .eq('id', playerId)
-                .single();
-              if (playerResourcesError) throw playerResourcesError;
-
-              const currentIron = Number(playerResources?.iron) || 0;
-              const currentGold = Number(playerResources?.gold) || 0;
-              const currentMorale = Number(playerResources?.morale) || 0;
-              const currentXp = Number(playerResources?.xp) || 0;
-
-              const tier = F.normaliseTier(updatedTerritory?.tier);
-              const xpEarned = F.calcContestWinXp(tier);
-
-              const { error: writeResourcesError } = await supabase
-                .from('players')
-                .update({
-                  iron: currentIron + contestEarned.iron,
-                  gold: currentGold + contestEarned.gold,
-                  morale: currentMorale + contestEarned.morale,
-                  xp: currentXp + xpEarned,
-                })
-                .eq('id', playerId)
-                .select();
-              if (writeResourcesError) throw writeResourcesError;
-
-              const { error: logError } = await supabase
-                .from('activity_log')
-                .insert({
-                  player_id: playerId,
-                  event_type: 'contest_participated',
-                  xp_amount: xpEarned,
-                  contest_count: 1,
-                  metadata: {
-                    territory_id: territoryId,
-                    territory_name: territoryName,
-                    outcome: 'attack_won',
-                  },
-                });
-              if (logError) {
-                console.warn('[activity_log] contest_participated write failed:', logError);
-              }
-
-              setEarned({ ...contestEarned, xp: xpEarned });
-            } catch (resourceError) {
-              // TODO: make ownership + reward writes transactional in phase 4.
-              console.error('[ContestResult] contest win resource update failed:', resourceError);
-            }
-          });
-      })();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!territoryId || !playerId) return;
-    if (contestState !== 'defend_won') return;
-
-    (async () => {
-      try {
-        const { data: territoryRow, error: territoryError } = await supabase
-          .from('territories')
-          .select('tier')
-          .eq('id', territoryId)
-          .single();
-        if (territoryError) throw territoryError;
-
-        const tier = F.normaliseTier(territoryRow?.tier);
-        const defenceEarned = F.calcResourceEarn('defence_win');
-        const xpEarned = F.calcDefenceWinXp(tier);
-
-        const { data: playerRow, error: playerFetchError } = await supabase
-          .from('players')
-          .select('iron, stone, gold, morale, xp, lifetime_defence_wins')
-          .eq('id', playerId)
-          .single();
-        if (playerFetchError) throw playerFetchError;
-
-        const currentIron = Number(playerRow?.iron) || 0;
-        const currentStone = Number(playerRow?.stone) || 0;
-        const currentGold = Number(playerRow?.gold) || 0;
-        const currentMorale = Number(playerRow?.morale) || 0;
-        const currentXp = Number(playerRow?.xp) || 0;
-        const newDefenceWins = (playerRow?.lifetime_defence_wins ?? 0) + 1;
-
-        const { error: writeRewardError } = await supabase
-          .from('players')
-          .update({
-            iron: currentIron + defenceEarned.iron,
-            stone: currentStone + defenceEarned.stone,
-            gold: currentGold + defenceEarned.gold,
-            morale: currentMorale + defenceEarned.morale,
-            xp: currentXp + xpEarned,
-            lifetime_defence_wins: newDefenceWins,
-          })
-          .eq('id', playerId)
-          .select();
-        if (writeRewardError) throw writeRewardError;
-
-        const { error: logError } = await supabase
-          .from('activity_log')
-          .insert({
-            player_id: playerId,
-            event_type: 'contest_participated',
-            xp_amount: xpEarned,
-            contest_count: 1,
-            metadata: {
-              territory_id: territoryId,
-              territory_name: territoryName,
-              outcome: contestOutcomeForActivityLog(contestState),
-            },
-          });
-        if (logError) {
-          console.warn('[activity_log] contest_participated write failed:', logError);
-        }
-      } catch (e) {
-        console.error('[ContestResult] defend_won reward update failed:', e);
-      }
-    })();
-  }, [contestState, territoryId, playerId, territoryName]);
-
-  useEffect(() => {
-    if (!territoryId || !playerId) return;
-    if (contestState !== 'attack_lost' && contestState !== 'defend_lost') return;
-
-    (async () => {
-      const { data: playerRow, error: playerFetchError } = await supabase
-        .from('players')
-        .select('xp')
-        .eq('id', playerId)
-        .single();
-      if (playerFetchError) {
-        console.warn('[ContestResult] contest loss player fetch failed:', playerFetchError);
-        return;
-      }
-
-      const currentXp = Number(playerRow?.xp) || 0;
-      const { error: writeRewardError } = await supabase
-        .from('players')
-        .update({ xp: currentXp })
-        .eq('id', playerId)
-        .select();
-      if (writeRewardError) {
-        console.warn('[ContestResult] contest loss player update failed:', writeRewardError);
-        return;
-      }
-
-      const { error: logError } = await supabase
-        .from('activity_log')
-        .insert({
-          player_id: playerId,
-          event_type: 'contest_participated',
-          xp_amount: 0,
-          contest_count: 1,
-          metadata: {
-            territory_id: territoryId,
-            territory_name: territoryName,
-            outcome: contestOutcomeForActivityLog(contestState),
-          },
-        });
-      if (logError) {
-        console.warn('[activity_log] contest_participated write failed:', logError);
-      }
-    })();
-  }, [contestState, territoryId, playerId, territoryName]);
-
-  const cfg = STATE_CONFIG[contestState] ?? STATE_CONFIG.attack_won;
+  const stateKey = mobileStateFromOutcome(outcome, role);
+  const cfg = STATE_CONFIG[stateKey] ?? STATE_CONFIG.attack_won;
   const markColor = cfg.role === 'attacker' ? CLAIM : ALLIANCE;
   const markSoftColor = cfg.role === 'attacker' ? CLAIM_SOFT : ALLIANCE_SOFT;
 
@@ -363,6 +127,11 @@ export default function ContestResultScreen() {
       }).start();
     }
   }, [cfg.outcome]);
+
+  // TODO: leveled-up celebration UI — gate on leveledUp when polish slice ships.
+  void leveledUp;
+  // TODO: first-contest-win badge — gate on firstContestWin when polish slice ships.
+  void firstContestWin;
 
   return (
     <View style={styles.screen}>
@@ -420,9 +189,9 @@ export default function ContestResultScreen() {
       <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
         <Text style={styles.consequenceText}>{consequenceLine(cfg, myM, oppM, opponentName)}</Text>
       </View>
-      {contestState === 'attack_won' && earned ? (
+      {stateKey === 'attack_won' ? (
         <Text style={styles.earnedBeat}>
-          +{earned.xp} SIEGE XP · +{earned.iron} IRON · +{earned.gold} GOLD · +{earned.morale} MORALE
+          +{xpGained} SIEGE XP · +{resourcesAwarded.iron} IRON · +{resourcesAwarded.gold} GOLD · +{resourcesAwarded.morale} MORALE
         </Text>
       ) : null}
 
@@ -588,4 +357,3 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
   },
 });
-

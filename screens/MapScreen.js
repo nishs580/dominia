@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { startClaim } from '../lib/claimApi';
+import { startContest } from '../lib/contestWalkApi';
 import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
@@ -56,14 +57,66 @@ function liveCountdown(expiresAtIso) {
   return `${sec} sec`;
 }
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, allFeatures = [] }) {
+function topBannerMessageForContestCode(code) {
+  switch (code) {
+    case 'player_not_found':
+      return "Couldn't load your account. Try again.";
+    case 'territory_not_found':
+      return 'This territory no longer exists.';
+    case 'invalid_tier':
+      return "Couldn't load territory data. Try again.";
+    case 'defender_not_found':
+    case 'no_perimeter':
+    case 'owner_level_unavailable':
+      return "Couldn't load contest data. Try again.";
+    case 'network_error':
+    case 'no_token':
+      return 'Network issue. Try again.';
+    default:
+      return 'Something went wrong. Try again.';
+  }
+}
+
+function contestStartErrorMessage(error) {
+  if (!error) return null;
+  const { code, context = {} } = error;
+  switch (code) {
+    case 'no_territory_owner':
+      return 'Territory is no longer owned. Try claiming it instead.';
+    case 'cannot_contest_own':
+      return "You can't contest your own territory.";
+    case 'territory_protected':
+      switch (context.reason) {
+        case 'new_owner_protection':
+          return 'Newly claimed — protected for 24 hours.';
+        case 'defense_protection':
+          return 'Recently defended — protected for 4 hours.';
+        case 'alliance_protection':
+          return 'Owner is in your alliance.';
+        default:
+          return 'This territory is protected.';
+      }
+    case 'level_too_low':
+      return `Reach level ${context.required_level} to contest a ${context.tier} territory.`;
+    case 'outside_contest_hours':
+      return 'Contests run 05:00–22:59 in your local time.';
+    case 'insufficient_iron':
+      return 'Need more iron.';
+    default:
+      return null;
+  }
+}
+
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [] }) {
   const navigation = useNavigation();
   const [expanded, setExpanded] = useState(false);
   const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
   const [contestMode, setContestMode] = useState(false);
   const [startError, setStartError] = useState(null);
-  const [deductionError, setDeductionError] = useState(false);
+  const [contestStartError, setContestStartError] = useState(null);
+  const [contestAlreadyActiveInfo, setContestAlreadyActiveInfo] = useState(null);
   const [isDeducting, setIsDeducting] = useState(false);
+  const [isAttacking, setIsAttacking] = useState(false);
   const [, tickClock] = useState(0);
   const [legacyRank, setLegacyRank] = useState(null);
   const [historyStats, setHistoryStats] = useState({
@@ -77,8 +130,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     setSheetState('info');
     setContestMode(false);
     setStartError(null);
-    setDeductionError(false);
+    setContestStartError(null);
+    setContestAlreadyActiveInfo(null);
     setIsDeducting(false);
+    setIsAttacking(false);
   }, [territory?.id]);
 
   useEffect(() => {
@@ -259,32 +314,42 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   };
 
   const handleAcceptContest = async () => {
-    setIsDeducting(true);
-    setDeductionError(false);
+    setIsAttacking(true);
+    setContestStartError(null);
+    setContestAlreadyActiveInfo(null);
     try {
-      const newIron = currentIron - ironCost;
-      const { error } = await supabase
-        .from('players')
-        .update({ iron: newIron })
-        .eq('id', myPlayer.id)
-        .select();
-      if (error) throw error;
-
-      onResourceBannerRefresh?.();
-
-      onClose();
-      navigation.navigate('ActiveClaim', {
-        mode: 'contest',
-        territoryName: selectedTerritory.name,
-        perimeterDistance: selectedTerritory.perimeter,
+      const result = await startContest({
+        clerkGetToken: () => getTokenRef.current(),
         territoryId: territory.id,
-        playerId: myPlayer?.id,
       });
-    } catch (err) {
-      console.error('[ContestDeduct]', err);
-      setDeductionError(true);
+      if (result.ok) {
+        const env = result.data;
+        onClose();
+        navigation.navigate('ActiveClaim', {
+          mode: 'contest',
+          territoryName: selectedTerritory.name,
+          territoryId: territory.id,
+          contestId: env.contest_id,
+          requiredWalkM: env.required_walk_m,
+          attackerAllianceId: env.attacker_alliance_id,
+          ironBalanceAfter: env.iron_balance_after,
+          playerId: myPlayer?.id,
+        });
+      } else {
+        const { code, context } = result;
+        if (code === 'contest_already_active') {
+          setContestAlreadyActiveInfo({
+            attacker_username: context?.attacker_username ?? 'someone',
+            attack_day_date: context?.attack_day_date ?? '',
+          });
+        } else if (contestStartErrorMessage({ code, context })) {
+          setContestStartError({ code, context });
+        } else {
+          showTopBanner?.(topBannerMessageForContestCode(code));
+        }
+      }
     } finally {
-      setIsDeducting(false);
+      setIsAttacking(false);
     }
   };
 
@@ -488,12 +553,32 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 </View>
               </View>
 
-              {contestMode && deductionError && (
-                <Text style={styles.sheetConfirmError}>Couldn't process. Try again.</Text>
+              {contestMode && contestStartError && (
+                <Text style={styles.sheetConfirmError}>
+                  {contestStartErrorMessage(contestStartError)}
+                </Text>
               )}
 
               {!contestMode && startError && (
                 <Text style={styles.sheetConfirmError}>{startErrorMessage}</Text>
+              )}
+
+              {contestMode && contestAlreadyActiveInfo && (
+                <View style={styles.sheetContestActiveCard}>
+                  <Text style={styles.sheetContestActiveText}>
+                    {`@${contestAlreadyActiveInfo.attacker_username} is contesting this until ${contestAlreadyActiveInfo.attack_day_date}.`}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.sheetAction,
+                      pressed && { opacity: 0.92 },
+                    ]}
+                    onPress={() => setContestAlreadyActiveInfo(null)}
+                  >
+                    <Text style={styles.sheetActionText}>Got it</Text>
+                  </Pressable>
+                </View>
               )}
 
               {!contestMode && startError && startErrorAllowsRetry ? (
@@ -509,18 +594,20 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 >
                   <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Retry'}</Text>
                 </Pressable>
-              ) : !(!contestMode && startError && !startErrorAllowsRetry) ? (
+              ) : !(!contestMode && startError && !startErrorAllowsRetry) && !(contestMode && contestAlreadyActiveInfo) ? (
                 <Pressable
                   accessibilityRole="button"
-                  disabled={isDeducting}
+                  disabled={contestMode ? isAttacking : isDeducting}
                   style={({ pressed }) => [
                     styles.sheetAction,
                     pressed && { opacity: 0.92 },
-                    isDeducting && { opacity: 0.6 },
+                    (contestMode ? isAttacking : isDeducting) && { opacity: 0.6 },
                   ]}
                   onPress={contestMode ? handleAcceptContest : handleAcceptClaim}
                 >
-                  <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Accept and continue'}</Text>
+                  <Text style={styles.sheetActionText}>
+                    {(contestMode ? isAttacking : isDeducting) ? 'Processing…' : 'Accept and continue'}
+                  </Text>
                 </Pressable>
               ) : null}
 
@@ -530,7 +617,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 onPress={() => {
                   setSheetState('info');
                   setStartError(null);
-                  setDeductionError(false);
+                  setContestStartError(null);
+                  setContestAlreadyActiveInfo(null);
                 }}
               >
                 <Text style={styles.sheetCancelText}>Cancel</Text>
@@ -581,6 +669,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
 export default function MapScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const cameraRef = useRef(null);
   const mapRef = useRef(null);
   const idleTimeoutRef = useRef(null);
@@ -597,9 +686,33 @@ export default function MapScreen() {
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
   const [myAllianceName, setMyAllianceName] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
+  const [topBannerMessage, setTopBannerMessage] = useState(null);
+  const topBannerTimerRef = useRef(null);
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
+  const showTopBanner = useCallback((message) => {
+    setTopBannerMessage(message);
+  }, []);
+
+  useEffect(() => {
+    if (!topBannerMessage) return undefined;
+    if (topBannerTimerRef.current) clearTimeout(topBannerTimerRef.current);
+    topBannerTimerRef.current = setTimeout(() => setTopBannerMessage(null), 5000);
+    return () => {
+      if (topBannerTimerRef.current) clearTimeout(topBannerTimerRef.current);
+    };
+  }, [topBannerMessage]);
+
+  useEffect(() => {
+    const msg = route?.params?.topBannerMessage;
+    if (msg) {
+      showTopBanner(msg);
+      navigation.setParams({ topBannerMessage: undefined });
+    }
+  }, [route?.params?.topBannerMessage]);
+
   const resourcePlayerId = myPlayer?.id;
 
   const fetchResourceBanner = useCallback(async () => {
@@ -954,6 +1067,11 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
+      {topBannerMessage ? (
+        <View style={styles.topBanner}>
+          <Text style={styles.topBannerText}>{topBannerMessage}</Text>
+        </View>
+      ) : null}
       <MapboxGL.MapView
         ref={mapRef}
         style={styles.map}
@@ -1001,6 +1119,7 @@ export default function MapScreen() {
         myPlayer={myPlayer}
         setMyPlayer={setMyPlayer}
         getTokenRef={getTokenRef}
+        showTopBanner={showTopBanner}
       />
       <ActivityLogSideRail hidden={selected != null} />
     </View>
@@ -1016,6 +1135,26 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+
+  topBanner: {
+    position: 'absolute',
+    top: (StatusBar.currentHeight ?? 0) + 48,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  topBannerText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: BONE,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 
   resourceBanner: {
@@ -1400,6 +1539,20 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
     paddingVertical: 10,
+  },
+  sheetContestActiveCard: {
+    marginTop: 12,
+    paddingTop: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(242,238,230,0.08)',
+    gap: 12,
+  },
+  sheetContestActiveText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: 'rgba(242,238,230,0.85)',
+    lineHeight: 18,
+    textAlign: 'center',
   },
   sheetCancel: {
     marginTop: 8,

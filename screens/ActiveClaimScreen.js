@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useReducer, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -13,6 +14,7 @@ import {
 } from 'react-native-health-connect';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
+import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
   subscribe,
@@ -54,11 +56,15 @@ let gpsWeak = false;
 let bannerStateModule = null;
 let halfwayResetTimer = null;
 
+// Contest walk aggregator (module scope — 30s windows)
+let contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
+
 // Set to true to drop a COMPLETE NOW button at the bottom for UI iteration without walking.
 const DEV_MODE_MANUAL = false;
 const DIAG_CALIBRATION = true;
 
 const POLL_INTERVAL_MS = 10000;          // HC step poll cadence — matches ActivityScreen
+const CONTEST_WINDOW_MS = 30_000;
 const STALE_GPS_THRESHOLD_MS = 5000;     // skip GPS points older than this
 const ZERO_MOVEMENT_WARN_MS = 30 * 1000; // 30s zero movement → show "PAUSED" banner
 const PAUSE_RESET_MS = 15 * 60 * 1000;   // 15 min zero movement → reset progress to zero
@@ -91,6 +97,60 @@ function formatPauseCountdown(ms) {
   const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
   const ss = (totalSec % 60).toString().padStart(2, '0');
   return `${mm}:${ss}`;
+}
+
+function flushContestAggregatorWindow() {
+  if (contestAggregator.steps > 0) {
+    contestWalk.enqueueSample({
+      steps: contestAggregator.steps,
+      distanceM: contestAggregator.distanceM,
+      windowStartMs: contestAggregator.startMs,
+      windowEndMs: contestAggregator.startMs + CONTEST_WINDOW_MS,
+    });
+  }
+  contestAggregator = {
+    startMs: contestAggregator.startMs + CONTEST_WINDOW_MS,
+    steps: 0,
+    distanceM: 0,
+  };
+}
+
+function drainContestWindows() {
+  while (Date.now() - contestAggregator.startMs >= CONTEST_WINDOW_MS) {
+    flushContestAggregatorWindow();
+  }
+}
+
+function flushPartialContestWindow() {
+  if (contestAggregator.steps > 0) {
+    const endMs = Date.now();
+    contestWalk.enqueueSample({
+      steps: contestAggregator.steps,
+      distanceM: contestAggregator.distanceM,
+      windowStartMs: contestAggregator.startMs,
+      windowEndMs: endMs,
+    });
+    contestAggregator = { startMs: endMs, steps: 0, distanceM: 0 };
+  }
+}
+
+function walkErrorToastMessage(code, context) {
+  switch (code) {
+    case 'player_not_found':
+      return 'Lost session. Exiting contest.';
+    case 'contest_not_found':
+      return 'Contest no longer exists.';
+    case 'contest_not_active':
+      if (context?.status === 'expired') return 'Contest expired.';
+      if (context?.status === 'attacker_won' || context?.status === 'defender_won') {
+        return 'Contest already resolved.';
+      }
+      return 'Contest already resolved.';
+    case 'not_a_participant':
+      return "You're not part of this contest.";
+    default:
+      return 'Something went wrong.';
+  }
 }
 
 async function readTodaySteps() {
@@ -172,6 +232,9 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       halfwayFired = false;
       lastStepTimestamp = now;
       claimStartMs = now;
+      if (claimState.mode === 'contest') {
+        contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
+      }
       didReset = true;
       nextBanner = 'reset';
     } else if (zeroMovementMs >= ZERO_MOVEMENT_WARN_MS) {
@@ -242,10 +305,24 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
     lastSteps = currentSteps;
 
-    const isComplete = !claimState.completed && newDistance >= claimState.perimeterM && claimState.perimeterM > 0;
+    let tickDistanceM = newDistance;
+    let isComplete = false;
+
+    if (claimState.mode === 'contest') {
+      const deltaSteps = inVehicle ? 0 : stepDeltaTick;
+      const deltaDistance = stepsToMetres(deltaSteps, currentStrideM);
+      contestAggregator.steps += deltaSteps;
+      contestAggregator.distanceM += deltaDistance;
+      drainContestWindows();
+      tickDistanceM = contestWalk.getCumulativeDistance() + contestAggregator.distanceM;
+    } else {
+      isComplete = !claimState.completed
+        && newDistance >= claimState.perimeterM
+        && claimState.perimeterM > 0;
+    }
 
     setTick({
-      distanceM: newDistance,
+      distanceM: tickDistanceM,
       liveSteps: newSteps,
       livePace: newPace,
       strideM: currentStrideM,
@@ -269,16 +346,45 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
-  const { territoryName = 'Territory', perimeterDistance = 0, territoryId, playerId, mode = 'claim', goldPaid, freeClaim } = route?.params ?? {};
-  const perimeterM = Math.max(0, Number(perimeterDistance) || 0);
+  const {
+    territoryName = 'Territory',
+    perimeterDistance = 0,
+    territoryId,
+    playerId,
+    mode = 'claim',
+    goldPaid,
+    freeClaim,
+    contestId,
+    requiredWalkM: requiredWalkMParam,
+    attackerAllianceId,
+  } = route?.params ?? {};
+
+  const requiredWalkM = Math.max(0, Number(requiredWalkMParam) || 0);
+  const perimeterM = mode === 'contest'
+    ? requiredWalkM
+    : Math.max(0, Number(perimeterDistance) || 0);
+  const progressThresholdM = perimeterM;
 
   const progress = useRef(new Animated.Value(0)).current;
   const navigatingRef = useRef(false);
   const [, forceRender] = useReducer((x) => x + 1, 0);
 
   const opponentNameRef = useRef('opponent');
-  const attackerAllianceRef = useRef(null);
+  const territoryNameRef = useRef(territoryName);
+  const territoryIdRef = useRef(territoryId);
+  const playerIdRef = useRef(playerId);
+  const attackerAllianceIdRef = useRef(attackerAllianceId);
+
+  useEffect(() => {
+    territoryNameRef.current = territoryName;
+    territoryIdRef.current = territoryId;
+    playerIdRef.current = playerId;
+    attackerAllianceIdRef.current = attackerAllianceId;
+  }, [territoryName, territoryId, playerId, attackerAllianceId]);
 
   useEffect(() => {
     navigation.setOptions?.({ headerShown: false, tabBarStyle: { display: 'none' } });
@@ -295,6 +401,7 @@ export default function ActiveClaimScreen() {
   }, []);
 
   useEffect(() => {
+    if (mode !== 'claim') return;
     if (claimState.completed && !navigatingRef.current) {
       navigatingRef.current = true;
       setTimeout(() => completeClaim(claimState.distanceM, claimState.liveSteps), 600);
@@ -302,8 +409,8 @@ export default function ActiveClaimScreen() {
   });
 
   useEffect(() => {
-    const nextPct = claimState.perimeterM > 0
-      ? clamp(claimState.distanceM / claimState.perimeterM, 0, 1)
+    const nextPct = progressThresholdM > 0
+      ? clamp(claimState.distanceM / progressThresholdM, 0, 1)
       : 0;
     Animated.timing(progress, {
       toValue: nextPct,
@@ -315,9 +422,13 @@ export default function ActiveClaimScreen() {
 
   useEffect(() => {
     return () => {
+      if (mode === 'contest') {
+        flushPartialContestWindow();
+        contestWalk.stop();
+      }
       if (!navigatingRef.current) endClaim();
     };
-  }, []);
+  }, [mode]);
 
   // ─── Mount: load stride, init HC, fetch contest metadata ────────────────
   useEffect(() => {
@@ -338,6 +449,9 @@ export default function ActiveClaimScreen() {
     if (halfwayResetTimer) {
       clearTimeout(halfwayResetTimer);
       halfwayResetTimer = null;
+    }
+    if (mode === 'contest') {
+      contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
     }
 
     startClaim({ territoryId, playerId, perimeterM, mode, territoryName });
@@ -376,7 +490,7 @@ export default function ActiveClaimScreen() {
       }
     })();
 
-    if (mode === 'contest' && territoryId && playerId) {
+    if (mode === 'contest' && territoryId) {
       supabase
         .from('territories')
         .select('players(username)')
@@ -385,20 +499,75 @@ export default function ActiveClaimScreen() {
         .then(({ data }) => {
           if (data?.players?.username) opponentNameRef.current = data.players.username;
         });
-      supabase
-        .from('players')
-        .select('alliance_id')
-        .eq('id', playerId)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.alliance_id) attackerAllianceRef.current = data.alliance_id;
-        });
     }
 
     return () => {
       cancelled = true;
     };
   }, [playerId, mode, territoryId, perimeterM, territoryName]);
+
+  useEffect(() => {
+    if (mode !== 'contest' || !contestId || !playerId || requiredWalkM <= 0) return;
+
+    const navigateToResult = (env) => {
+      navigatingRef.current = true;
+      flushPartialContestWindow();
+      navigation.replace('ContestResultScreen', {
+        outcome: env.outcome,
+        role: 'attacker',
+        territoryName: territoryNameRef.current,
+        territoryId: territoryIdRef.current,
+        playerId: playerIdRef.current,
+        opponentName: opponentNameRef.current,
+        attackerAlliance: attackerAllianceIdRef.current ?? null,
+        myDistance: env.attacker_walked_m,
+        opponentDistance: 0,
+        resourcesAwarded: env.resources_awarded,
+        xpGained: env.xp_awarded,
+        balances: {
+          iron_after: env.player_resources?.iron,
+          stone_after: env.player_resources?.stone,
+          gold_after: env.player_resources?.gold,
+          morale_after: env.player_resources?.morale,
+          xp_after: env.total_xp,
+          level_after: env.level_after,
+        },
+        leveledUp: env.leveled_up,
+        firstContestWin: env.first_contest_win,
+      });
+    };
+
+    const navigateBackWithToast = (code, context) => {
+      navigatingRef.current = true;
+      flushPartialContestWindow();
+      contestWalk.stop();
+      const message = walkErrorToastMessage(code, context);
+      navigation.reset({
+        index: 0,
+        routes: [{
+          name: 'MainTabs',
+          params: { screen: 'Map', params: { topBannerMessage: message } },
+        }],
+      });
+    };
+
+    contestWalk.start({
+      contestId,
+      requiredWalkM,
+      playerId,
+      clerkGetToken: () => getTokenRef.current(),
+      onResolved: navigateToResult,
+      onWalkError: navigateBackWithToast,
+    });
+
+    const appStateSub = AppState.addEventListener('change', contestWalk.onAppStateChange);
+
+    return () => {
+      appStateSub.remove();
+      flushPartialContestWindow();
+      contestWalk.stop();
+    };
+  }, [mode, contestId, playerId, requiredWalkM, navigation]);
 
   // ─── GPS watch via foreground service ──────────────────────────────────
   useEffect(() => {
@@ -444,27 +613,22 @@ export default function ActiveClaimScreen() {
   }, []);
 
   function completeClaim(walkedM, finalSteps) {
+    navigation.navigate('ClaimSuccessScreen', {
+      territoryName,
+      perimeterDistance: perimeterM,
+      territoryId,
+      playerId,
+      goldPaid,
+      freeClaim,
+    });
+  }
+
+  function handleCancel() {
     if (mode === 'contest') {
-      navigation.navigate('ContestResultScreen', {
-        contestState: 'attack_won',
-        territoryName,
-        territoryId,
-        playerId,
-        myDistance: Math.round(walkedM),
-        opponentDistance: 0,
-        opponentName: opponentNameRef.current,
-        attackerAlliance: attackerAllianceRef.current,
-      });
-    } else {
-      navigation.navigate('ClaimSuccessScreen', {
-        territoryName,
-        perimeterDistance: perimeterM,
-        territoryId,
-        playerId,
-        goldPaid,
-        freeClaim,
-      });
+      flushPartialContestWindow();
+      contestWalk.stop();
     }
+    navigation.goBack();
   }
 
   function handleManualComplete() {
@@ -485,7 +649,9 @@ export default function ActiveClaimScreen() {
     [progress, ring.circumference],
   );
 
-  const pct = perimeterM > 0 ? Math.round(clamp((claimState.distanceM / perimeterM) * 100, 0, 100)) : 0;
+  const pct = progressThresholdM > 0
+    ? Math.round(clamp((claimState.distanceM / progressThresholdM) * 100, 0, 100))
+    : 0;
   const isCalibrated = claimState.strideSessions >= 3;
 
   return (
@@ -521,7 +687,7 @@ export default function ActiveClaimScreen() {
           </Svg>
           <View style={styles.ringCenter}>
             <Text style={styles.pctText}>{pct}%</Text>
-            <Text style={styles.metresText}>{`${formatMetres(claimState.distanceM)} / ${formatMetres(perimeterM)} m`}</Text>
+            <Text style={styles.metresText}>{`${formatMetres(claimState.distanceM)} / ${formatMetres(progressThresholdM)} m`}</Text>
           </View>
         </View>
       </View>
@@ -565,7 +731,7 @@ export default function ActiveClaimScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Cancel claim"
-        onPress={() => navigation.goBack()}
+        onPress={handleCancel}
         style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
       >
         <Text style={styles.cancelText}>Cancel claim</Text>
