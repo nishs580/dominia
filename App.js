@@ -13,6 +13,7 @@ import ActiveClaimScreen from './screens/ActiveClaimScreen';
 import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
+import SessionMismatchScreen from './screens/SessionMismatchScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
 import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import WalletScreen from './screens/WalletScreen';
@@ -221,6 +222,7 @@ export default function App() {
           <Stack.Screen name="SignIn" component={SignInScreen} />
           <Stack.Screen name="Username" component={UsernameScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="SessionMismatch" component={SessionMismatchScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
           <Stack.Screen

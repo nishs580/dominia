@@ -1,11 +1,13 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 export default function AuthGate({ navigation }) {
   const { isSignedIn, isLoaded, userId, getToken } = useAuth();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [gateError, setGateError] = useState(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const showSpinner = !isLoaded || (isSignedIn && (!userId || checkingOnboarding));
 
@@ -45,9 +47,11 @@ export default function AuthGate({ navigation }) {
 
     async function runGate() {
       setCheckingOnboarding(true);
+      setGateError(null);
+
       const { data, error } = await supabase
         .from('players')
-        .select('has_onboarded')
+        .select('id, has_onboarded')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -56,15 +60,20 @@ export default function AuthGate({ navigation }) {
       setCheckingOnboarding(false);
 
       if (error) {
-        console.error('AuthGate has_onboarded check failed:', error);
-        navigation.replace('Onboarding');
+        console.error('AuthGate runGate failed:', error);
+        setGateError(error);
         return;
       }
 
-      if (data?.has_onboarded === true) {
+      if (!data) {
+        navigation.replace('SessionMismatch');
+        return;
+      }
+
+      if (data.has_onboarded === true) {
         navigation.replace('MainTabs');
       } else {
-        navigation.replace('Onboarding');
+        navigation.replace('Onboarding', { playerId: data.id });
       }
     }
 
@@ -73,11 +82,34 @@ export default function AuthGate({ navigation }) {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, userId, navigation]);
+  }, [isLoaded, isSignedIn, userId, navigation, retryNonce]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' }}>
-      {showSpinner ? <ActivityIndicator color="#FF6B35" /> : null}
+    <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+      {gateError ? (
+        <>
+          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, letterSpacing: 1.6, color: '#8B8F98', textTransform: 'uppercase', marginBottom: 12 }}>
+            Connection error
+          </Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#F2EEE6', textAlign: 'center', marginBottom: 24 }}>
+            Could not check your session. Please retry.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRetryNonce((n) => n + 1)}
+            style={({ pressed }) => [
+              { backgroundColor: '#D64525', paddingVertical: 14, paddingHorizontal: 32 },
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 14, letterSpacing: 2.4, color: '#F2EEE6', textTransform: 'uppercase' }}>
+              Retry
+            </Text>
+          </Pressable>
+        </>
+      ) : showSpinner ? (
+        <ActivityIndicator color="#FF6B35" />
+      ) : null}
     </View>
   );
 }

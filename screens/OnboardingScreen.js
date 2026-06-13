@@ -140,6 +140,8 @@ export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
   const { userId: clerkUserId, getToken } = useAuth();
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
+  const [resolveError, setResolveError] = useState(null);
+  const [resolveRetryNonce, setResolveRetryNonce] = useState(0);
   const [step, setStep] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
@@ -152,15 +154,30 @@ export default function OnboardingScreen({ route }) {
   useEffect(() => {
     if (resolvedPlayerId) return;
     if (!clerkUserId) return;
+    let cancelled = false;
+    setResolveError(null);
     supabase
       .from('players')
       .select('id')
       .eq('clerk_id', clerkUserId)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data?.id) setResolvedPlayerId(data.id);
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('OnboardingScreen resolvedPlayerId lookup failed:', error);
+          setResolveError(error);
+          return;
+        }
+        if (!data) {
+          setResolveError(new Error('NO_PLAYER_ROW'));
+          return;
+        }
+        setResolvedPlayerId(data.id);
       });
-  }, [clerkUserId, resolvedPlayerId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkUserId, resolvedPlayerId, resolveRetryNonce]);
 
   const taglineOpacity = useRef(new Animated.Value(0)).current;
   const bodyOpacity = useRef(new Animated.Value(0)).current;
@@ -434,19 +451,54 @@ export default function OnboardingScreen({ route }) {
             ) : null}
           </View>
           {!resolvedPlayerId ? (
-            <Text
-              style={{
-                fontFamily: 'GeistMono_400Regular',
-                fontSize: 9,
-                color: SLATE2,
-                textTransform: 'uppercase',
-                letterSpacing: 1.4,
-                textAlign: 'center',
-                marginTop: 8,
-              }}
-            >
-              Loading session...
-            </Text>
+            resolveError ? (
+              <View style={{ marginTop: 8, alignItems: 'center' }}>
+                <Text
+                  style={{
+                    fontFamily: 'GeistMono_400Regular',
+                    fontSize: 9,
+                    color: CLAIM,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.4,
+                    marginBottom: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  Could not load session
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setResolveRetryNonce((n) => n + 1)}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'GeistMono_500Medium',
+                      fontSize: 11,
+                      color: BONE,
+                      textTransform: 'uppercase',
+                      letterSpacing: 1.4,
+                      textDecorationLine: 'underline',
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontFamily: 'GeistMono_400Regular',
+                  fontSize: 9,
+                  color: SLATE2,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.4,
+                  textAlign: 'center',
+                  marginTop: 8,
+                }}
+              >
+                Loading session...
+              </Text>
+            )
           ) : null}
         </View>
       );
