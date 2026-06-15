@@ -12,6 +12,7 @@ import MapScreen from './screens/MapScreen';
 import ActiveClaimScreen from './screens/ActiveClaimScreen';
 import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
+import DefenderAcceptScreen from './screens/DefenderAcceptScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import SessionMismatchScreen from './screens/SessionMismatchScreen';
 import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
@@ -233,6 +234,7 @@ export default function App() {
           <Stack.Screen name="ActiveClaim" component={ActiveClaimScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="ClaimSuccessScreen" component={ClaimSuccessScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="ContestResultScreen" component={ContestResultScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
+          <Stack.Screen name="DefenderAccept" component={DefenderAcceptScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="AllianceJoined" component={AllianceJoinedScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />
           <Stack.Screen name="CreateAlliance" component={CreateAllianceScreen} options={{ headerShown: false }} />
           <Stack.Screen
