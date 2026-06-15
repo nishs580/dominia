@@ -361,6 +361,8 @@ export default function ActiveClaimScreen() {
     contestId,
     requiredWalkM: requiredWalkMParam,
     attackerAllianceId,
+    role = 'attacker',
+    attackerUsername,
   } = route?.params ?? {};
 
   const requiredWalkM = Math.max(0, Number(requiredWalkMParam) || 0);
@@ -373,7 +375,9 @@ export default function ActiveClaimScreen() {
   const navigatingRef = useRef(false);
   const [, forceRender] = useReducer((x) => x + 1, 0);
 
-  const opponentNameRef = useRef('opponent');
+  const opponentNameRef = useRef(
+    role === 'defender' ? (attackerUsername ?? 'opponent') : 'opponent',
+  );
   const territoryNameRef = useRef(territoryName);
   const territoryIdRef = useRef(territoryId);
   const playerIdRef = useRef(playerId);
@@ -490,7 +494,7 @@ export default function ActiveClaimScreen() {
       }
     })();
 
-    if (mode === 'contest' && territoryId) {
+    if (mode === 'contest' && territoryId && role === 'attacker') {
       supabase
         .from('territories')
         .select('players(username)')
@@ -504,7 +508,7 @@ export default function ActiveClaimScreen() {
     return () => {
       cancelled = true;
     };
-  }, [playerId, mode, territoryId, perimeterM, territoryName]);
+  }, [playerId, mode, territoryId, perimeterM, territoryName, role]);
 
   useEffect(() => {
     if (mode !== 'contest' || !contestId || !playerId || requiredWalkM <= 0) return;
@@ -514,14 +518,14 @@ export default function ActiveClaimScreen() {
       flushPartialContestWindow();
       navigation.replace('ContestResultScreen', {
         outcome: env.outcome,
-        role: 'attacker',
+        role,
         territoryName: territoryNameRef.current,
         territoryId: territoryIdRef.current,
         playerId: playerIdRef.current,
         opponentName: opponentNameRef.current,
         attackerAlliance: attackerAllianceIdRef.current ?? null,
-        myDistance: env.attacker_walked_m,
-        opponentDistance: 0,
+        myDistance: role === 'defender' ? env.defender_walked_m : env.attacker_walked_m,
+        opponentDistance: role === 'defender' ? env.attacker_walked_m : 0,
         resourcesAwarded: env.resources_awarded,
         xpGained: env.xp_awarded,
         balances: {
@@ -567,7 +571,7 @@ export default function ActiveClaimScreen() {
       flushPartialContestWindow();
       contestWalk.stop();
     };
-  }, [mode, contestId, playerId, requiredWalkM, navigation]);
+  }, [mode, contestId, playerId, requiredWalkM, navigation, role]);
 
   // ─── GPS watch via foreground service ──────────────────────────────────
   useEffect(() => {

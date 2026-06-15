@@ -189,9 +189,11 @@ export default function ContestResultScreen() {
       <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
         <Text style={styles.consequenceText}>{consequenceLine(cfg, myM, oppM, opponentName)}</Text>
       </View>
-      {stateKey === 'attack_won' ? (
+      {(stateKey === 'attack_won' || stateKey === 'defend_won') ? (
         <Text style={styles.earnedBeat}>
-          +{xpGained} SIEGE XP · +{resourcesAwarded.iron} IRON · +{resourcesAwarded.gold} GOLD · +{resourcesAwarded.morale} MORALE
+          {stateKey === 'defend_won'
+            ? `+${xpGained} SIEGE XP · +${resourcesAwarded.stone} STONE · +${resourcesAwarded.gold} GOLD · +${resourcesAwarded.morale} MORALE`
+            : `+${xpGained} SIEGE XP · +${resourcesAwarded.iron} IRON · +${resourcesAwarded.gold} GOLD · +${resourcesAwarded.morale} MORALE`}
         </Text>
       ) : null}
 

@@ -332,7 +332,6 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           contestId: env.contest_id,
           requiredWalkM: env.required_walk_m,
           attackerAllianceId: env.attacker_alliance_id,
-          ironBalanceAfter: env.iron_balance_after,
           playerId: myPlayer?.id,
         });
       } else {
