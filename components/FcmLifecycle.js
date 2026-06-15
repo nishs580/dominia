@@ -76,7 +76,7 @@ export default function FcmLifecycle() {
   useEffect(() => {
     const unsubscribe = onForegroundMessage((remoteMessage) => {
       const kind = remoteMessage?.data?.kind;
-      const route = routeForPush(kind);
+      const route = routeForPush(kind, remoteMessage?.data);
       const title = remoteMessage?.notification?.title || remoteMessage?.data?.title || '';
       const body = remoteMessage?.notification?.body || remoteMessage?.data?.body || '';
       const cardData = { ...(remoteMessage?.data || {}), title, body };
@@ -89,7 +89,7 @@ export default function FcmLifecycle() {
           text1: title,
           text2: body,
           position: 'top',
-          onPress: () => navigateTo(route.target),
+          onPress: () => navigateTo(route.target, route.params),
         });
       } else if (route.surface === SURFACES.BANNER_ROUTE) {
         // Banner component not yet built; interim is a longer toast with tap-route.
@@ -99,7 +99,7 @@ export default function FcmLifecycle() {
           text2: body,
           position: 'top',
           visibilityTime: 8000,
-          onPress: () => navigateTo(route.target),
+          onPress: () => navigateTo(route.target, route.params),
         });
       }
     });
@@ -110,8 +110,8 @@ export default function FcmLifecycle() {
   useEffect(() => {
     const unsubscribe = onBackgroundTap((remoteMessage) => {
       const kind = remoteMessage?.data?.kind;
-      const route = routeForPush(kind);
-      navigateTo(route.target);
+      const route = routeForPush(kind, remoteMessage?.data);
+      navigateTo(route.target, route.params);
     });
     return unsubscribe;
   }, []);
@@ -122,8 +122,8 @@ export default function FcmLifecycle() {
     getInitialPushPayload().then((remoteMessage) => {
       if (cancelled || !remoteMessage) return;
       const kind = remoteMessage?.data?.kind;
-      const route = routeForPush(kind);
-      navigateToAfterAuthGate(route.target); // navigateToAfterAuthGate defers until current route is MainTabs (race-safe vs AuthGate.replace)
+      const route = routeForPush(kind, remoteMessage?.data);
+      navigateToAfterAuthGate(route.target, route.params); // navigateToAfterAuthGate defers until current route is MainTabs (race-safe vs AuthGate.replace)
     });
     return () => { cancelled = true; };
   }, []);
