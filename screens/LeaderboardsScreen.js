@@ -18,27 +18,86 @@ import { useAuth } from '@clerk/clerk-expo';
 import { getLeaderboard } from '../lib/leaderboardApi';
 import { supabase } from '../lib/supabase';
 
-function primaryValueForRow(row, board, subject) {
-  if (board === 'power' && subject === 'players') return row.total_power;
-  if (board === 'power' && subject === 'alliances') return row.alliance_power;
-  if (board === 'territory') return row.territory_count;
-  if (board === 'battles') return row.battles;
-  return 0;
-}
-
-function PlaceholderRow({ row, board, subject }) {
-  const primaryValue = primaryValueForRow(row, board, subject) ?? 0;
-  const name = subject === 'players' ? row.username : row.alliance_name;
+function PowerRow({ row, subject, isSelfRow }) {
+  let title;
+  let subtitle;
+  let rightValue;
+  if (subject === 'players') {
+    title = row.username;
+    subtitle = `LVL ${row.level ?? '-'} · A ${row.activity_power.toLocaleString()} · T ${row.territory_power.toLocaleString()} · L ${row.legacy_power.toLocaleString()}`;
+    rightValue = row.total_power.toLocaleString();
+  } else {
+    title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
+    subtitle = `MBR ${row.member_count} · BASE ${row.base_power.toLocaleString()} · ${Math.round(row.participation_rate * 100)}% · ×${row.coordination_mult.toFixed(2)}`;
+    rightValue = row.alliance_power.toLocaleString();
+  }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
       <View style={styles.nameCell}>
-        <Text style={styles.nameText}>{name}</Text>
+        <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
+        <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
       </View>
-      <Text style={styles.valueText}>{primaryValue.toLocaleString()}</Text>
+      <Text style={styles.valueText}>{rightValue}</Text>
+    </View>
+  );
+}
+
+function TerritoryRow({ row, subject, isSelfRow }) {
+  let title;
+  let subtitle;
+  let rightValue;
+  if (subject === 'players') {
+    title = row.username;
+    subtitle = `LVL ${row.level ?? '-'}`;
+    rightValue = row.territory_count.toLocaleString();
+  } else {
+    title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
+    subtitle = `MBR ${row.member_count}`;
+    rightValue = row.territory_count.toLocaleString();
+  }
+
+  return (
+    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
+      <View style={styles.rankCell}>
+        <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
+      </View>
+      <View style={styles.nameCell}>
+        <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
+        <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
+      </View>
+      <Text style={styles.valueText}>{rightValue}</Text>
+    </View>
+  );
+}
+
+function BattlesRow({ row, subject, isSelfRow }) {
+  let title;
+  let subtitle;
+  let rightValue;
+  if (subject === 'players') {
+    title = row.username;
+    subtitle = `LVL ${row.level ?? '-'} · W ${row.wins.toLocaleString()} · L ${row.losses.toLocaleString()}`;
+    rightValue = row.battles.toLocaleString();
+  } else {
+    title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
+    subtitle = `MBR ${row.member_count} · W ${row.wins.toLocaleString()} · L ${row.losses.toLocaleString()}`;
+    rightValue = row.battles.toLocaleString();
+  }
+
+  return (
+    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
+      <View style={styles.rankCell}>
+        <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
+      </View>
+      <View style={styles.nameCell}>
+        <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
+        <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
+      </View>
+      <Text style={styles.valueText}>{rightValue}</Text>
     </View>
   );
 }
@@ -149,9 +208,19 @@ export default function LeaderboardsScreen() {
         keyExtractor={(item) =>
           subject === 'players' ? String(item.player_id) : String(item.alliance_id)
         }
-        renderItem={({ item }) => (
-          <PlaceholderRow row={item} board={board} subject={subject} />
-        )}
+        renderItem={({ item }) => {
+          const isSelfRow =
+            subject === 'players'
+              ? viewerPlayerId !== null && item.player_id === viewerPlayerId
+              : viewerAllianceId !== null && item.alliance_id === viewerAllianceId;
+          if (board === 'power') {
+            return <PowerRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+          }
+          if (board === 'territory') {
+            return <TerritoryRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+          }
+          return <BattlesRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -338,6 +407,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(242,238,230,0.08)',
   },
+  rowSelf: {
+    backgroundColor: 'rgba(214,69,37,0.14)',
+  },
   rankCell: {
     width: 32,
   },
@@ -354,6 +426,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     color: '#F2EEE6',
+  },
+  subtitleText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#8B8F98',
+    marginTop: 2,
   },
   valueText: {
     fontFamily: 'GeistMono_500Medium',
