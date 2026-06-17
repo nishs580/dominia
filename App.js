@@ -23,6 +23,7 @@ import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
 import ActivityLogScreen from './screens/ActivityLogScreen';
+import LeaderboardsScreen from './screens/LeaderboardsScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
@@ -226,6 +227,7 @@ export default function App() {
           <Stack.Screen name="SessionMismatch" component={SessionMismatchScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
+          <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
           <Stack.Screen
             name="WarRoom"
             component={WarRoomScreen}

@@ -24,6 +24,7 @@ import {
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
 import ActivityLogSideRail from '../components/ActivityLogSideRail';
+import LeaderboardsSideRail from '../components/LeaderboardsSideRail';
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
@@ -1120,6 +1121,7 @@ export default function MapScreen() {
         getTokenRef={getTokenRef}
         showTopBanner={showTopBanner}
       />
+      <LeaderboardsSideRail hidden={selected != null} />
       <ActivityLogSideRail hidden={selected != null} />
     </View>
   );
