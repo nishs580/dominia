@@ -106,6 +106,7 @@ export default function LeaderboardsScreen() {
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  const fetchSeqRef = useRef(0);
 
   const [board, setBoard] = useState('power');
   const [subject, setSubject] = useState('players');
@@ -136,12 +137,16 @@ export default function LeaderboardsScreen() {
   }, [userId]);
 
   const fetchLeaderboard = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
     setError(null);
     const result = await getLeaderboard({
       clerkGetToken: () => getTokenRef.current(),
       board,
       subject,
     });
+    if (seq !== fetchSeqRef.current) {
+      return;
+    }
     if (result.ok) {
       setRows(result.data.rows ?? []);
     } else {
@@ -151,6 +156,22 @@ export default function LeaderboardsScreen() {
     setLoading(false);
     setRefreshing(false);
   }, [board, subject]);
+
+  const onSelectBoard = (key) => {
+    if (key === board) return;
+    setRows([]);
+    setError(null);
+    setLoading(true);
+    setBoard(key);
+  };
+
+  const onSelectSubject = (key) => {
+    if (key === subject) return;
+    setRows([]);
+    setError(null);
+    setLoading(true);
+    setSubject(key);
+  };
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -253,7 +274,7 @@ export default function LeaderboardsScreen() {
             <Pressable
               key={key}
               accessibilityRole="button"
-              onPress={() => setBoard(key)}
+              onPress={() => onSelectBoard(key)}
               style={({ pressed }) => [styles.tabCell, pressed && { opacity: 0.7 }]}
             >
               <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{label}</Text>
@@ -276,7 +297,7 @@ export default function LeaderboardsScreen() {
             <Pressable
               key={key}
               accessibilityRole="button"
-              onPress={() => setSubject(key)}
+              onPress={() => onSelectSubject(key)}
               style={({ pressed }) => [styles.tabCell, pressed && { opacity: 0.7 }]}
             >
               <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{label}</Text>
