@@ -1,38 +1,61 @@
-// Screen: ChatScreen — City + Alliance chat (M1: read-only, no composer)
+// Screen: ChatScreen — City + Alliance chat (M2: composer + Ably + push deep link + error banner)
 // Surface: Ink #0E1014 background, rows transparent, 1px hairline-standard rgba(242,238,230,0.08) divider
-// Typography: section label Geist Mono 500 11px, body Inter 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
-// Territory colors: delegated to none — chat is neutral surface
-// Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen. Tab strip mirrors LeaderboardsScreen L14 pattern. Inverted FlatList for chat-app convention (newest at bottom) — no KeyboardAvoidingView so inverted insets are inert at M1.
+// Typography: section label Geist Mono 500 11px, body Inter 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Inter 400 13px on Claim/red or amber surface
+// Territory colors: delegated to none — chat is a neutral surface
+// Brand rule applied: Send button is the single Claim CTA on the screen. Inverted FlatList for chat-app convention (newest at bottom). KeyboardAvoidingView wraps composer with platform-appropriate behavior.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   getMessages,
   getRooms,
   patchReadState,
+  postMessage,
 } from '../lib/chatApi';
+import {
+  connectChatRealtime,
+  disconnectChatRealtime,
+  subscribeToChannel,
+} from '../lib/chatRealtime';
 import { timeAgo } from '../lib/timeAgo';
+
+const MAX_CONTENT_LENGTH = 500;
+const BANNER_AUTO_DISMISS_MS = 5000;
+
+function genClientTempId() {
+  return (
+    'tmp-' +
+    Date.now().toString(36) +
+    '-' +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
 
 export default function ChatScreen() {
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const navigation = useNavigation();
+  const route = useRoute();
+  const initialTab = route?.params?.initialTab === 'alliance' ? 'alliance' : 'city';
 
   const [rooms, setRooms] = useState([]);
   const [roomsLoaded, setRoomsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState('city');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [messagesByRoom, setMessagesByRoom] = useState({});
   const [nextCursorByRoom, setNextCursorByRoom] = useState({});
   const [endReachedByRoom, setEndReachedByRoom] = useState({});
@@ -40,6 +63,12 @@ export default function ChatScreen() {
   const [loadingMoreByRoom, setLoadingMoreByRoom] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Composer state
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [banner, setBanner] = useState(null); // { kind: 'muted'|'rate_limited'|'filtered'|'error', text }
+  const bannerTimerRef = useRef(null);
 
   const cityRoom = useMemo(
     () => rooms.find((r) => r.room_type === 'city') ?? null,
@@ -51,9 +80,18 @@ export default function ChatScreen() {
   );
   const activeRoom = activeTab === 'city' ? cityRoom : allianceRoom;
 
-  // For PATCHing read-state on blur, we need to know the newest visible message
-  // and the timestamp at which we observed it.
   const lastObservedByRoom = useRef({});
+
+  const showBanner = useCallback((kind, text) => {
+    setBanner({ kind, text });
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = setTimeout(() => setBanner(null), BANNER_AUTO_DISMISS_MS);
+  }, []);
+
+  const clearBanner = useCallback(() => {
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    setBanner(null);
+  }, []);
 
   const fetchRooms = useCallback(async () => {
     const result = await getRooms({
@@ -98,11 +136,7 @@ export default function ChatScreen() {
   const fetchNextPageForRoom = useCallback(
     async (roomId) => {
       const cursor = nextCursorByRoom[roomId];
-      if (
-        loadingMoreByRoom[roomId] ||
-        endReachedByRoom[roomId] ||
-        !cursor
-      ) {
+      if (loadingMoreByRoom[roomId] || endReachedByRoom[roomId] || !cursor) {
         return;
       }
       setLoadingMoreByRoom((prev) => ({ ...prev, [roomId]: true }));
@@ -143,19 +177,67 @@ export default function ChatScreen() {
     fetchRooms();
   }, [fetchRooms]);
 
-  // When the active room becomes known and we haven't loaded its first page yet, load it.
   useEffect(() => {
     if (!activeRoom) return;
     if (messagesByRoom[activeRoom.id] !== undefined) return;
     fetchFirstPageForRoom(activeRoom.id);
   }, [activeRoom, messagesByRoom, fetchFirstPageForRoom]);
 
-  // If solo player landed on alliance tab without an alliance, snap back to city.
   useEffect(() => {
     if (activeTab === 'alliance' && allianceRoom == null && roomsLoaded) {
       setActiveTab('city');
     }
   }, [activeTab, allianceRoom, roomsLoaded]);
+
+  // Ably realtime — connect when rooms known; subscribe per accessible room.
+  useEffect(() => {
+    if (!roomsLoaded || rooms.length === 0) return undefined;
+
+    let cancelled = false;
+    let unsubFns = [];
+    let realtimeHandle = null;
+
+    (async () => {
+      const result = await connectChatRealtime({
+        clerkGetToken: () => getTokenRef.current(),
+      });
+      if (cancelled) return;
+      if (!result.ok) {
+        console.warn('[ChatScreen] realtime connect failed', result.code);
+        return;
+      }
+      realtimeHandle = result.realtime;
+      for (const room of rooms) {
+        const channelName = `chat:${room.id}`;
+        const unsub = subscribeToChannel(
+          realtimeHandle,
+          channelName,
+          (payload) => {
+            // Dedupe: skip if id already in list (server echo of optimistic) or
+            // if there's a matching client_temp_id in messages.
+            setMessagesByRoom((prev) => {
+              const existing = prev[room.id] || [];
+              if (existing.some((m) => m.id === payload.id)) return prev;
+              const merged = [
+                payload,
+                ...existing.filter(
+                  (m) => m.client_temp_id !== payload.client_temp_id,
+                ),
+              ];
+              return { ...prev, [room.id]: merged };
+            });
+          },
+        );
+        unsubFns.push(unsub);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubFns.forEach((u) => u && u());
+      disconnectChatRealtime();
+    };
+  }, [roomsLoaded, rooms]);
 
   // PATCH read-state on blur per Q-S81-K.
   useEffect(() => {
@@ -173,6 +255,88 @@ export default function ChatScreen() {
     });
     return unsubscribe;
   }, [navigation]);
+
+  // Cleanup banner timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    if (!activeRoom) return;
+    const content = draft.trim();
+    if (content.length === 0) return;
+    if (sending) return;
+
+    const clientTempId = genClientTempId();
+    const optimisticMessage = {
+      id: clientTempId,
+      client_temp_id: clientTempId,
+      room_id: activeRoom.id,
+      sender_id: 'self',
+      sender_name: 'You',
+      sender_level: null,
+      sender_alliance_short_name: null,
+      content,
+      created_at: new Date().toISOString(),
+      _optimistic: true,
+    };
+
+    setMessagesByRoom((prev) => ({
+      ...prev,
+      [activeRoom.id]: [optimisticMessage, ...(prev[activeRoom.id] || [])],
+    }));
+    setDraft('');
+    setSending(true);
+    clearBanner();
+
+    const result = await postMessage({
+      clerkGetToken: () => getTokenRef.current(),
+      roomId: activeRoom.id,
+      content,
+    });
+
+    setSending(false);
+
+    if (result.ok) {
+      const serverMessage = result.data.message;
+      setMessagesByRoom((prev) => {
+        const list = prev[activeRoom.id] || [];
+        return {
+          ...prev,
+          [activeRoom.id]: list.map((m) =>
+            m.id === clientTempId
+              ? { ...serverMessage, client_temp_id: clientTempId }
+              : m,
+          ),
+        };
+      });
+    } else {
+      // Roll back optimistic and surface banner.
+      setMessagesByRoom((prev) => {
+        const list = prev[activeRoom.id] || [];
+        return {
+          ...prev,
+          [activeRoom.id]: list.filter((m) => m.id !== clientTempId),
+        };
+      });
+      setDraft(content); // restore so user can edit / retry
+      if (result.code === 'chat_muted') {
+        const until = result.context?.muted_until;
+        showBanner('muted', `Muted${until ? ` until ${timeAgo(until)}` : ''}.`);
+      } else if (result.code === 'rate_limited') {
+        const secs = result.context?.retry_after_seconds ?? 30;
+        showBanner('rate_limited', `Slow down — retry in ${secs}s.`);
+      } else if (result.code === 'message_filtered') {
+        showBanner('filtered', 'Message blocked by content rules.');
+      } else if (result.code === 'room_access_forbidden') {
+        showBanner('error', 'You no longer have access to this room.');
+      } else {
+        showBanner('error', 'Send failed. Try again.');
+      }
+    }
+  }, [activeRoom, draft, sending, clearBanner, showBanner]);
 
   const renderBody = () => {
     if (!roomsLoaded) {
@@ -267,8 +431,16 @@ export default function ChatScreen() {
     );
   };
 
+  const canCompose = activeRoom != null;
+  const remainingChars = MAX_CONTENT_LENGTH - draft.length;
+  const sendDisabled =
+    sending || draft.trim().length === 0 || draft.length > MAX_CONTENT_LENGTH;
+
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={styles.header}>
         <Text style={styles.sectionLabel}>CHAT</Text>
         <View style={styles.hairlineStrong} />
@@ -306,8 +478,51 @@ export default function ChatScreen() {
       </View>
       <View style={styles.hairline} />
 
-      {renderBody()}
-    </View>
+      <View style={{ flex: 1 }}>{renderBody()}</View>
+
+      {banner != null ? (
+        <View
+          style={[
+            styles.banner,
+            banner.kind === 'rate_limited'
+              ? styles.bannerAmber
+              : styles.bannerRed,
+          ]}
+        >
+          <Text style={styles.bannerText}>{banner.text}</Text>
+        </View>
+      ) : null}
+
+      {canCompose ? (
+        <View style={styles.composer}>
+          <TextInput
+            style={styles.composerInput}
+            placeholder="Message"
+            placeholderTextColor="#5C6068"
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            maxLength={MAX_CONTENT_LENGTH}
+            editable={!sending}
+          />
+          <View style={styles.composerSideCol}>
+            <Text style={styles.counterText}>{remainingChars}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleSend}
+              disabled={sendDisabled}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                sendDisabled && { opacity: 0.4 },
+                pressed && !sendDisabled && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={styles.sendBtnText}>SEND</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -317,7 +532,7 @@ function ChatMessageRow({ row }) {
       ? `${row.sender_name} · ${row.sender_alliance_short_name}`
       : row.sender_name;
   return (
-    <View style={styles.messageRow}>
+    <View style={[styles.messageRow, row._optimistic && styles.messageRowPending]}>
       <View style={styles.messageMetaRow}>
         <Text style={styles.senderText} numberOfLines={1}>
           {senderLine}
@@ -426,6 +641,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(242,238,230,0.08)',
   },
+  messageRowPending: {
+    opacity: 0.55,
+  },
   messageMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -451,5 +669,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F2EEE6',
     lineHeight: 20,
+  },
+  banner: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  bannerRed: {
+    backgroundColor: 'rgba(214,69,37,0.85)',
+  },
+  bannerAmber: {
+    backgroundColor: 'rgba(212,160,40,0.85)',
+  },
+  bannerText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: '#F2EEE6',
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: '#1A1D24',
+  },
+  composerInput: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 96,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#F2EEE6',
+    backgroundColor: '#0E1014',
+    borderWidth: 1,
+    borderColor: 'rgba(242,238,230,0.16)',
+    borderRadius: 0,
+  },
+  composerSideCol: {
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  counterText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: '#5C6068',
+    marginBottom: 4,
+  },
+  sendBtn: {
+    backgroundColor: '#D64525',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minWidth: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.76,
+    textTransform: 'uppercase',
+    color: '#F2EEE6',
   },
 });

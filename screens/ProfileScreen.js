@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { clearFcmToken } from '../lib/fcm';
+import { patchAllianceChatPushEnabled } from '../lib/chatApi';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
 import {
@@ -68,6 +69,51 @@ function SettingsRow({ label }) {
   );
 }
 
+function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
+  const [enabled, setEnabled] = useState(
+    playerRow?.alliance_chat_push_enabled !== false,
+  );
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (playerRow != null) {
+      setEnabled(playerRow.alliance_chat_push_enabled !== false);
+    }
+  }, [playerRow]);
+
+  const onPress = async () => {
+    if (pending) return;
+    const next = !enabled;
+    setEnabled(next);
+    setPending(true);
+    const result = await patchAllianceChatPushEnabled({
+      clerkGetToken,
+      enabled: next,
+    });
+    if (!result.ok) {
+      setEnabled(!next);
+    }
+    setPending(false);
+  };
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [
+      styles.settingsRow,
+      pressed && { opacity: 0.7 },
+    ]}>
+      <Text style={styles.settingsLabel}>Alliance chat push</Text>
+      <Text
+        style={[
+          styles.settingsLabel,
+          { color: enabled ? '#F2EEE6' : '#5C6068' },
+        ]}
+      >
+        {enabled ? 'ON' : 'OFF'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const today = useMemo(() => new Date(), []);
@@ -103,7 +149,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins')
+        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, alliance_chat_push_enabled')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -453,6 +499,11 @@ export default function ProfileScreen() {
           <View style={[styles.card, { marginTop: 32 }]}>
             <SectionDivider label="SETTINGS" />
             <View style={styles.settingsList}>
+              <AllianceChatPushToggleRow
+                playerRow={playerRow}
+                clerkGetToken={getToken}
+              />
+              <View style={styles.listDivider} />
               <SettingsRow label="Notification settings" />
               <View style={styles.listDivider} />
               <Pressable
