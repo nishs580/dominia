@@ -25,6 +25,7 @@ import {
 } from '../components/ResourceGlyphs';
 import ActivityLogSideRail from '../components/ActivityLogSideRail';
 import LeaderboardsSideRail from '../components/LeaderboardsSideRail';
+import ChatSideRail from '../components/ChatSideRail';
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
@@ -1121,6 +1122,7 @@ export default function MapScreen() {
         getTokenRef={getTokenRef}
         showTopBanner={showTopBanner}
       />
+      <ChatSideRail hidden={selected != null} />
       <LeaderboardsSideRail hidden={selected != null} />
       <ActivityLogSideRail hidden={selected != null} />
     </View>

@@ -24,6 +24,7 @@ import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
 import ActivityLogScreen from './screens/ActivityLogScreen';
 import LeaderboardsScreen from './screens/LeaderboardsScreen';
+import ChatScreen from './screens/ChatScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
@@ -228,6 +229,7 @@ export default function App() {
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen
             name="WarRoom"
             component={WarRoomScreen}
