@@ -13,7 +13,9 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
+import { donateMorale } from '../lib/allianceApi';
 import { spacing } from '../lib/theme';
 import {
   IronGlyph,
@@ -75,6 +77,7 @@ function SectionDivider({ label }) {
 
 export default function WalletScreen({ route }) {
   const navigation = useNavigation();
+  const { getToken } = useAuth();
   const { playerId = null, username = '' } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
@@ -145,16 +148,12 @@ export default function WalletScreen({ route }) {
           onPress: async () => {
             setDonating(true);
             setDonateError(null);
-            const { error } = await supabase.rpc('donate_morale', {
-              player_id: playerId,
-              alliance_id: allianceId,
-              amount: parsed,
-            });
+            const res = await donateMorale({ clerkGetToken: getToken, allianceId, amount: parsed });
             setDonating(false);
-            if (error) {
+            if (!res.ok) {
               setDonateError('Donation failed. Try again.');
             } else {
-              setWallet(prev => ({ ...prev, morale: prev.morale - parsed }));
+              setWallet(prev => ({ ...prev, morale: res.data.player_morale }));
               setCustomAmount('');
               setDonateModalVisible(false);
             }

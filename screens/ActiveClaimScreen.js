@@ -275,7 +275,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         calTickDiag = { accuracyM, speedKmh, windowMs, stepsInWindow, gpsDistM: gpsDist, candidateStride, qualifies, rejectReason };
         if (windowMs >= 30000) {
           if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
-            const result = await pushCalibrationSample(claimState.playerId, gpsDist, stepsInWindow, calibrationSamples);
+            const result = await pushCalibrationSample(() => getTokenRef.current(), gpsDist, stepsInWindow);
             if (result) {
               calibrationSamples = result.samples;
               currentStrideM = result.strideM;

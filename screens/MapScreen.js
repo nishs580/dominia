@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { startClaim } from '../lib/claimApi';
 import { startContest } from '../lib/contestWalkApi';
+import { abandonTerritory } from '../lib/territoryApi';
 import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
@@ -498,13 +499,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     text: 'Abandon',
                     style: 'destructive',
                     onPress: async () => {
-                      const { error } = await supabase
-                        .from('territories')
-                        .update({ owner_id: null, alliance_id: null })
-                        .eq('id', territory.id)
-                        .select();
-                      if (error) {
-                        console.error('Abandon territory failed:', error);
+                      const res = await abandonTerritory({
+                        clerkGetToken: () => getTokenRef.current(),
+                        territoryId: territory.id,
+                      });
+                      if (!res.ok) {
+                        console.error('Abandon territory failed:', res.status, res.error);
                         return;
                       }
                       onClose();

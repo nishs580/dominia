@@ -6,6 +6,7 @@ import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { setHomePin as saveHomePin } from '../lib/homePinApi';
+import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
@@ -582,8 +583,8 @@ export default function OnboardingScreen({ route }) {
       }
       setFinishingOnboarding(true);
       try {
-        const { error } = await supabase.from('players').update({ has_onboarded: true }).eq('id', resolvedPlayerId);
-        if (error) throw error;
+        const res = await patchMe({ clerkGetToken: getToken, fields: { has_onboarded: true } });
+        if (!res.ok) throw new Error('update_failed');
         navigation.replace('MainTabs');
       } catch (err) {
         console.error('Onboarding finish failed:', err);

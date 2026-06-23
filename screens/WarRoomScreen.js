@@ -10,9 +10,11 @@ import {
   StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '@clerk/clerk-expo';
 import { MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { supabase } from '../lib/supabase';
+import { spendAllianceMorale } from '../lib/allianceApi';
 import { calcDailyInfluence } from '../lib/formulas';
 
 const normaliseTier = t =>
@@ -74,6 +76,7 @@ function parseMoraleCost(costStr) {
 
 export default function WarRoomScreen({ route }) {
   const navigation = useNavigation();
+  const { getToken } = useAuth();
   const {
     allianceId = null,
     allianceName = 'Alliance',
@@ -161,14 +164,11 @@ export default function WarRoomScreen({ route }) {
           text: 'Activate',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await supabase.rpc('deduct_alliance_morale', {
-              alliance_id: allianceId,
-              amount: costAmount,
-            });
-            if (error) {
+            const res = await spendAllianceMorale({ clerkGetToken: getToken, allianceId, amount: costAmount });
+            if (!res.ok) {
               Alert.alert('Failed', 'Could not activate ability. Try again.');
             } else {
-              setWarChestMorale(prev => prev - costAmount);
+              setWarChestMorale(res.data.alliance_morale);
             }
           },
         },

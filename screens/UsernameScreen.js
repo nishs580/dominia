@@ -3,10 +3,12 @@ import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/ge
 import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '@clerk/clerk-expo';
+import { patchMe } from '../lib/meApi';
 
 export default function UsernameScreen({ navigation, route }) {
   const playerId = route.params?.playerId;
+  const { getToken } = useAuth();
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,11 +36,8 @@ export default function UsernameScreen({ navigation, route }) {
     setLoading(true);
     setError('');
     try {
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ username: username.trim() })
-        .eq('id', playerId);
-      if (updateError) throw updateError;
+      const res = await patchMe({ clerkGetToken: getToken, fields: { username: username.trim() } });
+      if (!res.ok) throw new Error('update_failed');
       navigation.replace('Onboarding', { playerId });
     } catch (err) {
       setError('Username already taken. Try another.');
