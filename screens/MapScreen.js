@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -23,9 +23,7 @@ import {
   GoldGlyph,
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
-import ActivityLogSideRail from '../components/ActivityLogSideRail';
-import LeaderboardsSideRail from '../components/LeaderboardsSideRail';
-import ChatSideRail from '../components/ChatSideRail';
+import MapSideRail from '../components/MapSideRail';
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
@@ -682,9 +680,16 @@ export default function MapScreen() {
   // Bounded to ~3000 entries — when exceeded, evict features outside last viewport.
   const featureCacheRef = useRef(new Map());
   const previousAllianceIdRef = useRef(undefined);
+  // Latest viewport requested while a fetch was in flight — fired once it settles
+  // (trailing edge) so the area the player lands on always loads.
+  const pendingFetchRef = useRef(null);
+  // Always points at the latest fetchTerritoriesForViewport so settle() can re-invoke it.
+  const fetchRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
+  const [isFetchingTerritories, setIsFetchingTerritories] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
   const [myAllianceName, setMyAllianceName] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
   const [topBannerMessage, setTopBannerMessage] = useState(null);
@@ -728,27 +733,6 @@ export default function MapScreen() {
     }
     setMyPlayer(prev => (prev ? { ...prev, ...data } : prev));
   }, [resourcePlayerId]);
-
-  const signedArea = (ring) => {
-    let s = 0;
-    for (let i = 0; i < ring.length - 1; i++) {
-      s += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
-    }
-    return s;
-  };
-
-  const ensureCCWOuterRing = (geom) => {
-    if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]) return geom;
-    const outer = geom.coordinates[0];
-    if (signedArea(outer) > 0) {
-      // Clockwise — reverse to make it CCW
-      return {
-        ...geom,
-        coordinates: [outer.slice().reverse(), ...geom.coordinates.slice(1)],
-      };
-    }
-    return geom;
-  };
 
   const fetchPlayer = useCallback(async () => {
     const { data: playerRow } = await supabase
@@ -795,15 +779,36 @@ export default function MapScreen() {
       abortControllerRef.current = null;
     }
 
-    // If a recent fetch is still in flight, do not start a new one — let it finish.
+    // If a recent fetch is still in flight, don't start a new one — but remember
+    // this viewport so settle() can fetch it once the in-flight request finishes.
+    // Without this, a quick pan/zoom could leave the area the player lands on blank.
     if (abortControllerRef.current) {
-      console.log('[vp fetch] SKIP (recent in-flight, age', inFlightAge, 'ms)');
+      console.log('[vp fetch] DEFER (recent in-flight, age', inFlightAge, 'ms)');
+      pendingFetchRef.current = { bounds, zoom };
       return;
     }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
     abortControllerStartRef.current = now;
+    setIsFetchingTerritories(true);
+
+    // Clears this fetch's controller and either fires the deferred viewport
+    // (trailing edge) or, if nothing is queued and nothing else is loading,
+    // ends the loading state. Guarded so a superseded fetch never clobbers a
+    // newer in-flight controller's ref or loading state.
+    const settle = () => {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      const pending = pendingFetchRef.current;
+      if (pending) {
+        pendingFetchRef.current = null;
+        fetchRef.current?.(pending.bounds, pending.zoom);
+      } else if (!abortControllerRef.current) {
+        setIsFetchingTerritories(false);
+      }
+    };
 
     let data;
     let error;
@@ -822,10 +827,11 @@ export default function MapScreen() {
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === '20' || err?.code === 20) {
         console.log('[vp fetch] ABORTED (caught in catch)');
-        abortControllerRef.current = null;
+        settle();
         return;
       }
       console.log('[vp fetch] THREW', err?.message);
+      settle();
       throw err;
     }
 
@@ -835,13 +841,13 @@ export default function MapScreen() {
       error?.code === 20
     ) {
       console.log('[vp fetch] ABORTED (returned as error)');
-      abortControllerRef.current = null;
+      settle();
       return;
     }
 
     if (error) {
       console.log('[vp fetch] ERROR', error.message);
-      abortControllerRef.current = null;
+      settle();
       return;
     }
     const rows = data ?? [];
@@ -855,6 +861,7 @@ export default function MapScreen() {
         type: 'Feature',
         id: t.id,
         properties: {
+          id: t.id,
           name: t.territory_name,
           owner: t.owner_username ?? 'Unclaimed',
           alliance: t.alliance_short_name ?? null,
@@ -867,7 +874,8 @@ export default function MapScreen() {
             (myPlayer?.alliance_id && t.alliance_id === myPlayer.alliance_id) ? '#3F8F4E' :
             t.owner_id != null ? '#4A6B8A' : 'transparent',
         },
-        geometry: t.geojson ? ensureCCWOuterRing(t.geojson) : {
+        // Winding order already normalised server-side via ST_ForcePolygonCCW.
+        geometry: t.geojson ?? {
           type: 'Polygon',
           coordinates: [[
             [t.longitude - 0.003, t.latitude + 0.002],
@@ -900,12 +908,28 @@ export default function MapScreen() {
     }
 
     console.log('[vp fetch] OK', { newRows: rows.length, cacheSize: cache.size });
-    abortControllerRef.current = null;
     setTerritories({
       type: 'FeatureCollection',
       features: Array.from(cache.values()),
     });
+    settle();
   }, [userId, myPlayer?.alliance_id]);
+
+  // Keep fetchRef pointing at the latest fetch so settle() can re-invoke it
+  // for the deferred (trailing-edge) viewport.
+  useEffect(() => {
+    fetchRef.current = fetchTerritoriesForViewport;
+  }, [fetchTerritoriesForViewport]);
+
+  // Delay showing the loading indicator by 250ms so quick fetches don't flicker.
+  useEffect(() => {
+    if (!isFetchingTerritories) {
+      setShowLoading(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setShowLoading(true), 250);
+    return () => clearTimeout(t);
+  }, [isFetchingTerritories]);
 
   useEffect(() => {
     fetchPlayer();
@@ -1035,6 +1059,59 @@ export default function MapScreen() {
     [],
   );
 
+  const selectedId = selected?.feature?.id ?? null;
+
+  // Matches only the currently selected territory; a sentinel that no real
+  // territory id can equal keeps the highlight layers empty when nothing is tapped.
+  const highlightFilter = useMemo(
+    () => ['==', ['get', 'id'], selectedId == null ? '__none__' : selectedId],
+    [selectedId],
+  );
+
+  // Brighten the selected territory's fill so it stands out from neighbours.
+  // Unclaimed (transparent) territories get a faint bone wash instead.
+  const selectedFillStyle = useMemo(
+    () => ({
+      fillColor: [
+        'case',
+        ['==', ['get', 'color'], 'transparent'], '#F2EEE6',
+        ['get', 'color'],
+      ],
+      fillOpacity: [
+        'case',
+        ['==', ['get', 'color'], 'transparent'], 0.12,
+        0.68,
+      ],
+      fillEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Soft bone halo rendered under the crisp outline for a glow / pop-out effect.
+  // Tuned for the dark `night` basemap — wider and more opaque so the glow reads
+  // clearly against the dark ground (it was washing out on the old light style).
+  const selectedGlowStyle = useMemo(
+    () => ({
+      lineColor: '#F2EEE6',
+      lineWidth: 9,
+      lineOpacity: 0.4,
+      lineBlur: 6,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Crisp bright outline on top of the glow.
+  const selectedLineStyle = useMemo(
+    () => ({
+      lineColor: '#FFFFFF',
+      lineWidth: 3,
+      lineOpacity: 1,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
   const recenter = () => {
     if (!cameraRef.current) return;
     const centerCoordinate = lastUserCoord ?? AMSTERDAM_CENTER;
@@ -1073,12 +1150,25 @@ export default function MapScreen() {
           <Text style={styles.topBannerText}>{topBannerMessage}</Text>
         </View>
       ) : null}
+      {showLoading && !topBannerMessage ? (
+        <View pointerEvents="none" style={styles.loadingWrap}>
+          <View style={styles.loadingPill}>
+            <ActivityIndicator size="small" color="#F2EEE6" />
+            <Text style={styles.loadingText}>Loading territories</Text>
+          </View>
+        </View>
+      ) : null}
       <MapboxGL.MapView
         ref={mapRef}
         style={styles.map}
-        styleURL="mapbox://styles/mapbox/light-v11"
+        styleURL="mapbox://styles/mapbox/standard"
         onCameraChanged={onCameraChanged}
       >
+        <MapboxGL.StyleImport
+          id="basemap"
+          existing
+          config={{ lightPreset: 'night' }}
+        />
         <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
 
         <MapboxGL.UserLocation
@@ -1101,6 +1191,9 @@ export default function MapScreen() {
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
           <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
+          <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
+          <MapboxGL.LineLayer id="territories-selected-glow" filter={highlightFilter} style={selectedGlowStyle} />
+          <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
           <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
         </MapboxGL.ShapeSource>
       </MapboxGL.MapView>
@@ -1122,9 +1215,7 @@ export default function MapScreen() {
         getTokenRef={getTokenRef}
         showTopBanner={showTopBanner}
       />
-      <ChatSideRail hidden={selected != null} />
-      <LeaderboardsSideRail hidden={selected != null} />
-      <ActivityLogSideRail hidden={selected != null} />
+      <MapSideRail hidden={selected != null} />
     </View>
   );
 }
@@ -1158,6 +1249,32 @@ const styles = StyleSheet.create({
     color: BONE,
     letterSpacing: 0.5,
     textAlign: 'center',
+  },
+
+  loadingWrap: {
+    position: 'absolute',
+    top: (StatusBar.currentHeight ?? 0) + 48,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 90,
+  },
+  loadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  loadingText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: BONE,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
 
   resourceBanner: {

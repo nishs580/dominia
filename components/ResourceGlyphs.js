@@ -100,6 +100,113 @@ export function MoraleGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, stroke
   );
 }
 
+export function ChatGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Path
+        d="M2.5 3 H15.5 V11.5 H7.5 L4.5 14.5 V11.5 H2.5 Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <Line x1="5" y1="6" x2="13" y2="6" stroke={color} strokeWidth={1.2} />
+      <Line x1="5" y1="8.5" x2="11" y2="8.5" stroke={color} strokeWidth={1.2} />
+    </Svg>
+  );
+}
+
+export function BoardsGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Rect x="2.5" y="9.5" width="3.2" height="5" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Rect x="7.4" y="3.5" width="3.2" height="11" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Rect x="12.3" y="6.5" width="3.2" height="8" stroke={color} strokeWidth={strokeWidth} fill="none" />
+    </Svg>
+  );
+}
+
+export function LogGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Rect x="2.5" y="4" width="2.5" height="2.5" fill={color} />
+      <Line x1="6.75" y1="5.25" x2="15.5" y2="5.25" stroke={color} strokeWidth={strokeWidth} />
+      <Rect x="2.5" y="8" width="2.5" height="2.5" fill={color} />
+      <Line x1="6.75" y1="9.25" x2="15.5" y2="9.25" stroke={color} strokeWidth={strokeWidth} />
+      <Rect x="2.5" y="12" width="2.5" height="2.5" fill={color} />
+      <Line x1="6.75" y1="13.25" x2="13" y2="13.25" stroke={color} strokeWidth={strokeWidth} />
+    </Svg>
+  );
+}
+
+export function MapGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Path
+        d="M2 5 L7 3.5 L12 5 L16 3.5 L16 13 L12 14.5 L7 13 L2 14.5 Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinejoin="round"
+      />
+      <Line x1="7" y1="3.5" x2="7" y2="13" stroke={color} strokeWidth={strokeWidth} />
+      <Line x1="12" y1="5" x2="12" y2="14.5" stroke={color} strokeWidth={strokeWidth} />
+    </Svg>
+  );
+}
+
+export function ActivityGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Polyline
+        points="2,9 5.5,9 7.5,4.5 10.5,13.5 12.5,9 16,9"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function AllianceGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Circle cx="6.5" cy="6" r="2.3" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Circle cx="11.5" cy="6" r="2.3" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Path
+        d="M2.5 15 C2.5 11.2 4.3 10 6.5 10 C8.7 10 10.5 11.2 10.5 15"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M7.5 15 C7.5 11.2 9.3 10 11.5 10 C13.7 10 15.5 11.2 15.5 15"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function ProfileGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Circle cx="9" cy="6" r="2.9" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Path
+        d="M3.5 15.5 C3.5 10.8 6 9.5 9 9.5 C12 9.5 14.5 10.8 14.5 15.5"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 export function InfluenceGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 18 18">

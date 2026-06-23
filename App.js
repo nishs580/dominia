@@ -30,6 +30,13 @@ import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
 import StreakBreakLifecycle from './components/StreakBreakLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  MapGlyph,
+  ActivityGlyph,
+  AllianceGlyph,
+  ProfileGlyph,
+} from './components/ResourceGlyphs';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
 import { useFonts } from 'expo-font';
@@ -64,7 +71,28 @@ function PlaceholderScreen({ label }) {
   );
 }
 
+function makeTabOptions(label, Icon) {
+  return {
+    tabBarIcon: ({ color }) => <Icon size={20} color={color} />,
+    tabBarLabel: ({ focused, color }) => (
+      <Text
+        style={{
+          fontFamily: focused ? 'GeistMono_500Medium' : 'GeistMono_400Regular',
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: 1.4,
+          includeFontPadding: false,
+          color,
+        }}
+      >
+        {label}
+      </Text>
+    ),
+  };
+}
+
 const TabNavigator = () => {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -73,117 +101,19 @@ const TabNavigator = () => {
           borderTopWidth: 1,
           borderTopColor: 'rgba(242,238,230,0.16)',
           elevation: 0,
+          height: 62 + insets.bottom,
+          paddingTop: 10,
+          paddingBottom: insets.bottom + 10,
         },
         tabBarActiveTintColor: '#F2EEE6',
         tabBarInactiveTintColor: '#5C6068',
-        tabBarShowIcon: false,
-        tabBarLabelStyle: {
-          fontFamily: 'GeistMono_400Regular',
-          fontSize: 10,
-          textTransform: 'uppercase',
-          letterSpacing: 1.4,
-          includeFontPadding: false,
-          marginTop: -14,
-        },
         headerShown: false,
       }}
     >
-      <Tab.Screen
-        name="Map"
-        options={{
-          tabBarLabel: ({ focused, color }) => (
-            <Text
-              style={{
-                fontFamily: focused
-                  ? 'GeistMono_500Medium'
-                  : 'GeistMono_400Regular',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: 1.4,
-                includeFontPadding: false,
-                marginTop: -14,
-                color,
-              }}
-            >
-              MAP
-            </Text>
-          ),
-          tabBarIcon: () => null,
-        }}
-        component={MapScreen}
-      />
-      <Tab.Screen
-        name="Activity"
-        options={{
-          tabBarLabel: ({ focused, color }) => (
-            <Text
-              style={{
-                fontFamily: focused
-                  ? 'GeistMono_500Medium'
-                  : 'GeistMono_400Regular',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: 1.4,
-                includeFontPadding: false,
-                marginTop: -14,
-                color,
-              }}
-            >
-              ACTIVITY
-            </Text>
-          ),
-          tabBarIcon: () => null,
-        }}
-        component={ActivityScreen}
-      />
-      <Tab.Screen
-        name="Alliance"
-        options={{
-          tabBarLabel: ({ focused, color }) => (
-            <Text
-              style={{
-                fontFamily: focused
-                  ? 'GeistMono_500Medium'
-                  : 'GeistMono_400Regular',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: 1.4,
-                includeFontPadding: false,
-                marginTop: -14,
-                color,
-              }}
-            >
-              ALLIANCE
-            </Text>
-          ),
-          tabBarIcon: () => null,
-        }}
-        component={AllianceScreen}
-      />
-      <Tab.Screen
-        name="Profile"
-        options={{
-          tabBarLabel: ({ focused, color }) => (
-            <Text
-              style={{
-                fontFamily: focused
-                  ? 'GeistMono_500Medium'
-                  : 'GeistMono_400Regular',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: 1.4,
-                includeFontPadding: false,
-                marginTop: -14,
-                color,
-              }}
-            >
-              PROFILE
-            </Text>
-          ),
-          tabBarIcon: () => null,
-        }}
-        component={ProfileScreen}
-      />
+      <Tab.Screen name="Map" options={makeTabOptions('MAP', MapGlyph)} component={MapScreen} />
+      <Tab.Screen name="Activity" options={makeTabOptions('ACTIVITY', ActivityGlyph)} component={ActivityScreen} />
+      <Tab.Screen name="Alliance" options={makeTabOptions('ALLIANCE', AllianceGlyph)} component={AllianceScreen} />
+      <Tab.Screen name="Profile" options={makeTabOptions('PROFILE', ProfileGlyph)} component={ProfileScreen} />
     </Tab.Navigator>
   );
 };
