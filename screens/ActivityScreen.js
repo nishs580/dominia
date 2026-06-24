@@ -12,6 +12,8 @@ import {
 import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
 import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
+import { fetchActivityBests } from '../lib/activityBestsApi';
+import { loadPlayerStride } from '../lib/claim';
 import { showCard } from '../lib/notifications/cardController';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
 import { STEPS_READ_PERM, hasForegroundStepsRead } from '../lib/healthConnect';
@@ -49,6 +51,14 @@ function startOfLocalDay(d = new Date()) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
+}
+
+function fmtKm(meters) {
+  return `${((Number(meters) || 0) / 1000).toFixed(1)} km`;
+}
+
+function fmtMin(minutes) {
+  return `${Math.max(0, Math.round(Number(minutes) || 0))} min`;
 }
 
 function localDayKey(date) {
@@ -199,6 +209,14 @@ export default function ActivityScreen() {
   const [challengesLoaded, setChallengesLoaded] = useState(false);
   const [permRequesting, setPermRequesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState(0);
+  const [strideM, setStrideM] = useState(0.75);
+  // Daily Achievements: today's totals + all-time best single-day totals,
+  // aggregated server-side from accepted activity_samples. Distance today is
+  // shown from on-device steps × stride (live); everything else comes from here.
+  const [bests, setBests] = useState({
+    today: { distance_m: 0, active_minutes: 0 },
+    best: { distance_m: 0, active_minutes: 0 },
+  });
   const [weeklySteps, setWeeklySteps] = useState([
     { day: 'Mon', steps: 0 },
     { day: 'Tue', steps: 0 },
@@ -389,6 +407,10 @@ export default function ActivityScreen() {
       // Authoritative success — clear any prior block for this challenge.
       blockedKeysRef.current.delete(ch.key);
 
+      // Completion forced a full-day flush, so today's distance/active-minutes
+      // moved server-side — refresh the achievements panel (fire-and-forget).
+      loadBests();
+
       // Sync UI to authoritative backend state.
       const d = result.data;
       setPlayerXp(d.total_xp);
@@ -510,17 +532,38 @@ export default function ActivityScreen() {
     }
   }, [hcReady, hasStepsPerm]);
 
+  // Load stride once per player so distance-today can be shown live from steps.
+  useEffect(() => {
+    if (!playerId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { strideM: m } = await loadPlayerStride(playerId);
+        if (!cancelled && Number.isFinite(m) && m > 0) setStrideM(m);
+      } catch (e) {
+        console.warn('[activity] loadPlayerStride failed:', e?.message ?? e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [playerId]);
+
+  const loadBests = useCallback(async () => {
+    const result = await fetchActivityBests({ clerkGetToken: getToken });
+    if (result.ok) setBests(result.data);
+  }, [getToken]);
+
   useFocusEffect(
     useCallback(() => {
       if (!hcReady || !hasStepsPerm) return;
       readTodaySteps();
       readWeeklySteps();
+      loadBests();
       pollRef.current = setInterval(readTodaySteps, 10000);
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps]),
+    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps, loadBests]),
   );
 
   async function handleRequestStepsPerm() {
@@ -698,24 +741,16 @@ export default function ActivityScreen() {
 
           <View style={styles.achievementsRow}>
             <Text style={styles.achievementsLabel}>DISTANCE</Text>
-            <Text style={styles.achievementsToday}>6.2 km</Text>
-            <Text style={styles.achievementsBest}>12.4 km</Text>
-          </View>
-
-          <View style={styles.achievementsDivider} />
-
-          <View style={styles.achievementsRow}>
-            <Text style={styles.achievementsLabel}>CALORIES BURNT</Text>
-            <Text style={styles.achievementsToday}>340 kcal</Text>
-            <Text style={styles.achievementsBest}>820 kcal</Text>
+            <Text style={styles.achievementsToday}>{fmtKm(liveSteps * strideM)}</Text>
+            <Text style={styles.achievementsBest}>{fmtKm(bests.best.distance_m)}</Text>
           </View>
 
           <View style={styles.achievementsDivider} />
 
           <View style={styles.achievementsRow}>
             <Text style={styles.achievementsLabel}>ACTIVE MINUTES</Text>
-            <Text style={styles.achievementsToday}>47 min</Text>
-            <Text style={styles.achievementsBest}>94 min</Text>
+            <Text style={styles.achievementsToday}>{fmtMin(bests.today.active_minutes)}</Text>
+            <Text style={styles.achievementsBest}>{fmtMin(bests.best.active_minutes)}</Text>
           </View>
         </View>
 
