@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '@clerk/clerk-expo';
-import { supabase } from '../lib/supabase';
+import { bootstrapPlayer } from '../lib/meApi';
 import * as producer from '../lib/activity';
 
 export default function ActivitySyncLifecycle() {
@@ -24,19 +24,18 @@ export default function ActivitySyncLifecycle() {
       return;
     }
     (async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, has_onboarded')
-        .eq('clerk_id', userId)
-        .maybeSingle();
+      // Gate on the authoritative backend (idempotent /me/bootstrap) rather than
+      // a direct Supabase read, which can fail under the RLS lockdown and would
+      // silently disable activity sync for a legitimate onboarded player.
+      const res = await bootstrapPlayer({ clerkGetToken: () => getTokenRef.current() });
       if (cancelled) return;
-      if (error || !data?.id) {
+      if (!res.ok || !res.data?.player?.id) {
         setPlayerId(null);
         setHasOnboarded(false);
         return;
       }
-      setPlayerId(data.id);
-      setHasOnboarded(data.has_onboarded === true);
+      setPlayerId(res.data.player.id);
+      setHasOnboarded(res.data.player.has_onboarded === true);
     })();
     return () => {
       cancelled = true;
