@@ -19,6 +19,7 @@ import AllianceJoinedScreen from './screens/AllianceJoinedScreen';
 import CreateAllianceScreen from './screens/CreateAllianceScreen';
 import WalletScreen from './screens/WalletScreen';
 import HealthConnectDebugScreen from './screens/HealthConnectDebugScreen';
+import WelcomeScreen from './screens/WelcomeScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
@@ -152,6 +153,7 @@ export default function App() {
       <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AuthGate" component={AuthGate} />
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
           <Stack.Screen name="Username" component={UsernameScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />

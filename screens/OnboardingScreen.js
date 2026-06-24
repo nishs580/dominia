@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
-import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox/maps';
+import { MapView, Camera, MarkerView, setAccessToken } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { setHomePin as saveHomePin } from '../lib/homePinApi';
 import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
+import { logDebug } from '../lib/debug';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -21,6 +22,14 @@ const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 
+// Onboarding is account-bound setup only — the value pitch (intro + how-it-works)
+// now lives in the pre-auth WelcomeScreen. Three steps: permissions, home pin,
+// payoff.
+const TOTAL_STEPS = 3;
+const STEP_PERMISSIONS = 0;
+const STEP_HOME_PIN = 1;
+const STEP_PAYOFF = 2;
+
 function coordsFromMapPress(payload) {
   if (!payload) return null;
   const fromGeometry = payload.geometry?.coordinates ?? payload?.features?.[0]?.geometry?.coordinates;
@@ -33,7 +42,7 @@ function coordsFromMapPress(payload) {
 function ProgressBar({ step }) {
   return (
     <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'center', marginBottom: 12 }}>
-      {Array.from({ length: 5 }).map((_, idx) => (
+      {Array.from({ length: TOTAL_STEPS }).map((_, idx) => (
         <View
           key={idx}
           style={{
@@ -143,14 +152,17 @@ export default function OnboardingScreen({ route }) {
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
   const [resolveError, setResolveError] = useState(null);
   const [resolveRetryNonce, setResolveRetryNonce] = useState(0);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(STEP_PERMISSIONS);
   const [requesting, setRequesting] = useState(false);
+  const [locationDenied, setLocationDenied] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
   const [homePin, setHomePin] = useState(null);
+  const [mapCenter, setMapCenter] = useState([4.9041, 52.3676]);
+  const [mapZoom, setMapZoom] = useState(12);
   const [username, setUsername] = useState('');
-  const [displayedTagline, setDisplayedTagline] = useState('');
-  const [displayedBody, setDisplayedBody] = useState('');
+  const [resolvedCity, setResolvedCity] = useState(null);
+  const [unclaimedNearby, setUnclaimedNearby] = useState(0);
 
   useEffect(() => {
     if (resolvedPlayerId) return;
@@ -180,60 +192,8 @@ export default function OnboardingScreen({ route }) {
     };
   }, [clerkUserId, resolvedPlayerId, resolveRetryNonce]);
 
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const bodyOpacity = useRef(new Animated.Value(0)).current;
-  const buttonTranslateY = useRef(new Animated.Value(60)).current;
-  const buttonOpacity = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    if (step !== 0) return;
-    const fullTagline = 'Walk · Claim · Conquer · Defend';
-    setDisplayedTagline('');
-    setDisplayedBody('');
-    taglineOpacity.setValue(1);
-    bodyOpacity.setValue(0);
-    buttonOpacity.setValue(0);
-    buttonTranslateY.setValue(60);
-
-    let index = 0;
-    const interval = setInterval(() => {
-      index += 1;
-      setDisplayedTagline(fullTagline.slice(0, index));
-      if (index >= fullTagline.length) {
-        clearInterval(interval);
-        setTimeout(() => {
-          const fullBody = 'Your city is the game board.';
-          let bodyIndex = 0;
-          const bodyInterval = setInterval(() => {
-            bodyIndex += 1;
-            setDisplayedBody(fullBody.slice(0, bodyIndex));
-            if (bodyIndex >= fullBody.length) {
-              clearInterval(bodyInterval);
-              Animated.parallel([
-                Animated.timing(buttonTranslateY, {
-                  toValue: 0,
-                  duration: 280,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }),
-                Animated.timing(buttonOpacity, {
-                  toValue: 1,
-                  duration: 280,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }
-          }, 55);
-        }, 200);
-      }
-    }, 55);
-
-    return () => clearInterval(interval);
-  }, [step]);
-
-  useEffect(() => {
-    if (step !== 4 || !resolvedPlayerId) return;
+    if (step !== STEP_PAYOFF || !resolvedPlayerId) return;
     supabase
       .from('players')
       .select('username')
@@ -244,74 +204,45 @@ export default function OnboardingScreen({ route }) {
       });
   }, [step, resolvedPlayerId]);
 
+  // On reaching the home-pin step, center the map on the device's actual
+  // location (permission was requested on the previous step) and pre-drop the
+  // pin there so the player only has to confirm or nudge — not hunt across a
+  // city-level map that used to open hardcoded on Amsterdam. Falls back to the
+  // default center silently if location is unavailable or denied.
+  useEffect(() => {
+    if (step !== STEP_HOME_PIN) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (cancelled) return;
+        const coord = [pos.coords.longitude, pos.coords.latitude];
+        setMapCenter(coord);
+        setMapZoom(14);
+        setHomePin((prev) => prev ?? coord);
+      } catch (err) {
+        if (__DEV__) console.log('Onboarding location center failed:', err?.message ?? err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
+
+  // Funnel instrumentation: one event per step the player reaches, so drop-off
+  // within the setup flow is measurable. Depends on `step` only to avoid a
+  // duplicate emit when the player id resolves a beat later.
+  useEffect(() => {
+    logDebug(resolvedPlayerId, 'onboarding_step_viewed', { step });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const content = useMemo(() => {
-    if (step === 0) {
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
-            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
-              DOMINIA
-            </Text>
-            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: CLAIM, marginLeft: 4, marginBottom: 6 }}>
-              ▪
-            </Text>
-          </View>
-          <Animated.View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
-            <Text
-              style={{
-                fontFamily: 'GeistMono_400Regular',
-                fontSize: 9,
-                letterSpacing: 1.6,
-                color: SLATE2,
-                textTransform: 'uppercase',
-                flexShrink: 0,
-              }}
-            >
-              {displayedTagline}
-            </Text>
-            <View style={{ flex: 1, height: 0.5, backgroundColor: HAIRLINE_STRONG }} />
-          </Animated.View>
-          <View>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{displayedBody}</Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (step === 1) {
-      return (
-        <View style={{ width: '100%' }}>
-          <SectionLabel label="HOW IT WORKS" />
-          <Text
-            style={{
-              fontFamily: 'Archivo_900Black',
-              fontSize: 24,
-              color: BONE,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              marginBottom: 22,
-              lineHeight: 30,
-              textAlign: 'left',
-            }}
-          >
-            WALK TO OWN THE CITY
-          </Text>
-          <NumberedRow
-            num="01"
-            title="Claim territories"
-            subtitle="Walk a territory's perimeter distance — from anywhere — to own it."
-          />
-          <NumberedRow
-            num="02"
-            title="Contest and defend"
-            subtitle="Attack enemy ground. Hold your own when it comes under fire."
-          />
-          <NumberedRow num="03" title="Join an alliance" subtitle="Coordinate with 19 others to hold your city." last />
-        </View>
-      );
-    }
-
-    if (step === 2) {
+    if (step === STEP_PERMISSIONS) {
       return (
         <View style={{ width: '100%', flex: 1, justifyContent: 'center' }}>
           <SectionLabel label="BEFORE WE START" />
@@ -361,7 +292,7 @@ export default function OnboardingScreen({ route }) {
       );
     }
 
-    if (step === 3) {
+    if (step === STEP_HOME_PIN) {
       return (
         <View style={{ width: '100%', flex: 1 }}>
           <SectionLabel label="SET YOUR BASE" />
@@ -400,7 +331,7 @@ export default function OnboardingScreen({ route }) {
                 if (c) setHomePin(c);
               }}
             >
-              <Camera zoomLevel={12} centerCoordinate={[4.9041, 52.3676]} />
+              <Camera zoomLevel={mapZoom} centerCoordinate={mapCenter} />
               {homePin ? (
                 <MarkerView coordinate={homePin} anchor={{ x: 0.5, y: 1 }}>
                   <View style={{ alignItems: 'center' }}>
@@ -511,9 +442,6 @@ export default function OnboardingScreen({ route }) {
           <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
             Commander
           </Text>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE, textTransform: 'uppercase', letterSpacing: 1.4 }}>
-            #0004
-          </Text>
         </View>
         <Text
           style={{
@@ -528,29 +456,52 @@ export default function OnboardingScreen({ route }) {
           {username || 'COMMANDER'}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>Amsterdam is yours to take.</Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
-          Three territories nearby are unclaimed.
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>
+          {resolvedCity || 'Your city'} is yours to take.
         </Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>Claim them on your next walk.</Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
+          {unclaimedNearby > 0
+            ? `${unclaimedNearby} ${unclaimedNearby === 1 ? 'territory' : 'territories'} nearby ${unclaimedNearby === 1 ? 'is' : 'are'} unclaimed.`
+            : 'Unclaimed ground is waiting nearby.'}
+        </Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>
+          {unclaimedNearby > 1 ? 'Claim them on your next walk.' : 'Claim it on your next walk.'}
+        </Text>
       </View>
     );
-  }, [step, homePin, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody]);
+  }, [step, homePin, mapCenter, mapZoom, resolvedCity, unclaimedNearby, resolvedPlayerId, resolveError, username]);
 
   const onNext = async () => {
-    if (step === 2) {
+    if (step === STEP_PERMISSIONS) {
       if (requesting) return;
       setRequesting(true);
       try {
-        await Promise.allSettled([Location.requestForegroundPermissionsAsync(), Pedometer.requestPermissionsAsync()]);
+        const [locRes, pedRes] = await Promise.allSettled([
+          Location.requestForegroundPermissionsAsync(),
+          Pedometer.requestPermissionsAsync(),
+        ]);
+        const locationGranted = locRes.status === 'fulfilled' && locRes.value?.status === 'granted';
+        const pedometerGranted = pedRes.status === 'fulfilled' && pedRes.value?.status === 'granted';
+        logDebug(resolvedPlayerId, 'onboarding_permissions_result', {
+          location: locationGranted,
+          pedometer: pedometerGranted,
+        });
+        // Location is the hard requirement (map + walk tracking). If it's denied,
+        // don't silently push on into a degraded home-pin step — surface a
+        // recovery path. The step counter can still be granted later.
+        if (!locationGranted) {
+          setLocationDenied(true);
+          return;
+        }
+        setLocationDenied(false);
+        setStep(STEP_HOME_PIN);
       } finally {
         setRequesting(false);
-        setStep(3);
       }
       return;
     }
 
-    if (step === 3) {
+    if (step === STEP_HOME_PIN) {
       if (!homePin || savingPin) return;
       if (!resolvedPlayerId) {
         Alert.alert('Session error', 'Player ID missing. Please restart the app.');
@@ -568,14 +519,32 @@ export default function OnboardingScreen({ route }) {
           Alert.alert('Could not save', result.error || 'Please check your connection and try again.');
           return;
         }
-        setStep(4);
+        // The backend resolves the pin to a live city; null means the pin isn't
+        // in (or near) any realm with territories. Block here rather than drop
+        // the player into an empty map with nothing to claim.
+        if (!result.data?.home_city) {
+          logDebug(resolvedPlayerId, 'onboarding_home_pin_rejected', { reason: 'city_not_live' });
+          Alert.alert(
+            'Not live here yet',
+            'Dominia hasn’t launched in your area. Drop your pin inside a live city to play, or check back soon.',
+          );
+          return;
+        }
+        const nearby = Number(result.data.unclaimed_nearby ?? 0);
+        setResolvedCity(result.data.home_city);
+        setUnclaimedNearby(nearby);
+        logDebug(resolvedPlayerId, 'onboarding_home_pin_set', {
+          home_city: result.data.home_city,
+          unclaimed_nearby: nearby,
+        });
+        setStep(STEP_PAYOFF);
       } finally {
         setSavingPin(false);
       }
       return;
     }
 
-    if (step === 4) {
+    if (step === STEP_PAYOFF) {
       if (finishingOnboarding) return;
       if (!resolvedPlayerId) {
         Alert.alert('Session error', 'Player ID missing. Please restart the app.');
@@ -585,6 +554,7 @@ export default function OnboardingScreen({ route }) {
       try {
         const res = await patchMe({ clerkGetToken: getToken, fields: { has_onboarded: true } });
         if (!res.ok) throw new Error('update_failed');
+        logDebug(resolvedPlayerId, 'onboarding_completed', {});
         navigation.replace('MainTabs');
       } catch (err) {
         console.error('Onboarding finish failed:', err);
@@ -592,18 +562,15 @@ export default function OnboardingScreen({ route }) {
       } finally {
         setFinishingOnboarding(false);
       }
-      return;
     }
-
-    setStep((s) => s + 1);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 }}>
-      <View style={{ flex: 1, justifyContent: step === 0 || step === 1 || step === 2 ? 'center' : 'flex-start' }}>{content}</View>
+      <View style={{ flex: 1 }}>{content}</View>
       <View style={{ gap: 10 }}>
-        {step >= 1 && step <= 3 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => setStep((s) => s - 1)}>
+        {step === STEP_HOME_PIN ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => setStep(STEP_PERMISSIONS)}>
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
@@ -619,26 +586,38 @@ export default function OnboardingScreen({ route }) {
           </Pressable>
         ) : null}
         <ProgressBar step={step} />
-        {step === 0 ? (
-          <Animated.View style={{ opacity: buttonOpacity, transform: [{ translateY: buttonTranslateY }] }}>
-            <PrimaryButton stepLabel="Step 1 of 5" actionLabel="Begin →" onPress={onNext} disabled={false} />
-          </Animated.View>
+        {step === STEP_PERMISSIONS && locationDenied ? (
+          <View style={{ marginBottom: 4 }}>
+            <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: CLAIM, textTransform: 'uppercase', letterSpacing: 1.6, textAlign: 'center', marginBottom: 8 }}>
+              Location is required to play
+            </Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: SLATE2, textAlign: 'center', lineHeight: 19, marginBottom: 10 }}>
+              Dominia needs location to show the map and count your walks. Enable it in Settings, then try again.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => Linking.openSettings()}>
+              <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 11, color: BONE, textTransform: 'uppercase', letterSpacing: 1.4, textAlign: 'center', textDecorationLine: 'underline' }}>
+                Open settings
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
-        {step === 1 ? (
-          <PrimaryButton stepLabel="Step 2 of 5" actionLabel="Continue →" onPress={onNext} disabled={false} />
-        ) : null}
-        {step === 2 ? (
-          <PrimaryButton stepLabel="Step 3 of 5" actionLabel="Grant access →" onPress={onNext} disabled={requesting} />
-        ) : null}
-        {step === 3 ? (
+        {step === STEP_PERMISSIONS ? (
           <PrimaryButton
-            stepLabel="Step 4 of 5"
+            stepLabel="Step 1 of 3"
+            actionLabel={locationDenied ? 'Try again →' : 'Grant access →'}
+            onPress={onNext}
+            disabled={requesting}
+          />
+        ) : null}
+        {step === STEP_HOME_PIN ? (
+          <PrimaryButton
+            stepLabel="Step 2 of 3"
             actionLabel="Confirm pin →"
             onPress={onNext}
             disabled={!homePin || savingPin || !resolvedPlayerId}
           />
         ) : null}
-        {step === 4 ? (
+        {step === STEP_PAYOFF ? (
           <PrimaryButton stepLabel="Last step" actionLabel="Enter the map →" onPress={onNext} disabled={finishingOnboarding} />
         ) : null}
       </View>

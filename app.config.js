@@ -3,6 +3,7 @@ module.exports = {
     name: 'dominia',
     slug: 'dominia',
     version: '1.0.0',
+    scheme: 'dominia',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',

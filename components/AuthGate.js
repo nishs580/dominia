@@ -1,21 +1,35 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { bootstrapPlayer } from '../lib/meApi';
+import { logDebug } from '../lib/debug';
 
 export default function AuthGate({ navigation }) {
   const { isSignedIn, isLoaded, userId, getToken } = useAuth();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [gateError, setGateError] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [slowConnect, setSlowConnect] = useState(false);
 
   const showSpinner = !isLoaded || (isSignedIn && (!userId || checkingOnboarding));
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      navigation.replace('SignIn');
+      navigation.replace('Welcome');
     }
   }, [isLoaded, isSignedIn]);
+
+  // The first authenticated request hits the backend's bootstrap, which can be
+  // a Railway cold start (several seconds). After a short wait, reassure the
+  // player the app isn't stuck rather than leaving a bare spinner.
+  useEffect(() => {
+    if (!showSpinner) {
+      setSlowConnect(false);
+      return;
+    }
+    const t = setTimeout(() => setSlowConnect(true), 4000);
+    return () => clearTimeout(t);
+  }, [showSpinner]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -37,7 +51,7 @@ export default function AuthGate({ navigation }) {
 
     if (!isSignedIn) {
       setCheckingOnboarding(false);
-      navigation.replace('SignIn');
+      navigation.replace('Welcome');
       return;
     }
 
@@ -49,31 +63,41 @@ export default function AuthGate({ navigation }) {
       setCheckingOnboarding(true);
       setGateError(null);
 
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, has_onboarded')
-        .eq('clerk_id', userId)
-        .maybeSingle();
+      // Gate on the backend bootstrap rather than a direct Supabase read.
+      // /me/bootstrap is idempotent: it creates the player row if missing and
+      // returns the existing one otherwise, so a freshly-signed-up user can
+      // never fall into the "account not found" dead-end on the new-signup race
+      // (and it stays correct under the RLS lockdown, which removes client reads).
+      const res = await bootstrapPlayer({ clerkGetToken: getToken });
 
       if (cancelled) return;
 
       setCheckingOnboarding(false);
 
-      if (error) {
-        console.error('AuthGate runGate failed:', error);
-        setGateError(error);
+      if (!res.ok) {
+        console.error('AuthGate bootstrap failed:', res.status, res.error);
+        setGateError(res.error || 'bootstrap_failed');
         return;
       }
 
-      if (!data) {
-        navigation.replace('SessionMismatch');
+      const { player, needsUsername } = res.data;
+
+      const destination = needsUsername
+        ? 'username'
+        : player?.has_onboarded === true
+          ? 'maintabs'
+          : 'onboarding';
+      logDebug(player?.id, 'onboarding_gate_resolved', { destination, needsUsername });
+
+      if (needsUsername) {
+        navigation.replace('Username', { playerId: player?.id });
         return;
       }
 
-      if (data.has_onboarded === true) {
+      if (player?.has_onboarded === true) {
         navigation.replace('MainTabs');
       } else {
-        navigation.replace('Onboarding', { playerId: data.id });
+        navigation.replace('Onboarding', { playerId: player?.id });
       }
     }
 
@@ -82,7 +106,7 @@ export default function AuthGate({ navigation }) {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, userId, navigation, retryNonce]);
+  }, [isLoaded, isSignedIn, userId, navigation, retryNonce, getToken]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
@@ -108,7 +132,14 @@ export default function AuthGate({ navigation }) {
           </Pressable>
         </>
       ) : showSpinner ? (
-        <ActivityIndicator color="#FF6B35" />
+        <>
+          <ActivityIndicator color="#FF6B35" />
+          {slowConnect ? (
+            <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: '#8B8F98', textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 16, textAlign: 'center' }}>
+              Waking the server…
+            </Text>
+          ) : null}
+        </>
       ) : null}
     </View>
   );
