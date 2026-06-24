@@ -1,10 +1,13 @@
 import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
 import { Inter_400Regular } from '@expo-google-fonts/inter';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { patchMe } from '../lib/meApi';
+import { patchMe, checkUsernameAvailable } from '../lib/meApi';
+import { logDebug } from '../lib/debug';
+
+const USERNAME_RE = /^[a-zA-Z0-9._]+$/;
 
 export default function UsernameScreen({ navigation, route }) {
   const playerId = route.params?.playerId;
@@ -12,39 +15,81 @@ export default function UsernameScreen({ navigation, route }) {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [availability, setAvailability] = useState('idle'); // idle | invalid | checking | available | taken
+  const checkSeq = useRef(0);
 
   const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, Inter_400Regular });
+
+  // Debounced live availability check: validate format locally for instant
+  // feedback, then ask the backend whether the name is free (the client can't
+  // read `players` directly under RLS). A monotonic seq guards against a slow
+  // earlier response landing after a newer keystroke.
+  useEffect(() => {
+    const value = username.trim();
+    setError('');
+    if (value.length === 0) {
+      setAvailability('idle');
+      return;
+    }
+    if (value.length < 2 || value.length > 20 || !USERNAME_RE.test(value)) {
+      setAvailability('invalid');
+      return;
+    }
+    setAvailability('checking');
+    const seq = ++checkSeq.current;
+    const timer = setTimeout(async () => {
+      const res = await checkUsernameAvailable({ clerkGetToken: getToken, username: value });
+      if (seq !== checkSeq.current) return; // a newer keystroke superseded this
+      if (res.ok) {
+        setAvailability(res.data?.available ? 'available' : 'taken');
+      } else if (res.status === 400) {
+        setAvailability('invalid');
+      } else {
+        // Network/unknown — don't hard-block; the submit path validates too.
+        setAvailability('idle');
+      }
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [username, getToken]);
+
   if (!fontsLoaded) return null;
 
+  const canSubmit = availability === 'available' && !loading;
+
   const handleConfirm = async () => {
-    if (!username.trim()) {
-      setError('Please enter a username.');
-      return;
-    }
-    if (username.length < 2) {
-      setError('Username must be at least 2 characters.');
-      return;
-    }
-    if (username.length > 20) {
-      setError('Username must be 20 characters or less.');
-      return;
-    }
-    if (!/^[a-zA-Z0-9._]+$/.test(username)) {
-      setError('Only letters, numbers, dots and underscores allowed.');
-      return;
-    }
+    if (!canSubmit) return;
     setLoading(true);
     setError('');
     try {
-      const res = await patchMe({ clerkGetToken: getToken, fields: { username: username.trim() } });
-      if (!res.ok) throw new Error('update_failed');
+      const res = await patchMe({ clerkGetToken: getToken, fields: { username: username.trim().toUpperCase() } });
+      if (!res.ok) {
+        if (res.status === 409 || res.status === 400) {
+          setAvailability('taken');
+          setError('That name was just taken. Try another.');
+        } else {
+          setError('Couldn’t save. Check your connection and try again.');
+        }
+        return;
+      }
+      logDebug(playerId, 'onboarding_username_set', {});
       navigation.replace('Onboarding', { playerId });
     } catch (err) {
-      setError('Username already taken. Try another.');
+      setError('Couldn’t save. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  const statusText =
+    availability === 'checking' ? 'Checking…'
+    : availability === 'available' ? 'Available'
+    : availability === 'taken' ? 'Taken — try another.'
+    : availability === 'invalid' ? 'Use 2–20 letters, numbers, dots or underscores.'
+    : '';
+  const statusColor =
+    availability === 'available' ? '#5FA45A'
+    : availability === 'checking' ? '#8B8F98'
+    : '#D64525';
 
   return (
     <KeyboardAvoidingView
@@ -59,19 +104,24 @@ export default function UsernameScreen({ navigation, route }) {
           style={styles.input}
           placeholder="Commander name"
           placeholderTextColor="#5C6068"
-          autoCapitalize="none"
+          autoCapitalize="characters"
+          autoCorrect={false}
           value={username}
-          onChangeText={setUsername}
+          onChangeText={(t) => setUsername(t.toUpperCase())}
           maxLength={20}
         />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : statusText ? (
+          <Text style={[styles.error, { color: statusColor }]}>{statusText}</Text>
+        ) : null}
       </View>
 
       <View style={styles.buttonContainer}>
         <Pressable
           onPress={handleConfirm}
-          disabled={loading || username.trim().length < 2}
+          disabled={!canSubmit}
           style={({ pressed }) => [
             {
               backgroundColor: '#D64525',
@@ -79,8 +129,8 @@ export default function UsernameScreen({ navigation, route }) {
               width: '100%',
               alignItems: 'center',
             },
-            (loading || username.trim().length < 2) && { opacity: 0.5 },
-            pressed && username.trim().length >= 2 && !loading && { opacity: 0.9 },
+            !canSubmit && { opacity: 0.5 },
+            pressed && canSubmit && { opacity: 0.9 },
           ]}
         >
           <Text
