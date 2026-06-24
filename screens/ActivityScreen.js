@@ -210,6 +210,13 @@ export default function ActivityScreen() {
   ]);
   const pollRef = useRef(null);
   const inFlightTiersRef = useRef(new Set());
+  // Challenges the backend has rejected this session because its accepted
+  // daily_steps total is still under threshold (a deterministic 403). Maps
+  // ch.key -> the liveSteps reading when it was rejected, so the auto-complete
+  // effect won't re-attempt until the player has actually walked further.
+  // Without this, the effect re-fires on every completedKeys/isCompleting
+  // toggle and floods the backend with identical, doomed requests.
+  const blockedKeysRef = useRef(new Map());
 
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -362,6 +369,13 @@ export default function ActivityScreen() {
       if (!result.ok) {
         // Revert optimistic UI.
         console.log('[onCompleteChallenge] backend failed', result.status, result.error);
+        // A 403 here is the under-threshold gate: the backend's accepted
+        // daily_steps total is below this tier's target even after we flushed.
+        // It's deterministic, so block auto-retries until liveSteps grows —
+        // otherwise the auto-complete effect spins on it forever.
+        if (result.status === 403) {
+          blockedKeysRef.current.set(ch.key, liveSteps);
+        }
         setCompletedKeys((prev) => {
           const next = new Set(prev);
           next.delete(ch.key);
@@ -371,6 +385,9 @@ export default function ActivityScreen() {
         setPlayerLevel(prevLevel);
         return;
       }
+
+      // Authoritative success — clear any prior block for this challenge.
+      blockedKeysRef.current.delete(ch.key);
 
       // Sync UI to authoritative backend state.
       const d = result.data;
@@ -530,6 +547,13 @@ export default function ActivityScreen() {
         if (completedKeys.has(ch.key)) continue;
         if (inFlightTiersRef.current.has(ch.key)) continue;
         if (isCompleting.has(ch.key)) continue;
+        // Skip a challenge the backend already rejected as under-threshold
+        // until the player has walked further than when it was rejected. Each
+        // time liveSteps grows we allow one more attempt (re-blocking at the
+        // higher count if it 403s again), so retries track real progress
+        // instead of hammering a doomed request.
+        const blockedAt = blockedKeysRef.current.get(ch.key);
+        if (blockedAt != null && liveSteps <= blockedAt) continue;
         inFlightTiersRef.current.add(ch.key);
         try {
           await onCompleteChallenge(ch);
