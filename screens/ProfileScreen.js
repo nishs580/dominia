@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
-import { useAuth } from '@clerk/clerk-expo';
+import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useAuth, useUser } from '@clerk/clerk-expo';
+import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
+import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
+import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
 import {
   calcLevel,
@@ -118,8 +121,10 @@ export default function ProfileScreen() {
   const navigation = useNavigation();
   const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
+  const { user } = useUser();
 
   const [loading, setLoading] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [playerRow, setPlayerRow] = useState(null);
   const [ownedTerritories, setOwnedTerritories] = useState([]);
   const [profileError, setProfileError] = useState(null);
@@ -149,7 +154,7 @@ export default function ProfileScreen() {
 
       const { data: player, error: playerError } = await supabase
         .from('players')
-        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, alliance_chat_push_enabled')
+        .select('id, username, level, xp, alliance_id, current_streak, longest_streak, iron, stone, gold, morale, lifetime_contest_wins, lifetime_defence_wins, alliance_chat_push_enabled, avatar_url')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -287,6 +292,72 @@ export default function ProfileScreen() {
     return 'You have reached the top.';
   }, [next?.title]);
 
+  const avatarUrl = playerRow?.avatar_url ?? null;
+  const avatarInitials =
+    playerName && playerName !== '—' ? playerName.slice(0, 2).toUpperCase() : '??';
+
+  const onChangeAvatar = async () => {
+    if (uploadingAvatar) return;
+    if (!user) {
+      Alert.alert('Hang on', 'Your account is still loading. Try again in a moment.');
+      return;
+    }
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Photo access needed',
+          'Allow photo access in Settings to set a profile picture.',
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (result.canceled) return;
+
+      const asset = result.assets?.[0];
+      if (!asset?.base64) {
+        Alert.alert('Upload failed', 'Could not read the selected image.');
+        return;
+      }
+
+      setUploadingAvatar(true);
+      const mime = asset.mimeType ?? 'image/jpeg';
+      const file = `data:${mime};base64,${asset.base64}`;
+
+      // Upload to Clerk's CDN, then cache the resulting URL into our DB so
+      // other players can see it in chat without a Clerk lookup per row.
+      await user.setProfileImage({ file });
+      await user.reload();
+      const newUrl = user.imageUrl ?? null;
+
+      const res = await patchMe({
+        clerkGetToken: getToken,
+        fields: { avatar_url: newUrl },
+      });
+      if (!res.ok) {
+        console.warn('[Profile] avatar patchMe failed:', res.status, res.error);
+        Alert.alert(
+          'Almost there',
+          'Your picture uploaded but did not sync to the game. Reopen Profile to retry.',
+        );
+      }
+
+      setPlayerRow((prev) => (prev ? { ...prev, avatar_url: newUrl } : prev));
+    } catch (err) {
+      console.warn('[Profile] avatar update failed:', err?.message ?? err);
+      Alert.alert('Upload failed', 'Something went wrong setting your picture. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       {!loading && playerRow ? (
@@ -295,17 +366,42 @@ export default function ProfileScreen() {
           onLongPress={() => navigation.navigate('HealthConnectDebug')}
           delayLongPress={1000}
         >
-          <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
-          <Text style={styles.commanderName}>{playerName}</Text>
-          <Text style={styles.rankLine}>
-            <Text style={styles.rankTitle}>{rankBadge}</Text>
-            <Text style={styles.rankSeparator}> · </Text>
-            {allianceName ? (
-              <Text style={styles.rankAllianceClaim}>{allianceName}</Text>
-            ) : (
-              <Text style={styles.rankAlliance}>UNAFFILIATED</Text>
-            )}
-          </Text>
+          <View style={styles.headerTopRow}>
+            <Pressable
+              onPress={onChangeAvatar}
+              style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile picture"
+            >
+              {avatarUrl ? (
+                <Image source={{ uri: avatarThumb(avatarUrl, 72) }} style={styles.avatarImage} />
+              ) : (
+                <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitials}>{avatarInitials}</Text>
+                </View>
+              )}
+              <View style={styles.avatarEditBadge}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color={BONE} />
+                ) : (
+                  <Text style={styles.avatarEditBadgeText}>{avatarUrl ? 'EDIT' : 'ADD'}</Text>
+                )}
+              </View>
+            </Pressable>
+            <View style={styles.headerTextCol}>
+              <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
+              <Text style={styles.commanderName}>{playerName}</Text>
+              <Text style={styles.rankLine}>
+                <Text style={styles.rankTitle}>{rankBadge}</Text>
+                <Text style={styles.rankSeparator}> · </Text>
+                {allianceName ? (
+                  <Text style={styles.rankAllianceClaim}>{allianceName}</Text>
+                ) : (
+                  <Text style={styles.rankAlliance}>UNAFFILIATED</Text>
+                )}
+              </Text>
+            </View>
+          </View>
           <View style={styles.hairlineStrong} />
         </Pressable>
       ) : null}
@@ -607,6 +703,55 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight ?? 0) + 12,
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  headerTextCol: {
+    flex: 1,
+  },
+  avatarWrap: {
+    width: 72,
+    height: 72,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK2,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 24,
+    color: SLATE2,
+    letterSpacing: -0.01,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    left: -1,
+    right: -1,
+    bottom: -1,
+    minHeight: 16,
+    paddingVertical: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(14,16,20,0.82)',
+    borderWidth: 1,
+    borderColor: CLAIM,
+  },
+  avatarEditBadgeText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 8,
+    letterSpacing: 1.4,
+    color: CLAIM,
   },
   commanderLabel: {
     fontFamily: 'GeistMono_400Regular',

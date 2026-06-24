@@ -53,6 +53,12 @@ module.exports = {
       ],
       'expo-sensors',
       [
+        'expo-image-picker',
+        {
+          photosPermission: 'Dominia needs photo access so you can set a profile picture.',
+        },
+      ],
+      [
         'expo-build-properties',
         {
           android: {

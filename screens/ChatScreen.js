@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -32,6 +33,7 @@ import {
   subscribeToChannel,
 } from '../lib/chatRealtime';
 import { timeAgo } from '../lib/timeAgo';
+import { avatarThumb, avatarInitials } from '../lib/avatar';
 
 const MAX_CONTENT_LENGTH = 500;
 const BANNER_AUTO_DISMISS_MS = 5000;
@@ -531,15 +533,29 @@ function ChatMessageRow({ row }) {
     row.sender_alliance_short_name != null
       ? `${row.sender_name} · ${row.sender_alliance_short_name}`
       : row.sender_name;
+  const thumb = avatarThumb(row.sender_avatar_url, 32);
   return (
     <View style={[styles.messageRow, row._optimistic && styles.messageRowPending]}>
-      <View style={styles.messageMetaRow}>
-        <Text style={styles.senderText} numberOfLines={1}>
-          {senderLine}
-        </Text>
-        <Text style={styles.timeText}>{timeAgo(row.created_at)}</Text>
+      <View style={styles.messageRowInner}>
+        {thumb ? (
+          <Image source={{ uri: thumb }} style={styles.messageAvatar} />
+        ) : (
+          <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+            <Text style={styles.messageAvatarInitials}>
+              {avatarInitials(row.sender_name)}
+            </Text>
+          </View>
+        )}
+        <View style={styles.messageBody}>
+          <View style={styles.messageMetaRow}>
+            <Text style={styles.senderText} numberOfLines={1}>
+              {senderLine}
+            </Text>
+            <Text style={styles.timeText}>{timeAgo(row.created_at)}</Text>
+          </View>
+          <Text style={styles.contentText}>{row.content}</Text>
+        </View>
       </View>
-      <Text style={styles.contentText}>{row.content}</Text>
     </View>
   );
 }
@@ -640,6 +656,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(242,238,230,0.08)',
+  },
+  messageRowInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  messageBody: {
+    flex: 1,
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: '#1A1D24',
+    borderWidth: 1,
+    borderColor: 'rgba(242,238,230,0.16)',
+  },
+  messageAvatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageAvatarInitials: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: '#8B8F98',
   },
   messageRowPending: {
     opacity: 0.55,
