@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StatusBar,
@@ -17,6 +18,19 @@ import {
 import { useAuth } from '@clerk/clerk-expo';
 import { getLeaderboard } from '../lib/leaderboardApi';
 import { supabase } from '../lib/supabase';
+import { avatarThumb, avatarInitials } from '../lib/avatar';
+
+function RowAvatar({ url, name }) {
+  const thumb = avatarThumb(url, 28);
+  if (thumb) {
+    return <Image source={{ uri: thumb }} style={styles.avatar} />;
+  }
+  return (
+    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+      <Text style={styles.avatarInitials}>{avatarInitials(name)}</Text>
+    </View>
+  );
+}
 
 function PowerRow({ row, subject, isSelfRow }) {
   let title;
@@ -37,6 +51,7 @@ function PowerRow({ row, subject, isSelfRow }) {
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
+      {subject === 'players' ? <RowAvatar url={row.avatar_url} name={row.username} /> : null}
       <View style={styles.nameCell}>
         <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
@@ -65,6 +80,7 @@ function TerritoryRow({ row, subject, isSelfRow }) {
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
+      {subject === 'players' ? <RowAvatar url={row.avatar_url} name={row.username} /> : null}
       <View style={styles.nameCell}>
         <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
@@ -93,6 +109,7 @@ function BattlesRow({ row, subject, isSelfRow }) {
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
+      {subject === 'players' ? <RowAvatar url={row.avatar_url} name={row.username} /> : null}
       <View style={styles.nameCell}>
         <Text style={styles.nameText} numberOfLines={1}>{title}</Text>
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
@@ -437,6 +454,25 @@ const styles = StyleSheet.create({
   rankText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
+    color: '#8B8F98',
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    marginLeft: 8,
+    backgroundColor: '#1A1D24',
+    borderWidth: 1,
+    borderColor: 'rgba(242,238,230,0.16)',
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    letterSpacing: 0.4,
     color: '#8B8F98',
   },
   nameCell: {
