@@ -82,7 +82,7 @@ export default function FcmLifecycle() {
       const cardData = { ...(remoteMessage?.data || {}), title, body };
 
       if (route.surface === SURFACES.CARD) {
-        showCard({ kind, data: cardData, target: route.target });
+        showCard({ kind, data: cardData, target: route.target, params: route.params });
       } else if (route.surface === SURFACES.TOAST) {
         Toast.show({
           type: 'info',

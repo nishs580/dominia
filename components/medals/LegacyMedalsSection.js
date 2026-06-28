@@ -170,7 +170,7 @@ export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
   return (
     <View>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>LEGACY MEDALS</Text>
+        <Text style={styles.headerTitle}>HONOR MEDALS</Text>
         <Text style={styles.headerCount}>
           {medals ? `${earnedCount(medals)}/16` : '—'}
         </Text>

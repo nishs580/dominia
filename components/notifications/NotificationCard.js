@@ -5,6 +5,10 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { subscribe, hideCard, getCurrentCard } from '../../lib/notifications/cardController';
 import { navigateTo } from '../../lib/navigation';
+import MedalEarnCard from '../medals/MedalEarnCard';
+
+const isMedalKind = (kind) =>
+  typeof kind === 'string' && kind.startsWith('legacy_medal_');
 
 const DEFAULT_TITLES = {
   streak_milestone: 'Proven streak.',
@@ -30,26 +34,29 @@ export default function NotificationCard() {
 
   if (!card) return null;
 
-  const { kind, data, target } = card;
+  const { kind, data, target, params } = card;
   const title = data?.title || DEFAULT_TITLES[kind] || 'Notification';
   const body = data?.body || '';
+
+  const goToTarget = () => {
+    if (target) navigateTo(target, params || {});
+    hideCard();
+  };
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={hideCard}>
       <Pressable style={styles.backdrop} onPress={hideCard}>
-        <Pressable
-          style={styles.card}
-          onPress={() => {
-            if (target) navigateTo(target);
-            hideCard();
-          }}
-        >
-          <Text style={styles.title}>{title}</Text>
-          {body ? <Text style={styles.body}>{body}</Text> : null}
-          <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
-            <Text style={styles.dismissText}>DISMISS</Text>
+        {isMedalKind(kind) ? (
+          <MedalEarnCard data={data} onPress={goToTarget} onDismiss={hideCard} />
+        ) : (
+          <Pressable style={styles.card} onPress={goToTarget}>
+            <Text style={styles.title}>{title}</Text>
+            {body ? <Text style={styles.body}>{body}</Text> : null}
+            <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
+              <Text style={styles.dismissText}>DISMISS</Text>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        )}
       </Pressable>
     </Modal>
   );
