@@ -18,7 +18,7 @@ import {
   calcTerritoryPower,
   calcFullValueCap,
   calcTerritoryCapForLevel,
-  calcLegacyPower,
+  calcMedalPower,
   calcActivityPower,
 } from '../lib/formulas';
 
@@ -29,6 +29,7 @@ function territoryCapForLevel(level) {
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
+import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -133,6 +134,7 @@ export default function ProfileScreen() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [activityPower, setActivityPower] = useState(0);
+  const [medals, setMedals] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +233,22 @@ export default function ProfileScreen() {
     };
   }, [userId]);
 
+  // Honor Medal state — drives Legacy Power and is passed to the medals section.
+  useEffect(() => {
+    if (!userId) {
+      setMedals(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await fetchLegacyMedals({ clerkGetToken: getToken });
+      if (!cancelled && res.ok) setMedals(res.data.medals);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const xp = Math.max(0, Number(playerRow?.xp) || 0);
   const xpInt = Math.floor(xp);
   const level = calcLevel(xpInt);
@@ -260,14 +278,9 @@ export default function ProfileScreen() {
   const lifetimeContestWins = Math.max(0, Number(playerRow?.lifetime_contest_wins) || 0);
   const lifetimeDefenceWins = Math.max(0, Number(playerRow?.lifetime_defence_wins) || 0);
 
-  const legacyPower = calcLegacyPower({
-    titlesEarned: 0,
-    championshipWins: 0,
-    lifetimeContestWins,
-    lifetimeDefenceWins,
-    highestStreakDays: longestStreak,
-    lifetimeXp: xpInt,
-  });
+  // Legacy Power now derives from Honor Medals (calcMedalPower). 0 until the
+  // medal state loads, then the power row updates.
+  const legacyPower = calcMedalPower(medals);
   const totalPower = activityPower + territoryPower + legacyPower;
 
   const playerName = playerRow?.username ?? '—';
