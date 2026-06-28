@@ -28,6 +28,7 @@ function territoryCapForLevel(level) {
 }
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
+import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -272,11 +273,6 @@ export default function ProfileScreen() {
   const playerName = playerRow?.username ?? '—';
   const rankBadge = getLevelTitle(level);
   const next = level < 10 ? { title: getLevelTitle(level + 1) } : null;
-  const FAKE_LEGACY_TITLES = [
-    { title: 'GROUNDBREAKER', descriptor: 'DAY 32 · 2.3.2026 · 30 TERRITORY-DAYS' },
-    { title: 'THE IRON WEEK', descriptor: 'DAY 21 · 21.2.2026 · 21-DAY STREAK' },
-    { title: 'FIRST BLOOD', descriptor: 'DAY 1 · 1.2.2026 · FIRST CLAIM IN THE REALM' },
-  ];
 
   const unlockText = useMemo(() => {
     const title = next?.title;
@@ -559,18 +555,7 @@ export default function ProfileScreen() {
 
           <View>
             <View style={{ marginTop: 24 }}>
-              <SectionDivider label={`LEGACY TITLES · ${FAKE_LEGACY_TITLES.length}`} />
-            </View>
-            <View style={styles.legacyList}>
-              {FAKE_LEGACY_TITLES.map((t, index) => (
-                <View
-                  key={`${t.title}-${index}`}
-                  style={[styles.legacyEntry, index < FAKE_LEGACY_TITLES.length - 1 ? styles.legacyEntrySpacing : null]}
-                >
-                  <Text style={styles.legacyTitle}>{t.title}</Text>
-                  <Text style={styles.legacyDescriptor}>{t.descriptor}</Text>
-                </View>
-              ))}
+              <LegacyMedalsSection clerkGetToken={getToken} />
             </View>
           </View>
         </>
