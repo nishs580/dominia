@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { supabase } from '../lib/supabase';
@@ -20,43 +21,15 @@ import { calcDailyInfluence } from '../lib/formulas';
 const normaliseTier = t =>
   t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
 
+// Display copy (name/cost/duration/effect) lives in locales under
+// warRoom.abilities.<id>; only the id and numeric morale cost live here.
 const ABILITIES = [
-  {
-    name: 'WAR SURGE',
-    cost: '80 MORALE',
-    duration: '6 HOURS',
-    effect: 'Attacker Iron costs −40% for all contests opened during window.',
-  },
-  {
-    name: 'IRON BULWARK',
-    cost: '80 MORALE',
-    duration: '6 HOURS',
-    effect: 'Contesting any alliance territory costs 40% more Iron.',
-  },
-  {
-    name: 'RALLY CRY',
-    cost: '60 MORALE',
-    duration: '12 HOURS',
-    effect: 'Attackers walk 80% of the normal contest distance.',
-  },
-  {
-    name: 'STEADFAST',
-    cost: '60 MORALE',
-    duration: '12 HOURS',
-    effect: 'Defenders only need to walk 80% of attacker distance.',
-  },
-  {
-    name: 'SUPPLY LINE',
-    cost: '40 MORALE',
-    duration: '24 HOURS',
-    effect: 'All resource earn events give +20% for all members.',
-  },
-  {
-    name: 'UNIFIED FRONT',
-    cost: '100 MORALE',
-    duration: '48 HOURS',
-    effect: 'No member can have their streak broken during this window.',
-  },
+  { id: 'warSurge', morale: 80 },
+  { id: 'ironBulwark', morale: 80 },
+  { id: 'rallyCry', morale: 60 },
+  { id: 'steadfast', morale: 60 },
+  { id: 'supplyLine', morale: 40 },
+  { id: 'unifiedFront', morale: 100 },
 ];
 
 function SectionLabel({ left, accent }) {
@@ -69,13 +42,9 @@ function SectionLabel({ left, accent }) {
   );
 }
 
-function parseMoraleCost(costStr) {
-  const match = costStr.match(/(\d+)/);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
 export default function WarRoomScreen({ route }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const {
     allianceId = null,
@@ -122,7 +91,7 @@ export default function WarRoomScreen({ route }) {
       if (cancelled) return;
 
       if (allianceResult.error) {
-        setError(allianceResult.error.message ?? 'Could not load war room');
+        setError(allianceResult.error.message ?? t('warRoom.errFallback'));
         setLoading(false);
         return;
       }
@@ -156,17 +125,17 @@ export default function WarRoomScreen({ route }) {
     if (warChestMorale < costAmount) return;
 
     Alert.alert(
-      `Activate ${ability}?`,
-      `Costs ${costAmount} Morale from the war chest.`,
+      t('warRoom.alertActivateTitle', { ability }),
+      t('warRoom.alertActivateBody', { cost: costAmount }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('warRoom.alertCancel'), style: 'cancel' },
         {
-          text: 'Activate',
+          text: t('warRoom.alertActivateConfirm'),
           style: 'destructive',
           onPress: async () => {
             const res = await spendAllianceMorale({ clerkGetToken: getToken, allianceId, amount: costAmount });
             if (!res.ok) {
-              Alert.alert('Failed', 'Could not activate ability. Try again.');
+              Alert.alert(t('warRoom.alertFailedTitle'), t('warRoom.alertFailedBody'));
             } else {
               setWarChestMorale(res.data.alliance_morale);
             }
@@ -180,9 +149,9 @@ export default function WarRoomScreen({ route }) {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← ALLIANCE</Text>
+          <Text style={styles.backBtnText}>{t('warRoom.back')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>WAR ROOM</Text>
+        <Text style={styles.headerTitle}>{t('warRoom.title')}</Text>
         <Text style={styles.headerSub}>[{shortName}] · {allianceName.toUpperCase()}</Text>
         <View style={styles.headerDivider} />
       </View>
@@ -190,7 +159,7 @@ export default function WarRoomScreen({ route }) {
       {loading ? (
         <View style={styles.loadingBlock}>
           <ActivityIndicator size="large" color={colors.slate2} />
-          <Text style={styles.loadingText}>Loading war room…</Text>
+          <Text style={styles.loadingText}>{t('warRoom.loading')}</Text>
         </View>
       ) : null}
 
@@ -209,7 +178,7 @@ export default function WarRoomScreen({ route }) {
           {/* ALLIANCE INFLUENCE */}
           <View style={styles.influenceBlock}>
             <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>INFLUENCE</Text>
+              <Text style={styles.influenceLabel}>{t('warRoom.influenceLabel')}</Text>
               <View style={styles.influenceHairline} />
             </View>
             <View style={styles.influenceRow}>
@@ -220,58 +189,60 @@ export default function WarRoomScreen({ route }) {
                     ? allianceInfluence.toLocaleString()
                     : allianceInfluence.toFixed(1)}
                 </Text>
-                <Text style={styles.influenceSublabel}>ALLIANCE INFLUENCE / DAY</Text>
+                <Text style={styles.influenceSublabel}>{t('warRoom.influenceSublabel')}</Text>
                 <Text style={styles.influenceContext}>
-                  Earned daily from alliance-held territories
+                  {t('warRoom.influenceContext')}
                 </Text>
               </View>
             </View>
           </View>
 
           {/* ATTACK DAY COUNTDOWN */}
-          <SectionLabel left="NEXT ATTACK DAY" />
+          <SectionLabel left={t('warRoom.nextAttackDay')} />
           <View style={styles.countdownCard}>
             <Text style={styles.countdownValue}>2D 14H</Text>
             <Text style={styles.countdownDay}>SATURDAY · 05:00 – 23:00</Text>
           </View>
 
           {/* WAR CHEST — MORALE ONLY */}
-          <SectionLabel left="WAR CHEST" accent="ALLIANCE MORALE" />
+          <SectionLabel left={t('warRoom.warChest')} accent={t('warRoom.warChestAccent')} />
           <View style={styles.warChestMoraleCell}>
             <View style={styles.warChestMoraleLeft}>
               <Text style={styles.warChestMoraleValue}>
                 {warChestMorale.toLocaleString()}
               </Text>
-              <Text style={styles.warChestLabel}>MORALE</Text>
+              <Text style={styles.warChestLabel}>{t('warRoom.moraleLabel')}</Text>
               <Text style={styles.warChestSub}>
-                Pooled from member donations · powers all abilities
+                {t('warRoom.warChestSub')}
               </Text>
             </View>
             <MoraleGlyph size={32} color={colors.alliance} />
           </View>
 
           {/* MORALE ABILITIES */}
-          <SectionLabel left="MORALE ABILITIES" accent="FOUNDER · MARSHAL ONLY" />
-          {ABILITIES.map((a, i) => (
-            <React.Fragment key={a.name}>
+          <SectionLabel left={t('warRoom.abilitiesLabel')} accent={t('warRoom.abilitiesAccent')} />
+          {ABILITIES.map((a, i) => {
+            const name = t(`warRoom.abilities.${a.id}.name`);
+            return (
+            <React.Fragment key={a.id}>
               <View style={styles.abilityRow}>
                 <View style={styles.abilityLeft}>
-                  <Text style={styles.abilityName}>{a.name}</Text>
-                  <Text style={styles.abilityCost}>{a.cost} · {a.duration}</Text>
-                  <Text style={styles.abilityEffect}>{a.effect}</Text>
+                  <Text style={styles.abilityName}>{name}</Text>
+                  <Text style={styles.abilityCost}>{t(`warRoom.abilities.${a.id}.cost`)} · {t(`warRoom.abilities.${a.id}.duration`)}</Text>
+                  <Text style={styles.abilityEffect}>{t(`warRoom.abilities.${a.id}.effect`)}</Text>
                 </View>
                 {(() => {
-                  const costAmount = parseMoraleCost(a.cost);
+                  const costAmount = a.morale;
                   const canAfford = warChestMorale >= costAmount;
                   const active = isFounder && canAfford;
                   return (
                     <Pressable
                       style={[styles.activateBtn, !active && styles.activateBtnDisabled]}
-                      onPress={active ? () => confirmActivate(a.name, costAmount) : undefined}
+                      onPress={active ? () => confirmActivate(name, costAmount) : undefined}
                       disabled={!active}
                     >
                       <Text style={[styles.activateBtnText, active && styles.activateBtnTextActive]}>
-                        ACTIVATE
+                        {t('warRoom.activate')}
                       </Text>
                     </Pressable>
                   );
@@ -279,7 +250,8 @@ export default function WarRoomScreen({ route }) {
               </View>
               {i < ABILITIES.length - 1 && <View style={styles.rowDivider} />}
             </React.Fragment>
-          ))}
+            );
+          })}
         </ScrollView>
       ) : null}
     </View>

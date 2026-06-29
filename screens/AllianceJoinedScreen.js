@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { getAllianceById } from '../lib/allianceApi';
 import THEME from '../lib/theme';
 
@@ -22,24 +23,10 @@ const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
-const BENEFITS_FOUNDED = [
-  { title: 'Collective defence', sub: 'Alliance members can defend your territories.' },
-  { title: 'Shared War Chest', sub: 'Pool resources to fund alliance abilities.' },
-  { title: 'Alliance colour', sub: 'Alliance-held territories now display in Alliance green.' },
-  { title: 'Alliance missions', sub: 'Weekly shared goals. Complete together for resources.' },
-  { title: 'Recruit up to 19 Commanders', sub: "Invite by username. Bring in players who haven't joined yet." },
-];
-const BENEFITS_JOINED = [
-  { title: 'Collective defence', sub: 'Alliance members can defend your territories.' },
-  { title: 'Shared War Chest', sub: 'Pool resources to fund alliance abilities.' },
-  { title: 'Alliance colour', sub: 'Your territories now display in Alliance green.' },
-  { title: 'Alliance missions', sub: 'Weekly shared goals. Complete together for resources.' },
-  { title: 'Welcome the Commander', sub: 'Existing members will see you in their roster.' },
-];
-
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const { allianceId, context } = route.params ?? {};
   const isJoined = context === 'joined';
   const { getToken } = useAuth();
@@ -114,13 +101,13 @@ export default function AllianceJoinedScreen() {
   if (error) {
     return (
       <View style={styles.fullScreenCentered}>
-        <Text style={styles.errorMessage}>Couldn't load alliance</Text>
+        <Text style={styles.errorMessage}>{t('allianceJoined.couldNotLoad')}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => setRetryCount((c) => c + 1)}
           style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
     );
@@ -136,38 +123,41 @@ export default function AllianceJoinedScreen() {
 
         {/* Kicker */}
         <View style={styles.kickerRow}>
-          <Text style={styles.kickerText}>{isJoined ? 'Alliance joined' : 'Alliance founded'}</Text>
+          <Text style={styles.kickerText}>{isJoined ? t('allianceJoined.kickerJoined') : t('allianceJoined.kickerFounded')}</Text>
           <View style={styles.kickerRule} />
         </View>
 
         {/* Hero alliance name */}
-        <Text style={styles.allianceName}>{alliance?.name ?? 'Your Alliance'}</Text>
+        <Text style={styles.allianceName}>{alliance?.name ?? t('allianceJoined.defaultName')}</Text>
         <Text style={styles.tag}>[{alliance?.short_name ?? 'XXX'}]</Text>
 
         {/* Milestone subtitle */}
-        <Text style={styles.subtitle}>{isJoined ? "You're no longer alone on this map." : 'Ready for war.'}</Text>
+        <Text style={styles.subtitle}>{isJoined ? t('allianceJoined.subtitleJoined') : t('allianceJoined.subtitleFounded')}</Text>
 
         {/* Meta grid: city + commanders */}
         <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>City</Text>
+            <Text style={styles.metaLabel}>{t('allianceJoined.city')}</Text>
             <Text style={styles.metaValue}>{alliance?.city ?? '—'}</Text>
           </View>
           <View style={[styles.metaCell, styles.metaCellLast]}>
-            <Text style={styles.metaLabel}>Commanders</Text>
+            <Text style={styles.metaLabel}>{t('allianceJoined.commanders')}</Text>
             <Text style={styles.metaValue}>{memberCount} / 20</Text>
           </View>
         </View>
 
         {/* Section header */}
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>What you've unlocked</Text>
+          <Text style={styles.sectionLabel}>{t('allianceJoined.unlocked')}</Text>
           <View style={styles.sectionRule} />
         </View>
 
         {/* Benefit rows */}
         <View style={styles.bList}>
-          {(isJoined ? BENEFITS_JOINED : BENEFITS_FOUNDED).map((b, i) => (
+          {(isJoined
+            ? t('allianceJoined.benefitsJoined', { returnObjects: true })
+            : t('allianceJoined.benefitsFounded', { returnObjects: true })
+          ).map((b, i) => (
             <View key={i} style={[styles.bRow, i === 0 && styles.bRowFirst]}>
               <Text style={styles.bNum}>{String(i + 1).padStart(2, '0')}</Text>
               <View style={styles.bText}>
@@ -184,8 +174,8 @@ export default function AllianceJoinedScreen() {
           onPress={() => navigation.navigate('MainTabs', { screen: 'Alliance' })}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
         >
-          <Text style={styles.ctaStep}>Take command</Text>
-          <Text style={styles.ctaAction}>Enter alliance →</Text>
+          <Text style={styles.ctaStep}>{t('allianceJoined.takeCommand')}</Text>
+          <Text style={styles.ctaAction}>{t('allianceJoined.enterAlliance')}</Text>
         </Pressable>
 
       </View>

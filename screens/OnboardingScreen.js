@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
@@ -139,6 +140,7 @@ function NumberedRow({ num, title, subtitle, last = false }) {
 
 export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { userId: clerkUserId, getToken } = useAuth();
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
   const [resolveError, setResolveError] = useState(null);
@@ -187,7 +189,7 @@ export default function OnboardingScreen({ route }) {
 
   useEffect(() => {
     if (step !== 0) return;
-    const fullTagline = 'Walk · Claim · Conquer · Defend';
+    const fullTagline = t('onboarding.typewriterTagline');
     setDisplayedTagline('');
     setDisplayedBody('');
     taglineOpacity.setValue(1);
@@ -202,7 +204,7 @@ export default function OnboardingScreen({ route }) {
       if (index >= fullTagline.length) {
         clearInterval(interval);
         setTimeout(() => {
-          const fullBody = 'Your city is the game board.';
+          const fullBody = t('onboarding.typewriterBody');
           let bodyIndex = 0;
           const bodyInterval = setInterval(() => {
             bodyIndex += 1;
@@ -230,7 +232,7 @@ export default function OnboardingScreen({ route }) {
     }, 55);
 
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, t]);
 
   useEffect(() => {
     if (step !== 4 || !resolvedPlayerId) return;
@@ -281,7 +283,7 @@ export default function OnboardingScreen({ route }) {
     if (step === 1) {
       return (
         <View style={{ width: '100%' }}>
-          <SectionLabel label="HOW IT WORKS" />
+          <SectionLabel label={t('onboarding.sectionHowItWorks')} />
           <Text
             style={{
               fontFamily: 'Archivo_900Black',
@@ -294,19 +296,19 @@ export default function OnboardingScreen({ route }) {
               textAlign: 'left',
             }}
           >
-            WALK TO OWN THE CITY
+            {t('onboarding.heading1')}
           </Text>
           <NumberedRow
             num="01"
-            title="Claim territories"
-            subtitle="Walk a territory's perimeter distance — from anywhere — to own it."
+            title={t('onboarding.row1Title')}
+            subtitle={t('onboarding.row1Sub')}
           />
           <NumberedRow
             num="02"
-            title="Contest and defend"
-            subtitle="Attack enemy ground. Hold your own when it comes under fire."
+            title={t('onboarding.row2Title')}
+            subtitle={t('onboarding.row2Sub')}
           />
-          <NumberedRow num="03" title="Join an alliance" subtitle="Coordinate with 19 others to hold your city." last />
+          <NumberedRow num="03" title={t('onboarding.row3Title')} subtitle={t('onboarding.row3Sub')} last />
         </View>
       );
     }
@@ -314,7 +316,7 @@ export default function OnboardingScreen({ route }) {
     if (step === 2) {
       return (
         <View style={{ width: '100%', flex: 1, justifyContent: 'center' }}>
-          <SectionLabel label="BEFORE WE START" />
+          <SectionLabel label={t('onboarding.sectionBeforeStart')} />
           <Text
             style={{
               fontFamily: 'Archivo_900Black',
@@ -327,10 +329,10 @@ export default function OnboardingScreen({ route }) {
               textAlign: 'left',
             }}
           >
-            TWO THINGS WE NEED
+            {t('onboarding.heading2')}
           </Text>
-          <NumberedRow num="01" title="Location" subtitle="To show you the map and count your walks." />
-          <NumberedRow num="02" title="Step counter" subtitle="Steps convert directly into claimed ground." last />
+          <NumberedRow num="01" title={t('onboarding.locationTitle')} subtitle={t('onboarding.locationSub')} />
+          <NumberedRow num="02" title={t('onboarding.stepCounterTitle')} subtitle={t('onboarding.stepCounterSub')} last />
           <View
             style={{
               marginTop: 14,
@@ -351,10 +353,10 @@ export default function OnboardingScreen({ route }) {
                 textAlign: 'left',
               }}
             >
-              Privacy
+              {t('onboarding.privacyLabel')}
             </Text>
             <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: BONE, lineHeight: 17, textAlign: 'left' }}>
-              Your location is never visible to other players.
+              {t('onboarding.privacyBody')}
             </Text>
           </View>
         </View>
@@ -364,7 +366,7 @@ export default function OnboardingScreen({ route }) {
     if (step === 3) {
       return (
         <View style={{ width: '100%', flex: 1 }}>
-          <SectionLabel label="SET YOUR BASE" />
+          <SectionLabel label={t('onboarding.sectionSetBase')} />
           <Text
             style={{
               fontFamily: 'Archivo_900Black',
@@ -377,10 +379,10 @@ export default function OnboardingScreen({ route }) {
               textAlign: 'left',
             }}
           >
-            {'PLACE YOUR HOME PIN '}
+            {t('onboarding.heading3')}
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: SLATE2, marginBottom: 12, textAlign: 'left' }}>
-            This sets the city you play for.
+            {t('onboarding.setCitySub')}
           </Text>
           <View
             style={{
@@ -446,7 +448,7 @@ export default function OnboardingScreen({ route }) {
                     textAlign: 'left',
                   }}
                 >
-                  Tap to place your pin
+                  {t('onboarding.tapToPlace')}
                 </Text>
               </View>
             ) : null}
@@ -465,7 +467,7 @@ export default function OnboardingScreen({ route }) {
                     textAlign: 'center',
                   }}
                 >
-                  Could not load session
+                  {t('onboarding.couldNotLoadSession')}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -481,7 +483,7 @@ export default function OnboardingScreen({ route }) {
                       textDecorationLine: 'underline',
                     }}
                   >
-                    Retry
+                    {t('common.retry')}
                   </Text>
                 </Pressable>
               </View>
@@ -497,7 +499,7 @@ export default function OnboardingScreen({ route }) {
                   marginTop: 8,
                 }}
               >
-                Loading session...
+                {t('onboarding.loadingSession')}
               </Text>
             )
           ) : null}
@@ -509,7 +511,7 @@ export default function OnboardingScreen({ route }) {
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
-            Commander
+            {t('onboarding.commanderLabel')}
           </Text>
           <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE, textTransform: 'uppercase', letterSpacing: 1.4 }}>
             #0004
@@ -525,17 +527,17 @@ export default function OnboardingScreen({ route }) {
             lineHeight: 36,
           }}
         >
-          {username || 'COMMANDER'}
+          {username || t('onboarding.defaultCommander')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>Amsterdam is yours to take.</Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours')}</Text>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
-          Three territories nearby are unclaimed.
+          {t('onboarding.threeNearby')}
         </Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>Claim them on your next walk.</Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
-  }, [step, homePin, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody]);
+  }, [step, homePin, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
 
   const onNext = async () => {
     if (step === 2) {
@@ -553,7 +555,7 @@ export default function OnboardingScreen({ route }) {
     if (step === 3) {
       if (!homePin || savingPin) return;
       if (!resolvedPlayerId) {
-        Alert.alert('Session error', 'Player ID missing. Please restart the app.');
+        Alert.alert(t('onboarding.alertSessionErrorTitle'), t('onboarding.alertSessionErrorBody'));
         return;
       }
       setSavingPin(true);
@@ -565,7 +567,7 @@ export default function OnboardingScreen({ route }) {
         });
         if (!result.ok) {
           console.error('Home pin save failed:', result.status, result.error);
-          Alert.alert('Could not save', result.error || 'Please check your connection and try again.');
+          Alert.alert(t('onboarding.alertCouldNotSaveTitle'), result.error || t('onboarding.alertCouldNotSaveBody'));
           return;
         }
         setStep(4);
@@ -578,7 +580,7 @@ export default function OnboardingScreen({ route }) {
     if (step === 4) {
       if (finishingOnboarding) return;
       if (!resolvedPlayerId) {
-        Alert.alert('Session error', 'Player ID missing. Please restart the app.');
+        Alert.alert(t('onboarding.alertSessionErrorTitle'), t('onboarding.alertSessionErrorBody'));
         return;
       }
       setFinishingOnboarding(true);
@@ -588,7 +590,7 @@ export default function OnboardingScreen({ route }) {
         navigation.replace('MainTabs');
       } catch (err) {
         console.error('Onboarding finish failed:', err);
-        Alert.alert('Could not save', 'Please check your connection and try again.');
+        Alert.alert(t('onboarding.alertCouldNotSaveTitle'), t('onboarding.alertCouldNotSaveBody'));
       } finally {
         setFinishingOnboarding(false);
       }
@@ -603,7 +605,7 @@ export default function OnboardingScreen({ route }) {
       <View style={{ flex: 1, justifyContent: step === 0 || step === 1 || step === 2 ? 'center' : 'flex-start' }}>{content}</View>
       <View style={{ gap: 10 }}>
         {step >= 1 && step <= 3 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => setStep((s) => s - 1)}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('onboarding.back')} onPress={() => setStep((s) => s - 1)}>
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
@@ -614,32 +616,32 @@ export default function OnboardingScreen({ route }) {
                 textAlign: 'center',
               }}
             >
-              Back
+              {t('onboarding.back')}
             </Text>
           </Pressable>
         ) : null}
         <ProgressBar step={step} />
         {step === 0 ? (
           <Animated.View style={{ opacity: buttonOpacity, transform: [{ translateY: buttonTranslateY }] }}>
-            <PrimaryButton stepLabel="Step 1 of 5" actionLabel="Begin →" onPress={onNext} disabled={false} />
+            <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 1, total: 5 })} actionLabel={t('onboarding.actionBegin')} onPress={onNext} disabled={false} />
           </Animated.View>
         ) : null}
         {step === 1 ? (
-          <PrimaryButton stepLabel="Step 2 of 5" actionLabel="Continue →" onPress={onNext} disabled={false} />
+          <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 2, total: 5 })} actionLabel={t('onboarding.actionContinue')} onPress={onNext} disabled={false} />
         ) : null}
         {step === 2 ? (
-          <PrimaryButton stepLabel="Step 3 of 5" actionLabel="Grant access →" onPress={onNext} disabled={requesting} />
+          <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 3, total: 5 })} actionLabel={t('onboarding.actionGrantAccess')} onPress={onNext} disabled={requesting} />
         ) : null}
         {step === 3 ? (
           <PrimaryButton
-            stepLabel="Step 4 of 5"
-            actionLabel="Confirm pin →"
+            stepLabel={t('onboarding.stepCount', { current: 4, total: 5 })}
+            actionLabel={t('onboarding.actionConfirmPin')}
             onPress={onNext}
             disabled={!homePin || savingPin || !resolvedPlayerId}
           />
         ) : null}
         {step === 4 ? (
-          <PrimaryButton stepLabel="Last step" actionLabel="Enter the map →" onPress={onNext} disabled={finishingOnboarding} />
+          <PrimaryButton stepLabel={t('onboarding.lastStep')} actionLabel={t('onboarding.actionEnterMap')} onPress={onNext} disabled={finishingOnboarding} />
         ) : null}
       </View>
     </View>

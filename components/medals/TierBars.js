@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   TIER_ORDER,
   TIER_COLOR,
@@ -17,6 +18,7 @@ const BAR_WIDTHS = [7, 10, 13, 16];
  * show the Bone bar with their count (x N) or year stamp.
  */
 export default function TierBars({ medal, height = 6 }) {
+  const { t } = useTranslation();
   if (medal.type === 'tiered') {
     const filled = tierRank(medal.currentTier) + 1; // 0 when unearned
     return (
@@ -42,10 +44,12 @@ export default function TierBars({ medal, height = 6 }) {
     );
   }
 
-  // Singular: Bone bar with x N or year.
+  // Singular: Bone bar with x N or year (or a localized LOCKED for unearned).
+  const rawLabel = singularBarLabel(medal);
+  const label = rawLabel === 'LOCKED' ? t('medalLocked') : rawLabel;
   return (
     <View style={styles.boneBar}>
-      <Text style={styles.boneText}>{singularBarLabel(medal)}</Text>
+      <Text style={styles.boneText}>{label}</Text>
     </View>
   );
 }

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import {
   initialize,
   getGrantedPermissions,
@@ -28,23 +29,10 @@ import { colors, fonts, spacing } from '../lib/theme';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
 
-function formatToday(d) {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+// Locale-aware date header, e.g. "Monday, June 30". Uses Intl with the active
+// i18next language so non-English locales get native day/month names.
+function formatToday(d, lng) {
+  return d.toLocaleDateString(lng || 'en', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 function startOfLocalDay(d = new Date()) {
@@ -67,8 +55,6 @@ function localDayKey(date) {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
-
-const WEEK_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -102,6 +88,7 @@ function ProgressBar({ progress }) {
 }
 
 function WeeklyBarChart({ data }) {
+  const { t } = useTranslation();
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [chartWidth, setChartWidth] = useState(0);
   const max = Math.max(...data.map((d) => d.steps), 1);
@@ -127,7 +114,7 @@ function WeeklyBarChart({ data }) {
       <View style={styles.chartLabelSlot}>
         {selectedIdx !== null ? (
           <Text style={styles.chartLabelText}>
-            {data[selectedIdx].day} — {data[selectedIdx].steps.toLocaleString()} steps
+            {t('activity.chartLabel', { day: data[selectedIdx].day, steps: data[selectedIdx].steps.toLocaleString() })}
           </Text>
         ) : (
           <Text style={styles.chartLabelText}> </Text>
@@ -195,6 +182,8 @@ function WeeklyBarChart({ data }) {
 }
 
 export default function ActivityScreen() {
+  const { t, i18n } = useTranslation();
+  const weekDayLabels = useMemo(() => t('activity.weekDays', { returnObjects: true }), [t]);
   const { userId, getToken } = useAuth();
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
@@ -217,15 +206,9 @@ export default function ActivityScreen() {
     today: { distance_m: 0, active_minutes: 0 },
     best: { distance_m: 0, active_minutes: 0 },
   });
-  const [weeklySteps, setWeeklySteps] = useState([
-    { day: 'Mon', steps: 0 },
-    { day: 'Tue', steps: 0 },
-    { day: 'Wed', steps: 0 },
-    { day: 'Thu', steps: 0 },
-    { day: 'Fri', steps: 0 },
-    { day: 'Sat', steps: 0 },
-    { day: 'Sun', steps: 0 },
-  ]);
+  const [weeklySteps, setWeeklySteps] = useState(() =>
+    weekDayLabels.map((d) => ({ day: d, steps: 0 })),
+  );
   const pollRef = useRef(null);
   const inFlightTiersRef = useRef(new Set());
   // Challenges the backend has rejected this session because its accepted
@@ -318,30 +301,30 @@ export default function ActivityScreen() {
     () => [
       {
         key: 'easy',
-        difficulty: 'Easy',
-        task: 'Walk 5,000 steps',
+        difficulty: t('activity.diffEasy'),
+        task: t('activity.taskEasy'),
         xp: 50,
         earnKey: 'easy_step_challenge',
         target: 5000,
       },
       {
         key: 'medium',
-        difficulty: 'Medium',
-        task: 'Walk 10,000 steps',
+        difficulty: t('activity.diffMedium'),
+        task: t('activity.taskMedium'),
         xp: 150,
         earnKey: 'medium_step_challenge',
         target: 10000,
       },
       {
         key: 'hard',
-        difficulty: 'Hard',
-        task: 'Walk 15,000 steps',
+        difficulty: t('activity.diffHard'),
+        task: t('activity.taskHard'),
         xp: 400,
         earnKey: 'hard_step_challenge',
         target: 15000,
       },
     ],
-    [],
+    [t],
   );
 
   const completedCount = useMemo(() => {
@@ -420,7 +403,7 @@ export default function ActivityScreen() {
       if (d.streak_re_entry === true) {
         Toast.show({
           type: 'info',
-          text1: "Back. That's what matters.",
+          text1: t('activity.toastStreakReentry'),
           position: 'top',
         });
       }
@@ -428,7 +411,7 @@ export default function ActivityScreen() {
       if (d.grace_day_granted === true) {
         Toast.show({
           type: 'info',
-          text1: 'Grace Day banked.',
+          text1: t('activity.toastGraceDay'),
           position: 'top',
         });
       }
@@ -437,8 +420,8 @@ export default function ActivityScreen() {
         showCard({
           kind: 'level_up_4',
           data: {
-            title: 'The map just got real.',
-            body: "Other Commanders can challenge your territories now — but Alliance forces still can't touch you. Walk more. Hold more.",
+            title: t('activity.levelUp4Title'),
+            body: t('activity.levelUp4Body'),
           },
           target: 'Map',
         });
@@ -522,7 +505,7 @@ export default function ActivityScreen() {
         const jsDayIdx = day.getDay();
         const labelIdx = (jsDayIdx + 6) % 7;
         rows.push({
-          day: WEEK_DAY_LABELS[labelIdx],
+          day: weekDayLabels[labelIdx],
           steps: buckets[key] ?? 0,
         });
       }
@@ -530,7 +513,7 @@ export default function ActivityScreen() {
     } catch (e) {
       console.warn('[HC] weekly read failed:', e?.message ?? e);
     }
-  }, [hcReady, hasStepsPerm]);
+  }, [hcReady, hasStepsPerm, weekDayLabels]);
 
   // Load stride once per player so distance-today can be shown live from steps.
   useEffect(() => {
@@ -609,23 +592,23 @@ export default function ActivityScreen() {
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
-      return WEEK_DAY_LABELS.map((d) => ({ day: d, steps: 0 }));
+      return weekDayLabels.map((d) => ({ day: d, steps: 0 }));
     }
     // Today is the last entry; overlay live count so today's bar updates with the 10s poll
     return weeklySteps.map((row, idx) =>
       idx === 6 ? { ...row, steps: Math.max(row.steps, liveSteps) } : row,
     );
-  }, [weeklySteps, liveSteps, hasStepsPerm]);
+  }, [weeklySteps, liveSteps, hasStepsPerm, weekDayLabels]);
 
   return (
     <View style={styles.screen}>
       <View style={styles.headerBlock}>
-        <Text style={styles.commanderLabel}>{formatToday(today)}</Text>
-        <Text style={styles.commanderName}>ACTIVITY</Text>
+        <Text style={styles.commanderLabel}>{formatToday(today, i18n.language)}</Text>
+        <Text style={styles.commanderName}>{t('activity.title')}</Text>
         <Text style={styles.rankLine}>
-          <Text style={styles.rankTitle}>{username || '—'} · {playerLevel.title.toUpperCase()}</Text>
+          <Text style={styles.rankTitle}>{username || '—'} · {t('levelTitle.' + playerLevel.title).toUpperCase()}</Text>
           <Text style={styles.rankSeparator}> · </Text>
-          <Text style={styles.rankStreak}>{currentStreak} DAY STREAK</Text>
+          <Text style={styles.rankStreak}>{t('activity.dayStreak', { n: currentStreak })}</Text>
         </Text>
         <View style={styles.hairlineStrong} />
       </View>
@@ -637,9 +620,9 @@ export default function ActivityScreen() {
       >
         {hcReady && !hasStepsPerm ? (
           <View style={styles.permBanner}>
-            <Text style={styles.permBannerLabel}>HEALTH CONNECT</Text>
+            <Text style={styles.permBannerLabel}>{t('activity.permLabel')}</Text>
             <Text style={styles.permBannerText}>
-              Step tracking is locked. Grant Health Connect permission to start earning from daily challenges.
+              {t('activity.permText')}
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -652,7 +635,7 @@ export default function ActivityScreen() {
               ]}
             >
               <Text style={styles.permBannerBtnText}>
-                {permRequesting ? 'REQUESTING…' : 'GRANT PERMISSION'}
+                {permRequesting ? t('activity.requesting') : t('activity.grantPermission')}
               </Text>
             </Pressable>
           </View>
@@ -660,9 +643,9 @@ export default function ActivityScreen() {
 
         <View style={styles.challengeBlock}>
           <View style={styles.challengeHeaderRow}>
-            <Text style={styles.challengeSectionLabel}>DAILY CHALLENGES</Text>
+            <Text style={styles.challengeSectionLabel}>{t('activity.dailyChallenges')}</Text>
             <View style={styles.challengeHairline} />
-            <Text style={styles.challengeCount}>{completedCount} / 3 DONE</Text>
+            <Text style={styles.challengeCount}>{t('activity.doneCount', { n: completedCount })}</Text>
           </View>
 
           <View style={styles.challengeProgressTrack}>
@@ -684,22 +667,22 @@ export default function ActivityScreen() {
                         {(() => {
                           const r = calcResourceEarn(ch.earnKey);
                           const parts = [];
-                          parts.push(`+${ch.xp} XP`);
-                          if (r.stone > 0) parts.push(`+${r.stone} Stone`);
-                          if (r.iron > 0) parts.push(`+${r.iron} Iron`);
-                          if (r.gold > 0) parts.push(`+${r.gold} Gold`);
-                          if (r.morale > 0) parts.push(`+${r.morale} Morale`);
+                          parts.push(t('activity.rewardXp', { n: ch.xp }));
+                          if (r.stone > 0) parts.push(t('activity.rewardStone', { n: r.stone }));
+                          if (r.iron > 0) parts.push(t('activity.rewardIron', { n: r.iron }));
+                          if (r.gold > 0) parts.push(t('activity.rewardGold', { n: r.gold }));
+                          if (r.morale > 0) parts.push(t('activity.rewardMorale', { n: r.morale }));
                           return parts.join(' · ');
                         })()}
                       </Text>
                     </View>
                     <View style={styles.challengeAction}>
                       {isDone ? (
-                        <Text style={styles.challengeDone}>DONE</Text>
+                        <Text style={styles.challengeDone}>{t('activity.done')}</Text>
                       ) : DEV_MODE_MANUAL ? (
                         <Pressable
                           accessibilityRole="button"
-                          accessibilityLabel={`Complete ${ch.difficulty} challenge`}
+                          accessibilityLabel={t('activity.completeA11y', { difficulty: ch.difficulty })}
                           onPress={() => onCompleteChallenge(ch)}
                           disabled={!playerId || isBusy}
                           style={({ pressed }) => [
@@ -708,10 +691,10 @@ export default function ActivityScreen() {
                             pressed && { opacity: 0.75 },
                           ]}
                         >
-                          <Text style={styles.completeBtnText}>COMPLETE</Text>
+                          <Text style={styles.completeBtnText}>{t('activity.complete')}</Text>
                         </Pressable>
                       ) : !hasStepsPerm ? (
-                        <Text style={styles.challengeLocked}>LOCKED</Text>
+                        <Text style={styles.challengeLocked}>{t('activity.locked')}</Text>
                       ) : (
                         <Text style={styles.challengeProgress}>
                           {Math.min(liveSteps, ch.target).toLocaleString()} / {ch.target.toLocaleString()}
@@ -727,20 +710,20 @@ export default function ActivityScreen() {
 
         <View style={styles.achievementsBlock}>
           <View style={styles.achievementsSectionRow}>
-            <Text style={styles.achievementsSectionLabel}>DAILY ACHIEVEMENTS</Text>
+            <Text style={styles.achievementsSectionLabel}>{t('activity.dailyAchievements')}</Text>
             <View style={styles.achievementsHairline} />
           </View>
 
           <View style={styles.achievementsHeaderRow}>
             <Text style={styles.achievementsColLeft} />
-            <Text style={styles.achievementsColToday}>TODAY</Text>
-            <Text style={styles.achievementsColBest}>BEST</Text>
+            <Text style={styles.achievementsColToday}>{t('activity.today')}</Text>
+            <Text style={styles.achievementsColBest}>{t('activity.best')}</Text>
           </View>
 
           <View style={styles.achievementsHeaderDivider} />
 
           <View style={styles.achievementsRow}>
-            <Text style={styles.achievementsLabel}>DISTANCE</Text>
+            <Text style={styles.achievementsLabel}>{t('activity.distance')}</Text>
             <Text style={styles.achievementsToday}>{fmtKm(liveSteps * strideM)}</Text>
             <Text style={styles.achievementsBest}>{fmtKm(bests.best.distance_m)}</Text>
           </View>
@@ -748,7 +731,7 @@ export default function ActivityScreen() {
           <View style={styles.achievementsDivider} />
 
           <View style={styles.achievementsRow}>
-            <Text style={styles.achievementsLabel}>ACTIVE MINUTES</Text>
+            <Text style={styles.achievementsLabel}>{t('activity.activeMinutes')}</Text>
             <Text style={styles.achievementsToday}>{fmtMin(bests.today.active_minutes)}</Text>
             <Text style={styles.achievementsBest}>{fmtMin(bests.best.active_minutes)}</Text>
           </View>
@@ -756,7 +739,7 @@ export default function ActivityScreen() {
 
         <View style={styles.weeklyBlock}>
           <View style={styles.weeklySectionRow}>
-            <Text style={styles.weeklySectionLabel}>WEEKLY STEPS</Text>
+            <Text style={styles.weeklySectionLabel}>{t('activity.weeklySteps')}</Text>
             <View style={styles.weeklyHairline} />
           </View>
           <WeeklyBarChart data={weekly} />

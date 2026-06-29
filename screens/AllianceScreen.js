@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import AllianceLogEvent from '../components/AllianceLogEvent';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
@@ -20,45 +21,45 @@ const ALLIANCE_GREEN = '#3F8F4E';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
-function formatAllianceRole(role) {
-  if (!role) return 'MEMBER';
-  if (role === 'founder') return 'FOUNDR';
+function formatAllianceRole(t, role) {
+  if (!role) return t('alliance.roleMember');
+  if (role === 'founder') return t('alliance.roleFounder');
   return role.toUpperCase();
 }
 
-function mapJoinAllianceError(error) {
+function mapJoinAllianceError(t, error) {
   const code = error?.code ?? null;
   switch (code) {
     case 'already_in_alliance':
-      return 'You are already in an alliance.';
+      return t('alliance.errAlreadyInAlliance');
     case 'not_same_city':
-      return 'This alliance is in a different city.';
+      return t('alliance.errNotSameCity');
     case 'level_too_low':
-      return 'You must be Level 6 to join an alliance.';
+      return t('alliance.errLevelTooLowJoin');
     case 'alliance_full':
-      return 'This alliance is at full strength.';
+      return t('alliance.errAllianceFull');
     case 'alliance_disbanded':
-      return 'This alliance has disbanded.';
+      return t('alliance.errAllianceDisbanded');
     case 'alliance_not_found':
-      return 'Alliance no longer exists.';
+      return t('alliance.errAllianceNotFound');
     case 'player_not_found':
-      return 'Account error. Try signing out and back in.';
+      return t('alliance.errAccount');
     default:
-      return 'Could not join. Try again.';
+      return t('alliance.errCouldNotJoin');
   }
 }
 
-function mapLeaveAllianceError(error) {
+function mapLeaveAllianceError(t, error) {
   const code = error?.code ?? error?.error ?? null;
   switch (code) {
     case 'founder_must_transfer_first':
-      return 'Transfer founder role first.';
+      return t('alliance.errFounderMustTransfer');
     case 'player_not_found':
-      return 'Account error. Try signing out and back in.';
+      return t('alliance.errAccount');
     case 'not_in_alliance':
-      return 'You are not in an alliance.';
+      return t('alliance.errNotInAlliance');
     default:
-      return 'Could not leave. Try again.';
+      return t('alliance.errCouldNotLeave');
   }
 }
 
@@ -67,55 +68,55 @@ function capitalizeRole(role) {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-function mapTransferFounderError(error, targetName) {
+function mapTransferFounderError(t, error, targetName) {
   const code = error?.error ?? error?.code ?? null;
   switch (code) {
     case 'not_founder':
-      return "You're no longer the Founder.";
+      return t('alliance.errNotFounder');
     case 'target_role_ineligible':
-      return 'Only Marshals and Officers can be promoted to Founder.';
+      return t('alliance.errTargetIneligible');
     case 'target_not_member':
-      return `${targetName} is no longer a member.`;
+      return t('alliance.errTargetNotMember', { target: targetName });
     case 'cannot_transfer_to_self':
-      return 'You cannot transfer to yourself.';
+      return t('alliance.errTransferSelf');
     default:
-      return "Couldn't complete transfer. Try again.";
+      return t('alliance.errTransferGeneric');
   }
 }
 
-function mapManageError(error) {
+function mapManageError(t, error) {
   const code = error?.error ?? error?.code ?? null;
   switch (code) {
-    case 'role_slots_full': return 'Role is at capacity.';
-    case 'insufficient_permission': return 'You cannot perform that action.';
-    case 'only_founder_can_demote': return 'Only the Founder can demote members.';
-    case 'cannot_kick_founder': return 'The Founder cannot be removed.';
-    case 'cannot_promote_founder': return 'The Founder cannot be promoted.';
-    case 'cannot_demote_self': return 'You cannot demote yourself.';
-    case 'cannot_promote_self': return 'You cannot promote yourself.';
-    case 'cannot_kick_self': return 'You cannot kick yourself.';
-    case 'invalid_target_role': return 'Invalid target role.';
-    case 'new_role_not_higher': return 'New role must be higher.';
-    case 'new_role_not_lower': return 'New role must be lower.';
-    case 'actor_not_in_alliance': return 'You are not in this alliance.';
-    case 'target_not_in_alliance': return 'Member not found in alliance.';
-    default: return 'Action failed. Try again.';
+    case 'role_slots_full': return t('alliance.errRoleSlotsFull');
+    case 'insufficient_permission': return t('alliance.errInsufficientPermission');
+    case 'only_founder_can_demote': return t('alliance.errOnlyFounderDemote');
+    case 'cannot_kick_founder': return t('alliance.errCannotKickFounder');
+    case 'cannot_promote_founder': return t('alliance.errCannotPromoteFounder');
+    case 'cannot_demote_self': return t('alliance.errCannotDemoteSelf');
+    case 'cannot_promote_self': return t('alliance.errCannotPromoteSelf');
+    case 'cannot_kick_self': return t('alliance.errCannotKickSelf');
+    case 'invalid_target_role': return t('alliance.errInvalidTargetRole');
+    case 'new_role_not_higher': return t('alliance.errNewRoleNotHigher');
+    case 'new_role_not_lower': return t('alliance.errNewRoleNotLower');
+    case 'actor_not_in_alliance': return t('alliance.errActorNotInAlliance');
+    case 'target_not_in_alliance': return t('alliance.errTargetNotInAlliance');
+    default: return t('alliance.errActionFailed');
   }
 }
 
-function actionLabel(action) {
-  if (action.type === 'kick') return 'KICK';
-  if (action.type === 'transfer_founder') return 'TRANSFER ALLIANCE';
-  if (action.type === 'promote') return `PROMOTE TO ${action.toRole.toUpperCase()}`;
-  if (action.type === 'demote') return `DEMOTE TO ${action.toRole.toUpperCase()}`;
+function actionLabel(t, action) {
+  if (action.type === 'kick') return t('alliance.actionKick');
+  if (action.type === 'transfer_founder') return t('alliance.actionTransfer');
+  if (action.type === 'promote') return t('alliance.actionPromoteTo', { role: action.toRole.toUpperCase() });
+  if (action.type === 'demote') return t('alliance.actionDemoteTo', { role: action.toRole.toUpperCase() });
   return '';
 }
 
-function actionLoadingLabel(action) {
-  if (action.type === 'kick') return 'KICKING…';
-  if (action.type === 'promote') return 'PROMOTING…';
-  if (action.type === 'demote') return 'DEMOTING…';
-  return 'WORKING…';
+function actionLoadingLabel(t, action) {
+  if (action.type === 'kick') return t('alliance.loadingKick');
+  if (action.type === 'promote') return t('alliance.loadingPromote');
+  if (action.type === 'demote') return t('alliance.loadingDemote');
+  return t('alliance.loadingWork');
 }
 
 function HeaderKicker({ children }) {
@@ -172,6 +173,7 @@ function NonMemberContent({
   setJoinSaving,
   getToken,
 }) {
+  const { t } = useTranslation();
   const [joinError, setJoinError] = useState('');
 
   const handleConfirmJoin = async () => {
@@ -192,10 +194,10 @@ function NonMemberContent({
         return;
       }
 
-      setJoinError(mapJoinAllianceError(result.error));
+      setJoinError(mapJoinAllianceError(t, result.error));
     } catch (err) {
       console.error('Join alliance failed:', err);
-      setJoinError('Could not join. Try again.');
+      setJoinError(t('alliance.errCouldNotJoin'));
     } finally {
       setJoinSaving(false);
     }
@@ -210,8 +212,8 @@ function NonMemberContent({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>Join alliance</Text>
-          <Text style={styles.confirmTitle}>Join {confirmAlliance.name}?</Text>
+          <Text style={styles.confirmKicker}>{t('alliance.joinKicker')}</Text>
+          <Text style={styles.confirmTitle}>{t('alliance.joinTitle', { name: confirmAlliance.name })}</Text>
           <Text style={styles.confirmTag}>[{confirmAlliance.short_name}]</Text>
 
           <Pressable
@@ -227,10 +229,10 @@ function NonMemberContent({
             {joinSaving ? (
               <>
                 <ActivityIndicator color={BONE} />
-                <Text style={[styles.ctaAction, { marginTop: 8 }]}>JOINING…</Text>
+                <Text style={[styles.ctaAction, { marginTop: 8 }]}>{t('alliance.joining')}</Text>
               </>
             ) : (
-              <Text style={styles.ctaAction}>JOIN</Text>
+              <Text style={styles.ctaAction}>{t('alliance.join')}</Text>
             )}
           </Pressable>
 
@@ -243,7 +245,7 @@ function NonMemberContent({
             }}
             style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.cancelLinkText}>CANCEL</Text>
+            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
           </Pressable>
 
           {joinError ? <Text style={styles.joinError}>{joinError}</Text> : null}
@@ -257,12 +259,12 @@ function NonMemberContent({
     return (
       <View style={styles.scroll}>
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabelText}>Alliances in</Text>
+          <Text style={styles.sectionLabelText}>{t('alliance.alliancesIn')}</Text>
           <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
           <View style={styles.sectionHairline} />
         </View>
         <View style={styles.emptyListWrap}>
-          <Text style={styles.emptyListText}>No alliances in your city yet.</Text>
+          <Text style={styles.emptyListText}>{t('alliance.noAlliancesInCity')}</Text>
         </View>
         <View style={styles.footerRow}>
           <Pressable
@@ -271,7 +273,7 @@ function NonMemberContent({
             style={({ pressed }) => [pressed && { opacity: 0.6 }]}
           >
             <Text style={styles.createLink}>
-              Found the first one — <Text style={styles.createLinkStrong}>create alliance →</Text>
+              {t('alliance.foundFirst')}<Text style={styles.createLinkStrong}>{t('alliance.createAllianceLink')}</Text>
             </Text>
           </Pressable>
         </View>
@@ -283,12 +285,12 @@ function NonMemberContent({
   return (
     <View style={styles.scroll}>
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionLabelText}>Alliances in</Text>
+        <Text style={styles.sectionLabelText}>{t('alliance.alliancesIn')}</Text>
         <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
         <View style={styles.sectionHairline} />
       </View>
 
-      <Text style={styles.directiveText}>Tap to join</Text>
+      <Text style={styles.directiveText}>{t('alliance.tapToJoin')}</Text>
 
       <ScrollView
         style={styles.allianceListScroll}
@@ -316,10 +318,10 @@ function NonMemberContent({
               </Text>
               <Text style={styles.aMeta}>
                 {(a.city ?? '—')}
-                {a.founder_username ? ` · Founded by ${a.founder_username.toUpperCase()}` : ''}
+                {a.founder_username ? t('alliance.foundedBy', { founder: a.founder_username.toUpperCase() }) : ''}
               </Text>
             </View>
-            <Text style={styles.aMembers}>{a.memberCount} / 20</Text>
+            <Text style={styles.aMembers}>{t('alliance.slash20', { n: a.memberCount })}</Text>
             <Text style={styles.aChev}>→</Text>
           </Pressable>
         ))}
@@ -332,7 +334,7 @@ function NonMemberContent({
           style={({ pressed }) => [pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.createLink}>
-            Or <Text style={styles.createLinkStrong}>create your own alliance →</Text>
+            {t('alliance.orCreate')}<Text style={styles.createLinkStrong}>{t('alliance.createYourOwn')}</Text>
           </Text>
         </Pressable>
       </View>
@@ -342,6 +344,7 @@ function NonMemberContent({
 
 function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const allianceId = myAlliance?.id;
   const [events, setEvents] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -447,10 +450,10 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         await onRefreshAfterLeave();
         return;
       }
-      setLeaveError(mapLeaveAllianceError(result.error));
+      setLeaveError(mapLeaveAllianceError(t, result.error));
     } catch (err) {
       console.error('Leave alliance failed:', err);
-      setLeaveError('Could not leave. Try again.');
+      setLeaveError(t('alliance.errCouldNotLeave'));
     } finally {
       setLeaveSaving(false);
     }
@@ -518,13 +521,13 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
       const targetName = (manageTarget.username ?? 'Member').toUpperCase();
       if (result.status === 0 || result.error === 'network_error') {
-        setTransferError("Couldn't complete transfer. Try again.");
+        setTransferError(t('alliance.errTransferGeneric'));
       } else {
-        setTransferError(mapTransferFounderError(result.error, targetName));
+        setTransferError(mapTransferFounderError(t, result.error, targetName));
       }
     } catch (err) {
       console.error('Transfer founder failed:', err);
-      setTransferError("Couldn't complete transfer. Try again.");
+      setTransferError(t('alliance.errTransferGeneric'));
     } finally {
       setTransferSaving(false);
     }
@@ -564,10 +567,10 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         await onRefreshAfterLeave(); // existing refetch prop — reuse, do not rename
         return;
       }
-      setManageError(mapManageError(result?.error));
+      setManageError(mapManageError(t, result?.error));
     } catch (err) {
       console.error('Manage action failed:', err);
-      setManageError('Action failed. Try again.');
+      setManageError(t('alliance.errActionFailed'));
     } finally {
       setManageActionInFlight(null);
     }
@@ -575,12 +578,9 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
   if (manageTarget && showTransferConfirm) {
     const targetName = manageTarget.username ?? '—';
-    const allianceName = myAlliance?.name ?? 'this alliance';
+    const allianceName = myAlliance?.name ?? t('alliance.allianceFallback');
     const demotedRole = capitalizeRole(manageTarget.role);
-    const transferBody =
-      `Make ${targetName} the Founder of ${allianceName}?\n\n` +
-      `You will be demoted to ${demotedRole}.\n\n` +
-      'This cannot be undone except by the new Founder.';
+    const transferBody = t('alliance.transferBody', { target: targetName, alliance: allianceName, role: demotedRole });
     const transferEnabled = transferConfirmInput === 'TRANSFER';
 
     return (
@@ -590,16 +590,16 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>Alliance</Text>
-          <Text style={styles.confirmTitle}>Transfer Alliance</Text>
+          <Text style={styles.confirmKicker}>{t('alliance.allianceKicker')}</Text>
+          <Text style={styles.confirmTitle}>{t('alliance.transferTitle')}</Text>
           <Text style={styles.confirmBody}>{transferBody}</Text>
 
           <TextInput
-            accessibilityLabel="Type TRANSFER to confirm"
+            accessibilityLabel={t('alliance.typeTransfer')}
             autoCapitalize="characters"
             autoCorrect={false}
             editable={!transferSaving}
-            placeholder="Type TRANSFER to confirm"
+            placeholder={t('alliance.typeTransfer')}
             placeholderTextColor={SLATE}
             style={styles.transferConfirmInput}
             value={transferConfirmInput}
@@ -621,10 +621,10 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             {transferSaving ? (
               <>
                 <ActivityIndicator color={BONE} />
-                <Text style={[styles.ctaAction, { marginTop: 8 }]}>TRANSFERRING…</Text>
+                <Text style={[styles.ctaAction, { marginTop: 8 }]}>{t('alliance.transferring')}</Text>
               </>
             ) : (
-              <Text style={styles.ctaAction}>TRANSFER</Text>
+              <Text style={styles.ctaAction}>{t('alliance.transfer')}</Text>
             )}
           </Pressable>
 
@@ -634,7 +634,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             onPress={closeTransferConfirm}
             style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.cancelLinkText}>CANCEL</Text>
+            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -656,9 +656,9 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>Manage member</Text>
+          <Text style={styles.confirmKicker}>{t('alliance.manageKicker')}</Text>
           <Text style={styles.confirmTitle}>{(manageTarget.username ?? '—').toUpperCase()}</Text>
-          <Text style={styles.confirmTag}>{formatAllianceRole(manageTarget.role)}</Text>
+          <Text style={styles.confirmTag}>{formatAllianceRole(t, manageTarget.role)}</Text>
 
           {availableActions.map((action, idx) => {
             const isTransfer = action.type === 'transfer_founder';
@@ -683,10 +683,10 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
                 {isThisInFlight ? (
                   <>
                     <ActivityIndicator color={BONE} />
-                    <Text style={[styles.ctaAction, { marginTop: 8 }]}>{actionLoadingLabel(action)}</Text>
+                    <Text style={[styles.ctaAction, { marginTop: 8 }]}>{actionLoadingLabel(t, action)}</Text>
                   </>
                 ) : (
-                  <Text style={styles.ctaAction}>{actionLabel(action)}</Text>
+                  <Text style={styles.ctaAction}>{actionLabel(t, action)}</Text>
                 )}
               </Pressable>
             );
@@ -698,7 +698,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             onPress={closeManage}
             style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
           >
-            <Text style={styles.cancelLinkText}>CANCEL</Text>
+            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
           </Pressable>
 
           {manageError ? <Text style={styles.joinError}>{manageError}</Text> : null}
@@ -708,22 +708,22 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   }
 
   if (leaveConfirmCase) {
-    const allianceName = myAlliance?.name ?? 'this alliance';
+    const allianceName = myAlliance?.name ?? t('alliance.allianceFallback');
     const title =
       leaveConfirmCase === 'blocked'
-        ? 'Cannot leave yet'
+        ? t('alliance.cannotLeaveYet')
         : leaveConfirmCase === 'disband'
-          ? `Disband ${allianceName}?`
-          : `Leave ${allianceName}?`;
+          ? t('alliance.disbandTitle', { name: allianceName })
+          : t('alliance.leaveTitle', { name: allianceName });
     const body =
       leaveConfirmCase === 'blocked'
-        ? 'As Founder, transfer your role to another member before leaving. Use the alliance settings to promote a Marshal.'
+        ? t('alliance.blockedBody')
         : leaveConfirmCase === 'disband'
-          ? 'This alliance will be permanently disbanded. The HQ territory will become neutral and can be claimed by anyone. This cannot be undone.'
-          : 'You will lose access to alliance chat, missions, and HQ. You can join another alliance later.';
+          ? t('alliance.disbandBody')
+          : t('alliance.leaveBody');
     const primaryLabel =
-      leaveConfirmCase === 'disband' ? 'DISBAND' : leaveConfirmCase === 'leave' ? 'LEAVE' : 'GOT IT';
-    const loadingLabel = leaveConfirmCase === 'disband' ? 'DISBANDING…' : 'LEAVING…';
+      leaveConfirmCase === 'disband' ? t('alliance.disband') : leaveConfirmCase === 'leave' ? t('alliance.leave') : t('alliance.gotIt');
+    const loadingLabel = leaveConfirmCase === 'disband' ? t('alliance.disbanding') : t('alliance.leaving');
 
     return (
       <ScrollView
@@ -732,7 +732,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>Alliance</Text>
+          <Text style={styles.confirmKicker}>{t('alliance.allianceKicker')}</Text>
           <Text style={styles.confirmTitle}>{title}</Text>
           {leaveConfirmCase !== 'blocked' && myAlliance?.short_name ? (
             <Text style={styles.confirmTag}>[{myAlliance.short_name}]</Text>
@@ -766,7 +766,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
               onPress={closeLeaveConfirm}
               style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
             >
-              <Text style={styles.cancelLinkText}>CANCEL</Text>
+              <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
             </Pressable>
           ) : null}
 
@@ -790,8 +790,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.sectionLabelRow}>
-          <Text style={styles.sectionLabelText}>THIS WEEK</Text>
-          <Text style={styles.sectionLabelAccent}> · COLLECTIVE MISSION</Text>
+          <Text style={styles.sectionLabelText}>{t('alliance.thisWeek')}</Text>
+          <Text style={styles.sectionLabelAccent}>{t('alliance.collectiveMission')}</Text>
           <View style={styles.sectionHairline} />
         </View>
         <View style={styles.missionCard}>
@@ -812,14 +812,14 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         </View>
 
         <View style={styles.sectionLabelRow}>
-          <Text style={styles.sectionLabelText}>ALLIANCE MESSAGES</Text>
-          <Text style={styles.sectionLabelAccent}> · WIRE</Text>
+          <Text style={styles.sectionLabelText}>{t('alliance.allianceMessages')}</Text>
+          <Text style={styles.sectionLabelAccent}>{t('alliance.wire')}</Text>
           <View style={styles.sectionHairline} />
         </View>
 
         <View style={styles.wireContainer}>
           <View style={styles.wireHeaderStrip}>
-            <Text style={styles.wireStatusText}>▌ LIVE</Text>
+            <Text style={styles.wireStatusText}>{t('alliance.wireLive')}</Text>
           </View>
           <ScrollView
             style={styles.wireScroll}
@@ -830,7 +830,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             nestedScrollEnabled={true}
           >
             {events.length === 0 && !isLoading && !feedError && (
-              <Text style={styles.wireEmptyText}>▸ NO TRANSMISSIONS.</Text>
+              <Text style={styles.wireEmptyText}>{t('alliance.noTransmissions')}</Text>
             )}
             {events.map((item) => (
               <AllianceLogEvent key={item.id} event={item} />
@@ -839,7 +839,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
               <ActivityIndicator style={styles.wireLoadingMore} color={SLATE} />
             )}
             {!isLoadingMore && !nextCursor && events.length > 0 && (
-              <Text style={styles.wireEndOfList}>—— END OF WIRE ——</Text>
+              <Text style={styles.wireEndOfList}>{t('alliance.endOfWire')}</Text>
             )}
           </ScrollView>
           {isLoading && (
@@ -849,17 +849,17 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           )}
           {!isLoading && feedError && (
             <View style={styles.wireOverlay}>
-              <Text style={styles.wireErrorText}>▸ WIRE LOST.</Text>
+              <Text style={styles.wireErrorText}>{t('alliance.wireLost')}</Text>
               <Pressable onPress={fetchFirstPage} style={styles.wireRetryButton}>
-                <Text style={styles.wireRetryText}>RETRY</Text>
+                <Text style={styles.wireRetryText}>{t('common.retry')}</Text>
               </Pressable>
             </View>
           )}
         </View>
 
         <View style={styles.sectionLabelRow}>
-          <Text style={styles.sectionLabelText}>TOP CONTRIBUTORS</Text>
-          <Text style={styles.sectionLabelAccent}> · THIS WEEK</Text>
+          <Text style={styles.sectionLabelText}>{t('alliance.topContributors')}</Text>
+          <Text style={styles.sectionLabelAccent}>{t('alliance.thisWeekAccent')}</Text>
           <View style={styles.sectionHairline} />
         </View>
 
@@ -880,10 +880,10 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         ))}
 
         <View style={styles.sectionLabelRow}>
-          <Text style={styles.sectionLabelText}>ROSTER</Text>
-          <Text style={styles.sectionLabelAccent}> · {roster.length} ACTIVE</Text>
+          <Text style={styles.sectionLabelText}>{t('alliance.roster')}</Text>
+          <Text style={styles.sectionLabelAccent}>{t('alliance.activeAccent', { n: roster.length })}</Text>
           <View style={styles.sectionHairline} />
-          <Text style={styles.sectionLabelRight}>RESETS MON 00:00</Text>
+          <Text style={styles.sectionLabelRight}>{t('alliance.resetsMon')}</Text>
         </View>
         {roster.map((m, i) => {
           const actions =
@@ -900,7 +900,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
               key={m.player_id}
               initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
               name={m.username ?? '—'}
-              role={formatAllianceRole(m.role)}
+              role={formatAllianceRole(t, m.role)}
               steps="—"
               showBorder={i < roster.length - 1}
               onPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
@@ -917,7 +917,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             currentPlayerId: playerId,
           })}
         >
-          <Text style={styles.warRoomBtnText}>ENTER WAR ROOM →</Text>
+          <Text style={styles.warRoomBtnText}>{t('alliance.enterWarRoom')}</Text>
         </Pressable>
 
         <Pressable
@@ -925,7 +925,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           onPress={openLeaveConfirm}
           style={({ pressed }) => [styles.leaveLink, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.leaveLinkText}>LEAVE ALLIANCE</Text>
+          <Text style={styles.leaveLinkText}>{t('alliance.leaveAlliance')}</Text>
         </Pressable>
       </ScrollView>
     </>
@@ -934,6 +934,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
 export default function AllianceScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -1046,7 +1047,7 @@ export default function AllianceScreen() {
         }
 
         if (!myResult.ok) {
-          setFetchError('Could not load alliance');
+          setFetchError(t('alliance.couldNotLoad'));
           setMyAlliance(null);
           setRoster([]);
           setTerritoryCount(null);
@@ -1067,7 +1068,7 @@ export default function AllianceScreen() {
         });
 
         if (!detailResult.ok) {
-          setFetchError('Could not load alliance');
+          setFetchError(t('alliance.couldNotLoad'));
           setMyAlliance(null);
           setRoster([]);
           setTerritoryCount(null);
@@ -1106,7 +1107,7 @@ export default function AllianceScreen() {
         hasLoadedOnceRef.current = true;
       }
     },
-    [userId, loadAllianceList],
+    [userId, loadAllianceList, t],
   );
 
   useFocusEffect(
@@ -1121,7 +1122,7 @@ export default function AllianceScreen() {
     return (
       <View style={[styles.screen, styles.centered]}>
         <ActivityIndicator size="large" color={SLATE2} />
-        <Text style={styles.loadingText}>LOADING…</Text>
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
   }
@@ -1135,7 +1136,7 @@ export default function AllianceScreen() {
           onPress={() => fetchAllianceData()}
           style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.retryBtnText}>RETRY</Text>
+          <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
     );
@@ -1152,21 +1153,21 @@ export default function AllianceScreen() {
             </View>
           </View>
 
-          <Text style={styles.headerTitle}>{myAlliance?.name ?? 'Alliance'}</Text>
+          <Text style={styles.headerTitle}>{myAlliance?.name ?? t('alliance.allianceFallback')}</Text>
 
           <Text style={styles.headerCity}>
-            {'OF ' + (myAlliance?.city ?? '—').toUpperCase() + ' · REALM 01'}
+            {t('alliance.headerCity', { city: (myAlliance?.city ?? '—').toUpperCase() })}
           </Text>
 
           <View style={styles.headerDivider} />
 
           <View style={styles.headerStatsRow}>
             <Text style={styles.headerStat}>
-              <Text style={styles.headerStatLabel}>ROSTER </Text>
-              <Text style={styles.headerStatValue}>{myAlliance?.memberCount ?? '—'} / 20</Text>
+              <Text style={styles.headerStatLabel}>{t('alliance.rosterLabel')}</Text>
+              <Text style={styles.headerStatValue}>{t('alliance.slash20', { n: myAlliance?.memberCount ?? '—' })}</Text>
             </Text>
             <Text style={styles.headerStat}>
-              <Text style={styles.headerStatLabel}>TERRITORIES </Text>
+              <Text style={styles.headerStatLabel}>{t('alliance.territoriesLabel')}</Text>
               <Text style={styles.headerStatValue}>
                 {territoryCount !== null ? String(territoryCount) : '—'}
               </Text>
@@ -1176,9 +1177,9 @@ export default function AllianceScreen() {
       )}
       {!isMember && !confirmAlliance && (
         <View style={styles.header}>
-          <HeaderKicker>ALLIANCE</HeaderKicker>
-          <Text style={styles.headerTitle}>NO ALLIANCE</Text>
-          <Text style={styles.headerSubtitle}>You are unaffiliated</Text>
+          <HeaderKicker>{t('alliance.kicker')}</HeaderKicker>
+          <Text style={styles.headerTitle}>{t('alliance.noAllianceTitle')}</Text>
+          <Text style={styles.headerSubtitle}>{t('alliance.unaffiliated')}</Text>
         </View>
       )}
 
@@ -1191,7 +1192,7 @@ export default function AllianceScreen() {
               onPress={() => fetchAllianceData()}
               style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
             >
-              <Text style={styles.retryBtnText}>RETRY</Text>
+              <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
             </Pressable>
           </View>
         ) : (

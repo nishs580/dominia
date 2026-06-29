@@ -4,10 +4,12 @@ import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { patchMe } from '../lib/meApi';
 
 export default function UsernameScreen({ navigation, route }) {
   const playerId = route.params?.playerId;
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
@@ -18,19 +20,19 @@ export default function UsernameScreen({ navigation, route }) {
 
   const handleConfirm = async () => {
     if (!username.trim()) {
-      setError('Please enter a username.');
+      setError(t('username.errorEmpty'));
       return;
     }
     if (username.length < 2) {
-      setError('Username must be at least 2 characters.');
+      setError(t('username.errorTooShort'));
       return;
     }
     if (username.length > 20) {
-      setError('Username must be 20 characters or less.');
+      setError(t('username.errorTooLong'));
       return;
     }
     if (!/^[a-zA-Z0-9._]+$/.test(username)) {
-      setError('Only letters, numbers, dots and underscores allowed.');
+      setError(t('username.errorInvalidChars'));
       return;
     }
     setLoading(true);
@@ -40,7 +42,7 @@ export default function UsernameScreen({ navigation, route }) {
       if (!res.ok) throw new Error('update_failed');
       navigation.replace('Onboarding', { playerId });
     } catch (err) {
-      setError('Username already taken. Try another.');
+      setError(t('username.errorTaken'));
     } finally {
       setLoading(false);
     }
@@ -52,12 +54,12 @@ export default function UsernameScreen({ navigation, route }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Choose your name</Text>
-        <Text style={styles.subtitle}>This is how other Commanders will know you.</Text>
+        <Text style={styles.title}>{t('username.title')}</Text>
+        <Text style={styles.subtitle}>{t('username.subtitle')}</Text>
 
         <TextInput
           style={styles.input}
-          placeholder="Commander name"
+          placeholder={t('username.placeholder')}
           placeholderTextColor="#5C6068"
           autoCapitalize="none"
           value={username}
@@ -92,7 +94,7 @@ export default function UsernameScreen({ navigation, route }) {
               textTransform: 'uppercase',
             }}
           >
-            Next →
+            {t('username.next')}
           </Text>
         </Pressable>
       </View>

@@ -3,9 +3,11 @@ import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { ensurePlayer } from '../lib/auth';
 
 export default function SignInScreen({ navigation }) {
+  const { t } = useTranslation();
   const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
   const { getToken } = useAuth();
@@ -28,7 +30,7 @@ export default function SignInScreen({ navigation }) {
       const { needsUsername } = await ensurePlayer({ clerkGetToken: getToken, email });
       navigation.replace(needsUsername ? 'Username' : 'MainTabs');
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? 'Sign in failed. Check your email and password.');
+      setError(err.errors?.[0]?.message ?? t('signIn.signInFailed'));
     } finally {
       setLoading(false);
     }
@@ -44,7 +46,7 @@ export default function SignInScreen({ navigation }) {
       const { needsUsername, player } = await ensurePlayer({ clerkGetToken: getToken, email });
       navigation.replace(needsUsername ? 'Username' : 'Onboarding', { playerId: player?.id });
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? 'Sign up failed. Try a different email.');
+      setError(err.errors?.[0]?.message ?? t('signIn.signUpFailed'));
     } finally {
       setLoading(false);
     }
@@ -58,11 +60,11 @@ export default function SignInScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <Text style={styles.title}>DOMINIA <Text style={styles.claimMark}>■</Text></Text>
-      <Text style={styles.subtitle}>Walk. Claim. Conquer. Defend.</Text>
+      <Text style={styles.subtitle}>{t('signIn.tagline')}</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder={t('signIn.emailPlaceholder')}
         placeholderTextColor="#6B7280"
         autoCapitalize="none"
         keyboardType="email-address"
@@ -71,7 +73,7 @@ export default function SignInScreen({ navigation }) {
       />
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder={t('signIn.passwordPlaceholder')}
         placeholderTextColor="#6B7280"
         secureTextEntry
         value={password}
@@ -86,7 +88,7 @@ export default function SignInScreen({ navigation }) {
         disabled={loading}
       >
         <Text style={styles.buttonText}>
-          {loading ? 'Please wait...' : isSignIn ? 'Sign In' : 'Create Account'}
+          {loading ? t('signIn.pleaseWait') : isSignIn ? t('signIn.signIn') : t('signIn.createAccount')}
         </Text>
       </Pressable>
 
@@ -95,8 +97,8 @@ export default function SignInScreen({ navigation }) {
         onPress={() => { setMode(isSignIn ? 'signup' : 'signin'); setError(''); }}
       >
         <Text style={styles.toggleText}>
-          {isSignIn ? "Don't have an account? " : 'Already have an account? '}
-          <Text style={styles.toggleLink}>{isSignIn ? 'Sign Up' : 'Sign In'}</Text>
+          {isSignIn ? t('signIn.noAccount') : t('signIn.haveAccount')}
+          <Text style={styles.toggleLink}>{isSignIn ? t('signIn.signUpLink') : t('signIn.signInLink')}</Text>
         </Text>
       </Pressable>
     </KeyboardAvoidingView>

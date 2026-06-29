@@ -10,6 +10,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { getRooms } from '../lib/chatApi';
 import { getActivityLog } from '../lib/activityLogApi';
 import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
@@ -24,6 +25,7 @@ function withCount(base, count) {
 
 export default function MapSideRail({ hidden = false }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -56,9 +58,9 @@ export default function MapSideRail({ hidden = false }) {
   if (hidden) return null;
 
   const items = [
-    { key: 'chat', Icon: ChatGlyph, label: withCount('CHAT', chatUnread), onPress: () => navigation.navigate('Chat') },
-    { key: 'boards', Icon: BoardsGlyph, label: 'BOARDS', onPress: () => navigation.navigate('Leaderboards') },
-    { key: 'log', Icon: LogGlyph, label: withCount('LOG', logUnread), onPress: () => navigation.navigate('ActivityLog') },
+    { key: 'chat', Icon: ChatGlyph, label: withCount(t('sideRail.chat'), chatUnread), onPress: () => navigation.navigate('Chat') },
+    { key: 'boards', Icon: BoardsGlyph, label: t('sideRail.boards'), onPress: () => navigation.navigate('Leaderboards') },
+    { key: 'log', Icon: LogGlyph, label: withCount(t('sideRail.log'), logUnread), onPress: () => navigation.navigate('ActivityLog') },
   ];
 
   return (

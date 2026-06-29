@@ -1,41 +1,16 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { mobileStateFromOutcome } from '../lib/contestResultHelpers';
 
+// Display strings live in locales/<lng>.json under contestResult.<i18nKey>.*;
+// only the role/outcome logic and the i18n key live here.
 const STATE_CONFIG = {
-  attack_won: {
-    role: 'attacker',
-    outcome: 'won',
-    eyebrow: '▪ TERRITORY TAKEN',
-    headline: 'Yours.',
-    opponentRoleLabel: 'DEFENDER',
-    primaryCta: 'CLAIM & DEFEND',
-  },
-  attack_lost: {
-    role: 'attacker',
-    outcome: 'lost',
-    eyebrow: '▪ ATTACK FAILED',
-    headline: 'Held.',
-    opponentRoleLabel: 'DEFENDER',
-    primaryCta: 'RECONTEST WHEN READY',
-  },
-  defend_won: {
-    role: 'defender',
-    outcome: 'won',
-    eyebrow: '▪ TERRITORY HELD',
-    headline: 'Yours, still.',
-    opponentRoleLabel: 'ATTACKER',
-    primaryCta: 'FORTIFY FOR 24H',
-  },
-  defend_lost: {
-    role: 'defender',
-    outcome: 'lost',
-    eyebrow: '▪ TERRITORY LOST',
-    headline: 'Taken.',
-    opponentRoleLabel: 'ATTACKER',
-    primaryCta: 'RECONQUER',
-  },
+  attack_won: { role: 'attacker', outcome: 'won', i18nKey: 'attackWon' },
+  attack_lost: { role: 'attacker', outcome: 'lost', i18nKey: 'attackLost' },
+  defend_won: { role: 'defender', outcome: 'won', i18nKey: 'defendWon' },
+  defend_lost: { role: 'defender', outcome: 'lost', i18nKey: 'defendLost' },
 };
 
 const INK = '#0E1014';
@@ -59,28 +34,23 @@ function formatMetres(m) {
   return Math.max(0, Math.round(clampNumber(m, 0))).toLocaleString();
 }
 
-function consequenceLine(cfg, myM, oppM, opponentName) {
+function consequenceLine(t, cfg, myM, oppM, opponentName) {
   const diff = Math.abs(myM - oppM);
-  if (cfg.outcome === 'won' && cfg.role === 'attacker') {
-    return `${opponentName.toUpperCase()} HELD THIS GROUND.\nYOU ARE NOW IN THE HALL OF HOLDERS.`;
-  }
-  if (cfg.outcome === 'lost' && cfg.role === 'attacker') {
-    return `${diff} METRES SHORT.\nSTREAK INTACT. RECONTEST WHEN READY.`;
-  }
-  if (cfg.outcome === 'won' && cfg.role === 'defender') {
-    return `+60 XP · +12 SHIELD.\nYOUR HOLD CONTINUES.`;
-  }
-  return `RECONQUEST WINDOW OPEN: 72H.\nYOUR DEFENCE IS RECORDED.`;
+  return t(`contestResult.${cfg.i18nKey}.consequence`, {
+    opponent: opponentName.toUpperCase(),
+    diff,
+  });
 }
 
 export default function ContestResultScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
 
   const {
     outcome = 'attacker_won',
     role = 'attacker',
-    territoryName = 'Territory',
+    territoryName = t('common.territoryFallback'),
     territoryPerimeter,
     myDistance = 0,
     opponentDistance = 0,
@@ -137,7 +107,7 @@ export default function ContestResultScreen() {
     <View style={styles.screen}>
       <View style={styles.statusSpacer} />
 
-      <Text style={[styles.eyebrow, { color: markColor }]}>{cfg.eyebrow}</Text>
+      <Text style={[styles.eyebrow, { color: markColor }]}>{t(`contestResult.${cfg.i18nKey}.eyebrow`)}</Text>
 
       <View style={styles.markWrap}>
         {cfg.outcome === 'won' ? (
@@ -163,57 +133,57 @@ export default function ContestResultScreen() {
       </View>
 
       <Text style={styles.territoryName}>{territoryName.toUpperCase()}</Text>
-      <Text style={styles.headline}>{cfg.headline}</Text>
+      <Text style={styles.headline}>{t(`contestResult.${cfg.i18nKey}.headline`)}</Text>
 
-      {territoryPerimeter ? <Text style={styles.perimeter}>{`${territoryPerimeter} KM PERIMETER`}</Text> : null}
+      {territoryPerimeter ? <Text style={styles.perimeter}>{t('contestResult.perimeter', { km: territoryPerimeter })}</Text> : null}
 
       <View style={styles.statsRow}>
         <View style={styles.statCell}>
-          <Text style={styles.statLabel}>YOU</Text>
-          <Text style={styles.statName}>You</Text>
+          <Text style={styles.statLabel}>{t('contestResult.youLabel')}</Text>
+          <Text style={styles.statName}>{t('contestResult.youName')}</Text>
           <Text style={[styles.statValue, myIsWinner ? { color: markColor } : { color: SLATE }]}>
             {formatMetres(myM)}
           </Text>
-          <Text style={styles.statUnit}>METRES WALKED</Text>
+          <Text style={styles.statUnit}>{t('contestResult.metresWalked')}</Text>
         </View>
         <View style={styles.statCell}>
-          <Text style={styles.statLabel}>{cfg.opponentRoleLabel}</Text>
+          <Text style={styles.statLabel}>{t(`contestResult.${cfg.i18nKey}.opponentRole`)}</Text>
           <Text style={styles.statName}>{opponentName}</Text>
           <Text style={[styles.statValue, oppIsWinner ? { color: markColor } : { color: SLATE }]}>
             {formatMetres(oppM)}
           </Text>
-          <Text style={styles.statUnit}>METRES WALKED</Text>
+          <Text style={styles.statUnit}>{t('contestResult.metresWalked')}</Text>
         </View>
       </View>
 
       <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
-        <Text style={styles.consequenceText}>{consequenceLine(cfg, myM, oppM, opponentName)}</Text>
+        <Text style={styles.consequenceText}>{consequenceLine(t, cfg, myM, oppM, opponentName)}</Text>
       </View>
       {(stateKey === 'attack_won' || stateKey === 'defend_won') ? (
         <Text style={styles.earnedBeat}>
           {stateKey === 'defend_won'
-            ? `+${xpGained} SIEGE XP · +${resourcesAwarded.stone} STONE · +${resourcesAwarded.gold} GOLD · +${resourcesAwarded.morale} MORALE`
-            : `+${xpGained} SIEGE XP · +${resourcesAwarded.iron} IRON · +${resourcesAwarded.gold} GOLD · +${resourcesAwarded.morale} MORALE`}
+            ? t('contestResult.earnedDefend', { xp: xpGained, stone: resourcesAwarded.stone, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })
+            : t('contestResult.earnedAttack', { xp: xpGained, iron: resourcesAwarded.iron, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })}
         </Text>
       ) : null}
 
       <View style={styles.ctaStack}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={cfg.primaryCta}
+          accessibilityLabel={t(`contestResult.${cfg.i18nKey}.cta`)}
           onPress={() => navigation.navigate('MainTabs')}
           style={({ pressed }) => [styles.ctaPrimary, pressed && { opacity: 0.85 }]}
         >
-          <Text style={styles.ctaPrimaryText}>{cfg.primaryCta}</Text>
+          <Text style={styles.ctaPrimaryText}>{t(`contestResult.${cfg.i18nKey}.cta`)}</Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back to map"
+          accessibilityLabel={t('contestResult.backToMap')}
           onPress={() => navigation.navigate('MainTabs')}
           style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.ctaSecondaryText}>BACK TO MAP</Text>
+          <Text style={styles.ctaSecondaryText}>{t('contestResult.backToMap')}</Text>
         </Pressable>
       </View>
     </View>

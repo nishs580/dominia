@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useReducer, useRef } from 'react';
 import { Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -134,22 +135,22 @@ function flushPartialContestWindow() {
   }
 }
 
-function walkErrorToastMessage(code, context) {
+function walkErrorToastMessage(t, code, context) {
   switch (code) {
     case 'player_not_found':
-      return 'Lost session. Exiting contest.';
+      return t('activeClaim.toastLostSession');
     case 'contest_not_found':
-      return 'Contest no longer exists.';
+      return t('activeClaim.toastContestGone');
     case 'contest_not_active':
-      if (context?.status === 'expired') return 'Contest expired.';
+      if (context?.status === 'expired') return t('activeClaim.toastContestExpired');
       if (context?.status === 'attacker_won' || context?.status === 'defender_won') {
-        return 'Contest already resolved.';
+        return t('activeClaim.toastContestResolved');
       }
-      return 'Contest already resolved.';
+      return t('activeClaim.toastContestResolved');
     case 'not_a_participant':
-      return "You're not part of this contest.";
+      return t('activeClaim.toastNotParticipant');
     default:
-      return 'Something went wrong.';
+      return t('activeClaim.toastGenericError');
   }
 }
 
@@ -346,12 +347,13 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
   const {
-    territoryName = 'Territory',
+    territoryName = t('activeClaim.territoryFallback'),
     perimeterDistance = 0,
     territoryId,
     playerId,
@@ -545,7 +547,7 @@ export default function ActiveClaimScreen() {
       navigatingRef.current = true;
       flushPartialContestWindow();
       contestWalk.stop();
-      const message = walkErrorToastMessage(code, context);
+      const message = walkErrorToastMessage(t, code, context);
       navigation.reset({
         index: 0,
         routes: [{
@@ -595,8 +597,8 @@ export default function ActiveClaimScreen() {
           distanceInterval: 0,
           showsBackgroundLocationIndicator: false,
           foregroundService: {
-            notificationTitle: 'Dominia · Active Claim',
-            notificationBody: 'Tracking your walk',
+            notificationTitle: t('activeClaim.fgServiceTitle'),
+            notificationBody: t('activeClaim.fgServiceBody'),
             notificationColor: '#D64525',
           },
           pausesUpdatesAutomatically: false,
@@ -662,11 +664,11 @@ export default function ActiveClaimScreen() {
     <View style={styles.screen}>
       <View style={styles.topRow}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.claimingLabel, { marginTop: 32 }]}>{mode === 'contest' ? 'CONTESTING' : 'CLAIMING'}</Text>
+          <Text style={[styles.claimingLabel, { marginTop: 32 }]}>{mode === 'contest' ? t('activeClaim.contesting') : t('activeClaim.claiming')}</Text>
           <Text style={styles.territoryName}>{territoryName}</Text>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>In Progress</Text>
+          <Text style={styles.badgeText}>{t('activeClaim.inProgress')}</Text>
         </View>
       </View>
 
@@ -697,30 +699,30 @@ export default function ActiveClaimScreen() {
       </View>
 
       <View style={styles.statsPanel}>
-        <StatRow label="STEPS WALKED" value={String(claimState.liveSteps)} />
-        <StatRow label="DISTANCE" value={`${formatMetres(claimState.distanceM)} m`} />
-        <StatRow label={isCalibrated ? 'STRIDE (CAL)' : 'STRIDE (DEFAULT)'} value={`${claimState.strideM.toFixed(2)} m`} />
-        <StatRow label="PACE" value={`${claimState.livePace} spm`} last />
+        <StatRow label={t('activeClaim.statSteps')} value={String(claimState.liveSteps)} />
+        <StatRow label={t('activeClaim.statDistance')} value={`${formatMetres(claimState.distanceM)} m`} />
+        <StatRow label={isCalibrated ? t('activeClaim.statStrideCal') : t('activeClaim.statStrideDefault')} value={`${claimState.strideM.toFixed(2)} m`} />
+        <StatRow label={t('activeClaim.statPace')} value={`${claimState.livePace} spm`} last />
       </View>
 
       <View style={styles.bannerZone}>
         {claimState.hcPermission === 'denied' && (
-          <Banner color={CLAIM} label="HEALTH CONNECT NOT GRANTED · Steps cannot be read" />
+          <Banner color={CLAIM} label={t('activeClaim.bannerHcDenied')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'vehicle' && (
-          <Banner color={CLAIM} label="VEHICLE DETECTED · Steps paused" />
+          <Banner color={CLAIM} label={t('activeClaim.bannerVehicle')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'paused' && (
-          <Banner color={AMBER} label={`PAUSED · ${formatPauseCountdown(claimState.pauseElapsedMs)} until reset`} />
+          <Banner color={AMBER} label={t('activeClaim.bannerPaused', { countdown: formatPauseCountdown(claimState.pauseElapsedMs) })} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'reset' && (
-          <Banner color={CLAIM} label="PROGRESS RESET · Walk to resume" />
+          <Banner color={CLAIM} label={t('activeClaim.bannerReset')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'gpsWeak' && (
-          <Banner color={SLATE2} label="GPS WEAK · Vehicle filter on hold" />
+          <Banner color={SLATE2} label={t('activeClaim.bannerGpsWeak')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'halfway' && (
-          <Banner color={BONE} label="50% — KEEP GOING" />
+          <Banner color={BONE} label={t('activeClaim.bannerHalfway')} />
         )}
       </View>
 
@@ -728,17 +730,17 @@ export default function ActiveClaimScreen() {
 
       {DEV_MODE_MANUAL && (
         <Pressable onPress={handleManualComplete} style={styles.devBtn}>
-          <Text style={styles.devBtnText}>COMPLETE NOW (DEV)</Text>
+          <Text style={styles.devBtnText}>{t('activeClaim.devComplete')}</Text>
         </Pressable>
       )}
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Cancel claim"
+        accessibilityLabel={t('activeClaim.cancelClaim')}
         onPress={handleCancel}
         style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
       >
-        <Text style={styles.cancelText}>Cancel claim</Text>
+        <Text style={styles.cancelText}>{t('activeClaim.cancelClaim')}</Text>
       </Pressable>
     </View>
   );

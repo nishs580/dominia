@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { completeClaim } from '../lib/claimApi';
 
 const INK = '#0E1014';
@@ -25,12 +26,13 @@ function completeErrorShowsRetry(code) {
 export default function ClaimSuccessScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
   const {
-    territoryName = 'Territory',
+    territoryName = t('common.territoryFallback'),
     perimeterDistance = 0,
     territoryId,
     playerId,
@@ -114,24 +116,24 @@ export default function ClaimSuccessScreen() {
         switch (code) {
           case 'intent_expired':
             return freeClaim
-              ? 'Your claim expired.'
-              : `Your claim expired. ${goldPaid} gold has been forfeited.`;
+              ? t('claimSuccess.errIntentExpiredFree')
+              : t('claimSuccess.errIntentExpiredPaid', { gold: goldPaid });
           case 'territory_already_claimed':
             return freeClaim
-              ? 'Another player claimed this territory while you walked.'
-              : `Another player claimed this territory while you walked. ${goldPaid} gold forfeited.`;
+              ? t('claimSuccess.errAlreadyClaimedFree')
+              : t('claimSuccess.errAlreadyClaimedPaid', { gold: goldPaid });
           case 'intent_not_found':
-            return "Couldn't find your claim. Tap to retry.";
+            return t('claimSuccess.errIntentNotFound');
           case 'network_error':
-            return 'Lost connection — your claim may have completed. Tap to retry.';
+            return t('claimSuccess.errNetwork');
           case 'no_token':
           case 'unauthorized':
-            return 'Please sign in again.';
+            return t('claimSuccess.errSignIn');
           case 'player_not_found':
           case 'territory_not_found':
           case 'unknown_error':
           default:
-            return 'Something went wrong. Tap to retry.';
+            return t('claimSuccess.errGeneric');
         }
       })()
     : null;
@@ -156,7 +158,7 @@ export default function ClaimSuccessScreen() {
                 isRetrying && { opacity: 0.6 },
               ]}
             >
-              <Text style={styles.retryBtnText}>{isRetrying ? 'Retrying…' : 'Retry'}</Text>
+              <Text style={styles.retryBtnText}>{isRetrying ? t('claimSuccess.retrying') : t('common.retry')}</Text>
             </Pressable>
           ) : null}
         </Animated.View>
@@ -165,27 +167,27 @@ export default function ClaimSuccessScreen() {
           <View style={styles.iconSquare} />
 
           <Text style={styles.territory}>{territoryName}</Text>
-          <Text style={styles.territoryCaption}>is yours.</Text>
+          <Text style={styles.territoryCaption}>{t('claimSuccess.isYours')}</Text>
           {showRewardBeats ? (
             <>
-              <Text style={styles.goldEarnedBeat}>+{envelope.xp_awarded} SIEGE XP EARNED</Text>
-              <Text style={styles.goldEarnedBeat}>+{envelope.resources_awarded.gold} GOLD EARNED</Text>
+              <Text style={styles.goldEarnedBeat}>{t('claimSuccess.xpEarned', { xp: envelope.xp_awarded })}</Text>
+              <Text style={styles.goldEarnedBeat}>{t('claimSuccess.goldEarned', { gold: envelope.resources_awarded.gold })}</Text>
               {envelope.leveled_up === true ? (
                 // TODO: level-up celebration card when design is ready
                 null
               ) : null}
             </>
           ) : null}
-          <Text style={styles.message}>Defend it.</Text>
+          <Text style={styles.message}>{t('claimSuccess.defendIt')}</Text>
 
           <View style={styles.cardsRow}>
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>PERIMETER</Text>
+              <Text style={styles.cardLabel}>{t('claimSuccess.perimeterLabel')}</Text>
               <Text style={styles.cardValue}>{formatMeters(perimeterDistance)}</Text>
             </View>
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>STATUS</Text>
-              <Text style={[styles.cardValue, { color: ALLIANCE }]}>Owned</Text>
+              <Text style={styles.cardLabel}>{t('claimSuccess.statusLabel')}</Text>
+              <Text style={[styles.cardValue, { color: ALLIANCE }]}>{t('claimSuccess.owned')}</Text>
             </View>
           </View>
         </Animated.View>
@@ -328,11 +330,11 @@ export default function ClaimSuccessScreen() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to Map"
+        accessibilityLabel={t('claimSuccess.backToMap')}
         onPress={() => navigation.navigate('MainTabs')}
         style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
       >
-        <Text style={styles.ctaText}>Back to Map</Text>
+        <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>
       </Pressable>
     </View>
   );

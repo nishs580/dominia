@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Tex
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
 import { patchMe } from '../lib/meApi';
@@ -75,6 +76,7 @@ function SettingsRow({ label }) {
 }
 
 function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState(
     playerRow?.alliance_chat_push_enabled !== false,
   );
@@ -106,14 +108,14 @@ function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
       styles.settingsRow,
       pressed && { opacity: 0.7 },
     ]}>
-      <Text style={styles.settingsLabel}>Alliance chat push</Text>
+      <Text style={styles.settingsLabel}>{t('profile.allianceChatPush')}</Text>
       <Text
         style={[
           styles.settingsLabel,
           { color: enabled ? '#F2EEE6' : '#5C6068' },
         ]}
       >
-        {enabled ? 'ON' : 'OFF'}
+        {enabled ? t('profile.on') : t('profile.off')}
       </Text>
     </Pressable>
   );
@@ -121,6 +123,7 @@ function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
   const { user } = useUser();
@@ -146,7 +149,7 @@ export default function ProfileScreen() {
         setPlayerRow(null);
         setOwnedTerritories([]);
         setActivityPower(0);
-        setProfileError('Not signed in.');
+        setProfileError(t('profile.errNotSignedIn'));
         setLoading(false);
         return;
       }
@@ -166,7 +169,7 @@ export default function ProfileScreen() {
       const __profileT1 = Date.now();
 
       if (playerError) {
-        setProfileError(playerError.message ?? 'Could not load profile');
+        setProfileError(playerError.message ?? t('profile.errCouldNotLoad'));
         setPlayerRow(null);
         setOwnedTerritories([]);
         setActivityPower(0);
@@ -175,7 +178,7 @@ export default function ProfileScreen() {
       }
 
       if (!player) {
-        setProfileError('No player record for this account.');
+        setProfileError(t('profile.errNoPlayer'));
         setPlayerRow(null);
         setOwnedTerritories([]);
         setActivityPower(0);
@@ -201,7 +204,7 @@ export default function ProfileScreen() {
       console.log('[Profile] total time:', Date.now() - __profileT0, 'ms');
       setAllianceName(allianceResult.data?.name ?? null);
       if (territoriesResult.error) {
-        setProfileError(territoriesResult.error.message ?? 'Could not load territories');
+        setProfileError(territoriesResult.error.message ?? t('profile.errCouldNotLoadTerritories'));
         setOwnedTerritories([]);
       } else {
         setOwnedTerritories(territoriesResult.data ?? []);
@@ -289,17 +292,17 @@ export default function ProfileScreen() {
 
   const unlockText = useMemo(() => {
     const title = next?.title;
-    if (title === 'Pathfinder') return 'Calorie-burn challenge tier unlocked';
-    if (title === 'Claimer') return 'Contest mechanic unlocked';
-    if (title === 'Defender') return 'Contest enemy solo territories';
-    if (title === 'Commander') return 'Solo phase complete. Alliance eligible at Warlord';
-    if (title === 'Warlord') return 'Found or join an Alliance';
-    if (title === 'Strategist') return 'Alliance Officer rank eligible';
-    if (title === 'Conqueror') return 'Epic territory contests unlocked';
-    if (title === 'Sovereign') return 'Alliance Marshal rank eligible';
-    if (title === 'Dominator') return 'Realm legend. All mechanics unlocked';
-    return 'You have reached the top.';
-  }, [next?.title]);
+    if (title === 'Pathfinder') return t('profile.unlock.pathfinder');
+    if (title === 'Claimer') return t('profile.unlock.claimer');
+    if (title === 'Defender') return t('profile.unlock.defender');
+    if (title === 'Commander') return t('profile.unlock.commander');
+    if (title === 'Warlord') return t('profile.unlock.warlord');
+    if (title === 'Strategist') return t('profile.unlock.strategist');
+    if (title === 'Conqueror') return t('profile.unlock.conqueror');
+    if (title === 'Sovereign') return t('profile.unlock.sovereign');
+    if (title === 'Dominator') return t('profile.unlock.dominator');
+    return t('profile.unlock.top');
+  }, [next?.title, t]);
 
   const avatarUrl = playerRow?.avatar_url ?? null;
   const avatarInitials =
@@ -308,15 +311,15 @@ export default function ProfileScreen() {
   const onChangeAvatar = async () => {
     if (uploadingAvatar) return;
     if (!user) {
-      Alert.alert('Hang on', 'Your account is still loading. Try again in a moment.');
+      Alert.alert(t('profile.alertHangOnTitle'), t('profile.alertHangOnBody'));
       return;
     }
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          'Photo access needed',
-          'Allow photo access in Settings to set a profile picture.',
+          t('profile.alertPhotoTitle'),
+          t('profile.alertPhotoBody'),
         );
         return;
       }
@@ -332,7 +335,7 @@ export default function ProfileScreen() {
 
       const asset = result.assets?.[0];
       if (!asset?.base64) {
-        Alert.alert('Upload failed', 'Could not read the selected image.');
+        Alert.alert(t('profile.alertUploadFailedTitle'), t('profile.alertReadImageBody'));
         return;
       }
 
@@ -353,15 +356,15 @@ export default function ProfileScreen() {
       if (!res.ok) {
         console.warn('[Profile] avatar patchMe failed:', res.status, res.error);
         Alert.alert(
-          'Almost there',
-          'Your picture uploaded but did not sync to the game. Reopen Profile to retry.',
+          t('profile.alertAlmostTitle'),
+          t('profile.alertAlmostBody'),
         );
       }
 
       setPlayerRow((prev) => (prev ? { ...prev, avatar_url: newUrl } : prev));
     } catch (err) {
       console.warn('[Profile] avatar update failed:', err?.message ?? err);
-      Alert.alert('Upload failed', 'Something went wrong setting your picture. Please try again.');
+      Alert.alert(t('profile.alertUploadFailedTitle'), t('profile.alertUploadGenericBody'));
     } finally {
       setUploadingAvatar(false);
     }
@@ -380,7 +383,7 @@ export default function ProfileScreen() {
               onPress={onChangeAvatar}
               style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
-              accessibilityLabel="Change profile picture"
+              accessibilityLabel={t('profile.changeAvatarA11y')}
             >
               {avatarUrl ? (
                 <Image source={{ uri: avatarThumb(avatarUrl, 72) }} style={styles.avatarImage} />
@@ -393,20 +396,20 @@ export default function ProfileScreen() {
                 {uploadingAvatar ? (
                   <ActivityIndicator size="small" color={BONE} />
                 ) : (
-                  <Text style={styles.avatarEditBadgeText}>{avatarUrl ? 'EDIT' : 'ADD'}</Text>
+                  <Text style={styles.avatarEditBadgeText}>{avatarUrl ? t('profile.edit') : t('profile.add')}</Text>
                 )}
               </View>
             </Pressable>
             <View style={styles.headerTextCol}>
-              <Text style={styles.commanderLabel}>COMMANDER · #0001</Text>
+              <Text style={styles.commanderLabel}>{t('profile.commanderLabel')}</Text>
               <Text style={styles.commanderName}>{playerName}</Text>
               <Text style={styles.rankLine}>
-                <Text style={styles.rankTitle}>{rankBadge}</Text>
+                <Text style={styles.rankTitle}>{t('levelTitle.' + rankBadge)}</Text>
                 <Text style={styles.rankSeparator}> · </Text>
                 {allianceName ? (
                   <Text style={styles.rankAllianceClaim}>{allianceName}</Text>
                 ) : (
-                  <Text style={styles.rankAlliance}>UNAFFILIATED</Text>
+                  <Text style={styles.rankAlliance}>{t('profile.unaffiliated')}</Text>
                 )}
               </Text>
             </View>
@@ -419,7 +422,7 @@ export default function ProfileScreen() {
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
-            <Text style={styles.loadingText}>Loading profile…</Text>
+            <Text style={styles.loadingText}>{t('profile.loading')}</Text>
           </View>
         ) : null}
 
@@ -433,27 +436,27 @@ export default function ProfileScreen() {
           <>
           <View style={styles.powerSection}>
             <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>POWER</Text>
+              <Text style={styles.influenceLabel}>{t('profile.power')}</Text>
               <View style={styles.influenceHairline} />
             </View>
             <View style={styles.powerHeroBlock}>
               <Text style={styles.powerValue}>{totalPower.toLocaleString()}</Text>
-              <Text style={styles.influenceSublabel}>TOTAL POWER</Text>
+              <Text style={styles.influenceSublabel}>{t('profile.totalPower')}</Text>
             </View>
             <View style={styles.powerHeroDivider} />
             <View style={styles.powerRow}>
               <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>ACTIVITY POWER</Text>
-                <Text style={styles.powerRowReason}>Step tracking required</Text>
+                <Text style={styles.powerRowLabel}>{t('profile.activityPower')}</Text>
+                <Text style={styles.powerRowReason}>{t('profile.activityPowerReason')}</Text>
               </View>
               <Text style={styles.powerRowValueLive}>{activityPower.toLocaleString()}</Text>
             </View>
             <View style={styles.powerRowDivider} />
             <View style={styles.powerRow}>
               <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>TERRITORY POWER</Text>
+                <Text style={styles.powerRowLabel}>{t('profile.territoryPower')}</Text>
                 <Text style={styles.powerRowReason}>
-                  {`${ownedTerritories.length} ${ownedTerritories.length === 1 ? 'territory' : 'territories'} · ${fullValueCap} full-value cap`}
+                  {t('profile.territoryReason', { terr: t('profile.territories', { count: ownedTerritories.length }), cap: fullValueCap })}
                 </Text>
               </View>
               <Text style={styles.powerRowValueLive}>{territoryPower.toLocaleString()}</Text>
@@ -461,9 +464,9 @@ export default function ProfileScreen() {
             <View style={styles.powerRowDivider} />
             <View style={styles.powerRow}>
               <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>LEGACY POWER</Text>
+                <Text style={styles.powerRowLabel}>{t('profile.legacyPower')}</Text>
                 <Text style={styles.powerRowReason}>
-                  {`${lifetimeContestWins} contest ${lifetimeContestWins === 1 ? 'win' : 'wins'} · best streak ${longestStreak} ${longestStreak === 1 ? 'day' : 'days'}`}
+                  {t('profile.legacyReason', { wins: t('profile.contestWins', { count: lifetimeContestWins }), streak: t('profile.streakDays', { count: longestStreak }) })}
                 </Text>
               </View>
               <Text style={styles.powerRowValueLive}>{legacyPower.toLocaleString()}</Text>
@@ -472,7 +475,7 @@ export default function ProfileScreen() {
 
           <View style={styles.influenceBlock}>
             <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>INFLUENCE</Text>
+              <Text style={styles.influenceLabel}>{t('profile.influence')}</Text>
               <View style={styles.influenceHairline} />
             </View>
             <View style={styles.influenceRow}>
@@ -500,9 +503,9 @@ export default function ProfileScreen() {
                       : total.toFixed(1);
                   })()}
                 </Text>
-                <Text style={styles.influenceSublabel}>INFLUENCE / DAY</Text>
+                <Text style={styles.influenceSublabel}>{t('profile.influencePerDay')}</Text>
                 <Text style={styles.influenceContext}>
-                  {`From ${ownedTerritories.length} held ${ownedTerritories.length === 1 ? 'territory' : 'territories'}`}
+                  {t('profile.influenceContext', { count: ownedTerritories.length })}
                 </Text>
               </View>
             </View>
@@ -510,33 +513,33 @@ export default function ProfileScreen() {
 
           <View style={styles.statGrid}>
             <View style={styles.statCell}>
-              <Text style={styles.statLabel}>STREAK</Text>
-              <Text style={styles.statValue}>{currentStreak} days</Text>
+              <Text style={styles.statLabel}>{t('profile.streak')}</Text>
+              <Text style={styles.statValue}>{t('profile.daysValue', { n: currentStreak })}</Text>
             </View>
             <View style={styles.statCell}>
-              <Text style={styles.statLabel}>BEST STREAK</Text>
-              <Text style={styles.statValue}>{longestStreak} days</Text>
+              <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
+              <Text style={styles.statValue}>{t('profile.daysValue', { n: longestStreak })}</Text>
             </View>
             <View style={styles.statCell}>
-              <Text style={styles.statLabel}>TERRITORIES</Text>
+              <Text style={styles.statLabel}>{t('profile.territoriesLabel')}</Text>
               <Text style={styles.statValue}>
                 {ownedTerritories.length} / {territoryCap}
               </Text>
             </View>
             <View style={styles.statCell}>
-              <Text style={styles.statLabel}>SIEGE XP</Text>
+              <Text style={styles.statLabel}>{t('profile.siegeXp')}</Text>
               <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
             </View>
           </View>
 
           <View style={styles.card}>
-            <SectionDivider label="XP PROGRESS" />
+            <SectionDivider label={t('profile.xpProgress')} />
             <Text style={styles.xpNumbers}>
-              {xpIntoLevel} / {xpNeeded} XP
+              {t('profile.xpNumbers', { into: xpIntoLevel, needed: xpNeeded })}
             </Text>
             <Text style={styles.nextLine}>
-              <Text style={styles.nextPrefix}>NEXT · </Text>
-              <Text style={styles.nextTitle}>{next?.title ?? 'Max level'}</Text>
+              <Text style={styles.nextPrefix}>{t('profile.nextPrefix')}</Text>
+              <Text style={styles.nextTitle}>{next ? t('levelTitle.' + next.title) : t('profile.maxLevel')}</Text>
             </Text>
             <View style={styles.progressTrack}>
               <View
@@ -551,16 +554,16 @@ export default function ProfileScreen() {
 
           <View>
             <View style={{ marginTop: 24 }}>
-              <SectionDivider label="YOUR TERRITORIES" />
+              <SectionDivider label={t('profile.yourTerritories')} />
             </View>
             <View style={styles.list}>
               {ownedTerritories.length === 0 ? (
-                <Text style={styles.emptyText}>No territories held.</Text>
+                <Text style={styles.emptyText}>{t('profile.noTerritories')}</Text>
               ) : null}
-              {ownedTerritories.map((t, index) => (
-                <React.Fragment key={t.id ?? `${t.territory_name}-${index}`}>
+              {ownedTerritories.map((terr, index) => (
+                <React.Fragment key={terr.id ?? `${terr.territory_name}-${index}`}>
                   {index > 0 ? <View style={styles.listDivider} /> : null}
-                  <OwnedTerritoryRow name={t.territory_name ?? 'Territory'} tier={t.tier} />
+                  <OwnedTerritoryRow name={terr.territory_name ?? t('common.territoryFallback')} tier={terr.tier} />
                 </React.Fragment>
               ))}
             </View>
@@ -577,7 +580,7 @@ export default function ProfileScreen() {
       {!loading ? (
         <>
           <View style={styles.walletSection}>
-            <SectionDivider label="RESOURCES" />
+            <SectionDivider label={t('profile.resources')} />
             <Pressable
               style={styles.walletButton}
               onPress={() => navigation.navigate('Wallet', {
@@ -585,30 +588,30 @@ export default function ProfileScreen() {
                 username: playerRow?.username ?? '',
               })}
             >
-              <Text style={styles.walletButtonText}>MY RESOURCES</Text>
+              <Text style={styles.walletButtonText}>{t('profile.myResources')}</Text>
             </Pressable>
-            <Text style={styles.walletTapHint}>tap to enter</Text>
+            <Text style={styles.walletTapHint}>{t('profile.tapToEnter')}</Text>
           </View>
 
           <View style={[styles.card, { marginTop: 32 }]}>
-            <SectionDivider label="SETTINGS" />
+            <SectionDivider label={t('profile.settings')} />
             <View style={styles.settingsList}>
               <AllianceChatPushToggleRow
                 playerRow={playerRow}
                 clerkGetToken={getToken}
               />
               <View style={styles.listDivider} />
-              <SettingsRow label="Notification settings" />
+              <SettingsRow label={t('profile.notificationSettings')} />
               <View style={styles.listDivider} />
               <Pressable
                 onPress={() => {
                   Alert.alert(
-                    'Sign out',
-                    'Are you sure you want to sign out?',
+                    t('profile.signOut'),
+                    t('profile.signOutConfirm'),
                     [
-                      { text: 'Cancel', style: 'cancel' },
+                      { text: t('profile.cancel'), style: 'cancel' },
                       {
-                        text: 'Sign out',
+                        text: t('profile.signOut'),
                         style: 'destructive',
                         onPress: async () => {
                           try {
@@ -626,7 +629,7 @@ export default function ProfileScreen() {
                 }}
                 style={styles.settingsRow}
               >
-                <Text style={styles.settingsSignOut}>Sign out</Text>
+                <Text style={styles.settingsSignOut}>{t('profile.signOut')}</Text>
                 <Text style={styles.settingsChevron}>›</Text>
               </Pressable>
             </View>

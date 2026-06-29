@@ -11,6 +11,8 @@ import {
 import { routeForPush, SURFACES } from '../lib/notifications/route';
 import { showCard } from '../lib/notifications/cardController';
 import { navigateTo, navigateToAfterAuthGate } from '../lib/navigation';
+import { patchMe } from '../lib/meApi';
+import i18n from '../i18n';
 
 export default function FcmLifecycle() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
@@ -66,6 +68,14 @@ export default function FcmLifecycle() {
       .catch((err) => {
         console.warn('[fcm] lifecycle register failed:', err?.message);
       });
+
+    // Sync the device language to the backend so server-composed push
+    // notifications are translated to the player's locale. Fire-and-forget —
+    // patchMe never throws and resolves to an { ok } discriminant we ignore.
+    patchMe({
+      clerkGetToken: () => getTokenRef.current(),
+      fields: { locale: i18n.language },
+    });
 
     return () => {
       unsubscribe();

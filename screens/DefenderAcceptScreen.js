@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
 
@@ -20,6 +21,7 @@ const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 export default function DefenderAcceptScreen() {
   const { contestId } = useRoute().params ?? {};
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
@@ -182,11 +184,11 @@ export default function DefenderAcceptScreen() {
       <View style={styles.ctaStack}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Got it"
+          accessibilityLabel={t('defenderAccept.gotIt')}
           onPress={handleTerminalGotIt}
           style={({ pressed }) => [styles.ctaPrimary, pressed && { opacity: 0.85 }]}
         >
-          <Text style={styles.ctaPrimaryText}>GOT IT</Text>
+          <Text style={styles.ctaPrimaryText}>{t('defenderAccept.gotIt')}</Text>
         </Pressable>
       </View>
     </View>
@@ -203,13 +205,13 @@ export default function DefenderAcceptScreen() {
   if (previewError) {
     return (
       <View style={styles.fullScreenCentered}>
-        <Text style={styles.errorMessage}>Couldn't load preview</Text>
+        <Text style={styles.errorMessage}>{t('defenderAccept.couldNotLoadPreview')}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={handleRetry}
           style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.retryBtnText}>RETRY</Text>
+          <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
     );
@@ -217,17 +219,17 @@ export default function DefenderAcceptScreen() {
 
   if (previewData.defender_player_id !== null) {
     return renderTerminal(
-      '▪ ALREADY DEFENDED',
+      t('defenderAccept.alreadyDefendedEyebrow'),
       `@${previewData.defender_username}`,
-      'IS DEFENDING THIS.',
+      t('defenderAccept.isDefendingThis'),
     );
   }
 
   if (previewData.already_past_cutoff) {
     return renderTerminal(
-      '▪ DEFENSE CLOSED',
-      'Window passed.',
-      `Defense closes after ${Math.round(previewData.defend_cutoff_fraction * 100)}% attacker progress.`,
+      t('defenderAccept.defenseClosedEyebrow'),
+      t('defenderAccept.windowPassed'),
+      t('defenderAccept.defenseClosesAfter', { pct: Math.round(previewData.defend_cutoff_fraction * 100) }),
     );
   }
 
@@ -238,10 +240,10 @@ export default function DefenderAcceptScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.statusSpacer} />
-      <Text style={[styles.eyebrow, { color: ALLIANCE }]}>▪ DEFEND</Text>
+      <Text style={[styles.eyebrow, { color: ALLIANCE }]}>{t('defenderAccept.eyebrowDefend')}</Text>
       <Text style={styles.territoryName}>{previewData.territory_name.toUpperCase()}</Text>
-      <Text style={styles.tierSubtitle}>TIER {previewData.territory_tier}</Text>
-      <Text style={styles.attackerLine}>@{previewData.attacker_username} attacking</Text>
+      <Text style={styles.tierSubtitle}>{t('defenderAccept.tier', { tier: previewData.territory_tier })}</Text>
+      <Text style={styles.attackerLine}>{t('defenderAccept.attackerAttacking', { username: previewData.attacker_username })}</Text>
 
       <View style={styles.progressBlock}>
         <View style={styles.progressBar}>
@@ -249,21 +251,21 @@ export default function DefenderAcceptScreen() {
           <View style={[styles.progressBarBg, { flex: 1 - progressFraction }]} />
         </View>
         <Text style={styles.progressText}>
-          {previewData.attacker_walked_m}m / {previewData.required_walk_m}m
+          {t('defenderAccept.progress', { walked: previewData.attacker_walked_m, required: previewData.required_walk_m })}
         </Text>
       </View>
 
       <View style={[styles.previewRow, !effectiveSpendStone ? styles.previewRowActive : styles.previewRowInactive]}>
-        <Text style={styles.previewRowLabel}>MATCH PACE</Text>
+        <Text style={styles.previewRowLabel}>{t('defenderAccept.matchPace')}</Text>
         <Text style={styles.previewRowDistance}>
-          WALK {Math.floor(previewData.defender_response_ratio_without_stone * previewData.attacker_walked_m)}m
+          {t('defenderAccept.walkDistance', { metres: Math.floor(previewData.defender_response_ratio_without_stone * previewData.attacker_walked_m) })}
         </Text>
       </View>
 
       <View style={[styles.previewRow, effectiveSpendStone ? styles.previewRowActive : styles.previewRowInactive]}>
-        <Text style={styles.previewRowLabel}>WITH STONE</Text>
+        <Text style={styles.previewRowLabel}>{t('defenderAccept.withStone')}</Text>
         <Text style={styles.previewRowDistance}>
-          WALK {Math.floor(previewData.defender_response_ratio_with_stone * previewData.attacker_walked_m)}m
+          {t('defenderAccept.walkDistance', { metres: Math.floor(previewData.defender_response_ratio_with_stone * previewData.attacker_walked_m) })}
         </Text>
       </View>
 
@@ -278,22 +280,22 @@ export default function DefenderAcceptScreen() {
           {effectiveSpendStone ? '\u25A0' : '\u25A1'}
         </Text>
         <Text style={styles.stoneToggleLabel}>
-          SPEND {previewData.stone_defence_cost} STONE
+          {t('defenderAccept.spendStone', { stone: previewData.stone_defence_cost })}
         </Text>
         {!canAffordStone ? (
           <Text style={styles.stoneToggleHelper}>
-            NEED {previewData.stone_defence_cost} · HAVE {previewData.current_stone}
+            {t('defenderAccept.stoneHelper', { need: previewData.stone_defence_cost, have: previewData.current_stone })}
           </Text>
         ) : null}
       </Pressable>
 
       {submitError ? (
         <Text style={styles.submitErrorText}>
-          {submitError.code === 'contest_too_advanced' ? 'Defense window just closed.' :
-            submitError.code === 'contest_already_defended' ? 'Someone else just accepted.' :
-              submitError.code === 'insufficient_stone' ? "You don't have enough stone." :
-                submitError.code === 'not_in_defender_alliance' ? "You're not in this alliance anymore." :
-                  'Something went wrong. Try again.'}
+          {submitError.code === 'contest_too_advanced' ? t('defenderAccept.errTooAdvanced') :
+            submitError.code === 'contest_already_defended' ? t('defenderAccept.errAlreadyDefended') :
+              submitError.code === 'insufficient_stone' ? t('defenderAccept.errInsufficientStone') :
+                submitError.code === 'not_in_defender_alliance' ? t('defenderAccept.errNotInAlliance') :
+                  t('defenderAccept.errGeneric')}
         </Text>
       ) : null}
 
@@ -311,7 +313,7 @@ export default function DefenderAcceptScreen() {
           {submitting ? (
             <ActivityIndicator size="small" color={BONE} />
           ) : (
-            <Text style={styles.ctaPrimaryText}>ACCEPT DEFENSE</Text>
+            <Text style={styles.ctaPrimaryText}>{t('defenderAccept.acceptDefense')}</Text>
           )}
         </Pressable>
         <Pressable
@@ -320,7 +322,7 @@ export default function DefenderAcceptScreen() {
           onPress={handleCancel}
           style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.85 }]}
         >
-          <Text style={styles.ctaSecondaryText}>CANCEL</Text>
+          <Text style={styles.ctaSecondaryText}>{t('defenderAccept.cancel')}</Text>
         </Pressable>
       </View>
     </View>

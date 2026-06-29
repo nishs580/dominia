@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StatusBar, StyleSheet, Text, View 
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { startClaim } from '../lib/claimApi';
 import { startContest } from '../lib/contestWalkApi';
 import { abandonTerritory } from '../lib/territoryApi';
@@ -49,60 +50,60 @@ const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 
-function liveCountdown(expiresAtIso) {
+function liveCountdown(t, expiresAtIso) {
   const remainingMs = Math.max(0, new Date(expiresAtIso).getTime() - Date.now());
   const totalSec = Math.floor(remainingMs / 1000);
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
-  if (min > 0) return `${min} min`;
-  return `${sec} sec`;
+  if (min > 0) return t('map.countdownMin', { n: min });
+  return t('map.countdownSec', { n: sec });
 }
 
-function topBannerMessageForContestCode(code) {
+function topBannerMessageForContestCode(t, code) {
   switch (code) {
     case 'player_not_found':
-      return "Couldn't load your account. Try again.";
+      return t('map.topBannerErr.playerNotFound');
     case 'territory_not_found':
-      return 'This territory no longer exists.';
+      return t('map.topBannerErr.territoryNotFound');
     case 'invalid_tier':
-      return "Couldn't load territory data. Try again.";
+      return t('map.topBannerErr.invalidTier');
     case 'defender_not_found':
     case 'no_perimeter':
     case 'owner_level_unavailable':
-      return "Couldn't load contest data. Try again.";
+      return t('map.topBannerErr.contestData');
     case 'network_error':
     case 'no_token':
-      return 'Network issue. Try again.';
+      return t('map.topBannerErr.network');
     default:
-      return 'Something went wrong. Try again.';
+      return t('map.topBannerErr.generic');
   }
 }
 
-function contestStartErrorMessage(error) {
+function contestStartErrorMessage(t, error) {
   if (!error) return null;
   const { code, context = {} } = error;
   switch (code) {
     case 'no_territory_owner':
-      return 'Territory is no longer owned. Try claiming it instead.';
+      return t('map.contestErr.noOwner');
     case 'cannot_contest_own':
-      return "You can't contest your own territory.";
+      return t('map.contestErr.cannotContestOwn');
     case 'territory_protected':
       switch (context.reason) {
         case 'new_owner_protection':
-          return 'Newly claimed — protected for 24 hours.';
+          return t('map.contestErr.newOwnerProtection');
         case 'defense_protection':
-          return 'Recently defended — protected for 4 hours.';
+          return t('map.contestErr.defenseProtection');
         case 'alliance_protection':
-          return 'Owner is in your alliance.';
+          return t('map.contestErr.allianceProtection');
         default:
-          return 'This territory is protected.';
+          return t('map.contestErr.protected');
       }
     case 'level_too_low':
-      return `Reach level ${context.required_level} to contest a ${context.tier} territory.`;
+      return t('map.contestErr.levelTooLow', { level: context.required_level, tier: context.tier });
     case 'outside_contest_hours':
-      return 'Contests run 05:00–22:59 in your local time.';
+      return t('map.contestErr.outsideHours');
     case 'insufficient_iron':
-      return 'Need more iron.';
+      return t('map.contestErr.insufficientIron');
     default:
       return null;
   }
@@ -110,6 +111,7 @@ function contestStartErrorMessage(error) {
 
 function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [] }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
   const [contestMode, setContestMode] = useState(false);
@@ -167,7 +169,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
   if (!territory) return null;
 
-  const name = territory.properties?.name ?? 'Territory';
+  const name = territory.properties?.name ?? t('common.territoryFallback');
   const ownerRaw = territory.properties?.owner;
   const isUnclaimed = ownerRaw == null || ownerRaw === 'Unclaimed';
   const owner = !isUnclaimed ? ownerRaw : null;
@@ -195,10 +197,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   else if (isOwned) topBorderColour = '#4A6B8A';
 
   // Label above territory name
-  let stateLabel = 'Unclaimed territory';
-  if (isOwnTerritory) stateLabel = 'Your territory';
-  else if (isAllianceTerritory) stateLabel = 'Alliance territory';
-  else if (isOwned) stateLabel = 'Enemy territory';
+  let stateLabel = t('map.stateUnclaimed');
+  if (isOwnTerritory) stateLabel = t('map.stateYours');
+  else if (isAllianceTerritory) stateLabel = t('map.stateAlliance');
+  else if (isOwned) stateLabel = t('map.stateEnemy');
 
   const playerXp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
   const cap = territoryCapForLevel(F.calcLevel(playerXp));
@@ -243,7 +245,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   // Iron cost by tier
   const ironCost = { small: 8, medium: 20, large: 45, epic: 80 }[tier.toLowerCase()] ?? 20;
 
-  const walkLabel = isOwned ? 'Walk to contest' : 'Walk to claim';
+  const walkLabel = isOwned ? t('map.walkToContest') : t('map.walkToClaim');
 
   const selectedTerritory = {
     name,
@@ -264,22 +266,22 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
         const { code, context } = startError;
         switch (code) {
           case 'level_too_low':
-            return `Reach level ${context.required_level} to claim ${tier} territories`;
+            return t('map.startErr.levelTooLow', { level: context.required_level, tier });
           case 'insufficient_gold':
-            return `Need ${context.required_gold - context.player_gold} more gold`;
+            return t('map.startErr.insufficientGold', { n: context.required_gold - context.player_gold });
           case 'territory_already_claimed':
-            return 'This territory was just claimed';
+            return t('map.startErr.alreadyClaimed');
           case 'territory_being_claimed':
-            return `Available in ${liveCountdown(context.expires_at)} - another player is claiming`;
+            return t('map.startErr.beingClaimed', { countdown: liveCountdown(t, context.expires_at) });
           case 'active_claim_in_progress':
-            return `You're walking for another territory. Finish or wait ${liveCountdown(context.expires_at)} for expiry.`;
+            return t('map.startErr.activeInProgress', { countdown: liveCountdown(t, context.expires_at) });
           case 'network_error':
-            return 'Lost connection. Tap to retry.';
+            return t('map.startErr.network');
           case 'no_token':
           case 'unauthorized':
-            return 'Please sign in again.';
+            return t('map.startErr.signIn');
           default:
-            return "Couldn't start claim. Tap to retry.";
+            return t('map.startErr.generic');
         }
       })()
     : null;
@@ -342,10 +344,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             attacker_username: context?.attacker_username ?? 'someone',
             attack_day_date: context?.attack_day_date ?? '',
           });
-        } else if (contestStartErrorMessage({ code, context })) {
+        } else if (contestStartErrorMessage(t, { code, context })) {
           setContestStartError({ code, context });
         } else {
-          showTopBanner?.(topBannerMessageForContestCode(code));
+          showTopBanner?.(topBannerMessageForContestCode(t, code));
         }
       }
     } finally {
@@ -360,7 +362,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
       <View style={styles.sheetTopRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sheetStateLabel}>
-            {sheetState === 'confirm' ? (contestMode ? 'Contest' : 'Claim') : stateLabel}
+            {sheetState === 'confirm' ? (contestMode ? t('map.confirmContest') : t('map.confirmClaim')) : stateLabel}
           </Text>
           <View style={styles.sheetTitleRow}>
             <Text style={styles.sheetTitle}>{name}</Text>
@@ -380,7 +382,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           <View style={styles.sheetIntelBlock}>
             {!isUnclaimed && (
               <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Owner</Text>
+                <Text style={styles.sheetRowLabel}>{t('map.owner')}</Text>
                 <Text style={styles.sheetRowValue}>
                   {owner}
                   {alliance ? <Text style={styles.sheetAllianceTag}> [{alliance}]</Text> : null}
@@ -389,7 +391,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             )}
             {!isUnclaimed && (
               <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Streak</Text>
+                <Text style={styles.sheetRowLabel}>{t('map.streak')}</Text>
                 <Text style={[styles.sheetRowValue, ownerStreakDays >= 30 && { color: '#D64525' }]}>
                   {streakTierName(ownerStreakTier.tier)}
                 </Text>
@@ -397,30 +399,30 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             )}
             <View style={styles.sheetRow}>
               <Text style={styles.sheetRowLabel}>{walkLabel}</Text>
-              <Text style={styles.sheetRowValue}>{walkDistance.toLocaleString()}m</Text>
+              <Text style={styles.sheetRowValue}>{t('map.walkDistanceValue', { metres: walkDistance.toLocaleString() })}</Text>
             </View>
           </View>
 
           {/* Influence hero row */}
           <View style={styles.sheetInfluenceRow}>
             <View>
-              <Text style={styles.sheetInfluenceLabel}>Generates</Text>
-              <Text style={styles.sheetInfluenceSub}>Influence per day</Text>
+              <Text style={styles.sheetInfluenceLabel}>{t('map.generates')}</Text>
+              <Text style={styles.sheetInfluenceSub}>{t('map.influencePerDay')}</Text>
             </View>
-            <Text style={styles.sheetInfluenceValue}>+{influence}</Text>
+            <Text style={styles.sheetInfluenceValue}>{t('map.influenceValue', { n: influence })}</Text>
           </View>
 
           {/* Expanded detail */}
           {expanded && (
             <View style={styles.sheetExpandedBlock}>
               <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Development</Text>
+                <Text style={styles.sheetRowLabel}>{t('map.development')}</Text>
                 <Text style={styles.sheetRowValue}>
                   D{developmentLevel} · {developmentName(developmentLevel)}
                 </Text>
               </View>
               <View style={styles.sheetRow}>
-                <Text style={styles.sheetRowLabel}>Legacy</Text>
+                <Text style={styles.sheetRowLabel}>{t('map.legacy')}</Text>
                 <Text style={styles.sheetRowValue}>
                   {legacyRank == null ? '—' : `R${legacyRank} · ${F.legacyRankName(legacyRank)}`}
                 </Text>
@@ -429,16 +431,16 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 <>
                   {formatHeldDays(historyStats.heldDays) !== null && (
                     <View style={styles.sheetRow}>
-                      <Text style={styles.sheetRowLabel}>Held</Text>
+                      <Text style={styles.sheetRowLabel}>{t('map.held')}</Text>
                       <Text style={styles.sheetRowValue}>{formatHeldDays(historyStats.heldDays)}</Text>
                     </View>
                   )}
                   <View style={styles.sheetRow}>
-                    <Text style={styles.sheetRowLabel}>Changed hands</Text>
+                    <Text style={styles.sheetRowLabel}>{t('map.changedHands')}</Text>
                     <Text style={styles.sheetRowValue}>{formatChangedHands(historyStats.changedHands)}</Text>
                   </View>
                   <View style={styles.sheetRow}>
-                    <Text style={styles.sheetRowLabel}>Hall of Holders</Text>
+                    <Text style={styles.sheetRowLabel}>{t('map.hallOfHolders')}</Text>
                     <Text style={styles.sheetRowValue}>{formatHolderCount(historyStats.holderCount)}</Text>
                   </View>
                 </>
@@ -447,13 +449,13 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               {/* Your walk block — only when it's an attackable territory */}
               {isOwned && !isYours && (
                 <View style={styles.sheetYourWalk}>
-                  <Text style={styles.sheetYourWalkLabel}>Your walk</Text>
+                  <Text style={styles.sheetYourWalkLabel}>{t('map.yourWalk')}</Text>
                   <Text style={styles.sheetYourWalkValue}>
-                    {walkDistance.toLocaleString()}m · {ironCost} Iron
+                    {t('map.yourWalkValue', { metres: walkDistance.toLocaleString(), iron: ironCost })}
                   </Text>
                   {reductionPct > 0 && (
                     <Text style={styles.sheetYourWalkSub}>
-                      Your {myStreak}-day streak reduces this by {reductionPct}%.
+                      {t('map.streakReduces', { days: myStreak, pct: reductionPct })}
                     </Text>
                   )}
                 </View>
@@ -463,7 +465,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
           {/* Expand toggle — text only per brand rules */}
           <Pressable accessibilityRole="button" onPress={() => setExpanded(e => !e)} style={styles.sheetToggle}>
-            <Text style={styles.sheetToggleText}>{expanded ? 'Less' : 'More'}</Text>
+            <Text style={styles.sheetToggleText}>{expanded ? t('map.less') : t('map.more')}</Text>
           </Pressable>
 
           {/* Action buttons — kept from original logic */}
@@ -473,14 +475,14 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
               onPress={() => setSheetState('confirm')}
             >
-              <Text style={styles.sheetActionText}>Claim</Text>
+              <Text style={styles.sheetActionText}>{t('map.claim')}</Text>
             </Pressable>
           )}
 
           {isUnclaimed && isAtCap && (
             <View style={styles.sheetActionDisabled}>
-              <Text style={styles.sheetActionDisabledText}>Cap reached</Text>
-              <Text style={styles.sheetActionDisabledSub}>Level up to claim more territories</Text>
+              <Text style={styles.sheetActionDisabledText}>{t('map.capReached')}</Text>
+              <Text style={styles.sheetActionDisabledSub}>{t('map.capReachedSub')}</Text>
             </View>
           )}
 
@@ -493,10 +495,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 pressed && { opacity: 0.92 },
               ]}
               onPress={() => {
-                Alert.alert(`Abandon ${name}?`, 'You will lose control of this territory. This cannot be undone.', [
-                  { text: 'Cancel', style: 'cancel' },
+                Alert.alert(t('map.abandonAlertTitle', { name }), t('map.abandonAlertBody'), [
+                  { text: t('map.abandonCancel'), style: 'cancel' },
                   {
-                    text: 'Abandon',
+                    text: t('map.abandonConfirm'),
                     style: 'destructive',
                     onPress: async () => {
                       const res = await abandonTerritory({
@@ -514,7 +516,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 ]);
               }}
             >
-              <Text style={styles.sheetActionText}>Abandon</Text>
+              <Text style={styles.sheetActionText}>{t('map.abandon')}</Text>
             </Pressable>
           )}
 
@@ -527,7 +529,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 setSheetState('confirm');
               }}
             >
-              <Text style={styles.sheetActionText}>Contest</Text>
+              <Text style={styles.sheetActionText}>{t('map.contest')}</Text>
             </Pressable>
           )}
         </>
@@ -539,22 +541,22 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             <>
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
-                  <Text style={styles.sheetConfirmLabel}>Cost</Text>
+                  <Text style={styles.sheetConfirmLabel}>{t('map.cost')}</Text>
                   <Text style={styles.sheetConfirmValue}>
-                    {contestMode ? `${ironCost} Iron` : `${goldCost} Gold`}
+                    {contestMode ? t('map.amountIron', { n: ironCost }) : t('map.amountGold', { n: goldCost })}
                   </Text>
                 </View>
                 <View style={styles.sheetConfirmDataRow}>
-                  <Text style={styles.sheetConfirmLabel}>Balance after</Text>
+                  <Text style={styles.sheetConfirmLabel}>{t('map.balanceAfter')}</Text>
                   <Text style={styles.sheetConfirmValue}>
-                    {contestMode ? `${ironBalanceAfter} Iron` : `${balanceAfter} Gold`}
+                    {contestMode ? t('map.amountIron', { n: ironBalanceAfter }) : t('map.amountGold', { n: balanceAfter })}
                   </Text>
                 </View>
               </View>
 
               {contestMode && contestStartError && (
                 <Text style={styles.sheetConfirmError}>
-                  {contestStartErrorMessage(contestStartError)}
+                  {contestStartErrorMessage(t, contestStartError)}
                 </Text>
               )}
 
@@ -565,7 +567,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               {contestMode && contestAlreadyActiveInfo && (
                 <View style={styles.sheetContestActiveCard}>
                   <Text style={styles.sheetContestActiveText}>
-                    {`@${contestAlreadyActiveInfo.attacker_username} is contesting this until ${contestAlreadyActiveInfo.attack_day_date}.`}
+                    {t('map.contestActiveCard', { attacker: contestAlreadyActiveInfo.attacker_username, date: contestAlreadyActiveInfo.attack_day_date })}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
@@ -575,7 +577,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     ]}
                     onPress={() => setContestAlreadyActiveInfo(null)}
                   >
-                    <Text style={styles.sheetActionText}>Got it</Text>
+                    <Text style={styles.sheetActionText}>{t('map.gotIt')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -591,7 +593,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   ]}
                   onPress={handleAcceptClaim}
                 >
-                  <Text style={styles.sheetActionText}>{isDeducting ? 'Processing…' : 'Retry'}</Text>
+                  <Text style={styles.sheetActionText}>{isDeducting ? t('map.processing') : t('common.retry')}</Text>
                 </Pressable>
               ) : !(!contestMode && startError && !startErrorAllowsRetry) && !(contestMode && contestAlreadyActiveInfo) ? (
                 <Pressable
@@ -605,7 +607,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   onPress={contestMode ? handleAcceptContest : handleAcceptClaim}
                 >
                   <Text style={styles.sheetActionText}>
-                    {(contestMode ? isAttacking : isDeducting) ? 'Processing…' : 'Accept and continue'}
+                    {(contestMode ? isAttacking : isDeducting) ? t('map.processing') : t('map.acceptAndContinue')}
                   </Text>
                 </Pressable>
               ) : null}
@@ -620,22 +622,22 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   setContestAlreadyActiveInfo(null);
                 }}
               >
-                <Text style={styles.sheetCancelText}>Cancel</Text>
+                <Text style={styles.sheetCancelText}>{t('map.cancel')}</Text>
               </Pressable>
             </>
           ) : (
             <>
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
-                  <Text style={styles.sheetConfirmLabel}>Short by</Text>
+                  <Text style={styles.sheetConfirmLabel}>{t('map.shortBy')}</Text>
                   <Text style={styles.sheetConfirmValue}>
-                    {contestMode ? `${ironCost - currentIron} Iron` : `${goldCost - currentGold} Gold`}
+                    {contestMode ? t('map.amountIron', { n: ironCost - currentIron }) : t('map.amountGold', { n: goldCost - currentGold })}
                   </Text>
                 </View>
                 <Text style={styles.sheetConfirmHelpText}>
                   {contestMode
-                    ? 'Earn Iron by completing daily challenges.'
-                    : 'Earn Gold by completing daily challenges.'}
+                    ? t('map.earnIron')
+                    : t('map.earnGold')}
                 </Text>
               </View>
 
@@ -648,7 +650,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   navigation.navigate('Activity');
                 }}
               >
-                <Text style={styles.sheetActionText}>Go to Activity</Text>
+                <Text style={styles.sheetActionText}>{t('map.goToActivity')}</Text>
               </Pressable>
 
               <Pressable
@@ -656,7 +658,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
                 onPress={() => setSheetState('info')}
               >
-                <Text style={styles.sheetCancelText}>Cancel</Text>
+                <Text style={styles.sheetCancelText}>{t('map.cancel')}</Text>
               </Pressable>
             </>
           )}
@@ -669,6 +671,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation();
   const cameraRef = useRef(null);
   const mapRef = useRef(null);
   const idleTimeoutRef = useRef(null);
@@ -1154,7 +1157,7 @@ export default function MapScreen() {
         <View pointerEvents="none" style={styles.loadingWrap}>
           <View style={styles.loadingPill}>
             <ActivityIndicator size="small" color="#F2EEE6" />
-            <Text style={styles.loadingText}>Loading territories</Text>
+            <Text style={styles.loadingText}>{t('map.loadingTerritories')}</Text>
           </View>
         </View>
       ) : null}
@@ -1200,7 +1203,7 @@ export default function MapScreen() {
 
       <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
         <Text style={styles.locateIcon}>⌖</Text>
-        <Text style={styles.locateText}>Locate me</Text>
+        <Text style={styles.locateText}>{t('map.locateMe')}</Text>
       </Pressable>
 
       <TerritorySheet

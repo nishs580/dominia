@@ -52,6 +52,7 @@ module.exports = {
         },
       ],
       'expo-sensors',
+      'expo-localization',
       [
         'expo-image-picker',
         {

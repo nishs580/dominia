@@ -12,6 +12,10 @@ setBackgroundMessageHandler(getMessaging(), async (_remoteMessage) => {
 
 import { registerRootComponent } from 'expo';
 
+// Initialize i18next before the React tree renders so the first paint is already
+// in the device's language.
+import './i18n';
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

@@ -16,10 +16,12 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import ActivityLogEvent from '../components/ActivityLogEvent';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
 
 export default function ActivityLogScreen() {
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -83,7 +85,7 @@ export default function ActivityLogScreen() {
       return (
         <View>
           <View style={styles.endDivider} />
-          <Text style={styles.endLabel}>END OF LOG</Text>
+          <Text style={styles.endLabel}>{t('activityLog.endOfLog')}</Text>
         </View>
       );
     }
@@ -94,7 +96,7 @@ export default function ActivityLogScreen() {
     return (
       <View style={[styles.screen, styles.centered]}>
         <ActivityIndicator size="large" color="#5C6068" />
-        <Text style={styles.loadingText}>LOADING…</Text>
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
   }
@@ -102,13 +104,13 @@ export default function ActivityLogScreen() {
   if (error && events.length === 0) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <Text style={styles.errorBody}>Failed to load activity log.</Text>
+        <Text style={styles.errorBody}>{t('activityLog.failedToLoad')}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={fetchFirstPage}
           style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.retryBtnText}>RETRY</Text>
+          <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
     );
@@ -117,8 +119,8 @@ export default function ActivityLogScreen() {
   if (events.length === 0 && !error && !initialLoading) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <Text style={styles.emptyLabel}>EMPTY LOG</Text>
-        <Text style={styles.emptyBody}>Claim a territory to begin.</Text>
+        <Text style={styles.emptyLabel}>{t('activityLog.emptyTitle')}</Text>
+        <Text style={styles.emptyBody}>{t('activityLog.emptyBody')}</Text>
       </View>
     );
   }
@@ -126,7 +128,7 @@ export default function ActivityLogScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.sectionLabel}>ACTIVITY LOG</Text>
+        <Text style={styles.sectionLabel}>{t('activityLog.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
       <FlatList

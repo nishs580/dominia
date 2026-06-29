@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { subscribe, hideCard, getCurrentCard } from '../../lib/notifications/cardController';
 import { navigateTo } from '../../lib/navigation';
 import MedalEarnCard from '../medals/MedalEarnCard';
@@ -10,32 +11,17 @@ import MedalEarnCard from '../medals/MedalEarnCard';
 const isMedalKind = (kind) =>
   typeof kind === 'string' && kind.startsWith('legacy_medal_');
 
-const DEFAULT_TITLES = {
-  streak_milestone: 'Proven streak.',
-  streak_broken: 'Your streak reset.',
-  contest_won: 'Territory held.',
-  contest_lost: 'Territory lost.',
-  streak_break_warning: 'Streak at risk.',
-  alliance_kicked: 'Removed from alliance.',
-  alliance_demoted: 'Role updated.',
-  level_up_4: 'The map just got real.',
-  level_up_5: 'The city knows your name.',
-  level_up_6: 'Level 6. Alliance phase begins.',
-  level_up_10: 'Dominator.',
-  first_claim: 'First claim.',
-  first_contest_win: 'First conquest.',
-  first_reconquest: 'First reconquest.',
-  first_alliance_mission: 'First alliance mission complete.',
-};
-
 export default function NotificationCard() {
+  const { t } = useTranslation();
   const [card, setCard] = useState(getCurrentCard());
   useEffect(() => subscribe(setCard), []);
 
   if (!card) return null;
 
   const { kind, data, target, params } = card;
-  const title = data?.title || DEFAULT_TITLES[kind] || 'Notification';
+  // Server-provided title wins; otherwise fall back to a localized default per
+  // kind, then a generic label.
+  const title = data?.title || t(`notif.titles.${kind}`, { defaultValue: '' }) || t('notif.fallbackTitle');
   const body = data?.body || '';
 
   const goToTarget = () => {
@@ -53,7 +39,7 @@ export default function NotificationCard() {
             <Text style={styles.title}>{title}</Text>
             {body ? <Text style={styles.body}>{body}</Text> : null}
             <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
-              <Text style={styles.dismissText}>DISMISS</Text>
+              <Text style={styles.dismissText}>{t('notif.dismiss')}</Text>
             </Pressable>
           </Pressable>
         )}

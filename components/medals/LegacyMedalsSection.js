@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { fetchLegacyMedals } from '../../lib/legacyMedalsApi';
 import {
   CATEGORY_ORDER,
@@ -40,30 +41,32 @@ function fmtDate(iso) {
 }
 
 function CurrentLine({ medal }) {
-  const unit = MEDAL_UNIT[medal.key] ?? '';
+  const { t } = useTranslation();
+  const unit = t(`medalUnit.${medal.key}`, { defaultValue: '' });
   if (medal.type === 'tiered') {
     const next =
       medal.nextTierThreshold != null
         ? `${fmtNum(medal.currentValue)}${unit} / ${fmtNum(medal.nextTierThreshold)}${unit}`
-        : `${fmtNum(medal.currentValue)}${unit} · MAX`;
+        : t('medalsSection.maxLine', { current: `${fmtNum(medal.currentValue)}${unit}` });
     return <Text style={styles.detailValue}>{next}</Text>;
   }
   if (medal.type === 'singular_count') {
-    return <Text style={styles.detailValue}>{`× ${medal.count ?? 0}`}</Text>;
+    return <Text style={styles.detailValue}>{t('medal.countX', { count: medal.count ?? 0 })}</Text>;
   }
   return (
     <Text style={styles.detailValue}>
-      {medal.earned ? `Earned ${medal.earnedYear}` : 'Not yet earned'}
+      {medal.earned ? t('medal.earnedYear', { year: medal.earnedYear }) : t('medalsSection.notYetEarned')}
     </Text>
   );
 }
 
 function MedalDetailModal({ medal, onClose }) {
+  const { t } = useTranslation();
   if (!medal) return null;
   const earned = isMedalEarned(medal);
   const tierLabel =
     medal.type === 'tiered' && medal.currentTier
-      ? TIER_LABEL[medal.currentTier]
+      ? t(`tierLabel.${medal.currentTier}`)
       : null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -72,13 +75,13 @@ function MedalDetailModal({ medal, onClose }) {
           <View style={styles.detailIconWrap}>
             <MedalIcon medal={medal} size={120} earned={earned} />
           </View>
-          <Text style={styles.detailName}>{MEDAL_NAME[medal.key]}</Text>
+          <Text style={styles.detailName}>{t(`medalName.${medal.key}`)}</Text>
           {tierLabel ? <Text style={styles.detailTier}>{tierLabel}</Text> : null}
           <View style={{ marginTop: 10 }}>
             <TierBars medal={medal} height={8} />
           </View>
           <CurrentLine medal={medal} />
-          <Text style={styles.detailCondition}>{MEDAL_CONDITION[medal.key]}</Text>
+          <Text style={styles.detailCondition}>{t(`medalCondition.${medal.key}`)}</Text>
 
           {medal.type === 'tiered' && medal.tierEarnedAt ? (
             <View style={styles.tierDates}>
@@ -87,7 +90,7 @@ function MedalDetailModal({ medal, onClose }) {
                 if (!at) return null;
                 return (
                   <Text key={tier} style={styles.tierDateRow}>
-                    {`${TIER_LABEL[tier]}  ✓  ${at}`}
+                    {`${t(`tierLabel.${tier}`)}  ✓  ${at}`}
                   </Text>
                 );
               })}
@@ -95,7 +98,7 @@ function MedalDetailModal({ medal, onClose }) {
           ) : null}
 
           <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={8}>
-            <Text style={styles.closeText}>CLOSE</Text>
+            <Text style={styles.closeText}>{t('medalsSection.close')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -104,6 +107,7 @@ function MedalDetailModal({ medal, onClose }) {
 }
 
 function CategoryTile({ category, medals, active, onPress }) {
+  const { t } = useTranslation();
   const items = medalsForCategory(medals, category);
   const earned = categoryEarnedCount(medals, category);
   return (
@@ -112,7 +116,7 @@ function CategoryTile({ category, medals, active, onPress }) {
       onPress={onPress}
     >
       <View style={styles.tileHeader}>
-        <Text style={styles.tileLabel}>{CATEGORY_LABEL[category]}</Text>
+        <Text style={styles.tileLabel}>{t(`categoryLabel.${category}`)}</Text>
         <Text style={styles.tileCount}>{`${earned}/4`}</Text>
       </View>
       <View style={styles.tileIcons}>
@@ -125,12 +129,13 @@ function CategoryTile({ category, medals, active, onPress }) {
 }
 
 function MedalCell({ medal, onPress }) {
+  const { t } = useTranslation();
   const earned = isMedalEarned(medal);
   return (
     <Pressable style={styles.cell} onPress={onPress}>
       <MedalIcon medal={medal} size={62} earned={earned} />
       <Text style={[styles.cellName, !earned && styles.cellNameDim]} numberOfLines={1}>
-        {MEDAL_NAME[medal.key]}
+        {t(`medalName.${medal.key}`)}
       </Text>
       <View style={{ marginTop: 4 }}>
         <TierBars medal={medal} />
@@ -145,6 +150,7 @@ function MedalCell({ medal, onPress }) {
  * medal state from the backend (self by default; pass playerId to view another).
  */
 export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
+  const { t } = useTranslation();
   const [state, setState] = useState({ loading: true, error: null, medals: null });
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailMedal, setDetailMedal] = useState(null);
@@ -170,12 +176,12 @@ export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
   return (
     <View>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>HONOR MEDALS</Text>
+        <Text style={styles.headerTitle}>{t('medalsSection.title')}</Text>
         <Text style={styles.headerCount}>
           {medals ? `${earnedCount(medals)}/16` : '—'}
         </Text>
       </View>
-      <Text style={styles.headerSub}>LIFETIME · PERMANENT</Text>
+      <Text style={styles.headerSub}>{t('medalsSection.subtitle')}</Text>
 
       {loading ? (
         <View style={styles.stateBox}>
@@ -183,7 +189,7 @@ export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
         </View>
       ) : error ? (
         <View style={styles.stateBox}>
-          <Text style={styles.stateText}>Couldn’t load medals.</Text>
+          <Text style={styles.stateText}>{t('medalsSection.couldNotLoad')}</Text>
         </View>
       ) : (
         <>

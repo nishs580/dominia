@@ -40,6 +40,7 @@ import {
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
 import { useFonts } from 'expo-font';
+import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import {
@@ -93,6 +94,7 @@ function makeTabOptions(label, Icon) {
 
 const TabNavigator = () => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -110,10 +112,10 @@ const TabNavigator = () => {
         headerShown: false,
       }}
     >
-      <Tab.Screen name="Map" options={makeTabOptions('MAP', MapGlyph)} component={MapScreen} />
-      <Tab.Screen name="Activity" options={makeTabOptions('ACTIVITY', ActivityGlyph)} component={ActivityScreen} />
-      <Tab.Screen name="Alliance" options={makeTabOptions('ALLIANCE', AllianceGlyph)} component={AllianceScreen} />
-      <Tab.Screen name="Profile" options={makeTabOptions('PROFILE', ProfileGlyph)} component={ProfileScreen} />
+      <Tab.Screen name="Map" options={makeTabOptions(t('tabs.map'), MapGlyph)} component={MapScreen} />
+      <Tab.Screen name="Activity" options={makeTabOptions(t('tabs.activity'), ActivityGlyph)} component={ActivityScreen} />
+      <Tab.Screen name="Alliance" options={makeTabOptions(t('tabs.alliance'), AllianceGlyph)} component={AllianceScreen} />
+      <Tab.Screen name="Profile" options={makeTabOptions(t('tabs.profile'), ProfileGlyph)} component={ProfileScreen} />
     </Tab.Navigator>
   );
 };

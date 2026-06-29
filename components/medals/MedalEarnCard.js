@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import MedalIcon from './MedalIcon';
 import TierBars from './TierBars';
 import { MEDAL_NAME, TIER_LABEL } from '../../lib/legacyMedals';
@@ -30,12 +31,12 @@ export function medalFromPush(data) {
   };
 }
 
-function subline(medal, data) {
+function subline(t, medal, data) {
   if (medal.type === 'tiered') {
-    return medal.currentTier ? TIER_LABEL[medal.currentTier] : '';
+    return medal.currentTier ? t(`tierLabel.${medal.currentTier}`) : '';
   }
-  if (medal.type === 'singular_count') return `× ${medal.count}`;
-  return medal.earnedYear ? `Earned ${medal.earnedYear}` : '';
+  if (medal.type === 'singular_count') return t('medal.countX', { count: medal.count });
+  return medal.earnedYear ? t('medal.earnedYear', { year: medal.earnedYear }) : '';
 }
 
 /**
@@ -44,24 +45,25 @@ function subline(medal, data) {
  * Tapping deep-links to the profile's Honor Medals; DISMISS closes it.
  */
 export default function MedalEarnCard({ data, onPress, onDismiss }) {
+  const { t } = useTranslation();
   const medal = medalFromPush(data);
-  const name = MEDAL_NAME[medal.key] || data?.title || 'Medal earned';
+  const name = t(`medalName.${medal.key}`, { defaultValue: '' }) || data?.title || t('medal.medalEarnedFallback');
   const body = data?.body || '';
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      <Text style={styles.eyebrow}>MEDAL EARNED</Text>
+      <Text style={styles.eyebrow}>{t('medal.medalEarned')}</Text>
       <View style={styles.iconWrap}>
         <MedalIcon medal={medal} size={108} earned />
       </View>
       <Text style={styles.name}>{name}</Text>
-      <Text style={styles.sub}>{subline(medal, data)}</Text>
+      <Text style={styles.sub}>{subline(t, medal, data)}</Text>
       <View style={{ marginTop: 12 }}>
         <TierBars medal={medal} height={8} />
       </View>
       {body ? <Text style={styles.body}>{body}</Text> : null}
       <Pressable style={styles.dismiss} onPress={onDismiss} hitSlop={8}>
-        <Text style={styles.dismissText}>DISMISS</Text>
+        <Text style={styles.dismissText}>{t('notif.dismiss')}</Text>
       </Pressable>
     </Pressable>
   );

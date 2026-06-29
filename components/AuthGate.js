@@ -1,9 +1,11 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 
 export default function AuthGate({ navigation }) {
+  const { t } = useTranslation();
   const { isSignedIn, isLoaded, userId, getToken } = useAuth();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [gateError, setGateError] = useState(null);
@@ -89,10 +91,10 @@ export default function AuthGate({ navigation }) {
       {gateError ? (
         <>
           <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, letterSpacing: 1.6, color: '#8B8F98', textTransform: 'uppercase', marginBottom: 12 }}>
-            Connection error
+            {t('authGate.connectionError')}
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#F2EEE6', textAlign: 'center', marginBottom: 24 }}>
-            Could not check your session. Please retry.
+            {t('authGate.couldNotCheckSession')}
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -103,7 +105,7 @@ export default function AuthGate({ navigation }) {
             ]}
           >
             <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 14, letterSpacing: 2.4, color: '#F2EEE6', textTransform: 'uppercase' }}>
-              Retry
+              {t('common.retry')}
             </Text>
           </Pressable>
         </>

@@ -10,6 +10,7 @@
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
@@ -51,114 +52,109 @@ function DistanceBody({ text }) {
 }
 
 function StreakMilestoneRow({ event }) {
+  const { t } = useTranslation();
   const days = getMeta(event, 'streakDays', 'streak_days') ?? '—';
   return (
-    <RowShell accentColor={CLAIM} label="STREAK MILESTONE" labelColor={CLAIM} event={event}>
+    <RowShell accentColor={CLAIM} label={t('activityEvent.streakMilestone')} labelColor={CLAIM} event={event}>
       <Text style={styles.heroNumber}>{days}</Text>
-      <Text style={styles.supporting}>DAY STREAK</Text>
+      <Text style={styles.supporting}>{t('activityEvent.dayStreak')}</Text>
     </RowShell>
   );
 }
 
 function LeveledUpRow({ event }) {
+  const { t } = useTranslation();
   const levelAfter = getMeta(event, 'level_after', 'levelAfter') ?? '—';
   return (
-    <RowShell accentColor={CLAIM} label="LEVELED UP" labelColor={CLAIM} event={event}>
+    <RowShell accentColor={CLAIM} label={t('activityEvent.leveledUp')} labelColor={CLAIM} event={event}>
       <Text style={styles.heroNumber}>{levelAfter}</Text>
-      <Text style={styles.supporting}>LEVEL REACHED</Text>
+      <Text style={styles.supporting}>{t('activityEvent.levelReached')}</Text>
     </RowShell>
   );
 }
 
 function StreakBrokenRow({ event }) {
+  const { t } = useTranslation();
   const days = getMeta(event, 'previous_streak', 'previousStreak', 'streak_days', 'streakDays') ?? '—';
   const graceDayUsed = getMeta(event, 'grace_day_used', 'graceDayUsed') === true;
   return (
-    <RowShell accentColor={SLATE} label="STREAK BROKEN" labelColor={SLATE2} event={event}>
-      <Headline>{days}-day streak ended</Headline>
-      {graceDayUsed ? <Text style={styles.graceDayLine}>GRACE DAY USED</Text> : null}
+    <RowShell accentColor={SLATE} label={t('activityEvent.streakBroken')} labelColor={SLATE2} event={event}>
+      <Headline>{t('activityEvent.streakEnded', { days })}</Headline>
+      {graceDayUsed ? <Text style={styles.graceDayLine}>{t('activityEvent.graceDayUsed')}</Text> : null}
     </RowShell>
   );
 }
 
 function ContestWonRow({ event }) {
+  const { t } = useTranslation();
   const attackerWalked = getMeta(event, 'attacker_walked_m', 'attackerWalkedM');
   const required = getMeta(event, 'required_walk_m', 'requiredWalkM');
   const bodyText =
     attackerWalked != null && required != null
-      ? `${attackerWalked}m of ${required}m walked`
+      ? t('activityEvent.walkedOf', { walked: attackerWalked, required })
       : null;
   return (
-    <RowShell accentColor={CLAIM} label="TERRITORY WON" labelColor={CLAIM} event={event}>
+    <RowShell accentColor={CLAIM} label={t('activityEvent.territoryWon')} labelColor={CLAIM} event={event}>
       {bodyText ? <DistanceBody text={bodyText} /> : null}
     </RowShell>
   );
 }
 
 function ContestLostRow({ event }) {
+  const { t } = useTranslation();
   const attackerWalked = getMeta(event, 'attacker_walked_m', 'attackerWalkedM');
   const required = getMeta(event, 'required_walk_m', 'requiredWalkM');
   const bodyText =
     attackerWalked != null && required != null
-      ? `${attackerWalked}m of ${required}m walked`
+      ? t('activityEvent.walkedOf', { walked: attackerWalked, required })
       : null;
   return (
-    <RowShell accentColor={ENEMY} label="TERRITORY LOST" labelColor={ENEMY} event={event}>
+    <RowShell accentColor={ENEMY} label={t('activityEvent.territoryLost')} labelColor={ENEMY} event={event}>
       {bodyText ? <DistanceBody text={bodyText} /> : null}
     </RowShell>
   );
 }
 
 function ContestHeldRow({ event }) {
+  const { t } = useTranslation();
   const attackerWalked = getMeta(event, 'attacker_walked_m', 'attackerWalkedM');
   const required = getMeta(event, 'required_walk_m', 'requiredWalkM');
   const bodyText =
     attackerWalked != null && required != null
-      ? `${attackerWalked}m of ${required}m attempted`
+      ? t('activityEvent.attemptedOf', { walked: attackerWalked, required })
       : null;
   return (
-    <RowShell accentColor={ALLIANCE} label="TERRITORY HELD" labelColor={ALLIANCE} event={event}>
+    <RowShell accentColor={ALLIANCE} label={t('activityEvent.territoryHeld')} labelColor={ALLIANCE} event={event}>
       {bodyText ? <DistanceBody text={bodyText} /> : null}
     </RowShell>
   );
 }
 
 function ContestExpiredRow({ event }) {
+  const { t } = useTranslation();
   const attackerWalked = getMeta(event, 'attackerWalkedM', 'attacker_walked_m');
   const required = getMeta(event, 'requiredWalkM', 'required_walk_m');
   const bodyText =
     attackerWalked != null && required != null
-      ? `${attackerWalked}m of ${required}m attempted`
+      ? t('activityEvent.attemptedOf', { walked: attackerWalked, required })
       : null;
   return (
-    <RowShell accentColor={SLATE} label="CONTEST EXPIRED" labelColor={SLATE2} event={event}>
+    <RowShell accentColor={SLATE} label={t('activityEvent.contestExpired')} labelColor={SLATE2} event={event}>
       {bodyText ? <DistanceBody text={bodyText} /> : null}
     </RowShell>
   );
 }
 
 function ContestDefendedRow({ event }) {
+  const { t } = useTranslation();
   const defenderWalked = getMeta(event, 'defender_walked_m', 'defenderWalkedM');
-  const bodyText = defenderWalked != null ? `${defenderWalked}m walked in defence` : null;
+  const bodyText = defenderWalked != null ? t('activityEvent.walkedInDefence', { walked: defenderWalked }) : null;
   return (
-    <RowShell accentColor={ALLIANCE} label="TERRITORY DEFENDED" labelColor={ALLIANCE} event={event}>
+    <RowShell accentColor={ALLIANCE} label={t('activityEvent.territoryDefended')} labelColor={ALLIANCE} event={event}>
       {bodyText ? <DistanceBody text={bodyText} /> : null}
     </RowShell>
   );
 }
-
-const STUB_TITLES = {
-  challenge_completed: 'CHALLENGE COMPLETED',
-  territory_claimed: 'TERRITORY CLAIMED',
-  territory_abandoned: 'TERRITORY ABANDONED',
-  alliance_founded: 'ALLIANCE FOUNDED',
-  alliance_joined: 'JOINED ALLIANCE',
-  alliance_left: 'LEFT ALLIANCE',
-  alliance_kicked: 'REMOVED FROM ALLIANCE',
-  alliance_promoted: 'PROMOTED',
-  alliance_demoted: 'DEMOTED',
-  alliance_role_changed: 'ROLE CHANGED',
-};
 
 function GenericRow({ event, title }) {
   return (
@@ -167,6 +163,7 @@ function GenericRow({ event, title }) {
 }
 
 export default function ActivityLogEvent({ event }) {
+  const { t } = useTranslation();
   switch (event.event_type) {
     case 'streak_milestone':
       return <StreakMilestoneRow event={event} />;
@@ -185,7 +182,7 @@ export default function ActivityLogEvent({ event }) {
     case 'leveled_up':
       return <LeveledUpRow event={event} />;
     default: {
-      const title = STUB_TITLES[event.event_type] ?? 'ACTIVITY';
+      const title = t(`activityEvent.stub.${event.event_type}`, { defaultValue: '' }) || t('activityEvent.fallback');
       return <GenericRow event={event} title={title} />;
     }
   }

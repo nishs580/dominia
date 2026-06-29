@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { foundAlliance } from '../lib/allianceApi';
 import { supabase } from '../lib/supabase';
 import THEME from '../lib/theme';
@@ -24,32 +25,33 @@ const CLAIM = THEME.colors.claim;
 const HAIRLINE = THEME.colors.hairline;
 const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
-function mapFoundAllianceError(error) {
+function mapFoundAllianceError(t, error) {
   const code = error?.code ?? null;
   switch (code) {
     case 'short_name_taken':
-      return 'That short name is already taken. Pick another.';
+      return t('createAlliance.errShortNameTaken');
     case 'invalid_short_name':
-      return 'Short name must be exactly 3 uppercase letters.';
+      return t('createAlliance.errInvalidShortName');
     case 'invalid_full_name':
-      return 'Alliance name must be 3-32 characters.';
+      return t('createAlliance.errInvalidFullName');
     case 'already_in_alliance':
-      return 'You are already in an alliance.';
+      return t('createAlliance.errAlreadyInAlliance');
     case 'hq_not_owned':
-      return 'You must own the HQ territory.';
+      return t('createAlliance.errHqNotOwned');
     case 'hq_city_mismatch':
-      return 'HQ must be in your home city.';
+      return t('createAlliance.errHqCityMismatch');
     case 'level_too_low':
-      return 'You must be Level 6 to found an alliance.';
+      return t('createAlliance.errLevelTooLow');
     case 'player_not_found':
-      return 'Account error. Try signing out and back in.';
+      return t('createAlliance.errPlayerNotFound');
     default:
-      return 'Could not create alliance. Try again.';
+      return t('createAlliance.errGeneric');
   }
 }
 
 export default function CreateAllianceScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
   const [step, setStep] = useState(1);
@@ -141,14 +143,14 @@ export default function CreateAllianceScreen() {
     let nErr = '';
     let cErr = '';
     if (!nameTrim) {
-      nErr = 'Enter an alliance name.';
+      nErr = t('createAlliance.errEnterName');
     } else if (nameTrim.length < 3) {
-      nErr = 'Name must be at least 3 characters.';
+      nErr = t('createAlliance.errNameTooShort');
     }
     if (!codeUpper) {
-      cErr = 'Enter a 3-letter code.';
+      cErr = t('createAlliance.errEnterCode');
     } else if (codeUpper.length !== 3) {
-      cErr = 'Code must be exactly 3 letters.';
+      cErr = t('createAlliance.errCodeLength');
     }
     setNameError(nErr);
     setCodeError(cErr);
@@ -163,7 +165,7 @@ export default function CreateAllianceScreen() {
     if (error) {
       console.error('CreateAllianceScreen code check:', error);
     } else if (data) {
-      setCodeError('That code is taken.');
+      setCodeError(t('createAlliance.errCodeTaken'));
       return;
     }
     setAllianceName(nameTrim);
@@ -190,10 +192,10 @@ export default function CreateAllianceScreen() {
         return;
       }
 
-      setSubmitError(mapFoundAllianceError(result.error));
+      setSubmitError(mapFoundAllianceError(t, result.error));
     } catch (err) {
       console.error('Create alliance failed:', err);
-      setSubmitError('Could not create alliance. Try again.');
+      setSubmitError(t('createAlliance.errGeneric'));
     } finally {
       setCreateSaving(false);
     }
@@ -207,7 +209,7 @@ export default function CreateAllianceScreen() {
         hitSlop={12}
         style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.75 }]}
       >
-        <Text style={styles.backBtnText}>← BACK</Text>
+        <Text style={styles.backBtnText}>{t('createAlliance.back')}</Text>
       </Pressable>
     </View>
   );
@@ -215,7 +217,7 @@ export default function CreateAllianceScreen() {
   const formatTierLabel = (tier) => {
     if (tier === null || tier === undefined || tier === '') return '—';
     if (typeof tier === 'string') return tier.charAt(0).toUpperCase() + tier.slice(1);
-    return `Tier ${tier}`;
+    return t('createAlliance.tierN', { n: tier });
   };
 
   return (
@@ -230,23 +232,23 @@ export default function CreateAllianceScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.kickerRow}>
-            <Text style={styles.kickerText}>Create Alliance · 01 / 03</Text>
+            <Text style={styles.kickerText}>{t('createAlliance.kicker', { step: '01' })}</Text>
             <View style={styles.kickerRule} />
           </View>
 
-          <Text style={styles.stepTitle}>Name{'\n'}your alliance</Text>
+          <Text style={styles.stepTitle}>{t('createAlliance.step1Title')}</Text>
           <Text style={styles.bodyText}>
-            Both names are permanent. The short name cannot be changed after founding.
+            {t('createAlliance.step1Body')}
           </Text>
 
           <View style={styles.labelRow}>
-            <Text style={styles.labelText}>Full name</Text>
-            <Text style={styles.labelHint}>3–24 characters</Text>
+            <Text style={styles.labelText}>{t('createAlliance.fullName')}</Text>
+            <Text style={styles.labelHint}>{t('createAlliance.fullNameHint')}</Text>
           </View>
           {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
           <TextInput
             style={styles.input}
-            placeholder="Alliance name"
+            placeholder={t('createAlliance.namePlaceholder')}
             placeholderTextColor="#555"
             value={allianceName}
             onChangeText={(t) => {
@@ -258,15 +260,15 @@ export default function CreateAllianceScreen() {
           />
 
           <View style={styles.labelRow}>
-            <Text style={styles.labelText}>Short name</Text>
-            <Text style={styles.labelHint}>3 letters · used in [TAG]</Text>
+            <Text style={styles.labelText}>{t('createAlliance.shortName')}</Text>
+            <Text style={styles.labelHint}>{t('createAlliance.shortNameHint')}</Text>
           </View>
           <TextInput
             style={[
               styles.input,
               { fontFamily: 'GeistMono_500Medium', letterSpacing: 4, fontSize: 18 },
             ]}
-            placeholder="e.g. SNW"
+            placeholder={t('createAlliance.shortNamePlaceholder')}
             placeholderTextColor="#555"
             value={code}
             onChangeText={(t) => {
@@ -280,7 +282,7 @@ export default function CreateAllianceScreen() {
           {codeError ? (
             <Text style={styles.fieldError}>{codeError}</Text>
           ) : (
-            <Text style={styles.micro}>Displayed in brackets — [{code || 'XXX'}]</Text>
+            <Text style={styles.micro}>{t('createAlliance.displayedInBrackets', { code: code || 'XXX' })}</Text>
           )}
 
           <Pressable
@@ -292,8 +294,8 @@ export default function CreateAllianceScreen() {
               pressed && { opacity: 0.9 },
             ]}
           >
-            <Text style={styles.ctaStep}>Step 01 of 03</Text>
-            <Text style={styles.ctaAction}>Continue →</Text>
+            <Text style={styles.ctaStep}>{t('createAlliance.stepOf', { n: '01' })}</Text>
+            <Text style={styles.ctaAction}>{t('createAlliance.continue')}</Text>
           </Pressable>
         </ScrollView>
       )}
@@ -301,13 +303,13 @@ export default function CreateAllianceScreen() {
       {step === 2 && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.kickerRow}>
-            <Text style={styles.kickerText}>Create Alliance · 02 / 03</Text>
+            <Text style={styles.kickerText}>{t('createAlliance.kicker', { step: '02' })}</Text>
             <View style={styles.kickerRule} />
           </View>
 
-          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>Choose your{'\n'}HQ territory</Text>
+          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>{t('createAlliance.step2Title')}</Text>
           <Text style={styles.bodyText}>
-            Your HQ anchors the alliance on the map. Choose a territory you already hold.
+            {t('createAlliance.step2Body')}
           </Text>
 
           {playerLoading ? (
@@ -316,7 +318,7 @@ export default function CreateAllianceScreen() {
             </View>
           ) : !playerId ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptySubtitle}>Could not load your player profile. Try again later.</Text>
+              <Text style={styles.emptySubtitle}>{t('createAlliance.couldNotLoadProfile')}</Text>
             </View>
           ) : territoriesLoading ? (
             <View style={styles.centered}>
@@ -324,7 +326,7 @@ export default function CreateAllianceScreen() {
             </View>
           ) : territories.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptySubtitle}>You hold no territories yet. Claim one from the map before founding an alliance.</Text>
+              <Text style={styles.emptySubtitle}>{t('createAlliance.noTerritories')}</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setStep(1)}
@@ -334,33 +336,33 @@ export default function CreateAllianceScreen() {
                   pressed && { opacity: 0.9 },
                 ]}
               >
-                <Text style={[styles.ctaStep, styles.ctaStepDisabled]}>No territories</Text>
-                <Text style={[styles.ctaAction, styles.ctaActionDisabled]}>← Back</Text>
+                <Text style={[styles.ctaStep, styles.ctaStepDisabled]}>{t('createAlliance.noTerritoriesStep')}</Text>
+                <Text style={[styles.ctaAction, styles.ctaActionDisabled]}>{t('createAlliance.backAction')}</Text>
               </Pressable>
             </View>
           ) : (
             <>
               <View style={styles.tList}>
-                {territories.map((t) => {
-                  const selected = t.id === selectedTerritoryId;
-                  const tierLabel = formatTierLabel(t.tier);
-                  const perimeter = t?.perimeter_distance;
+                {territories.map((terr) => {
+                  const selected = terr.id === selectedTerritoryId;
+                  const tierLabel = formatTierLabel(terr.tier);
+                  const perimeter = terr?.perimeter_distance;
                   const meta =
                     perimeter === null || perimeter === undefined || perimeter === ''
                       ? tierLabel
-                      : `${tierLabel} · ${perimeter} m perimeter`;
+                      : t('createAlliance.tierPerimeter', { tier: tierLabel, m: perimeter });
                   return (
                     <Pressable
-                      key={t.id}
+                      key={terr.id}
                       accessibilityRole="button"
-                      onPress={() => setSelectedTerritoryId(t.id)}
+                      onPress={() => setSelectedTerritoryId(terr.id)}
                       style={({ pressed }) => [styles.tRow, selected && styles.tRowSelected, pressed && { opacity: 0.92 }]}
                     >
                       <View style={styles.tInfo}>
-                        <Text style={styles.tName}>{t.territory_name ?? '—'}</Text>
+                        <Text style={styles.tName}>{terr.territory_name ?? '—'}</Text>
                         <Text style={styles.tMeta}>{meta}</Text>
                       </View>
-                      {selected ? <Text style={styles.tTag}>Selected</Text> : null}
+                      {selected ? <Text style={styles.tTag}>{t('createAlliance.selected')}</Text> : null}
                     </Pressable>
                   );
                 })}
@@ -375,8 +377,8 @@ export default function CreateAllianceScreen() {
                   pressed && selectedTerritoryId && { opacity: 0.9 },
                 ]}
               >
-                <Text style={[styles.ctaStep, !selectedTerritoryId && styles.ctaStepDisabled]}>Step 02 of 03</Text>
-                <Text style={[styles.ctaAction, !selectedTerritoryId && styles.ctaActionDisabled]}>Continue →</Text>
+                <Text style={[styles.ctaStep, !selectedTerritoryId && styles.ctaStepDisabled]}>{t('createAlliance.stepOf', { n: '02' })}</Text>
+                <Text style={[styles.ctaAction, !selectedTerritoryId && styles.ctaActionDisabled]}>{t('createAlliance.continue')}</Text>
               </Pressable>
             </>
           )}
@@ -386,31 +388,31 @@ export default function CreateAllianceScreen() {
       {step === 3 && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.kickerRow}>
-            <Text style={styles.kickerText}>Create Alliance · 03 / 03</Text>
+            <Text style={styles.kickerText}>{t('createAlliance.kicker', { step: '03' })}</Text>
             <View style={styles.kickerRule} />
           </View>
 
-          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>Confirm.{'\n'}Then create.</Text>
-          <Text style={styles.bodyText}>Founding is permanent. The short name cannot be changed.</Text>
+          <Text style={[styles.stepTitle, styles.stepTitleSmall]}>{t('createAlliance.step3Title')}</Text>
+          <Text style={styles.bodyText}>{t('createAlliance.step3Body')}</Text>
 
           <View style={styles.sumList}>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>Alliance</Text>
+              <Text style={styles.sumLabel}>{t('createAlliance.sumAlliance')}</Text>
               <Text style={styles.sumValue}>{allianceName.trim()}</Text>
             </View>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>Tag</Text>
+              <Text style={styles.sumLabel}>{t('createAlliance.sumTag')}</Text>
               <Text style={[styles.sumValue, styles.sumValueMono]}>[{code.trim().toUpperCase()}]</Text>
             </View>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>HQ</Text>
+              <Text style={styles.sumLabel}>{t('createAlliance.sumHQ')}</Text>
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
                 <Text style={styles.sumValue}>{selectedTerritory?.territory_name ?? '—'}</Text>
-                <Text style={styles.sumHomeTag}>Home</Text>
+                <Text style={styles.sumHomeTag}>{t('createAlliance.home')}</Text>
               </View>
             </View>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>City</Text>
+              <Text style={styles.sumLabel}>{t('createAlliance.city')}</Text>
               <Text style={styles.sumValue}>{homeCity ?? '—'}</Text>
             </View>
           </View>
@@ -429,9 +431,9 @@ export default function CreateAllianceScreen() {
               <ActivityIndicator color={BONE} />
             ) : (
               <>
-                <Text style={[styles.ctaStep, createSaving && styles.ctaStepDisabled]}>Final step · permanent</Text>
+                <Text style={[styles.ctaStep, createSaving && styles.ctaStepDisabled]}>{t('createAlliance.finalStep')}</Text>
                 <Text style={[styles.ctaAction, createSaving && styles.ctaActionDisabled]}>
-                  Create {allianceName.trim()} →
+                  {t('createAlliance.createName', { name: allianceName.trim() })}
                 </Text>
               </>
             )}

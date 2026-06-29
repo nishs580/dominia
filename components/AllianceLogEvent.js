@@ -12,6 +12,7 @@
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
@@ -22,54 +23,57 @@ const ENEMY = '#B83E2B';
 const BONE = '#F2EEE6';
 const SLATE2 = '#8B8F98';
 
-function subjectName(event) {
-  return (event.subject_username ?? 'FORMER MEMBER').toUpperCase();
+function subjectName(t, event) {
+  return (event.subject_username ?? t('allianceEvent.formerMember')).toUpperCase();
 }
 
-function actorName(event) {
-  return (event.actor_username ?? 'FORMER MEMBER').toUpperCase();
+function actorName(t, event) {
+  return (event.actor_username ?? t('allianceEvent.formerMember')).toUpperCase();
 }
 
 function AllianceFoundedRow({ event }) {
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const subject = subjectName(t, event);
   const shortName = getMeta(event, 'short_name') ?? '—';
   const fullName = getMeta(event, 'full_name');
 
   return (
     <View style={[styles.row, { borderLeftColor: CLAIM }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{subject} FOUNDED {shortName}</Text>
+        <Text style={styles.headline}>{t('allianceEvent.founded', { subject, name: shortName })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
       {fullName ? (
-        <Text style={styles.body}>{`▸ ${fullName}`.toUpperCase()}</Text>
+        <Text style={styles.body}>{t('allianceEvent.foundedBody', { name: String(fullName).toUpperCase() })}</Text>
       ) : null}
     </View>
   );
 }
 
 function AllianceJoinedRow({ event }) {
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const subject = subjectName(t, event);
   const role = (getMeta(event, 'role') ?? 'MEMBER').toUpperCase();
 
   return (
     <View style={[styles.row, { borderLeftColor: ALLIANCE_GREEN }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{subject} JOINED</Text>
+        <Text style={styles.headline}>{t('allianceEvent.joined', { subject })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
-      <Text style={styles.body}>{`▸ AS ${role}`}</Text>
+      <Text style={styles.body}>{t('allianceEvent.joinedBody', { role })}</Text>
     </View>
   );
 }
 
 function AllianceLeftRow({ event }) {
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const subject = subjectName(t, event);
 
   return (
     <View style={[styles.row, { borderLeftColor: SLATE }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{subject} LEFT</Text>
+        <Text style={styles.headline}>{t('allianceEvent.left', { subject })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
     </View>
@@ -77,51 +81,54 @@ function AllianceLeftRow({ event }) {
 }
 
 function AlliancePromotedRow({ event }) {
-  const actor = actorName(event);
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const actor = actorName(t, event);
+  const subject = subjectName(t, event);
   const prev = (getMeta(event, 'previous_role') ?? '?').toUpperCase();
   const next = (getMeta(event, 'new_role') ?? '?').toUpperCase();
 
   return (
     <View style={[styles.row, { borderLeftColor: ALLIANCE_GREEN }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{actor} PROMOTED {subject}</Text>
+        <Text style={styles.headline}>{t('allianceEvent.promoted', { actor, subject })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
-      <Text style={styles.body}>{`▸ ${prev} → ${next}`}</Text>
+      <Text style={styles.body}>{t('allianceEvent.roleChange', { prev, next })}</Text>
     </View>
   );
 }
 
 function AllianceDemotedRow({ event }) {
-  const actor = actorName(event);
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const actor = actorName(t, event);
+  const subject = subjectName(t, event);
   const prev = (getMeta(event, 'previous_role') ?? '?').toUpperCase();
   const next = (getMeta(event, 'new_role') ?? '?').toUpperCase();
 
   return (
     <View style={[styles.row, { borderLeftColor: SLATE }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{actor} DEMOTED {subject}</Text>
+        <Text style={styles.headline}>{t('allianceEvent.demoted', { actor, subject })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
-      <Text style={styles.body}>{`▸ ${prev} → ${next}`}</Text>
+      <Text style={styles.body}>{t('allianceEvent.roleChange', { prev, next })}</Text>
     </View>
   );
 }
 
 function AllianceKickedRow({ event }) {
-  const actor = actorName(event);
-  const subject = subjectName(event);
+  const { t } = useTranslation();
+  const actor = actorName(t, event);
+  const subject = subjectName(t, event);
   const prevRole = (getMeta(event, 'previous_role') ?? 'MEMBER').toUpperCase();
 
   return (
     <View style={[styles.row, { borderLeftColor: ENEMY }]}>
       <View style={styles.topRow}>
-        <Text style={styles.headline}>{actor} KICKED {subject}</Text>
+        <Text style={styles.headline}>{t('allianceEvent.kicked', { actor, subject })}</Text>
         <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
       </View>
-      <Text style={styles.body}>{`▸ WAS ${prevRole}`}</Text>
+      <Text style={styles.body}>{t('allianceEvent.kickedBody', { role: prevRole })}</Text>
     </View>
   );
 }

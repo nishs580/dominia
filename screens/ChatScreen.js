@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import {
   getMessages,
   getRooms,
@@ -48,6 +49,7 @@ function genClientTempId() {
 }
 
 export default function ChatScreen() {
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -277,7 +279,7 @@ export default function ChatScreen() {
       client_temp_id: clientTempId,
       room_id: activeRoom.id,
       sender_id: 'self',
-      sender_name: 'You',
+      sender_name: t('chat.you'),
       sender_level: null,
       sender_alliance_short_name: null,
       content,
@@ -326,19 +328,19 @@ export default function ChatScreen() {
       setDraft(content); // restore so user can edit / retry
       if (result.code === 'chat_muted') {
         const until = result.context?.muted_until;
-        showBanner('muted', `Muted${until ? ` until ${timeAgo(until)}` : ''}.`);
+        showBanner('muted', until ? t('chat.mutedUntil', { time: timeAgo(until) }) : t('chat.muted'));
       } else if (result.code === 'rate_limited') {
         const secs = result.context?.retry_after_seconds ?? 30;
-        showBanner('rate_limited', `Slow down — retry in ${secs}s.`);
+        showBanner('rate_limited', t('chat.rateLimited', { secs }));
       } else if (result.code === 'message_filtered') {
-        showBanner('filtered', 'Message blocked by content rules.');
+        showBanner('filtered', t('chat.filtered'));
       } else if (result.code === 'room_access_forbidden') {
-        showBanner('error', 'You no longer have access to this room.');
+        showBanner('error', t('chat.roomForbidden'));
       } else {
-        showBanner('error', 'Send failed. Try again.');
+        showBanner('error', t('chat.sendFailed'));
       }
     }
-  }, [activeRoom, draft, sending, clearBanner, showBanner]);
+  }, [activeRoom, draft, sending, clearBanner, showBanner, t]);
 
   const renderBody = () => {
     if (!roomsLoaded) {
@@ -352,13 +354,13 @@ export default function ChatScreen() {
     if (error && rooms.length === 0) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.errorBody}>Failed to load chat.</Text>
+          <Text style={styles.errorBody}>{t('chat.failedToLoad')}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={fetchRooms}
             style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.retryBtnText}>RETRY</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       );
@@ -367,9 +369,9 @@ export default function ChatScreen() {
     if (activeTab === 'city' && cityRoom == null) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.emptyLabel}>NO CITY YET</Text>
+          <Text style={styles.emptyLabel}>{t('chat.noCityTitle')}</Text>
           <Text style={styles.emptyBody}>
-            Set your home pin to join your city chat.
+            {t('chat.noCityBody')}
           </Text>
         </View>
       );
@@ -378,9 +380,9 @@ export default function ChatScreen() {
     if (activeTab === 'alliance' && allianceRoom == null) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.emptyLabel}>NO ALLIANCE</Text>
+          <Text style={styles.emptyLabel}>{t('chat.noAllianceTitle')}</Text>
           <Text style={styles.emptyBody}>
-            Join an alliance to chat with your alliance.
+            {t('chat.noAllianceBody')}
           </Text>
         </View>
       );
@@ -402,8 +404,8 @@ export default function ChatScreen() {
     if (messages && messages.length === 0) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.emptyLabel}>NO MESSAGES YET</Text>
-          <Text style={styles.emptyBody}>Be the first to say hi.</Text>
+          <Text style={styles.emptyLabel}>{t('chat.noMessagesTitle')}</Text>
+          <Text style={styles.emptyBody}>{t('chat.noMessagesBody')}</Text>
         </View>
       );
     }
@@ -444,18 +446,18 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <Text style={styles.sectionLabel}>CHAT</Text>
+        <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
 
       <View style={styles.tabStrip}>
         {(
           [
-            { key: 'city', label: 'CITY', visible: true },
-            { key: 'alliance', label: 'ALLIANCE', visible: allianceRoom != null },
+            { key: 'city', label: t('chat.tabCity'), visible: true },
+            { key: 'alliance', label: t('chat.tabAlliance'), visible: allianceRoom != null },
           ]
         )
-          .filter((t) => t.visible)
+          .filter((tab) => tab.visible)
           .map(({ key, label }) => {
             const selected = activeTab === key;
             return (
@@ -499,7 +501,7 @@ export default function ChatScreen() {
         <View style={styles.composer}>
           <TextInput
             style={styles.composerInput}
-            placeholder="Message"
+            placeholder={t('chat.messagePlaceholder')}
             placeholderTextColor="#5C6068"
             value={draft}
             onChangeText={setDraft}
@@ -519,7 +521,7 @@ export default function ChatScreen() {
                 pressed && !sendDisabled && { opacity: 0.7 },
               ]}
             >
-              <Text style={styles.sendBtnText}>SEND</Text>
+              <Text style={styles.sendBtnText}>{t('chat.send')}</Text>
             </Pressable>
           </View>
         </View>

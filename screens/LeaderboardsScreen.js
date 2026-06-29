@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { getLeaderboard } from '../lib/leaderboardApi';
 import { supabase } from '../lib/supabase';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
@@ -32,17 +33,17 @@ function RowAvatar({ url, name }) {
   );
 }
 
-function PowerRow({ row, subject, isSelfRow }) {
+function PowerRow({ t, row, subject, isSelfRow }) {
   let title;
   let subtitle;
   let rightValue;
   if (subject === 'players') {
     title = row.username;
-    subtitle = `LVL ${row.level ?? '-'} · A ${row.activity_power.toLocaleString()} · T ${row.territory_power.toLocaleString()} · L ${row.legacy_power.toLocaleString()}`;
+    subtitle = t('leaderboards.subPowerPlayer', { lvl: row.level ?? '-', a: row.activity_power.toLocaleString(), t: row.territory_power.toLocaleString(), l: row.legacy_power.toLocaleString() });
     rightValue = row.total_power.toLocaleString();
   } else {
     title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
-    subtitle = `MBR ${row.member_count} · BASE ${row.base_power.toLocaleString()} · ${Math.round(row.participation_rate * 100)}% · ×${row.coordination_mult.toFixed(2)}`;
+    subtitle = t('leaderboards.subPowerAlliance', { m: row.member_count, b: row.base_power.toLocaleString(), p: Math.round(row.participation_rate * 100), c: row.coordination_mult.toFixed(2) });
     rightValue = row.alliance_power.toLocaleString();
   }
 
@@ -61,17 +62,17 @@ function PowerRow({ row, subject, isSelfRow }) {
   );
 }
 
-function TerritoryRow({ row, subject, isSelfRow }) {
+function TerritoryRow({ t, row, subject, isSelfRow }) {
   let title;
   let subtitle;
   let rightValue;
   if (subject === 'players') {
     title = row.username;
-    subtitle = `LVL ${row.level ?? '-'}`;
+    subtitle = t('leaderboards.subTerritoryPlayer', { lvl: row.level ?? '-' });
     rightValue = row.territory_count.toLocaleString();
   } else {
     title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
-    subtitle = `MBR ${row.member_count}`;
+    subtitle = t('leaderboards.subTerritoryAlliance', { m: row.member_count });
     rightValue = row.territory_count.toLocaleString();
   }
 
@@ -90,17 +91,17 @@ function TerritoryRow({ row, subject, isSelfRow }) {
   );
 }
 
-function BattlesRow({ row, subject, isSelfRow }) {
+function BattlesRow({ t, row, subject, isSelfRow }) {
   let title;
   let subtitle;
   let rightValue;
   if (subject === 'players') {
     title = row.username;
-    subtitle = `LVL ${row.level ?? '-'} · W ${row.wins.toLocaleString()} · L ${row.losses.toLocaleString()}`;
+    subtitle = t('leaderboards.subBattlesPlayer', { lvl: row.level ?? '-', w: row.wins.toLocaleString(), l: row.losses.toLocaleString() });
     rightValue = row.battles.toLocaleString();
   } else {
     title = row.alliance_name + (row.alliance_short_name ? ` [${row.alliance_short_name}]` : '');
-    subtitle = `MBR ${row.member_count} · W ${row.wins.toLocaleString()} · L ${row.losses.toLocaleString()}`;
+    subtitle = t('leaderboards.subBattlesAlliance', { m: row.member_count, w: row.wins.toLocaleString(), l: row.losses.toLocaleString() });
     rightValue = row.battles.toLocaleString();
   }
 
@@ -120,6 +121,7 @@ function BattlesRow({ row, subject, isSelfRow }) {
 }
 
 export default function LeaderboardsScreen() {
+  const { t } = useTranslation();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -211,7 +213,7 @@ export default function LeaderboardsScreen() {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#5C6068" />
-          <Text style={styles.loadingText}>LOADING…</Text>
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
     }
@@ -219,13 +221,13 @@ export default function LeaderboardsScreen() {
     if (error && rows.length === 0) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.errorBody}>Failed to load leaderboard.</Text>
+          <Text style={styles.errorBody}>{t('leaderboards.failedToLoad')}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={fetchLeaderboard}
             style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.retryBtnText}>RETRY</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       );
@@ -234,8 +236,8 @@ export default function LeaderboardsScreen() {
     if (rows.length === 0 && !error) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.emptyLabel}>NO RANKINGS YET</Text>
-          <Text style={styles.emptyBody}>Boards open soon.</Text>
+          <Text style={styles.emptyLabel}>{t('leaderboards.noRankingsTitle')}</Text>
+          <Text style={styles.emptyBody}>{t('leaderboards.noRankingsBody')}</Text>
         </View>
       );
     }
@@ -252,12 +254,12 @@ export default function LeaderboardsScreen() {
               ? viewerPlayerId !== null && item.player_id === viewerPlayerId
               : viewerAllianceId !== null && item.alliance_id === viewerAllianceId;
           if (board === 'power') {
-            return <PowerRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+            return <PowerRow t={t} row={item} subject={subject} isSelfRow={isSelfRow} />;
           }
           if (board === 'territory') {
-            return <TerritoryRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+            return <TerritoryRow t={t} row={item} subject={subject} isSelfRow={isSelfRow} />;
           }
-          return <BattlesRow row={item} subject={subject} isSelfRow={isSelfRow} />;
+          return <BattlesRow t={t} row={item} subject={subject} isSelfRow={isSelfRow} />;
         }}
         refreshControl={
           <RefreshControl
@@ -274,16 +276,16 @@ export default function LeaderboardsScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.sectionLabel}>LEADERBOARDS</Text>
+        <Text style={styles.sectionLabel}>{t('leaderboards.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
 
       <View style={styles.boardStrip}>
         {(
           [
-            { key: 'power', label: 'POWER' },
-            { key: 'territory', label: 'TERRITORY' },
-            { key: 'battles', label: 'BATTLES' },
+            { key: 'power', label: t('leaderboards.boardPower') },
+            { key: 'territory', label: t('leaderboards.boardTerritory') },
+            { key: 'battles', label: t('leaderboards.boardBattles') },
           ]
         ).map(({ key, label }) => {
           const selected = board === key;
@@ -305,8 +307,8 @@ export default function LeaderboardsScreen() {
       <View style={styles.subjectStrip}>
         {(
           [
-            { key: 'players', label: 'PLAYERS' },
-            { key: 'alliances', label: 'ALLIANCES' },
+            { key: 'players', label: t('leaderboards.subjectPlayers') },
+            { key: 'alliances', label: t('leaderboards.subjectAlliances') },
           ]
         ).map(({ key, label }) => {
           const selected = subject === key;

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { donateMorale } from '../lib/allianceApi';
 import { spacing } from '../lib/theme';
@@ -30,39 +31,12 @@ const SLATE2 = '#8B8F98';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
+// Display copy (label/spend/earn) lives in locales under wallet.resources.<key>.
 const RESOURCES = [
-  {
-    key: 'iron',
-    label: 'IRON',
-    Glyph: IronGlyph,
-    glyphColor: '#F2EEE6',
-    spend: 'Spend to contest territories',
-    earn: 'Earn from calorie challenges & contest wins',
-  },
-  {
-    key: 'stone',
-    label: 'STONE',
-    Glyph: StoneGlyph,
-    glyphColor: '#F2EEE6',
-    spend: 'Spend to defend & develop territories',
-    earn: 'Earn from step challenges & defence wins',
-  },
-  {
-    key: 'gold',
-    label: 'GOLD',
-    Glyph: GoldGlyph,
-    glyphColor: '#F2EEE6',
-    spend: 'Spend to claim territories',
-    earn: 'Earn from all challenges & claims',
-  },
-  {
-    key: 'morale',
-    label: 'MORALE',
-    Glyph: MoraleGlyph,
-    glyphColor: '#F2EEE6',
-    spend: 'Donate to alliance war chest',
-    earn: 'Earn from challenges & alliance missions',
-  },
+  { key: 'iron', Glyph: IronGlyph, glyphColor: '#F2EEE6' },
+  { key: 'stone', Glyph: StoneGlyph, glyphColor: '#F2EEE6' },
+  { key: 'gold', Glyph: GoldGlyph, glyphColor: '#F2EEE6' },
+  { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#F2EEE6' },
 ];
 
 function SectionDivider({ label }) {
@@ -77,6 +51,7 @@ function SectionDivider({ label }) {
 
 export default function WalletScreen({ route }) {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { getToken } = useAuth();
   const { playerId = null, username = '' } = route?.params ?? {};
 
@@ -110,7 +85,7 @@ export default function WalletScreen({ route }) {
       if (cancelled) return;
 
       if (fetchError) {
-        setError(fetchError.message ?? 'Could not load wallet');
+        setError(fetchError.message ?? t('wallet.errFallback'));
         setLoading(false);
         return;
       }
@@ -133,17 +108,17 @@ export default function WalletScreen({ route }) {
     const parsed = parseInt(amount, 10);
     if (!parsed || parsed <= 0) return;
     if (parsed > wallet.morale) {
-      setDonateError('Not enough Morale.');
+      setDonateError(t('wallet.notEnoughMorale'));
       return;
     }
 
     Alert.alert(
-      `Donate ${parsed} Morale?`,
-      'This will be added to your alliance war chest.',
+      t('wallet.alertDonateTitle', { amount: parsed }),
+      t('wallet.alertDonateBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('wallet.alertCancel'), style: 'cancel' },
         {
-          text: 'Donate',
+          text: t('wallet.alertDonateConfirm'),
           style: 'destructive',
           onPress: async () => {
             setDonating(true);
@@ -151,7 +126,7 @@ export default function WalletScreen({ route }) {
             const res = await donateMorale({ clerkGetToken: getToken, allianceId, amount: parsed });
             setDonating(false);
             if (!res.ok) {
-              setDonateError('Donation failed. Try again.');
+              setDonateError(t('wallet.donationFailed'));
             } else {
               setWallet(prev => ({ ...prev, morale: res.data.player_morale }));
               setCustomAmount('');
@@ -167,10 +142,10 @@ export default function WalletScreen({ route }) {
     <View style={styles.screen}>
       <View style={styles.headerBlock}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← PROFILE</Text>
+          <Text style={styles.backBtnText}>{t('wallet.back')}</Text>
         </Pressable>
         <Text style={styles.headerLabel}>{username}</Text>
-        <Text style={styles.headerTitle}>MY RESOURCES</Text>
+        <Text style={styles.headerTitle}>{t('wallet.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
 
@@ -178,7 +153,7 @@ export default function WalletScreen({ route }) {
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
-            <Text style={styles.loadingText}>Loading wallet…</Text>
+            <Text style={styles.loadingText}>{t('wallet.loading')}</Text>
           </View>
         ) : null}
 
@@ -191,7 +166,7 @@ export default function WalletScreen({ route }) {
         {!loading && !error ? (
           <>
             <View style={styles.walletBlock}>
-              <SectionDivider label="WALLET" />
+              <SectionDivider label={t('wallet.walletSection')} />
               {RESOURCES.map((r, index) => (
                 <View key={r.key}>
                   {(() => {
@@ -202,17 +177,17 @@ export default function WalletScreen({ route }) {
                           <r.Glyph size={28} color={r.glyphColor} />
                         </View>
                         <View style={styles.resourceInfo}>
-                          <Text style={styles.resourceLabel}>{r.label}</Text>
+                          <Text style={styles.resourceLabel}>{t(`wallet.resources.${r.key}.label`)}</Text>
                           {isMoreale ? (
                             <>
-                              <Text style={styles.resourceSpend}>{r.spend}</Text>
-                              <Text style={styles.resourceEarn}>{r.earn}</Text>
-                              {allianceId ? <Text style={styles.donateArrow}>DONATE →</Text> : null}
+                              <Text style={styles.resourceSpend}>{t(`wallet.resources.${r.key}.spend`)}</Text>
+                              <Text style={styles.resourceEarn}>{t(`wallet.resources.${r.key}.earn`)}</Text>
+                              {allianceId ? <Text style={styles.donateArrow}>{t('wallet.donateArrow')}</Text> : null}
                             </>
                           ) : (
                             <>
-                              <Text style={styles.resourceSpend}>{r.spend}</Text>
-                              <Text style={styles.resourceEarn}>{r.earn}</Text>
+                              <Text style={styles.resourceSpend}>{t(`wallet.resources.${r.key}.spend`)}</Text>
+                              <Text style={styles.resourceEarn}>{t(`wallet.resources.${r.key}.earn`)}</Text>
                             </>
                           )}
                         </View>
@@ -253,9 +228,9 @@ export default function WalletScreen({ route }) {
         <View style={styles.modalSheet}>
           <View style={styles.modalHandle} />
 
-          <Text style={styles.modalTitle}>DONATE MORALE</Text>
+          <Text style={styles.modalTitle}>{t('wallet.modalTitle')}</Text>
           <Text style={styles.modalBalance}>
-            YOUR BALANCE · {wallet.morale.toLocaleString()}
+            {t('wallet.yourBalance', { n: wallet.morale.toLocaleString() })}
           </Text>
 
           <View style={styles.modalInputRow}>
@@ -267,7 +242,7 @@ export default function WalletScreen({ route }) {
                 setDonateError(null);
               }}
               keyboardType="numeric"
-              placeholder="Amount"
+              placeholder={t('wallet.amountPlaceholder')}
               placeholderTextColor={SLATE2}
               maxLength={6}
               autoFocus
@@ -280,7 +255,7 @@ export default function WalletScreen({ route }) {
               onPress={() => handleDonate(customAmount)}
               disabled={!customAmount || parseInt(customAmount) > wallet.morale || donating}
             >
-              <Text style={styles.modalDonateBtnText}>{donating ? '…' : 'DONATE'}</Text>
+              <Text style={styles.modalDonateBtnText}>{donating ? '…' : t('wallet.donate')}</Text>
             </Pressable>
           </View>
 
@@ -290,7 +265,7 @@ export default function WalletScreen({ route }) {
             disabled={wallet.morale === 0 || donating}
           >
             <Text style={styles.modalDonateAllBtnText}>
-              DONATE ALL · {wallet.morale.toLocaleString()} MORALE
+              {t('wallet.donateAll', { n: wallet.morale.toLocaleString() })}
             </Text>
           </Pressable>
 
