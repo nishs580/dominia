@@ -6,6 +6,13 @@ import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Pla
 import { useTranslation } from 'react-i18next';
 import { ensurePlayer } from '../lib/auth';
 
+// Password bounds. Min 8 follows NIST 800-63B; max 72 is the bcrypt byte
+// ceiling and matches Clerk's own limit (Clerk is the source of truth and
+// also runs breach detection — these are client-side guards for fast,
+// localized feedback before the network round-trip).
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 72;
+
 export default function SignInScreen({ navigation }) {
   const { t } = useTranslation();
   const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
@@ -38,6 +45,10 @@ export default function SignInScreen({ navigation }) {
 
   const handleSignUp = async () => {
     if (!signUpLoaded) return;
+    if (password.length < PASSWORD_MIN) {
+      setError(t('signIn.passwordTooShort', { min: PASSWORD_MIN }));
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -76,6 +87,7 @@ export default function SignInScreen({ navigation }) {
         placeholder={t('signIn.passwordPlaceholder')}
         placeholderTextColor="#6B7280"
         secureTextEntry
+        maxLength={PASSWORD_MAX}
         value={password}
         onChangeText={setPassword}
       />

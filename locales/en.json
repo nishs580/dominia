@@ -85,6 +85,7 @@
     "passwordPlaceholder": "Password",
     "signInFailed": "Sign in failed. Check your email and password.",
     "signUpFailed": "Sign up failed. Try a different email.",
+    "passwordTooShort": "Password must be at least {{min}} characters.",
     "pleaseWait": "Please wait...",
     "signIn": "Sign In",
     "createAccount": "Create Account",
