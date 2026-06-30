@@ -42,7 +42,11 @@ function fmtDate(iso) {
 
 function CurrentLine({ medal }) {
   const { t } = useTranslation();
-  const unit = t(`medalUnit.${medal.key}`, { defaultValue: '' });
+  // Only medals that actually carry a unit have a medalUnit.* translation;
+  // gate on the catalog so unitless medals (e.g. combat.conqueror) render no
+  // suffix. (A bare defaultValue:'' would leak the raw key here because the
+  // i18n config sets returnEmptyString:false.)
+  const unit = MEDAL_UNIT[medal.key] ? t(`medalUnit.${medal.key}`) : '';
   if (medal.type === 'tiered') {
     const next =
       medal.nextTierThreshold != null
