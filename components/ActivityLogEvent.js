@@ -163,7 +163,7 @@ function GenericRow({ event, title }) {
 }
 
 export default function ActivityLogEvent({ event }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   switch (event.event_type) {
     case 'streak_milestone':
       return <StreakMilestoneRow event={event} />;
@@ -182,7 +182,8 @@ export default function ActivityLogEvent({ event }) {
     case 'leveled_up':
       return <LeveledUpRow event={event} />;
     default: {
-      const title = t(`activityEvent.stub.${event.event_type}`, { defaultValue: '' }) || t('activityEvent.fallback');
+      const stubKey = `activityEvent.stub.${event.event_type}`;
+      const title = (i18n.exists(stubKey) ? t(stubKey) : '') || t('activityEvent.fallback');
       return <GenericRow event={event} title={title} />;
     }
   }

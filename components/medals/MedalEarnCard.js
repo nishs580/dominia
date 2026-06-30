@@ -45,9 +45,10 @@ function subline(t, medal, data) {
  * Tapping deep-links to the profile's Honor Medals; DISMISS closes it.
  */
 export default function MedalEarnCard({ data, onPress, onDismiss }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const medal = medalFromPush(data);
-  const name = t(`medalName.${medal.key}`, { defaultValue: '' }) || data?.title || t('medal.medalEarnedFallback');
+  const nameKey = `medalName.${medal.key}`;
+  const name = (i18n.exists(nameKey) ? t(nameKey) : '') || data?.title || t('medal.medalEarnedFallback');
   const body = data?.body || '';
 
   return (

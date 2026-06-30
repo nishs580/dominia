@@ -12,7 +12,7 @@ const isMedalKind = (kind) =>
   typeof kind === 'string' && kind.startsWith('legacy_medal_');
 
 export default function NotificationCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [card, setCard] = useState(getCurrentCard());
   useEffect(() => subscribe(setCard), []);
 
@@ -21,7 +21,8 @@ export default function NotificationCard() {
   const { kind, data, target, params } = card;
   // Server-provided title wins; otherwise fall back to a localized default per
   // kind, then a generic label.
-  const title = data?.title || t(`notif.titles.${kind}`, { defaultValue: '' }) || t('notif.fallbackTitle');
+  const titleKey = `notif.titles.${kind}`;
+  const title = data?.title || (i18n.exists(titleKey) ? t(titleKey) : '') || t('notif.fallbackTitle');
   const body = data?.body || '';
 
   const goToTarget = () => {
