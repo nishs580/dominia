@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -227,47 +227,55 @@ export default function CommandPostScreen({ route }) {
   const [wir, setWir] = useState(null);
   const [sort, setSort] = useState('readiness');
 
-  const load = useCallback(
-    async (nextSort) => {
-      if (!allianceId) {
-        setLoading(false);
-        setError('no_alliance');
-        return;
-      }
-      setError(null);
-      const clerkGetToken = () => getToken();
-      const [cpRes, wirRes] = await Promise.all([
-        getCommandPost({ clerkGetToken, allianceId, sort: nextSort }),
-        getWeekInReview({ clerkGetToken, allianceId }),
-      ]);
-
-      if (cpRes.ok) {
-        setCp(cpRes.data);
-      } else if (cpRes.status === 403) {
-        setError('not_founder');
-      } else {
-        setError('load_failed');
-      }
-      if (wirRes.ok) setWir(wirRes.data?.week_in_review ?? null);
-      setLoading(false);
-    },
-    [allianceId, getToken],
-  );
+  // Clerk's getToken is a fresh reference on every render. Hold it in a ref so
+  // the focus effect below depends only on [allianceId, sort] — otherwise the
+  // effect re-runs each render, re-fetching in a loop (slow load + flicker).
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  // Only the very first load shows the full-screen spinner; sort toggles and
+  // refocus refetch silently under the existing content.
+  const hasLoadedRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      load(sort);
-    }, [load, sort]),
+      let cancelled = false;
+
+      async function load() {
+        if (!allianceId) {
+          setError('no_alliance');
+          setLoading(false);
+          return;
+        }
+        if (!hasLoadedRef.current) setLoading(true);
+
+        const clerkGetToken = () => getTokenRef.current();
+        const [cpRes, wirRes] = await Promise.all([
+          getCommandPost({ clerkGetToken, allianceId, sort }),
+          getWeekInReview({ clerkGetToken, allianceId }),
+        ]);
+        if (cancelled) return;
+
+        if (cpRes.ok) {
+          setCp(cpRes.data);
+          setError(null);
+        } else if (cpRes.status === 403) {
+          setError('not_founder');
+        } else {
+          setError('load_failed');
+        }
+        if (wirRes.ok) setWir(wirRes.data?.week_in_review ?? null);
+        hasLoadedRef.current = true;
+        setLoading(false);
+      }
+
+      load();
+      return () => {
+        cancelled = true;
+      };
+    }, [allianceId, sort]),
   );
 
-  const onSort = useCallback(
-    (next) => {
-      if (next === sort) return;
-      setSort(next);
-    },
-    [sort],
-  );
+  const onSort = useCallback((next) => setSort(next), []);
 
   return (
     <View style={styles.screen}>
