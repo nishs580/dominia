@@ -22,9 +22,11 @@ import HealthConnectDebugScreen from './screens/HealthConnectDebugScreen';
 import SignInScreen from './screens/SignInScreen';
 import UsernameScreen from './screens/UsernameScreen';
 import WarRoomScreen from './screens/WarRoomScreen';
+import CommandPostScreen from './screens/CommandPostScreen';
 import ActivityLogScreen from './screens/ActivityLogScreen';
 import LeaderboardsScreen from './screens/LeaderboardsScreen';
 import ChatScreen from './screens/ChatScreen';
+import PublicProfileScreen from './screens/PublicProfileScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
@@ -162,9 +164,15 @@ export default function App() {
           <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
           <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
           <Stack.Screen
             name="WarRoom"
             component={WarRoomScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="CommandPost"
+            component={CommandPostScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen name="ActiveClaim" component={ActiveClaimScreen} options={{ headerShown: false, tabBarStyle: { display: 'none' } }} />

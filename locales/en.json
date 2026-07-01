@@ -267,6 +267,42 @@
     "errNotInAlliance": "You're not in this alliance anymore.",
     "errGeneric": "Something went wrong. Try again."
   },
+  "commandPost": {
+    "back": "← ALLIANCE",
+    "title": "COMMAND POST",
+    "lapseRadar": "LAPSE RADAR",
+    "atRisk": "AT RISK",
+    "allClear": "ALL CLEAR",
+    "allClearSub": "No one's slipping tonight. Keep them moving.",
+    "atRiskCount_one": "{{count}} at risk tonight",
+    "atRiskCount_other": "{{count}} at risk tonight",
+    "radarFootnote": "Flag it, then reach them in real life. A message tonight beats a lost member.",
+    "rosterReadiness": "ROSTER READINESS",
+    "sortReadiness": "READY",
+    "sortSteps": "STEPS",
+    "colMember": "MEMBER",
+    "colSteps": "STEPS/WK",
+    "colSince": "LAST",
+    "today": "today",
+    "daysShort": "d",
+    "rosterFootnote": "Ranked by consistency, not output. Steps are shared, never scored.",
+    "weekInReview": "WEEK IN REVIEW",
+    "wirPending": "This week's report lands Monday.",
+    "weekOf": "Week of {{date}}",
+    "statDistance": "KM WALKED",
+    "statTerritories": "TERRITORIES",
+    "statParticipation": "PARTICIPATION",
+    "statStreak": "LONGEST STREAK",
+    "share": "SHARE THE WEEK",
+    "shareBody": "{{alliance}} this week — {{distance}} km walked, {{territories}} territories held, {{participation}}% turned out, longest streak {{streak}} days. We move together. #Dominia",
+    "errNotFounder": "The Command Post is the Founder's alone.",
+    "errLoad": "Couldn't reach the Command Post. Head back and try again.",
+    "reason": {
+      "inactive": "Quiet {{days}}d",
+      "streakAtRisk": "{{streak}}d streak at risk",
+      "recruitStalling": "Recruit stalling"
+    }
+  },
   "warRoom": {
     "back": "← ALLIANCE",
     "title": "WAR ROOM",
@@ -370,6 +406,14 @@
       "dominator": "Realm legend. All mechanics unlocked",
       "top": "You have reached the top."
     }
+  },
+  "publicProfile": {
+    "back": "Back",
+    "commanderLabel": "COMMANDER",
+    "manageMember": "MANAGE MEMBER",
+    "loading": "Loading profile…",
+    "errCouldNotLoad": "Could not load profile",
+    "errNoPlayer": "Player not found."
   },
   "activity": {
     "title": "ACTIVITY",
@@ -647,6 +691,7 @@
     "endOfWire": "—— END OF WIRE ——",
     "wireLost": "▸ WIRE LOST.",
     "enterWarRoom": "ENTER WAR ROOM →",
+    "enterCommandPost": "ENTER COMMAND POST →",
     "leaveAlliance": "LEAVE ALLIANCE",
     "manageKicker": "Manage member",
     "allianceKicker": "Alliance",

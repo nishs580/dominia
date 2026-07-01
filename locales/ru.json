@@ -267,6 +267,44 @@
     "errNotInAlliance": "Вы больше не в этом альянсе.",
     "errGeneric": "Что-то пошло не так. Попробуйте снова."
   },
+  "commandPost": {
+    "back": "← АЛЬЯНС",
+    "title": "КОМАНДНЫЙ ПОСТ",
+    "lapseRadar": "РАДАР РИСКА",
+    "atRisk": "ПОД УГРОЗОЙ",
+    "allClear": "ВСЁ ЧИСТО",
+    "allClearSub": "Сегодня никто не сходит с дистанции. Держите темп.",
+    "atRiskCount_one": "{{count}} под угрозой сегодня",
+    "atRiskCount_few": "{{count}} под угрозой сегодня",
+    "atRiskCount_many": "{{count}} под угрозой сегодня",
+    "atRiskCount_other": "{{count}} под угрозой сегодня",
+    "radarFootnote": "Отметьте — и достучитесь вживую. Сообщение сегодня лучше потерянного бойца.",
+    "rosterReadiness": "ГОТОВНОСТЬ СОСТАВА",
+    "sortReadiness": "ГОТОВ",
+    "sortSteps": "ШАГИ",
+    "colMember": "БОЕЦ",
+    "colSteps": "ШАГИ/НЕД",
+    "colSince": "ПОСЛ.",
+    "today": "сегодня",
+    "daysShort": "д",
+    "rosterFootnote": "По постоянству, не по объёму. Шаги общие — их не оценивают.",
+    "weekInReview": "ИТОГИ НЕДЕЛИ",
+    "wirPending": "Отчёт за неделю выйдет в понедельник.",
+    "weekOf": "Неделя от {{date}}",
+    "statDistance": "КМ ПРОЙДЕНО",
+    "statTerritories": "ТЕРРИТОРИИ",
+    "statParticipation": "УЧАСТИЕ",
+    "statStreak": "ДЛИННАЯ СЕРИЯ",
+    "share": "ПОДЕЛИТЬСЯ НЕДЕЛЕЙ",
+    "shareBody": "{{alliance}} за неделю — {{distance}} км пройдено, {{territories}} территорий удержано, явка {{participation}}%, длиннейшая серия {{streak}} дн. Мы идём вместе. #Dominia",
+    "errNotFounder": "Командный пост — только для Основателя.",
+    "errLoad": "Не удалось открыть Командный пост. Вернитесь и попробуйте снова.",
+    "reason": {
+      "inactive": "Тишина {{days}}д",
+      "streakAtRisk": "Серия {{streak}}д под угрозой",
+      "recruitStalling": "Новобранец буксует"
+    }
+  },
   "warRoom": {
     "back": "← АЛЬЯНС",
     "title": "ВОЕННАЯ КОМНАТА",
@@ -378,6 +416,14 @@
       "dominator": "Легенда мира. Все механики открыты",
       "top": "Вы достигли вершины."
     }
+  },
+  "publicProfile": {
+    "back": "Назад",
+    "commanderLabel": "КОМАНДИР",
+    "manageMember": "УПРАВЛЕНИЕ УЧАСТНИКОМ",
+    "loading": "Загрузка профиля…",
+    "errCouldNotLoad": "Не удалось загрузить профиль",
+    "errNoPlayer": "Игрок не найден."
   },
   "activity": {
     "title": "АКТИВНОСТЬ",
@@ -655,6 +701,7 @@
     "endOfWire": "—— КОНЕЦ ЛЕНТЫ ——",
     "wireLost": "▸ ЛЕНТА ПОТЕРЯНА.",
     "enterWarRoom": "В ВОЕННУЮ КОМНАТУ →",
+    "enterCommandPost": "В КОМАНДНЫЙ ПОСТ →",
     "leaveAlliance": "ПОКИНУТЬ АЛЬЯНС",
     "manageKicker": "Управление участником",
     "allianceKicker": "Альянс",

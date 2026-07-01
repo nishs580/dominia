@@ -1,12 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import AllianceLogEvent from '../components/AllianceLogEvent';
-import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
+import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance } from '../lib/allianceApi';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
-import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 
@@ -61,62 +60,6 @@ function mapLeaveAllianceError(t, error) {
     default:
       return t('alliance.errCouldNotLeave');
   }
-}
-
-function capitalizeRole(role) {
-  if (!role) return '';
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
-
-function mapTransferFounderError(t, error, targetName) {
-  const code = error?.error ?? error?.code ?? null;
-  switch (code) {
-    case 'not_founder':
-      return t('alliance.errNotFounder');
-    case 'target_role_ineligible':
-      return t('alliance.errTargetIneligible');
-    case 'target_not_member':
-      return t('alliance.errTargetNotMember', { target: targetName });
-    case 'cannot_transfer_to_self':
-      return t('alliance.errTransferSelf');
-    default:
-      return t('alliance.errTransferGeneric');
-  }
-}
-
-function mapManageError(t, error) {
-  const code = error?.error ?? error?.code ?? null;
-  switch (code) {
-    case 'role_slots_full': return t('alliance.errRoleSlotsFull');
-    case 'insufficient_permission': return t('alliance.errInsufficientPermission');
-    case 'only_founder_can_demote': return t('alliance.errOnlyFounderDemote');
-    case 'cannot_kick_founder': return t('alliance.errCannotKickFounder');
-    case 'cannot_promote_founder': return t('alliance.errCannotPromoteFounder');
-    case 'cannot_demote_self': return t('alliance.errCannotDemoteSelf');
-    case 'cannot_promote_self': return t('alliance.errCannotPromoteSelf');
-    case 'cannot_kick_self': return t('alliance.errCannotKickSelf');
-    case 'invalid_target_role': return t('alliance.errInvalidTargetRole');
-    case 'new_role_not_higher': return t('alliance.errNewRoleNotHigher');
-    case 'new_role_not_lower': return t('alliance.errNewRoleNotLower');
-    case 'actor_not_in_alliance': return t('alliance.errActorNotInAlliance');
-    case 'target_not_in_alliance': return t('alliance.errTargetNotInAlliance');
-    default: return t('alliance.errActionFailed');
-  }
-}
-
-function actionLabel(t, action) {
-  if (action.type === 'kick') return t('alliance.actionKick');
-  if (action.type === 'transfer_founder') return t('alliance.actionTransfer');
-  if (action.type === 'promote') return t('alliance.actionPromoteTo', { role: action.toRole.toUpperCase() });
-  if (action.type === 'demote') return t('alliance.actionDemoteTo', { role: action.toRole.toUpperCase() });
-  return '';
-}
-
-function actionLoadingLabel(t, action) {
-  if (action.type === 'kick') return t('alliance.loadingKick');
-  if (action.type === 'promote') return t('alliance.loadingPromote');
-  if (action.type === 'demote') return t('alliance.loadingDemote');
-  return t('alliance.loadingWork');
 }
 
 function HeaderKicker({ children }) {
@@ -355,13 +298,6 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const [leaveConfirmCase, setLeaveConfirmCase] = useState(null);
   const [leaveSaving, setLeaveSaving] = useState(false);
   const [leaveError, setLeaveError] = useState('');
-  const [manageTarget, setManageTarget] = useState(null); // { player_id, username, role }
-  const [manageActionInFlight, setManageActionInFlight] = useState(null); // the action object currently submitting
-  const [manageError, setManageError] = useState('');
-  const [showTransferConfirm, setShowTransferConfirm] = useState(false);
-  const [transferConfirmInput, setTransferConfirmInput] = useState('');
-  const [transferSaving, setTransferSaving] = useState(false);
-  const [transferError, setTransferError] = useState('');
 
   const myMember = roster.find((m) => m.player_id === playerId);
   const myRole = myMember?.role ?? null;
@@ -458,254 +394,6 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       setLeaveSaving(false);
     }
   };
-
-  const handleRosterRowTap = (member) => {
-    if (!myRole || !myPlayerId) return;
-    const actions = getAvailableActions({
-      actorRole: myRole,
-      actorPlayerId: myPlayerId,
-      targetRole: member.role,
-      targetPlayerId: member.player_id,
-    });
-    if (actions.length === 0) return; // not tappable
-    setManageError('');
-    setManageActionInFlight(null);
-    setShowTransferConfirm(false);
-    setTransferConfirmInput('');
-    setTransferError('');
-    setManageTarget({ player_id: member.player_id, username: member.username, role: member.role });
-  };
-
-  const closeManage = () => {
-    if (manageActionInFlight || transferSaving) return;
-    setManageError('');
-    setShowTransferConfirm(false);
-    setTransferConfirmInput('');
-    setTransferError('');
-    setManageTarget(null);
-  };
-
-  const openTransferConfirm = () => {
-    if (manageActionInFlight || transferSaving) return;
-    setTransferError('');
-    setTransferConfirmInput('');
-    setShowTransferConfirm(true);
-  };
-
-  const closeTransferConfirm = () => {
-    if (transferSaving) return;
-    setTransferError('');
-    setTransferConfirmInput('');
-    setShowTransferConfirm(false);
-  };
-
-  const handleTransferSubmit = async () => {
-    if (!manageTarget || transferSaving || transferConfirmInput !== 'TRANSFER') return;
-    setTransferSaving(true);
-    setTransferError('');
-    try {
-      const result = await transferFounder({
-        clerkGetToken: getToken,
-        allianceId: myAlliance.id,
-        targetPlayerId: manageTarget.player_id,
-      });
-
-      if (result.ok) {
-        setShowTransferConfirm(false);
-        setTransferConfirmInput('');
-        setManageTarget(null);
-        setTransferError('');
-        await onRefreshAfterLeave();
-        return;
-      }
-
-      const targetName = (manageTarget.username ?? 'Member').toUpperCase();
-      if (result.status === 0 || result.error === 'network_error') {
-        setTransferError(t('alliance.errTransferGeneric'));
-      } else {
-        setTransferError(mapTransferFounderError(t, result.error, targetName));
-      }
-    } catch (err) {
-      console.error('Transfer founder failed:', err);
-      setTransferError(t('alliance.errTransferGeneric'));
-    } finally {
-      setTransferSaving(false);
-    }
-  };
-
-  const submitManageAction = async (action) => {
-    if (!manageTarget || manageActionInFlight) return;
-    setManageActionInFlight(action);
-    setManageError('');
-    try {
-      let result;
-      if (action.type === 'kick') {
-        result = await kickMember({
-          clerkGetToken: getToken,
-          allianceId: myAlliance.id,
-          playerId: manageTarget.player_id,
-        });
-      } else if (action.type === 'promote') {
-        result = await promoteMember({
-          clerkGetToken: getToken,
-          allianceId: myAlliance.id,
-          playerId: manageTarget.player_id,
-          toRole: action.toRole,
-        });
-      } else if (action.type === 'demote') {
-        result = await demoteMember({
-          clerkGetToken: getToken,
-          allianceId: myAlliance.id,
-          playerId: manageTarget.player_id,
-          toRole: action.toRole,
-        });
-      }
-
-      if (result?.ok) {
-        setManageTarget(null);
-        setManageError('');
-        await onRefreshAfterLeave(); // existing refetch prop — reuse, do not rename
-        return;
-      }
-      setManageError(mapManageError(t, result?.error));
-    } catch (err) {
-      console.error('Manage action failed:', err);
-      setManageError(t('alliance.errActionFailed'));
-    } finally {
-      setManageActionInFlight(null);
-    }
-  };
-
-  if (manageTarget && showTransferConfirm) {
-    const targetName = manageTarget.username ?? '—';
-    const allianceName = myAlliance?.name ?? t('alliance.allianceFallback');
-    const demotedRole = capitalizeRole(manageTarget.role);
-    const transferBody = t('alliance.transferBody', { target: targetName, alliance: allianceName, role: demotedRole });
-    const transferEnabled = transferConfirmInput === 'TRANSFER';
-
-    return (
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>{t('alliance.allianceKicker')}</Text>
-          <Text style={styles.confirmTitle}>{t('alliance.transferTitle')}</Text>
-          <Text style={styles.confirmBody}>{transferBody}</Text>
-
-          <TextInput
-            accessibilityLabel={t('alliance.typeTransfer')}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            editable={!transferSaving}
-            placeholder={t('alliance.typeTransfer')}
-            placeholderTextColor={SLATE}
-            style={styles.transferConfirmInput}
-            value={transferConfirmInput}
-            onChangeText={setTransferConfirmInput}
-          />
-
-          {transferError ? <Text style={styles.joinError}>{transferError}</Text> : null}
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={!transferEnabled || transferSaving}
-            onPress={handleTransferSubmit}
-            style={({ pressed }) => [
-              styles.cta,
-              (!transferEnabled || transferSaving) && styles.ctaDisabled,
-              pressed && transferEnabled && !transferSaving && { opacity: 0.9 },
-            ]}
-          >
-            {transferSaving ? (
-              <>
-                <ActivityIndicator color={BONE} />
-                <Text style={[styles.ctaAction, { marginTop: 8 }]}>{t('alliance.transferring')}</Text>
-              </>
-            ) : (
-              <Text style={styles.ctaAction}>{t('alliance.transfer')}</Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={transferSaving}
-            onPress={closeTransferConfirm}
-            style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  if (manageTarget) {
-    const availableActions = getAvailableActions({
-      actorRole: myRole,
-      actorPlayerId: myPlayerId,
-      targetRole: manageTarget.role,
-      targetPlayerId: manageTarget.player_id,
-    });
-
-    return (
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.confirmWrap}>
-          <Text style={styles.confirmKicker}>{t('alliance.manageKicker')}</Text>
-          <Text style={styles.confirmTitle}>{(manageTarget.username ?? '—').toUpperCase()}</Text>
-          <Text style={styles.confirmTag}>{formatAllianceRole(t, manageTarget.role)}</Text>
-
-          {availableActions.map((action, idx) => {
-            const isTransfer = action.type === 'transfer_founder';
-            const isThisInFlight =
-              manageActionInFlight &&
-              manageActionInFlight.type === action.type &&
-              manageActionInFlight.toRole === action.toRole;
-            const isAnyInFlight = manageActionInFlight !== null;
-            return (
-              <Pressable
-                key={`${action.type}-${action.toRole ?? 'x'}`}
-                accessibilityRole="button"
-                disabled={isAnyInFlight}
-                onPress={isTransfer ? openTransferConfirm : () => submitManageAction(action)}
-                style={({ pressed }) => [
-                  isTransfer ? styles.ctaDestructive : styles.cta,
-                  idx > 0 && { marginTop: 10 },
-                  isAnyInFlight && styles.ctaDisabled,
-                  pressed && !isAnyInFlight && { opacity: 0.9 },
-                ]}
-              >
-                {isThisInFlight ? (
-                  <>
-                    <ActivityIndicator color={BONE} />
-                    <Text style={[styles.ctaAction, { marginTop: 8 }]}>{actionLoadingLabel(t, action)}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.ctaAction}>{actionLabel(t, action)}</Text>
-                )}
-              </Pressable>
-            );
-          })}
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={manageActionInFlight !== null}
-            onPress={closeManage}
-            style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
-          </Pressable>
-
-          {manageError ? <Text style={styles.joinError}>{manageError}</Text> : null}
-        </View>
-      </ScrollView>
-    );
-  }
 
   if (leaveConfirmCase) {
     const allianceName = myAlliance?.name ?? t('alliance.allianceFallback');
@@ -885,31 +573,43 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <View style={styles.sectionHairline} />
           <Text style={styles.sectionLabelRight}>{t('alliance.resetsMon')}</Text>
         </View>
-        {roster.map((m, i) => {
-          const actions =
-            myRole && myPlayerId
-              ? getAvailableActions({
-                  actorRole: myRole,
-                  actorPlayerId: myPlayerId,
-                  targetRole: m.role,
-                  targetPlayerId: m.player_id,
-                })
-              : [];
-          return (
-            <RosterRow
-              key={m.player_id}
-              initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
-              name={m.username ?? '—'}
-              role={formatAllianceRole(t, m.role)}
-              steps="—"
-              showBorder={i < roster.length - 1}
-              onPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
-            />
-          );
-        })}
+        {roster.map((m, i) => (
+          <RosterRow
+            key={m.player_id}
+            initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
+            name={m.username ?? '—'}
+            role={formatAllianceRole(t, m.role)}
+            steps="—"
+            showBorder={i < roster.length - 1}
+            onPress={() =>
+              navigation.navigate('PublicProfile', {
+                playerId: m.player_id,
+                username: m.username,
+                allianceId: myAlliance?.id,
+                allianceName: myAlliance?.name,
+                viewerPlayerId: myPlayerId,
+                viewerRole: myRole,
+                memberRole: m.role,
+              })
+            }
+          />
+        ))}
+
+        {isFounder ? (
+          <Pressable
+            style={({ pressed }) => [styles.commandPostBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => navigation.navigate('CommandPost', {
+              allianceId: myAlliance?.id,
+              allianceName: myAlliance?.name,
+              shortName: myAlliance?.short_name,
+            })}
+          >
+            <Text style={styles.commandPostBtnText}>{t('alliance.enterCommandPost')}</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
-          style={({ pressed }) => [styles.warRoomBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.warRoomBtn, isFounder && { marginTop: 12 }, pressed && { opacity: 0.7 }]}
           onPress={() => navigation.navigate('WarRoom', {
             allianceId: myAlliance?.id,
             allianceName: myAlliance?.name,
@@ -1791,6 +1491,23 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
     color: BONE,
+  },
+  commandPostBtn: {
+    marginTop: 32,
+    borderWidth: 1,
+    borderColor: ALLIANCE_GREEN,
+    borderRadius: 0,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(63,143,78,0.10)',
+  },
+  commandPostBtnText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 12,
+    color: ALLIANCE_GREEN,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   warRoomBtn: {
     marginTop: 32,
