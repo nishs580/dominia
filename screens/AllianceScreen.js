@@ -123,7 +123,7 @@ function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
 }
 
-function RosterRow({ initials, name, role, steps, showBorder, onPress }) {
+function RosterRow({ initials, name, role, steps, showBorder, onPress, onLongPress }) {
   const inner = (
     <>
       <View style={styles.rosterLeft}>
@@ -139,11 +139,13 @@ function RosterRow({ initials, name, role, steps, showBorder, onPress }) {
     </>
   );
 
-  if (onPress) {
+  if (onPress || onLongPress) {
     return (
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
         style={({ pressed }) => [
           styles.rosterRow,
           showBorder && styles.rosterRowBorder,
@@ -886,6 +888,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <Text style={styles.sectionLabelRight}>{t('alliance.resetsMon')}</Text>
         </View>
         {roster.map((m, i) => {
+          // Tap any row → that member's profile. Long-press a member you can
+          // manage → the kick/promote/demote modal (handleRosterRowTap).
           const actions =
             myRole && myPlayerId
               ? getAvailableActions({
@@ -903,7 +907,13 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
               role={formatAllianceRole(t, m.role)}
               steps="—"
               showBorder={i < roster.length - 1}
-              onPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
+              onPress={() =>
+                navigation.navigate('PublicProfile', {
+                  playerId: m.player_id,
+                  username: m.username,
+                })
+              }
+              onLongPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
             />
           );
         })}

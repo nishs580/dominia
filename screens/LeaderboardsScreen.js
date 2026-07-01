@@ -16,10 +16,34 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { getLeaderboard } from '../lib/leaderboardApi';
 import { supabase } from '../lib/supabase';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
+
+// Player rows open that player's profile; alliance rows stay non-navigating.
+function RowContainer({ subject, row, isSelfRow, children }) {
+  const navigation = useNavigation();
+  if (subject === 'players' && row.player_id) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          navigation.navigate('PublicProfile', {
+            playerId: row.player_id,
+            username: row.username,
+            avatarUrl: row.avatar_url,
+          })
+        }
+        style={({ pressed }) => [styles.row, isSelfRow && styles.rowSelf, pressed && { opacity: 0.6 }]}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={[styles.row, isSelfRow && styles.rowSelf]}>{children}</View>;
+}
 
 function RowAvatar({ url, name }) {
   const thumb = avatarThumb(url, 28);
@@ -48,7 +72,7 @@ function PowerRow({ t, row, subject, isSelfRow }) {
   }
 
   return (
-    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
+    <RowContainer subject={subject} row={row} isSelfRow={isSelfRow}>
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
@@ -58,7 +82,7 @@ function PowerRow({ t, row, subject, isSelfRow }) {
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Text style={styles.valueText}>{rightValue}</Text>
-    </View>
+    </RowContainer>
   );
 }
 
@@ -77,7 +101,7 @@ function TerritoryRow({ t, row, subject, isSelfRow }) {
   }
 
   return (
-    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
+    <RowContainer subject={subject} row={row} isSelfRow={isSelfRow}>
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
@@ -87,7 +111,7 @@ function TerritoryRow({ t, row, subject, isSelfRow }) {
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Text style={styles.valueText}>{rightValue}</Text>
-    </View>
+    </RowContainer>
   );
 }
 
@@ -106,7 +130,7 @@ function BattlesRow({ t, row, subject, isSelfRow }) {
   }
 
   return (
-    <View style={[styles.row, isSelfRow && styles.rowSelf]}>
+    <RowContainer subject={subject} row={row} isSelfRow={isSelfRow}>
       <View style={styles.rankCell}>
         <Text style={styles.rankText}>{String(row.rank).padStart(2, '0')}</Text>
       </View>
@@ -116,7 +140,7 @@ function BattlesRow({ t, row, subject, isSelfRow }) {
         <Text style={styles.subtitleText} numberOfLines={1}>{subtitle}</Text>
       </View>
       <Text style={styles.valueText}>{rightValue}</Text>
-    </View>
+    </RowContainer>
   );
 }
 

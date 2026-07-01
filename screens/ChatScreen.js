@@ -531,28 +531,66 @@ export default function ChatScreen() {
 }
 
 function ChatMessageRow({ row }) {
+  const navigation = useNavigation();
   const senderLine =
     row.sender_alliance_short_name != null
       ? `${row.sender_name} · ${row.sender_alliance_short_name}`
       : row.sender_name;
   const thumb = avatarThumb(row.sender_avatar_url, 32);
+
+  // Avatar/name open the sender's profile — except for our own optimistic echo
+  // (sender_id 'self') or rows missing a real player id.
+  const canOpenProfile = !row._optimistic && row.sender_id && row.sender_id !== 'self';
+  const openProfile = canOpenProfile
+    ? () =>
+        navigation.navigate('PublicProfile', {
+          playerId: row.sender_id,
+          username: row.sender_name,
+          avatarUrl: row.sender_avatar_url,
+        })
+    : undefined;
+
+  const avatar = thumb ? (
+    <Image source={{ uri: thumb }} style={styles.messageAvatar} />
+  ) : (
+    <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+      <Text style={styles.messageAvatarInitials}>
+        {avatarInitials(row.sender_name)}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={[styles.messageRow, row._optimistic && styles.messageRowPending]}>
       <View style={styles.messageRowInner}>
-        {thumb ? (
-          <Image source={{ uri: thumb }} style={styles.messageAvatar} />
+        {openProfile ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={openProfile}
+            style={({ pressed }) => pressed && { opacity: 0.6 }}
+          >
+            {avatar}
+          </Pressable>
         ) : (
-          <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
-            <Text style={styles.messageAvatarInitials}>
-              {avatarInitials(row.sender_name)}
-            </Text>
-          </View>
+          avatar
         )}
         <View style={styles.messageBody}>
           <View style={styles.messageMetaRow}>
-            <Text style={styles.senderText} numberOfLines={1}>
-              {senderLine}
-            </Text>
+            {openProfile ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={openProfile}
+                style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.senderText} numberOfLines={1}>
+                  {senderLine}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.senderText} numberOfLines={1}>
+                {senderLine}
+              </Text>
+            )}
             <Text style={styles.timeText}>{timeAgo(row.created_at)}</Text>
           </View>
           <Text style={styles.contentText}>{row.content}</Text>
