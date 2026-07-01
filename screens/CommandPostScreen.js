@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
@@ -228,26 +228,31 @@ export default function CommandPostScreen({ route }) {
   const [sort, setSort] = useState('readiness');
 
   // Clerk's getToken is a fresh reference on every render. Hold it in a ref so
-  // the focus effect below depends only on [allianceId, sort] — otherwise the
-  // effect re-runs each render, re-fetching in a loop (slow load + flicker).
+  // the fetch effect depends only on [isFocused, allianceId, sort] — never on an
+  // unstable callback (that caused a re-fetch loop → slow load + flicker).
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   // Only the very first load shows the full-screen spinner; sort toggles and
   // refocus refetch silently under the existing content.
   const hasLoadedRef = useRef(false);
+  const isFocused = useIsFocused();
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
+  // Drive the fetch off isFocused (not useFocusEffect) so it reliably re-runs
+  // every time the screen is returned to. try/finally guarantees `loading`
+  // always resolves — even if a prior slow load was cancelled by navigating
+  // away mid-flight — so the screen can never get stuck on the spinner.
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    if (!allianceId) {
+      setError('no_alliance');
+      setLoading(false);
+      return undefined;
+    }
 
-      async function load() {
-        if (!allianceId) {
-          setError('no_alliance');
-          setLoading(false);
-          return;
-        }
-        if (!hasLoadedRef.current) setLoading(true);
-
+    let cancelled = false;
+    (async () => {
+      if (!hasLoadedRef.current) setLoading(true);
+      try {
         const clerkGetToken = () => getTokenRef.current();
         const [cpRes, wirRes] = await Promise.all([
           getCommandPost({ clerkGetToken, allianceId, sort }),
@@ -264,16 +269,20 @@ export default function CommandPostScreen({ route }) {
           setError('load_failed');
         }
         if (wirRes.ok) setWir(wirRes.data?.week_in_review ?? null);
-        hasLoadedRef.current = true;
-        setLoading(false);
+      } catch (_) {
+        if (!cancelled) setError('load_failed');
+      } finally {
+        if (!cancelled) {
+          hasLoadedRef.current = true;
+          setLoading(false);
+        }
       }
+    })();
 
-      load();
-      return () => {
-        cancelled = true;
-      };
-    }, [allianceId, sort]),
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused, allianceId, sort]);
 
   const onSort = useCallback((next) => setSort(next), []);
 
