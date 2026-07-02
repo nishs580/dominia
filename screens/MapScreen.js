@@ -1332,22 +1332,39 @@ export default function MapScreen() {
   );
 
   // Home base structures, anchored to their map point like buildings.
+  // Sized up with zoom so closing in on a base makes it grow; always placed
+  // (allowOverlap) so labels/emblems can never collision-hide a base.
   const baseIconStyle = useMemo(
     () => ({
       iconImage: ['get', 'baseIcon'],
-      iconSize: 0.55,
+      iconSize: [
+        'interpolate', ['linear'], ['zoom'],
+        12, 0.4,
+        14, 0.55,
+        16, 0.85,
+        18, 1.15,
+      ],
       iconAnchor: 'bottom',
-      iconAllowOverlap: false,
+      iconAllowOverlap: true,
       iconOpacity: 1.0,
     }),
     [],
   );
 
   // Alliance pennant beside the base — reuses the Phase 1 emblem images.
+  // Scales by the same zoom factor as the base (0.28/0.55 of its size at
+  // every stop); iconOffset is measured in icon px, so it scales with
+  // iconSize and the pennant stays pinned to the base's top-right corner.
   const pennantStyle = useMemo(
     () => ({
       iconImage: ['get', 'pennantIcon'],
-      iconSize: 0.28,
+      iconSize: [
+        'interpolate', ['linear'], ['zoom'],
+        12, 0.2,
+        14, 0.28,
+        16, 0.43,
+        18, 0.59,
+      ],
       iconOffset: [28, -92],
       iconAllowOverlap: true,
       iconOpacity: 0.95,
