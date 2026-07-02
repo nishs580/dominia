@@ -150,6 +150,9 @@ export default function OnboardingScreen({ route }) {
   const [savingPin, setSavingPin] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
   const [homePin, setHomePin] = useState(null);
+  const [userCoord, setUserCoord] = useState(null);
+  const homeCameraRef = useRef(null);
+  const didCenterOnUserRef = useRef(false);
   const [username, setUsername] = useState('');
   const [displayedTagline, setDisplayedTagline] = useState('');
   const [displayedBody, setDisplayedBody] = useState('');
@@ -181,6 +184,40 @@ export default function OnboardingScreen({ route }) {
       cancelled = true;
     };
   }, [clerkUserId, resolvedPlayerId, resolveRetryNonce]);
+
+  // When the player reaches the home-pin step, drop them on their actual current
+  // location (location permission is requested on the previous step) so they place
+  // the pin where they are rather than hunting from Amsterdam. Runs once; if the
+  // fix is unavailable or permission was denied, the map stays on its default center.
+  useEffect(() => {
+    if (step !== 3) return;
+    if (didCenterOnUserRef.current) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted) return;
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const lat = pos?.coords?.latitude;
+        const lng = pos?.coords?.longitude;
+        if (cancelled || lat == null || lng == null) return;
+        didCenterOnUserRef.current = true;
+        setUserCoord([lng, lat]);
+        homeCameraRef.current?.setCamera({
+          centerCoordinate: [lng, lat],
+          zoomLevel: 14,
+          animationDuration: 0,
+        });
+      } catch (err) {
+        console.log('[onboarding] current location unavailable', err?.message ?? err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
 
   const taglineOpacity = useRef(new Animated.Value(0)).current;
   const bodyOpacity = useRef(new Animated.Value(0)).current;
@@ -402,7 +439,13 @@ export default function OnboardingScreen({ route }) {
                 if (c) setHomePin(c);
               }}
             >
-              <Camera zoomLevel={12} centerCoordinate={[4.9041, 52.3676]} />
+              <Camera
+                ref={homeCameraRef}
+                defaultSettings={{
+                  centerCoordinate: userCoord ?? [4.9041, 52.3676],
+                  zoomLevel: userCoord ? 14 : 12,
+                }}
+              />
               {homePin ? (
                 <MarkerView coordinate={homePin} anchor={{ x: 0.5, y: 1 }}>
                   <View style={{ alignItems: 'center' }}>
@@ -537,7 +580,7 @@ export default function OnboardingScreen({ route }) {
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
-  }, [step, homePin, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
+  }, [step, homePin, userCoord, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
 
   const onNext = async () => {
     if (step === 2) {

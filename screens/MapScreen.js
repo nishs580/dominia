@@ -688,6 +688,10 @@ export default function MapScreen() {
   const pendingFetchRef = useRef(null);
   // Always points at the latest fetchTerritoriesForViewport so settle() can re-invoke it.
   const fetchRef = useRef(null);
+  // Guards the one-time camera centering on the player's home pin. Without this,
+  // the map opens on AMSTERDAM_CENTER (the Camera's static prop) instead of where
+  // the player placed their home pin during onboarding.
+  const didInitialCenterRef = useRef(false);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
@@ -740,7 +744,7 @@ export default function MapScreen() {
   const fetchPlayer = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale')
+      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, home_pin_lat, home_pin_lng')
       .eq('clerk_id', userId)
       .maybeSingle();
     setMyPlayer(playerRow);
@@ -1017,6 +1021,25 @@ export default function MapScreen() {
     }, [fetchResourceBanner, fetchPlayer])
   );
 
+  // Center the map on the player's home pin the first time it becomes available.
+  // The Camera's centerCoordinate prop is static (AMSTERDAM_CENTER) and only used
+  // at mount — before myPlayer has loaded — so we imperatively fly to the home pin
+  // once it arrives. Guarded by didInitialCenterRef so later player refetches (e.g.
+  // resource-banner updates) don't yank the camera back while the user is panning.
+  useEffect(() => {
+    if (didInitialCenterRef.current) return;
+    const lat = Number(myPlayer?.home_pin_lat);
+    const lng = Number(myPlayer?.home_pin_lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!cameraRef.current) return;
+    didInitialCenterRef.current = true;
+    cameraRef.current.setCamera({
+      centerCoordinate: [lng, lat],
+      zoomLevel: INITIAL_ZOOM,
+      animationDuration: 0,
+    });
+  }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng]);
+
   const fillStyle = useMemo(
     () => ({
       fillColor: ['get', 'color'],
@@ -1117,7 +1140,11 @@ export default function MapScreen() {
 
   const recenter = () => {
     if (!cameraRef.current) return;
-    const centerCoordinate = lastUserCoord ?? AMSTERDAM_CENTER;
+    const homeLat = Number(myPlayer?.home_pin_lat);
+    const homeLng = Number(myPlayer?.home_pin_lng);
+    const homeCoord =
+      Number.isFinite(homeLat) && Number.isFinite(homeLng) ? [homeLng, homeLat] : null;
+    const centerCoordinate = lastUserCoord ?? homeCoord ?? AMSTERDAM_CENTER;
     cameraRef.current.setCamera({
       centerCoordinate,
       zoomLevel: INITIAL_ZOOM,
