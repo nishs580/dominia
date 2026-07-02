@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, 
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import AllianceEmblem from '../components/AllianceEmblem';
 import AllianceLogEvent from '../components/AllianceLogEvent';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
@@ -1104,7 +1105,8 @@ export default function AllianceScreen() {
           prev?.id === nextAlliance.id &&
           prev?.memberCount === nextAlliance.memberCount &&
           prev?.name === nextAlliance.name &&
-          prev?.short_name === nextAlliance.short_name
+          prev?.short_name === nextAlliance.short_name &&
+          prev?.emblem === nextAlliance.emblem
             ? prev
             : nextAlliance,
         );
@@ -1170,6 +1172,7 @@ export default function AllianceScreen() {
       {isMember && (
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
+            <AllianceEmblem emblem={myAlliance?.emblem} size={40} />
             <View style={{ flex: 1 }} />
             <View style={styles.shortNameBox}>
               <Text style={styles.shortNameText}>{myAlliance?.short_name ?? '—'}</Text>

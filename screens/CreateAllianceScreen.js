@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { foundAlliance } from '../lib/allianceApi';
 import { supabase } from '../lib/supabase';
 import THEME from '../lib/theme';
+import AllianceEmblem from '../components/AllianceEmblem';
+import { ALLIANCE_EMBLEMS, DEFAULT_ALLIANCE_EMBLEM } from '../lib/allianceEmblems';
 
 const INK = THEME.colors.ink;
 const INK_2 = THEME.colors.ink2;
@@ -61,6 +63,7 @@ export default function CreateAllianceScreen() {
 
   const [allianceName, setAllianceName] = useState('');
   const [code, setCode] = useState('');
+  const [emblem, setEmblem] = useState(DEFAULT_ALLIANCE_EMBLEM);
   const [nameError, setNameError] = useState('');
   const [codeError, setCodeError] = useState('');
 
@@ -185,6 +188,7 @@ export default function CreateAllianceScreen() {
         fullName: allianceName.trim(),
         shortName: code.trim().toUpperCase(),
         hqTerritoryId: selectedTerritory.id,
+        emblem,
       });
 
       if (result.ok) {
@@ -284,6 +288,32 @@ export default function CreateAllianceScreen() {
           ) : (
             <Text style={styles.micro}>{t('createAlliance.displayedInBrackets', { code: code || 'XXX' })}</Text>
           )}
+
+          <View style={styles.labelRow}>
+            <Text style={styles.labelText}>{t('createAlliance.emblem')}</Text>
+            <Text style={styles.labelHint}>{t('createAlliance.emblemHint')}</Text>
+          </View>
+          <View style={styles.emblemGrid}>
+            {ALLIANCE_EMBLEMS.map((key) => {
+              const isSelected = key === emblem;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => setEmblem(key)}
+                  style={({ pressed }) => [
+                    styles.emblemCell,
+                    isSelected && styles.emblemCellSelected,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  <AllianceEmblem emblem={key} size={44} />
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.micro}>{t(`emblems.${emblem}`)}</Text>
 
           <Pressable
             accessibilityRole="button"
@@ -403,6 +433,13 @@ export default function CreateAllianceScreen() {
             <View style={styles.sumRow}>
               <Text style={styles.sumLabel}>{t('createAlliance.sumTag')}</Text>
               <Text style={[styles.sumValue, styles.sumValueMono]}>[{code.trim().toUpperCase()}]</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>{t('createAlliance.sumEmblem')}</Text>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <AllianceEmblem emblem={emblem} size={28} />
+                <Text style={styles.sumValue}>{t(`emblems.${emblem}`)}</Text>
+              </View>
             </View>
             <View style={styles.sumRow}>
               <Text style={styles.sumLabel}>{t('createAlliance.sumHQ')}</Text>
@@ -571,6 +608,26 @@ const styles = StyleSheet.create({
     marginTop: -10,
     marginBottom: 18,
     lineHeight: 14,
+  },
+  emblemGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
+  emblemCell: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: INK_2,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    borderRadius: 0,
+  },
+  emblemCellSelected: {
+    borderColor: BONE_2,
+    backgroundColor: 'rgba(242,238,230,0.04)',
   },
   cta: {
     backgroundColor: CLAIM,

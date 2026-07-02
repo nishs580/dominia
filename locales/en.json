@@ -471,6 +471,9 @@
     "shortNameHint": "3 letters · used in [TAG]",
     "shortNamePlaceholder": "e.g. SNW",
     "displayedInBrackets": "Displayed in brackets — [{{code}}]",
+    "emblem": "Emblem",
+    "emblemHint": "Chosen once · shown on the map",
+    "sumEmblem": "Emblem",
     "stepOf": "Step {{n}} of 03",
     "continue": "Continue →",
     "step2Title": "Choose your\nHQ territory",
@@ -505,6 +508,15 @@
     "errEnterCode": "Enter a 3-letter code.",
     "errCodeLength": "Code must be exactly 3 letters.",
     "errCodeTaken": "That code is taken."
+  },
+  "emblems": {
+    "vanguard": "Vanguard",
+    "bastion": "Bastion",
+    "summit": "Summit",
+    "wayfinder": "Wayfinder",
+    "ember": "Ember",
+    "forge": "Forge",
+    "banner": "Banner"
   },
   "leaderboards": {
     "title": "LEADERBOARDS",

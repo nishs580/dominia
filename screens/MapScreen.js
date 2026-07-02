@@ -26,6 +26,25 @@ import {
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
 import MapSideRail from '../components/MapSideRail';
+import { SvgXml } from 'react-native-svg';
+import AllianceEmblem from '../components/AllianceEmblem';
+import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
+
+// Streak deterrence bands — collapses the 7 formula tiers (lib/formulas.js
+// STREAK_TIER_THRESHOLDS) into 3 readable border treatments.
+function streakBandForDays(days) {
+  const d = Number(days) || 0;
+  if (d >= 21) return 'fortified';
+  if (d >= 7) return 'hardened';
+  return 'base';
+}
+
+// Map image name for a territory's alliance emblem, tinted by relationship.
+// Unknown keys fall back to the plain shield so a stale client never breaks.
+function emblemIconName(emblemKey, isOwnAlliance) {
+  const key = ALLIANCE_EMBLEMS.includes(emblemKey) ? emblemKey : 'unknown';
+  return `emblem-${key}-${isOwnAlliance ? 'ally' : 'enemy'}`;
+}
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
@@ -383,10 +402,19 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             {!isUnclaimed && (
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>{t('map.owner')}</Text>
-                <Text style={styles.sheetRowValue}>
-                  {owner}
-                  {alliance ? <Text style={styles.sheetAllianceTag}> [{alliance}]</Text> : null}
-                </Text>
+                <View style={styles.sheetRowValueRow}>
+                  {alliance ? (
+                    <AllianceEmblem
+                      emblem={territory.properties?.emblem}
+                      size={16}
+                      glyph={isAllianceTerritory ? '#3F8F4E' : '#4A6B8A'}
+                    />
+                  ) : null}
+                  <Text style={styles.sheetRowValue}>
+                    {owner}
+                    {alliance ? <Text style={styles.sheetAllianceTag}> [{alliance}]</Text> : null}
+                  </Text>
+                </View>
               </View>
             )}
             {!isUnclaimed && (
@@ -864,6 +892,13 @@ export default function MapScreen() {
     }
 
     const features = rows.map((t) => {
+      const developmentLevel = t.development_level ?? 0;
+      const allianceTag = t.alliance_short_name ?? null;
+      const isOwnAlliance = Boolean(myPlayer?.alliance_id && t.alliance_id === myPlayer.alliance_id);
+      // Second label line: development badge + alliance tag ("D3 · [VLK]").
+      const labelParts = [];
+      if (developmentLevel >= 1) labelParts.push(`D${developmentLevel}`);
+      if (allianceTag) labelParts.push(`[${allianceTag}]`);
       return {
         type: 'Feature',
         id: t.id,
@@ -871,14 +906,18 @@ export default function MapScreen() {
           id: t.id,
           name: t.territory_name,
           owner: t.owner_username ?? 'Unclaimed',
-          alliance: t.alliance_short_name ?? null,
+          alliance: allianceTag,
           tier: t.tier ?? 'Medium',
-          level: `D${t.development_level ?? 0}`,
+          level: `D${developmentLevel}`,
           ownerStreak: t.owner_streak_days ?? 0,
-          developmentLevel: t.development_level ?? 0,
+          streakBand: t.owner_id != null ? streakBandForDays(t.owner_streak_days) : 'base',
+          emblem: t.alliance_emblem ?? null,
+          developmentLevel,
+          labelSub: labelParts.join(' · '),
+          emblemIcon: t.alliance_id != null ? emblemIconName(t.alliance_emblem, isOwnAlliance) : '',
           perimeter: t.perimeter_distance,
           color: t.owner_clerk_id === userId ? '#D64525' :
-            (myPlayer?.alliance_id && t.alliance_id === myPlayer.alliance_id) ? '#3F8F4E' :
+            isOwnAlliance ? '#3F8F4E' :
             t.owner_id != null ? '#4A6B8A' : 'transparent',
         },
         // Winding order already normalised server-side via ST_ForcePolygonCCW.
@@ -1064,16 +1103,81 @@ export default function MapScreen() {
         ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
         '#5C6068',
       ],
-      lineWidth: 1.2,
+      // Border weight encodes the owner's streak band (deterrence at a glance):
+      // base <7d, hardened 7–20d, fortified 21+d (which also gets the inner line).
+      lineWidth: [
+        'match', ['get', 'streakBand'],
+        'hardened', 2.2,
+        'fortified', 2.2,
+        1.2,
+      ],
       lineOpacity: 0.9,
       lineEmissiveStrength: 1.0,
     }),
     [],
   );
 
+  // Inner second wall for fortified (21+ day streak) owners.
+  const streakInnerStyle = useMemo(
+    () => ({
+      lineColor: [
+        'case',
+        ['==', ['get', 'color'], '#D64525'], '#D64525',
+        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
+        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
+        '#5C6068',
+      ],
+      lineWidth: 1.2,
+      lineOpacity: 0.6,
+      lineOffset: 3,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  const streakInnerFilter = useMemo(
+    () => ['==', ['get', 'streakBand'], 'fortified'],
+    [],
+  );
+
+  // Development rampart — inset ring for D2+, heavier and brighter at D4.
+  const rampartStyle = useMemo(
+    () => ({
+      lineColor: [
+        'case',
+        ['==', ['get', 'color'], '#D64525'], '#D64525',
+        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
+        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
+        '#5C6068',
+      ],
+      lineWidth: ['case', ['>=', ['get', 'developmentLevel'], 4], 2.4, 1.4],
+      lineOpacity: ['case', ['>=', ['get', 'developmentLevel'], 4], 0.95, 0.65],
+      lineOffset: 7,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  const rampartFilter = useMemo(
+    () => ['>=', ['get', 'developmentLevel'], 2],
+    [],
+  );
+
   const labelStyle = useMemo(
     () => ({
-      textField: ['get', 'name'],
+      // Two-line label: territory name, then "D3 · [VLK]" (development badge +
+      // alliance tag) when either applies. labelSub is precomputed per feature.
+      textField: [
+        'format',
+        ['get', 'name'], {},
+        [
+          'case',
+          ['==', ['to-string', ['get', 'labelSub']], ''],
+          '',
+          ['concat', '\n', ['to-string', ['get', 'labelSub']]],
+        ],
+        { 'font-scale': 0.85, 'text-color': '#8B8F98' },
+      ],
       textSize: 11,
       textColor: '#F2EEE6',
       textHaloColor: 'rgba(14,16,20,0.85)',
@@ -1082,6 +1186,23 @@ export default function MapScreen() {
       textAnchor: 'center',
       textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
     }),
+    [],
+  );
+
+  // Alliance emblem shields above alliance-held territories (zoom-gated).
+  const emblemStyle = useMemo(
+    () => ({
+      iconImage: ['get', 'emblemIcon'],
+      iconSize: 0.5,
+      iconAllowOverlap: false,
+      iconOffset: [0, -30],
+      iconOpacity: 0.95,
+    }),
+    [],
+  );
+
+  const emblemFilter = useMemo(
+    () => ['!=', ['to-string', ['get', 'emblemIcon']], ''],
     [],
   );
 
@@ -1211,6 +1332,21 @@ export default function MapScreen() {
           }}
         />
 
+        <MapboxGL.Images>
+          {ALLIANCE_EMBLEMS.concat('unknown').flatMap((key) => [
+            <MapboxGL.Image key={`${key}-ally`} name={`emblem-${key}-ally`}>
+              <View style={{ width: 40, height: 40 }} collapsable={false}>
+                <SvgXml xml={emblemXml(key, { glyph: ALLIANCE })} width={40} height={40} />
+              </View>
+            </MapboxGL.Image>,
+            <MapboxGL.Image key={`${key}-enemy`} name={`emblem-${key}-enemy`}>
+              <View style={{ width: 40, height: 40 }} collapsable={false}>
+                <SvgXml xml={emblemXml(key, { glyph: ENEMY })} width={40} height={40} />
+              </View>
+            </MapboxGL.Image>,
+          ])}
+        </MapboxGL.Images>
+
         <MapboxGL.ShapeSource
           id="territories"
           shape={territories}
@@ -1221,10 +1357,13 @@ export default function MapScreen() {
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
           <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
+          <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
+          <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
           <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
           <MapboxGL.LineLayer id="territories-selected-glow" filter={highlightFilter} style={selectedGlowStyle} />
           <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
           <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
+          <MapboxGL.SymbolLayer id="territories-emblems" slot="top" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
         </MapboxGL.ShapeSource>
       </MapboxGL.MapView>
 
@@ -1511,6 +1650,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#F2EEE6',
     letterSpacing: 0.5,
+  },
+  sheetRowValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sheetInfluenceRow: {
     marginTop: 10,

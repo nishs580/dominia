@@ -481,6 +481,9 @@
     "shortNameHint": "3 буквы · в [ТЕГ]",
     "shortNamePlaceholder": "напр. SNW",
     "displayedInBrackets": "Отображается в скобках — [{{code}}]",
+    "emblem": "Эмблема",
+    "emblemHint": "Выбирается один раз · видна на карте",
+    "sumEmblem": "Эмблема",
     "stepOf": "Шаг {{n}} из 03",
     "continue": "Продолжить →",
     "step2Title": "Выберите\nштаб-территорию",
@@ -515,6 +518,15 @@
     "errEnterCode": "Введите код из 3 букв.",
     "errCodeLength": "Код должен быть ровно 3 буквы.",
     "errCodeTaken": "Этот код занят."
+  },
+  "emblems": {
+    "vanguard": "Авангард",
+    "bastion": "Бастион",
+    "summit": "Вершина",
+    "wayfinder": "Проводник",
+    "ember": "Искра",
+    "forge": "Кузня",
+    "banner": "Знамя"
   },
   "leaderboards": {
     "title": "РЕЙТИНГИ",
