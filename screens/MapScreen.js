@@ -29,6 +29,7 @@ import MapSideRail from '../components/MapSideRail';
 import { SvgXml } from 'react-native-svg';
 import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
+import { BASE_TIERS, baseTierForLevel, baseXml } from '../lib/homeBases';
 
 // Streak deterrence bands — collapses the 7 formula tiers (lib/formulas.js
 // STREAK_TIER_THRESHOLDS) into 3 readable border treatments.
@@ -723,6 +724,9 @@ export default function MapScreen() {
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
+  const [bases, setBases] = useState({ type: 'FeatureCollection', features: [] });
+  // Monotonic sequence — a slow bases response never overwrites a newer one.
+  const basesFetchSeqRef = useRef(0);
   const [isFetchingTerritories, setIsFetchingTerritories] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
   const [myAllianceName, setMyAllianceName] = useState(null);
@@ -961,6 +965,69 @@ export default function MapScreen() {
     settle();
   }, [userId, myPlayer?.alliance_id]);
 
+  // Home bases in viewport (Living Map Phase 2). Coordinates arrive snapped
+  // to a ~250m grid server-side (privacy); the player's own base is
+  // re-anchored to their exact pin, which the client already holds.
+  const fetchBasesForViewport = useCallback(async (bounds) => {
+    if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
+    const [ne, sw] = bounds;
+    const seq = ++basesFetchSeqRef.current;
+
+    const { data, error } = await supabase.rpc('get_home_bases_in_viewport', {
+      min_lon: sw[0],
+      min_lat: sw[1],
+      max_lon: ne[0],
+      max_lat: ne[1],
+    });
+    if (seq !== basesFetchSeqRef.current) return;
+    if (error) {
+      console.log('[bases fetch] ERROR', error.message);
+      return;
+    }
+
+    const homeLat = Number(myPlayer?.home_pin_lat);
+    const homeLng = Number(myPlayer?.home_pin_lng);
+    const hasOwnPin = Number.isFinite(homeLat) && Number.isFinite(homeLng);
+
+    let sawSelf = false;
+    const features = (data ?? []).map((b) => {
+      const isSelf = b.clerk_id === userId;
+      if (isSelf) sawSelf = true;
+      const isOwnAlliance = Boolean(myPlayer?.alliance_id && b.alliance_id === myPlayer.alliance_id);
+      return {
+        type: 'Feature',
+        id: `base-${b.player_id}`,
+        properties: {
+          playerId: b.player_id,
+          username: b.username,
+          baseIcon: `base-${baseTierForLevel(b.level)}-${isSelf ? 'own' : 'other'}`,
+          pennantIcon: b.alliance_id != null ? emblemIconName(b.alliance_emblem, isOwnAlliance) : '',
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: isSelf && hasOwnPin ? [homeLng, homeLat] : [b.longitude, b.latitude],
+        },
+      };
+    });
+
+    // The RPC drops dormant players; the owner should still see their own base.
+    if (!sawSelf && hasOwnPin && myPlayer?.id) {
+      features.push({
+        type: 'Feature',
+        id: `base-${myPlayer.id}`,
+        properties: {
+          playerId: myPlayer.id,
+          username: null,
+          baseIcon: `base-${baseTierForLevel(F.calcLevel(Math.max(0, Math.floor(Number(myPlayer?.xp) || 0))))}-own`,
+          pennantIcon: '',
+        },
+        geometry: { type: 'Point', coordinates: [homeLng, homeLat] },
+      });
+    }
+
+    setBases({ type: 'FeatureCollection', features });
+  }, [userId, myPlayer?.alliance_id, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, myPlayer?.xp, myPlayer?.id]);
+
   // Keep fetchRef pointing at the latest fetch so settle() can re-invoke it
   // for the deferred (trailing-edge) viewport.
   useEffect(() => {
@@ -997,11 +1064,12 @@ export default function MapScreen() {
             } catch {}
           }
           fetchTerritoriesForViewport(lastBoundsRef.current, zoom);
+          fetchBasesForViewport(lastBoundsRef.current);
         })();
       }
     }
     previousAllianceIdRef.current = currentAllianceId;
-  }, [myPlayer?.alliance_id, fetchTerritoriesForViewport]);
+  }, [myPlayer?.alliance_id, fetchTerritoriesForViewport, fetchBasesForViewport]);
 
   const onCameraChanged = useCallback((state) => {
     if (state?.gestures?.isGestureActive === true) {
@@ -1030,11 +1098,13 @@ export default function MapScreen() {
           return;
         }
         fetchTerritoriesForViewport(bounds, zoom);
+        // Bases layer is hidden below zoom 12 — skip the query when zoomed out.
+        if (zoom >= 11.5) fetchBasesForViewport(bounds);
       } catch (err) {
         console.log('[viewport fetch] getVisibleBounds threw:', err?.message);
       }
     }, 150);
-  }, [fetchTerritoriesForViewport]);
+  }, [fetchTerritoriesForViewport, fetchBasesForViewport]);
 
   const handleTerritoriesRefetched = useCallback(async (territoryId) => {
     if (territoryId) {
@@ -1206,6 +1276,58 @@ export default function MapScreen() {
     [],
   );
 
+  // D4 strongholds rise as extruded walls (visible when the map is tilted;
+  // the Phase 1 rampart line still carries the signal top-down).
+  const d4WallStyle = useMemo(
+    () => ({
+      fillExtrusionColor: [
+        'case',
+        ['==', ['get', 'color'], '#D64525'], '#D64525',
+        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
+        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
+        '#5C6068',
+      ],
+      fillExtrusionHeight: 14,
+      fillExtrusionBase: 0,
+      fillExtrusionOpacity: 0.55,
+    }),
+    [],
+  );
+
+  const d4WallFilter = useMemo(
+    () => ['>=', ['get', 'developmentLevel'], 4],
+    [],
+  );
+
+  // Home base structures, anchored to their map point like buildings.
+  const baseIconStyle = useMemo(
+    () => ({
+      iconImage: ['get', 'baseIcon'],
+      iconSize: 0.55,
+      iconAnchor: 'bottom',
+      iconAllowOverlap: false,
+      iconOpacity: 1.0,
+    }),
+    [],
+  );
+
+  // Alliance pennant beside the base — reuses the Phase 1 emblem images.
+  const pennantStyle = useMemo(
+    () => ({
+      iconImage: ['get', 'pennantIcon'],
+      iconSize: 0.28,
+      iconOffset: [28, -92],
+      iconAllowOverlap: true,
+      iconOpacity: 0.95,
+    }),
+    [],
+  );
+
+  const pennantFilter = useMemo(
+    () => ['!=', ['to-string', ['get', 'pennantIcon']], ''],
+    [],
+  );
+
   const selectedId = selected?.feature?.id ?? null;
 
   // Matches only the currently selected territory; a sentinel that no real
@@ -1333,6 +1455,18 @@ export default function MapScreen() {
         />
 
         <MapboxGL.Images>
+          {BASE_TIERS.flatMap((tier) => [
+            <MapboxGL.Image key={`base-${tier}-own`} name={`base-${tier}-own`}>
+              <View style={{ width: 40, height: 40 }} collapsable={false}>
+                <SvgXml xml={baseXml(tier, { tint: CLAIM })} width={40} height={40} />
+              </View>
+            </MapboxGL.Image>,
+            <MapboxGL.Image key={`base-${tier}-other`} name={`base-${tier}-other`}>
+              <View style={{ width: 40, height: 40 }} collapsable={false}>
+                <SvgXml xml={baseXml(tier, { tint: BONE })} width={40} height={40} />
+              </View>
+            </MapboxGL.Image>,
+          ])}
           {ALLIANCE_EMBLEMS.concat('unknown').flatMap((key) => [
             <MapboxGL.Image key={`${key}-ally`} name={`emblem-${key}-ally`}>
               <View style={{ width: 40, height: 40 }} collapsable={false}>
@@ -1356,6 +1490,7 @@ export default function MapScreen() {
           }}
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
+          <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
           <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
           <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
           <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
@@ -1364,6 +1499,23 @@ export default function MapScreen() {
           <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
           <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
           <MapboxGL.SymbolLayer id="territories-emblems" slot="top" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
+        </MapboxGL.ShapeSource>
+
+        <MapboxGL.ShapeSource
+          id="bases"
+          shape={bases}
+          onPress={(e) => {
+            const f = e?.features?.[0];
+            const playerId = f?.properties?.playerId;
+            if (!playerId || playerId === myPlayer?.id) return;
+            navigation.navigate('PublicProfile', {
+              playerId,
+              username: f?.properties?.username ?? undefined,
+            });
+          }}
+        >
+          <MapboxGL.SymbolLayer id="bases-icons" slot="top" minZoomLevel={12} style={baseIconStyle} />
+          <MapboxGL.SymbolLayer id="bases-pennants" slot="top" minZoomLevel={13} filter={pennantFilter} style={pennantStyle} />
         </MapboxGL.ShapeSource>
       </MapboxGL.MapView>
 
