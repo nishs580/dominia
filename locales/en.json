@@ -792,6 +792,13 @@
   },
   "map": {
     "loadingTerritories": "Loading territories",
+    "chip": {
+      "contested": "UNDER SIEGE",
+      "fell": "FELL {{ago}} AGO",
+      "held": "HELD {{ago}} AGO"
+    },
+    "agoMin": "{{n}}M",
+    "agoHr": "{{n}}H",
     "locateMe": "Locate me",
     "stateUnclaimed": "Unclaimed territory",
     "stateYours": "Your territory",

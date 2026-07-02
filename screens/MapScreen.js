@@ -30,6 +30,14 @@ import { SvgXml } from 'react-native-svg';
 import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
 import { BASE_TIERS, baseTierForLevel, baseXml } from '../lib/homeBases';
+import { battleChipFor } from '../lib/battleChips';
+
+// Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
+// stepping through these dasharrays reads as the border crawling).
+const SIEGE_DASH_SEQUENCE = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0],
+  [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5],
+];
 
 // Streak deterrence bands — collapses the 7 formula tiers (lib/formulas.js
 // STREAK_TIER_THRESHOLDS) into 3 readable border treatments.
@@ -895,44 +903,68 @@ export default function MapScreen() {
       const sample = rows[0];
     }
 
-    const features = rows.map((t) => {
-      const developmentLevel = t.development_level ?? 0;
-      const allianceTag = t.alliance_short_name ?? null;
-      const isOwnAlliance = Boolean(myPlayer?.alliance_id && t.alliance_id === myPlayer.alliance_id);
+    const features = rows.map((row) => {
+      const developmentLevel = row.development_level ?? 0;
+      const allianceTag = row.alliance_short_name ?? null;
+      const isOwnAlliance = Boolean(myPlayer?.alliance_id && row.alliance_id === myPlayer.alliance_id);
       // Second label line: development badge + alliance tag ("D3 · [VLK]").
       const labelParts = [];
       if (developmentLevel >= 1) labelParts.push(`D${developmentLevel}`);
       if (allianceTag) labelParts.push(`[${allianceTag}]`);
+
+      // War state: burning border while contested, report chip for 24h after.
+      const contested = row.contest_active === true;
+      const chip = battleChipFor({
+        contested,
+        lastBattleOutcome: row.last_battle_outcome ?? null,
+        lastBattleAt: row.last_battle_at ?? null,
+      });
+      let battleChip = '';
+      let chipColor = '#8B8F98';
+      if (chip?.key === 'contested') {
+        battleChip = t('map.chip.contested');
+        chipColor = '#D64525';
+      } else if (chip) {
+        const ago = chip.minutes < 60
+          ? t('map.agoMin', { n: chip.minutes })
+          : t('map.agoHr', { n: Math.floor(chip.minutes / 60) });
+        battleChip = t(chip.key === 'fell' ? 'map.chip.fell' : 'map.chip.held', { ago });
+        chipColor = chip.key === 'fell' ? '#D64525' : '#3F8F4E';
+      }
+
       return {
         type: 'Feature',
-        id: t.id,
+        id: row.id,
         properties: {
-          id: t.id,
-          name: t.territory_name,
-          owner: t.owner_username ?? 'Unclaimed',
+          id: row.id,
+          name: row.territory_name,
+          owner: row.owner_username ?? 'Unclaimed',
           alliance: allianceTag,
-          tier: t.tier ?? 'Medium',
+          tier: row.tier ?? 'Medium',
           level: `D${developmentLevel}`,
-          ownerStreak: t.owner_streak_days ?? 0,
-          streakBand: t.owner_id != null ? streakBandForDays(t.owner_streak_days) : 'base',
-          emblem: t.alliance_emblem ?? null,
+          ownerStreak: row.owner_streak_days ?? 0,
+          streakBand: row.owner_id != null ? streakBandForDays(row.owner_streak_days) : 'base',
+          emblem: row.alliance_emblem ?? null,
           developmentLevel,
           labelSub: labelParts.join(' · '),
-          emblemIcon: t.alliance_id != null ? emblemIconName(t.alliance_emblem, isOwnAlliance) : '',
-          perimeter: t.perimeter_distance,
-          color: t.owner_clerk_id === userId ? '#D64525' :
+          emblemIcon: row.alliance_id != null ? emblemIconName(row.alliance_emblem, isOwnAlliance) : '',
+          contested,
+          battleChip,
+          chipColor,
+          perimeter: row.perimeter_distance,
+          color: row.owner_clerk_id === userId ? '#D64525' :
             isOwnAlliance ? '#3F8F4E' :
-            t.owner_id != null ? '#4A6B8A' : 'transparent',
+            row.owner_id != null ? '#4A6B8A' : 'transparent',
         },
         // Winding order already normalised server-side via ST_ForcePolygonCCW.
-        geometry: t.geojson ?? {
+        geometry: row.geojson ?? {
           type: 'Polygon',
           coordinates: [[
-            [t.longitude - 0.003, t.latitude + 0.002],
-            [t.longitude + 0.003, t.latitude + 0.002],
-            [t.longitude + 0.003, t.latitude - 0.002],
-            [t.longitude - 0.003, t.latitude - 0.002],
-            [t.longitude - 0.003, t.latitude + 0.002],
+            [row.longitude - 0.003, row.latitude + 0.002],
+            [row.longitude + 0.003, row.latitude + 0.002],
+            [row.longitude + 0.003, row.latitude - 0.002],
+            [row.longitude - 0.003, row.latitude - 0.002],
+            [row.longitude - 0.003, row.latitude + 0.002],
           ]],
         },
       };
@@ -963,7 +995,7 @@ export default function MapScreen() {
       features: Array.from(cache.values()),
     });
     settle();
-  }, [userId, myPlayer?.alliance_id]);
+  }, [userId, myPlayer?.alliance_id, t]);
 
   // Home bases in viewport (Living Map Phase 2). Coordinates arrive snapped
   // to a ~250m grid server-side (privacy); the player's own base is
@@ -1328,6 +1360,59 @@ export default function MapScreen() {
     [],
   );
 
+  // Siege border animation — the interval only runs while a contested
+  // territory is actually in the viewport, so the idle map does zero work.
+  const [siegeDashStep, setSiegeDashStep] = useState(0);
+  const hasContested = useMemo(
+    () => territories.features.some((f) => f.properties?.contested === true),
+    [territories],
+  );
+  useEffect(() => {
+    if (!hasContested) return undefined;
+    const id = setInterval(
+      () => setSiegeDashStep((s) => (s + 1) % SIEGE_DASH_SEQUENCE.length),
+      200,
+    );
+    return () => clearInterval(id);
+  }, [hasContested]);
+
+  const contestedLineStyle = useMemo(
+    () => ({
+      lineColor: '#D64525',
+      lineWidth: 3,
+      lineOpacity: 1,
+      lineDasharray: SIEGE_DASH_SEQUENCE[siegeDashStep],
+      lineEmissiveStrength: 1.0,
+    }),
+    [siegeDashStep],
+  );
+
+  const contestedFilter = useMemo(
+    () => ['==', ['get', 'contested'], true],
+    [],
+  );
+
+  // Battle report chips — always placed (war news outranks label collision).
+  const chipStyle = useMemo(
+    () => ({
+      textField: ['get', 'battleChip'],
+      textSize: 9,
+      textColor: ['get', 'chipColor'],
+      textHaloColor: 'rgba(14,16,20,0.9)',
+      textHaloWidth: 1.5,
+      textAnchor: 'top',
+      textOffset: [0, 2.4],
+      textAllowOverlap: true,
+      textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+    }),
+    [],
+  );
+
+  const chipFilter = useMemo(
+    () => ['!=', ['to-string', ['get', 'battleChip']], ''],
+    [],
+  );
+
   const selectedId = selected?.feature?.id ?? null;
 
   // Matches only the currently selected territory; a sentinel that no real
@@ -1494,11 +1579,13 @@ export default function MapScreen() {
           <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
           <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
           <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
+          <MapboxGL.LineLayer id="territories-contested" filter={contestedFilter} style={contestedLineStyle} />
           <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
           <MapboxGL.LineLayer id="territories-selected-glow" filter={highlightFilter} style={selectedGlowStyle} />
           <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
           <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
           <MapboxGL.SymbolLayer id="territories-emblems" slot="top" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
+          <MapboxGL.SymbolLayer id="territories-battle-chips" slot="top" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
         </MapboxGL.ShapeSource>
 
         <MapboxGL.ShapeSource

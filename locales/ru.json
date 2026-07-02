@@ -802,6 +802,13 @@
   },
   "map": {
     "loadingTerritories": "Загрузка территорий",
+    "chip": {
+      "contested": "В ОСАДЕ",
+      "fell": "ПАЛА {{ago}} НАЗАД",
+      "held": "ОТБИТА {{ago}} НАЗАД"
+    },
+    "agoMin": "{{n}} МИН",
+    "agoHr": "{{n}} Ч",
     "locateMe": "Найти меня",
     "stateUnclaimed": "Незахваченная территория",
     "stateYours": "Ваша территория",
