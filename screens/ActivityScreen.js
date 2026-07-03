@@ -794,11 +794,11 @@ export default function ActivityScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {hcReady && !hasStepsPerm ? (
+        {hcReady && !(hasStepsPerm && hasKcalPerm && hasDistPerm) ? (
           <View style={styles.permBanner}>
             <Text style={styles.permBannerLabel}>{t('activity.permLabel')}</Text>
             <Text style={styles.permBannerText}>
-              {t('activity.permText')}
+              {!hasStepsPerm ? t('activity.permText') : t('activity.permTextPartial')}
             </Text>
             <Pressable
               accessibilityRole="button"

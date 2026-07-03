@@ -424,6 +424,7 @@
     "weekDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "permLabel": "HEALTH CONNECT",
     "permText": "Health data is locked. Grant Health Connect permissions (steps, active calories, distance) to start earning from daily challenges.",
+    "permTextPartial": "Some Health Connect permissions are missing (active calories or distance). Grant them to unlock all challenge types.",
     "requesting": "REQUESTING…",
     "grantPermission": "GRANT PERMISSION",
     "dailyChallenges": "DAILY CHALLENGES",
