@@ -8,6 +8,7 @@ import {
   initialize,
   getGrantedPermissions,
   requestPermission,
+  openHealthConnectSettings,
   readRecords,
 } from 'react-native-health-connect';
 import Toast from 'react-native-toast-message';
@@ -704,13 +705,26 @@ export default function ActivityScreen() {
     try {
       // One sheet for all axis data: Steps + ActiveCaloriesBurned + Distance.
       // Each is individually grantable; steps-only players keep the March axis.
+      const before = await getGrantedPermissions();
       await requestPermission(ACTIVITY_READ_PERMS);
       const granted = await getGrantedPermissions();
       const hasIt = hasForegroundStepsRead(granted);
+      const hasKcal = hasForegroundActiveCaloriesRead(granted);
+      const hasDist = hasForegroundDistanceRead(granted);
       setHasStepsPerm(hasIt);
-      setHasKcalPerm(hasForegroundActiveCaloriesRead(granted));
-      setHasDistPerm(hasForegroundDistanceRead(granted));
+      setHasKcalPerm(hasKcal);
+      setHasDistPerm(hasDist);
       if (hasIt) activityProducer.onPermissionGranted();
+
+      // Android only shows the Health Connect system sheet once per app;
+      // later requestPermission() calls for a NEW permission type silently
+      // no-op if the app has already been through that sheet (e.g. Steps
+      // was granted before this feature shipped). Detect a request that
+      // changed nothing and fall back to the Health Connect settings deep
+      // link, where the player can toggle the missing grants directly.
+      if (granted.length === before.length && (!hasKcal || !hasDist)) {
+        openHealthConnectSettings();
+      }
     } catch (e) {
       console.warn('[HC] permission request failed:', e?.message ?? e);
     } finally {
@@ -814,6 +828,19 @@ export default function ActivityScreen() {
                 {permRequesting ? t('activity.requesting') : t('activity.grantPermission')}
               </Text>
             </Pressable>
+            {hasStepsPerm && (
+              // Android shows its permission sheet once per app; if Steps was
+              // already granted before this feature shipped, the sheet won't
+              // reappear for the new grants. Always offer the direct settings
+              // path rather than relying on the auto-fallback heuristic alone.
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openHealthConnectSettings()}
+                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.permBannerLink}>{t('activity.openHcSettings')}</Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
 
@@ -1167,6 +1194,15 @@ const styles = StyleSheet.create({
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
+  },
+  permBannerLink: {
+    marginTop: spacing.xs,
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    textDecorationLine: 'underline',
   },
   challengeBlock: {
     marginTop: spacing.lg,
