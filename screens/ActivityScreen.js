@@ -253,6 +253,12 @@ export default function ActivityScreen() {
   );
   const pollRef = useRef(null);
   const inFlightTiersRef = useRef(new Set());
+  // Clerk's getToken identity churns with session state (notably while a
+  // token refresh is failing/retrying). Route all fetch callbacks through a
+  // ref so their identity stays stable and effects don't re-fire per churn —
+  // otherwise a failing refresh floods the backend with doomed 401 calls.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
   // Challenges the backend has rejected this session because its accepted
   // daily_steps total is still under threshold (a deterministic 403). Maps
   // ch.key -> the liveSteps reading when it was rejected, so the auto-complete
@@ -322,7 +328,9 @@ export default function ActivityScreen() {
   // completions and gating aggregates. Replaces the former direct Supabase
   // player_challenges read (RLS migration path).
   const loadTodayMenu = useCallback(async () => {
-    const result = await fetchChallengesToday({ clerkGetToken: getToken });
+    const result = await fetchChallengesToday({
+      clerkGetToken: () => getTokenRef.current(),
+    });
     if (!result.ok) {
       console.log('[activity] challenges/today failed', result.status, result.error);
       return;
@@ -330,7 +338,7 @@ export default function ActivityScreen() {
     setTodayMenu(result.data);
     setCompletedKeys(new Set((result.data.completed ?? []).map((c) => c.challenge_key)));
     setChallengesLoaded(true);
-  }, [getToken]);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -665,9 +673,11 @@ export default function ActivityScreen() {
   }, [playerId]);
 
   const loadBests = useCallback(async () => {
-    const result = await fetchActivityBests({ clerkGetToken: getToken });
+    const result = await fetchActivityBests({
+      clerkGetToken: () => getTokenRef.current(),
+    });
     if (result.ok) setBests(result.data);
-  }, [getToken]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
