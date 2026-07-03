@@ -1,11 +1,22 @@
 import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
 import { Inter_400Regular } from '@expo-google-fonts/inter';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
-import { patchMe } from '../lib/meApi';
+import { checkUsernameAvailable, patchMe } from '../lib/meApi';
+
+// Client-side validation mirrors the backend's normalizeUsername rules.
+// Returns an i18n error key, or null when the shape is valid.
+function validateUsername(name) {
+  const v = name.trim();
+  if (!v) return 'errorEmpty';
+  if (v.length < 2) return 'errorTooShort';
+  if (v.length > 20) return 'errorTooLong';
+  if (!/^[a-zA-Z0-9._]+$/.test(v)) return 'errorInvalidChars';
+  return null;
+}
 
 export default function UsernameScreen({ navigation, route }) {
   const playerId = route.params?.playerId;
@@ -14,39 +25,73 @@ export default function UsernameScreen({ navigation, route }) {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // 'idle' | 'checking' | 'available' | 'taken'
+  const [status, setStatus] = useState('idle');
 
   const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, Inter_400Regular });
+
+  // Debounced availability check: only fires once the name is well-formed.
+  // Advisory only — PATCH /me re-checks authoritatively on submit.
+  useEffect(() => {
+    if (validateUsername(username) !== null) {
+      setStatus('idle');
+      return;
+    }
+    setStatus('checking');
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      const res = await checkUsernameAvailable({ clerkGetToken: getToken, username: username.trim() });
+      if (cancelled) return;
+      if (res.ok) {
+        setStatus(res.data.available ? 'available' : 'taken');
+      } else {
+        // Network/other failure: don't block; submit will make the call that counts.
+        setStatus('idle');
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [username, getToken]);
+
   if (!fontsLoaded) return null;
 
   const handleConfirm = async () => {
-    if (!username.trim()) {
-      setError(t('username.errorEmpty'));
+    const problem = validateUsername(username);
+    if (problem) {
+      setError(t(`username.${problem}`));
       return;
     }
-    if (username.length < 2) {
-      setError(t('username.errorTooShort'));
-      return;
-    }
-    if (username.length > 20) {
-      setError(t('username.errorTooLong'));
-      return;
-    }
-    if (!/^[a-zA-Z0-9._]+$/.test(username)) {
-      setError(t('username.errorInvalidChars'));
+    if (status === 'taken') {
+      setError(t('username.errorTaken'));
       return;
     }
     setLoading(true);
     setError('');
     try {
       const res = await patchMe({ clerkGetToken: getToken, fields: { username: username.trim() } });
-      if (!res.ok) throw new Error('update_failed');
-      navigation.replace('Onboarding', { playerId });
+      if (res.ok) {
+        navigation.replace('Onboarding', { playerId });
+        return;
+      }
+      if (res.status === 409) {
+        setStatus('taken');
+        setError(t('username.errorTaken'));
+      } else if (res.status === 400) {
+        setError(t('username.errorInvalidChars'));
+      } else {
+        setError(t('username.errorGeneric'));
+      }
     } catch (err) {
-      setError(t('username.errorTaken'));
+      setError(t('username.errorGeneric'));
     } finally {
       setLoading(false);
     }
   };
+
+  const disabled =
+    loading ||
+    validateUsername(username) !== null ||
+    status === 'checking' ||
+    status === 'taken';
 
   return (
     <KeyboardAvoidingView
@@ -63,17 +108,25 @@ export default function UsernameScreen({ navigation, route }) {
           placeholderTextColor="#5C6068"
           autoCapitalize="none"
           value={username}
-          onChangeText={setUsername}
+          onChangeText={(text) => { setUsername(text); setError(''); }}
           maxLength={20}
         />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : status === 'taken' ? (
+          <Text style={styles.error}>{t('username.errorTaken')}</Text>
+        ) : status === 'checking' ? (
+          <Text style={styles.hint}>{t('username.checking')}</Text>
+        ) : status === 'available' ? (
+          <Text style={styles.available}>{t('username.available')}</Text>
+        ) : null}
       </View>
 
       <View style={styles.buttonContainer}>
         <Pressable
           onPress={handleConfirm}
-          disabled={loading || username.trim().length < 2}
+          disabled={disabled}
           style={({ pressed }) => [
             {
               backgroundColor: '#D64525',
@@ -81,8 +134,8 @@ export default function UsernameScreen({ navigation, route }) {
               width: '100%',
               alignItems: 'center',
             },
-            (loading || username.trim().length < 2) && { opacity: 0.5 },
-            pressed && username.trim().length >= 2 && !loading && { opacity: 0.9 },
+            disabled && { opacity: 0.5 },
+            pressed && !disabled && { opacity: 0.9 },
           ]}
         >
           <Text
@@ -148,6 +201,20 @@ const styles = StyleSheet.create({
   error: {
     fontFamily: 'Inter_400Regular',
     color: '#D64525',
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'left',
+  },
+  hint: {
+    fontFamily: 'Inter_400Regular',
+    color: '#8B8F98',
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'left',
+  },
+  available: {
+    fontFamily: 'Inter_400Regular',
+    color: '#4CAF50',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'left',

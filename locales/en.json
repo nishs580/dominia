@@ -103,7 +103,10 @@
     "errorTooShort": "Username must be at least 2 characters.",
     "errorTooLong": "Username must be 20 characters or less.",
     "errorInvalidChars": "Only letters, numbers, dots and underscores allowed.",
-    "errorTaken": "Username already taken. Try another."
+    "errorTaken": "Username already taken. Try another.",
+    "errorGeneric": "Couldn't save your name. Please try again.",
+    "checking": "Checking availability…",
+    "available": "Available ✓"
   },
   "sessionMismatch": {
     "label": "Session error",
