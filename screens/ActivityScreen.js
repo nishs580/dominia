@@ -11,13 +11,30 @@ import {
   readRecords,
 } from 'react-native-health-connect';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { completeChallenge as backendCompleteChallenge } from '../lib/challengeApi';
+import { fetchChallengesToday } from '../lib/challengesTodayApi';
+import {
+  AXES,
+  AXIS_CATALOG,
+  TIERS,
+  XP_PER_TIER,
+  THEME_BOOST_MULT,
+  themeAxisForDate,
+  boostedAxesForTheme,
+  defaultAxisForTheme,
+} from '../lib/challengeAxes';
 import { fetchActivityBests } from '../lib/activityBestsApi';
 import { loadPlayerStride } from '../lib/claim';
 import { showCard } from '../lib/notifications/cardController';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
-import { STEPS_READ_PERM, hasForegroundStepsRead } from '../lib/healthConnect';
+import {
+  ACTIVITY_READ_PERMS,
+  hasForegroundStepsRead,
+  hasForegroundActiveCaloriesRead,
+  hasForegroundDistanceRead,
+} from '../lib/healthConnect';
 import * as activityProducer from '../lib/activity';
 
 function levelFromXp(xp) {
@@ -28,6 +45,22 @@ function levelFromXp(xp) {
 import { colors, fonts, spacing } from '../lib/theme';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
+
+// Per-day conscious axis choice (memory: daily-challenge-redesign). The
+// server locks the axis on first completion; before that, this records the
+// player's explicit "Train X today" commitment so auto-complete watches the
+// chosen axis instead of the theme default.
+const AXIS_CHOICE_STORAGE_KEY = 'dominia.challengeAxisChoice.v1';
+
+function fmtAxisProgress(axis, current, target) {
+  if (axis === 'distance') {
+    return `${((Number(current) || 0) / 1000).toFixed(1)} / ${(target / 1000).toFixed(1)} km`;
+  }
+  if (axis === 'tempo') {
+    return `T${Math.min(Number(current) || 0, target)} / T${target}`;
+  }
+  return `${Math.min(Number(current) || 0, target).toLocaleString()} / ${target.toLocaleString()}`;
+}
 
 // Locale-aware date header, e.g. "Monday, June 30". Uses Intl with the active
 // i18next language so non-English locales get native day/month names.
@@ -195,10 +228,19 @@ export default function ActivityScreen() {
   const [playerLevel, setPlayerLevel] = useState(() => levelFromXp(0));
   const [hcReady, setHcReady] = useState(false);
   const [hasStepsPerm, setHasStepsPerm] = useState(false);
+  // Optional axis permissions — steps-only players still get March.
+  const [hasKcalPerm, setHasKcalPerm] = useState(false);
+  const [hasDistPerm, setHasDistPerm] = useState(false);
   const [challengesLoaded, setChallengesLoaded] = useState(false);
   const [permRequesting, setPermRequesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState(0);
   const [strideM, setStrideM] = useState(0.75);
+  // 4-axis daily menu — server-authoritative state from /me/challenges/today.
+  const [todayMenu, setTodayMenu] = useState(null);
+  // Conscious per-day axis choice (persisted). null = no choice yet.
+  const [committedAxis, setCommittedAxis] = useState(null);
+  // Which axis's ladder the card is currently showing (browsing is free).
+  const [viewAxis, setViewAxis] = useState(null);
   // Daily Achievements: today's totals + all-time best single-day totals,
   // aggregated server-side from accepted activity_samples. Distance today is
   // shown from on-device steps × stride (live); everything else comes from here.
@@ -220,7 +262,8 @@ export default function ActivityScreen() {
   const blockedKeysRef = useRef(new Map());
 
   const today = useMemo(() => new Date(), []);
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  // Device-local day key — used only for the per-day axis-choice storage.
+  const todayStr = useMemo(() => localDayKey(new Date()), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,15 +304,12 @@ export default function ActivityScreen() {
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
       setUsername(player.username ?? '');
 
-      const [terrResult, challengeResult] = await Promise.all([
-        supabase.from('territories').select('id', { count: 'exact', head: true }).eq('owner_id', player.id),
-        supabase.from('player_challenges').select('challenge_key').eq('player_id', player.id).eq('date', todayStr),
-      ]);
+      const terrResult = await supabase
+        .from('territories')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', player.id);
       if (cancelled) return;
       setTerritoryCount(terrResult.count ?? 0);
-      const next = new Set((challengeResult.data ?? []).map((r) => r.challenge_key).filter(Boolean));
-      setCompletedKeys(next);
-      setChallengesLoaded(true);
     }
 
     loadPlayerActivity();
@@ -277,6 +317,41 @@ export default function ActivityScreen() {
       cancelled = true;
     };
   }, [userId]);
+
+  // Server-authoritative daily menu: theme, locked axis, Iron Guard slot,
+  // completions and gating aggregates. Replaces the former direct Supabase
+  // player_challenges read (RLS migration path).
+  const loadTodayMenu = useCallback(async () => {
+    const result = await fetchChallengesToday({ clerkGetToken: getToken });
+    if (!result.ok) {
+      console.log('[activity] challenges/today failed', result.status, result.error);
+      return;
+    }
+    setTodayMenu(result.data);
+    setCompletedKeys(new Set((result.data.completed ?? []).map((c) => c.challenge_key)));
+    setChallengesLoaded(true);
+  }, [getToken]);
+
+  useEffect(() => {
+    if (!userId) return;
+    loadTodayMenu();
+  }, [userId, loadTodayMenu]);
+
+  // Rehydrate today's conscious axis choice; stale (yesterday's) choices drop.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(AXIS_CHOICE_STORAGE_KEY);
+        if (cancelled || !raw) return;
+        const stored = JSON.parse(raw);
+        if (stored?.date === todayStr && AXES.includes(stored?.axis)) {
+          setCommittedAxis(stored.axis);
+        }
+      } catch (_) { /* choice is a nicety — ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [todayStr]);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +364,8 @@ export default function ActivityScreen() {
         const granted = await getGrantedPermissions();
         if (cancelled) return;
         setHasStepsPerm(hasForegroundStepsRead(granted));
+        setHasKcalPerm(hasForegroundActiveCaloriesRead(granted));
+        setHasDistPerm(hasForegroundDistanceRead(granted));
       } catch (e) {
         console.warn('[HC] init failed:', e?.message ?? e);
       }
@@ -297,35 +374,74 @@ export default function ActivityScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  const challenges = useMemo(
-    () => [
-      {
-        key: 'easy',
-        difficulty: t('activity.diffEasy'),
-        task: t('activity.taskEasy'),
-        xp: 50,
-        earnKey: 'easy_step_challenge',
-        target: 5000,
-      },
-      {
-        key: 'medium',
-        difficulty: t('activity.diffMedium'),
-        task: t('activity.taskMedium'),
-        xp: 150,
-        earnKey: 'medium_step_challenge',
-        target: 10000,
-      },
-      {
-        key: 'hard',
-        difficulty: t('activity.diffHard'),
-        task: t('activity.taskHard'),
-        xp: 400,
-        earnKey: 'hard_step_challenge',
-        target: 15000,
-      },
-    ],
-    [t],
+  // ---- 4-axis daily menu derivations ---------------------------------------
+  // Theme: server value once /me/challenges/today loads; device-weekday
+  // fallback before that so the header renders immediately.
+  const clientThemeToken = themeAxisForDate(today); // axis name | 'war_prep' | null
+  const isChallengeDay = todayMenu ? todayMenu.is_challenge_day : clientThemeToken !== null;
+  const boostedAxes = todayMenu?.theme?.boosted_axes
+    ?? boostedAxesForTheme(clientThemeToken);
+  const serverThemeToken = todayMenu?.theme
+    ? (todayMenu.theme.key === 'war_prep'
+        ? 'war_prep'
+        : { march: 'steps', range: 'distance', drill: 'calories', tempo: 'tempo' }[todayMenu.theme.key] ?? null)
+    : null;
+  const themeToken = todayMenu ? serverThemeToken : clientThemeToken;
+
+  const lockedAxis = todayMenu?.locked_axis ?? null;
+  const offAxisSlot = todayMenu?.off_axis_slot ?? { eligible: false, used: false };
+
+  // The axis auto-complete watches: server lock > conscious choice > theme
+  // default (steps fallback when the theme axis has no data source).
+  const armedAxis =
+    lockedAxis
+    ?? committedAxis
+    ?? defaultAxisForTheme(themeToken, { hasKcalPerm });
+
+  // The card follows the armed axis until the player browses.
+  useEffect(() => {
+    if (viewAxis === null && armedAxis !== null) setViewAxis(armedAxis);
+  }, [viewAxis, armedAxis]);
+
+  // Live per-axis progress: on-device steps (and stride distance) are ahead
+  // of the server between flushes; server aggregates cover the rest.
+  const axisCurrent = useCallback(
+    (axis) => {
+      const agg = todayMenu?.aggregates;
+      if (axis === 'steps') return Math.max(liveSteps, Number(agg?.daily_steps) || 0);
+      if (axis === 'distance') {
+        return Math.max(Math.floor(liveSteps * strideM), Number(agg?.daily_distance_m) || 0);
+      }
+      if (axis === 'calories') return Number(agg?.daily_calories) || 0;
+      return Number(agg?.daily_tempo_tier) || 0;
+    },
+    [todayMenu, liveSteps, strideM],
   );
+
+  const activeAxis = viewAxis ?? armedAxis ?? 'steps';
+
+  const challenges = useMemo(() => {
+    const cat = AXIS_CATALOG[activeAxis];
+    const diffKey = { easy: 'diffEasy', medium: 'diffMedium', hard: 'diffHard' };
+    return TIERS.map((tier) => {
+      const def = cat.tiers[tier];
+      let taskParams;
+      if (activeAxis === 'steps') taskParams = { n: def.target.toLocaleString() };
+      else if (activeAxis === 'distance') taskParams = { n: (def.target / 1000).toLocaleString() };
+      else if (activeAxis === 'calories') taskParams = { n: def.target.toLocaleString() };
+      else taskParams = {};
+      return {
+        key: def.earnKey, // challenge_key === earn_key (axis-scoped, collision-free)
+        tier,
+        axis: activeAxis,
+        difficulty: t(`activity.${diffKey[tier]}`),
+        task: t(def.taskKey, taskParams),
+        xp: XP_PER_TIER[tier],
+        earnKey: def.earnKey,
+        target: def.target,
+      };
+    });
+  }, [activeAxis, t]);
 
   const completedCount = useMemo(() => {
     let n = 0;
@@ -334,6 +450,16 @@ export default function ActivityScreen() {
   }, [challenges, completedKeys]);
 
   const missionProgress = completedCount / 3;
+
+  async function handleCommitAxis(axis) {
+    setCommittedAxis(axis);
+    try {
+      await AsyncStorage.setItem(
+        AXIS_CHOICE_STORAGE_KEY,
+        JSON.stringify({ date: todayStr, axis }),
+      );
+    } catch (_) { /* non-fatal */ }
+  }
 
   async function onCompleteChallenge(ch) {
     if (!playerId) return;
@@ -363,7 +489,7 @@ export default function ActivityScreen() {
       const result = await backendCompleteChallenge({
         clerkGetToken: getToken,
         challengeKey: ch.key,
-        tier: ch.key,
+        tier: ch.tier,
         earnKey: ch.earnKey,
       });
 
@@ -371,11 +497,17 @@ export default function ActivityScreen() {
         // Revert optimistic UI.
         console.log('[onCompleteChallenge] backend failed', result.status, result.error);
         // A 403 here is the under-threshold gate: the backend's accepted
-        // daily_steps total is below this tier's target even after we flushed.
-        // It's deterministic, so block auto-retries until liveSteps grows —
+        // aggregate is below this tier's target even after we flushed. It's
+        // deterministic, so block auto-retries until the axis metric grows —
         // otherwise the auto-complete effect spins on it forever.
         if (result.status === 403) {
-          blockedKeysRef.current.set(ch.key, liveSteps);
+          blockedKeysRef.current.set(ch.key, axisCurrent(ch.axis));
+        }
+        // 409 axis_locked: the server knows a lock this client hasn't seen
+        // yet (another device, or a stale menu). Resync and inform.
+        if (result.status === 409) {
+          loadTodayMenu();
+          Toast.show({ type: 'info', text1: t('activity.toastAxisLocked'), position: 'top' });
         }
         setCompletedKeys((prev) => {
           const next = new Set(prev);
@@ -390,8 +522,10 @@ export default function ActivityScreen() {
       // Authoritative success — clear any prior block for this challenge.
       blockedKeysRef.current.delete(ch.key);
 
-      // Completion forced a full-day flush, so today's distance/active-minutes
-      // moved server-side — refresh the achievements panel (fire-and-forget).
+      // Completion forced a full-day flush, so today's aggregates moved
+      // server-side — refresh the menu (locks/completions) and the
+      // achievements panel (fire-and-forget).
+      loadTodayMenu();
       loadBests();
 
       // Sync UI to authoritative backend state.
@@ -541,22 +675,31 @@ export default function ActivityScreen() {
       readTodaySteps();
       readWeeklySteps();
       loadBests();
+      loadTodayMenu();
       pollRef.current = setInterval(readTodaySteps, 10000);
+      // kcal / distance / tempo aggregates only move server-side (producer
+      // flushes every ~2 min) — refresh the menu on a slower cadence.
+      const menuPoll = setInterval(loadTodayMenu, 60000);
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
+        clearInterval(menuPoll);
       };
-    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps, loadBests]),
+    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps, loadBests, loadTodayMenu]),
   );
 
   async function handleRequestStepsPerm() {
     if (!hcReady || permRequesting) return;
     setPermRequesting(true);
     try {
-      await requestPermission([STEPS_READ_PERM]);
+      // One sheet for all axis data: Steps + ActiveCaloriesBurned + Distance.
+      // Each is individually grantable; steps-only players keep the March axis.
+      await requestPermission(ACTIVITY_READ_PERMS);
       const granted = await getGrantedPermissions();
       const hasIt = hasForegroundStepsRead(granted);
       setHasStepsPerm(hasIt);
+      setHasKcalPerm(hasForegroundActiveCaloriesRead(granted));
+      setHasDistPerm(hasForegroundDistanceRead(granted));
       if (hasIt) activityProducer.onPermissionGranted();
     } catch (e) {
       console.warn('[HC] permission request failed:', e?.message ?? e);
@@ -565,30 +708,53 @@ export default function ActivityScreen() {
     }
   }
 
+  // Auto-complete watches ONLY the armed axis (server lock > conscious
+  // choice > theme default). Never any other axis — completion locks the
+  // day, so auto-firing a non-armed axis would steal the player's choice.
   useEffect(() => {
     if (!playerId || !hasStepsPerm || !challengesLoaded) return;
+    if (!isChallengeDay || armedAxis === null) return;
+    const cat = AXIS_CATALOG[armedAxis];
+    const current = axisCurrent(armedAxis);
     (async () => {
-      for (const ch of challenges) {
-        if (liveSteps < ch.target) continue;
-        if (completedKeys.has(ch.key)) continue;
-        if (inFlightTiersRef.current.has(ch.key)) continue;
-        if (isCompleting.has(ch.key)) continue;
+      for (const tier of TIERS) {
+        const def = cat.tiers[tier];
+        if (current < def.target) continue;
+        if (completedKeys.has(def.earnKey)) continue;
+        if (inFlightTiersRef.current.has(def.earnKey)) continue;
+        if (isCompleting.has(def.earnKey)) continue;
         // Skip a challenge the backend already rejected as under-threshold
-        // until the player has walked further than when it was rejected. Each
-        // time liveSteps grows we allow one more attempt (re-blocking at the
-        // higher count if it 403s again), so retries track real progress
-        // instead of hammering a doomed request.
-        const blockedAt = blockedKeysRef.current.get(ch.key);
-        if (blockedAt != null && liveSteps <= blockedAt) continue;
-        inFlightTiersRef.current.add(ch.key);
+        // until the axis metric has actually grown past the rejection point.
+        // Each retry re-blocks at the higher value if it 403s again, so
+        // retries track real progress instead of hammering a doomed request.
+        const blockedAt = blockedKeysRef.current.get(def.earnKey);
+        if (blockedAt != null && current <= blockedAt) continue;
+        inFlightTiersRef.current.add(def.earnKey);
         try {
-          await onCompleteChallenge(ch);
+          await onCompleteChallenge({
+            key: def.earnKey,
+            tier,
+            axis: armedAxis,
+            earnKey: def.earnKey,
+            xp: XP_PER_TIER[tier],
+          });
         } finally {
-          inFlightTiersRef.current.delete(ch.key);
+          inFlightTiersRef.current.delete(def.earnKey);
         }
       }
     })();
-  }, [liveSteps, playerId, hasStepsPerm, challenges, completedKeys, isCompleting, challengesLoaded]);
+  }, [
+    liveSteps,
+    todayMenu,
+    playerId,
+    hasStepsPerm,
+    armedAxis,
+    isChallengeDay,
+    axisCurrent,
+    completedKeys,
+    isCompleting,
+    challengesLoaded,
+  ]);
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
@@ -641,12 +807,86 @@ export default function ActivityScreen() {
           </View>
         ) : null}
 
+        {!isChallengeDay ? (
+          <View style={styles.challengeBlock}>
+            <View style={styles.challengeHeaderRow}>
+              <Text style={styles.challengeSectionLabel}>{t('activity.attackDay')}</Text>
+              <View style={styles.challengeHairline} />
+            </View>
+            <View style={styles.attackDayCard}>
+              <Text style={styles.attackDayTitle}>{t('activity.attackDayTitle')}</Text>
+              <Text style={styles.attackDayBody}>{t('activity.attackDayBody')}</Text>
+            </View>
+          </View>
+        ) : (
         <View style={styles.challengeBlock}>
           <View style={styles.challengeHeaderRow}>
             <Text style={styles.challengeSectionLabel}>{t('activity.dailyChallenges')}</Text>
             <View style={styles.challengeHairline} />
             <Text style={styles.challengeCount}>{t('activity.doneCount', { n: completedCount })}</Text>
           </View>
+
+          {themeToken !== null && (
+            <Text style={styles.themeBadge}>
+              {t(`activity.theme_${themeToken}`)}
+              {'  ·  '}
+              {t('activity.themeBoost', { mult: THEME_BOOST_MULT })}
+            </Text>
+          )}
+
+          <View style={styles.axisChipRow}>
+            {AXES.map((axis) => {
+              const isViewing = axis === activeAxis;
+              const isArmed = axis === armedAxis;
+              const isBoosted = boostedAxes.includes(axis);
+              // Once the server has locked the day, other axes are out —
+              // unless the Iron Guard off-axis slot is still open.
+              const isLockedOut =
+                lockedAxis !== null &&
+                axis !== lockedAxis &&
+                !(offAxisSlot.eligible && !offAxisSlot.used);
+              return (
+                <Pressable
+                  key={axis}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(AXIS_CATALOG[axis].nameKey)}
+                  onPress={() => setViewAxis(axis)}
+                  style={({ pressed }) => [
+                    styles.axisChip,
+                    isViewing && styles.axisChipViewing,
+                    isLockedOut && styles.axisChipLockedOut,
+                    pressed && { opacity: 0.75 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.axisChipText,
+                      isViewing && styles.axisChipTextViewing,
+                      isLockedOut && styles.axisChipTextLockedOut,
+                    ]}
+                  >
+                    {t(AXIS_CATALOG[axis].nameKey).toUpperCase()}
+                    {isBoosted ? ' ×1.5' : ''}
+                    {isLockedOut ? ' ✕' : isArmed ? ' ●' : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Conscious axis choice: viewing a different axis than the one
+              armed, before the server lock — commit switches auto-complete. */}
+          {lockedAxis === null && activeAxis !== armedAxis && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => handleCommitAxis(activeAxis)}
+              style={({ pressed }) => [styles.commitBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.commitBtnText}>
+                {t('activity.trainAxisToday', { axis: t(AXIS_CATALOG[activeAxis].nameKey).toUpperCase() })}
+              </Text>
+            </Pressable>
+          )}
 
           <View style={styles.challengeProgressTrack}>
             <View style={[styles.challengeProgressFill, { width: `${clamp(missionProgress, 0, 1) * 100}%` }]} />
@@ -656,6 +896,16 @@ export default function ActivityScreen() {
             {challenges.map((ch, idx) => {
               const isDone = completedKeys.has(ch.key);
               const isBusy = isCompleting.has(ch.key);
+              const current = axisCurrent(ch.axis);
+              // Iron Guard off-axis claim: day locked to another axis, slot
+              // open, this row's threshold met → manual claim (never auto).
+              const offAxisClaimable =
+                lockedAxis !== null &&
+                ch.axis !== lockedAxis &&
+                offAxisSlot.eligible &&
+                !offAxisSlot.used &&
+                current >= ch.target;
+              const axisNeedsKcalPerm = ch.axis === 'calories' && !hasKcalPerm;
               return (
                 <React.Fragment key={ch.key}>
                   {idx > 0 && <View style={styles.challengeDivider} />}
@@ -666,10 +916,12 @@ export default function ActivityScreen() {
                       <Text style={styles.challengeReward}>
                         {(() => {
                           const r = calcResourceEarn(ch.earnKey);
+                          const boosted = boostedAxes.includes(ch.axis);
+                          const mult = boosted ? THEME_BOOST_MULT : 1;
                           const parts = [];
                           parts.push(t('activity.rewardXp', { n: ch.xp }));
-                          if (r.stone > 0) parts.push(t('activity.rewardStone', { n: r.stone }));
-                          if (r.iron > 0) parts.push(t('activity.rewardIron', { n: r.iron }));
+                          if (r.stone > 0) parts.push(t('activity.rewardStone', { n: Math.round(r.stone * mult) }));
+                          if (r.iron > 0) parts.push(t('activity.rewardIron', { n: Math.round(r.iron * mult) }));
                           if (r.gold > 0) parts.push(t('activity.rewardGold', { n: r.gold }));
                           if (r.morale > 0) parts.push(t('activity.rewardMorale', { n: r.morale }));
                           return parts.join(' · ');
@@ -679,7 +931,7 @@ export default function ActivityScreen() {
                     <View style={styles.challengeAction}>
                       {isDone ? (
                         <Text style={styles.challengeDone}>{t('activity.done')}</Text>
-                      ) : DEV_MODE_MANUAL ? (
+                      ) : (DEV_MODE_MANUAL || offAxisClaimable) ? (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={t('activity.completeA11y', { difficulty: ch.difficulty })}
@@ -695,9 +947,11 @@ export default function ActivityScreen() {
                         </Pressable>
                       ) : !hasStepsPerm ? (
                         <Text style={styles.challengeLocked}>{t('activity.locked')}</Text>
+                      ) : axisNeedsKcalPerm ? (
+                        <Text style={styles.challengeLocked}>{t('activity.needsPermission')}</Text>
                       ) : (
                         <Text style={styles.challengeProgress}>
-                          {Math.min(liveSteps, ch.target).toLocaleString()} / {ch.target.toLocaleString()}
+                          {fmtAxisProgress(ch.axis, current, ch.target)}
                         </Text>
                       )}
                     </View>
@@ -707,6 +961,7 @@ export default function ActivityScreen() {
             })}
           </View>
         </View>
+        )}
 
         <View style={styles.achievementsBlock}>
           <View style={styles.achievementsSectionRow}>
@@ -905,6 +1160,77 @@ const styles = StyleSheet.create({
   },
   challengeBlock: {
     marginTop: spacing.lg,
+  },
+  themeBadge: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    color: colors.claim,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  axisChipRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  axisChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    paddingVertical: 7,
+    alignItems: 'center',
+    backgroundColor: colors.ink2,
+  },
+  axisChipViewing: {
+    borderColor: colors.bone,
+  },
+  axisChipLockedOut: {
+    opacity: 0.4,
+  },
+  axisChipText: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.1,
+  },
+  axisChipTextViewing: {
+    color: colors.bone,
+  },
+  axisChipTextLockedOut: {
+    color: colors.slate2,
+  },
+  commitBtn: {
+    marginBottom: spacing.sm,
+    backgroundColor: colors.claim,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  commitBtnText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 10,
+    color: colors.bone,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  attackDayCard: {
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink2,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  attackDayTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 18,
+    color: colors.bone,
+    textTransform: 'uppercase',
+  },
+  attackDayBody: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.slate2,
+    lineHeight: 18,
   },
   challengeHeaderRow: {
     flexDirection: 'row',
