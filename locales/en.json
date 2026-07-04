@@ -43,15 +43,45 @@
   },
   "medalLocked": "LOCKED",
   "medalName": {
-    "combat": { "first_blood": "FIRST BLOOD", "conqueror": "CONQUEROR", "trophy_hunter": "TROPHY HUNTER", "reclaimer": "RECLAIMER" },
-    "defense": { "the_wall": "THE WALL", "bulwark": "BULWARK", "guardian": "GUARDIAN", "immovable": "IMMOVABLE" },
-    "distance": { "pathfinder": "PATHFINDER", "iron_legs": "IRON LEGS", "daily_marcher": "DAILY MARCHER", "war_marcher": "WAR MARCHER" },
-    "endurance": { "unbroken": "UNBROKEN", "phoenix": "PHOENIX", "eternal": "ETERNAL", "time_served": "TIME SERVED" }
+    "combat": {
+      "first_blood": "FIRST BLOOD",
+      "conqueror": "CONQUEROR",
+      "trophy_hunter": "TROPHY HUNTER",
+      "reclaimer": "RECLAIMER"
+    },
+    "defense": {
+      "the_wall": "THE WALL",
+      "bulwark": "BULWARK",
+      "guardian": "GUARDIAN",
+      "immovable": "IMMOVABLE"
+    },
+    "distance": {
+      "pathfinder": "PATHFINDER",
+      "iron_legs": "IRON LEGS",
+      "daily_marcher": "DAILY MARCHER",
+      "war_marcher": "WAR MARCHER"
+    },
+    "endurance": {
+      "unbroken": "UNBROKEN",
+      "phoenix": "PHOENIX",
+      "eternal": "ETERNAL",
+      "time_served": "TIME SERVED"
+    }
   },
   "medalUnit": {
-    "defense": { "immovable": " days" },
-    "distance": { "pathfinder": " km", "iron_legs": " km", "daily_marcher": " days", "war_marcher": " km" },
-    "endurance": { "unbroken": " days", "time_served": " days" }
+    "defense": {
+      "immovable": " days"
+    },
+    "distance": {
+      "pathfinder": " km",
+      "iron_legs": " km",
+      "daily_marcher": " days",
+      "war_marcher": " km"
+    },
+    "endurance": {
+      "unbroken": " days",
+      "time_served": " days"
+    }
   },
   "medalCondition": {
     "combat": {
@@ -329,12 +359,42 @@
     "alertFailedTitle": "Failed",
     "alertFailedBody": "Could not activate ability. Try again.",
     "abilities": {
-      "warSurge": { "name": "WAR SURGE", "cost": "80 MORALE", "duration": "6 HOURS", "effect": "Attacker Iron costs −40% for all contests opened during window." },
-      "ironBulwark": { "name": "IRON BULWARK", "cost": "80 MORALE", "duration": "6 HOURS", "effect": "Contesting any alliance territory costs 40% more Iron." },
-      "rallyCry": { "name": "RALLY CRY", "cost": "60 MORALE", "duration": "12 HOURS", "effect": "Attackers walk 80% of the normal contest distance." },
-      "steadfast": { "name": "STEADFAST", "cost": "60 MORALE", "duration": "12 HOURS", "effect": "Defenders only need to walk 80% of attacker distance." },
-      "supplyLine": { "name": "SUPPLY LINE", "cost": "40 MORALE", "duration": "24 HOURS", "effect": "All resource earn events give +20% for all members." },
-      "unifiedFront": { "name": "UNIFIED FRONT", "cost": "100 MORALE", "duration": "48 HOURS", "effect": "No member can have their streak broken during this window." }
+      "warSurge": {
+        "name": "WAR SURGE",
+        "cost": "80 MORALE",
+        "duration": "6 HOURS",
+        "effect": "Attacker Iron costs −40% for all contests opened during window."
+      },
+      "ironBulwark": {
+        "name": "IRON BULWARK",
+        "cost": "80 MORALE",
+        "duration": "6 HOURS",
+        "effect": "Contesting any alliance territory costs 40% more Iron."
+      },
+      "rallyCry": {
+        "name": "RALLY CRY",
+        "cost": "60 MORALE",
+        "duration": "12 HOURS",
+        "effect": "Attackers walk 80% of the normal contest distance."
+      },
+      "steadfast": {
+        "name": "STEADFAST",
+        "cost": "60 MORALE",
+        "duration": "12 HOURS",
+        "effect": "Defenders only need to walk 80% of attacker distance."
+      },
+      "supplyLine": {
+        "name": "SUPPLY LINE",
+        "cost": "40 MORALE",
+        "duration": "24 HOURS",
+        "effect": "All resource earn events give +20% for all members."
+      },
+      "unifiedFront": {
+        "name": "UNIFIED FRONT",
+        "cost": "100 MORALE",
+        "duration": "48 HOURS",
+        "effect": "No member can have their streak broken during this window."
+      }
     }
   },
   "profile": {
@@ -421,7 +481,15 @@
   "activity": {
     "title": "ACTIVITY",
     "dayStreak": "{{n}} DAY STREAK",
-    "weekDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "weekDays": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat",
+      "Sun"
+    ],
     "permLabel": "HEALTH CONNECT",
     "permText": "Health data is locked. Grant Health Connect permissions (steps, active calories, distance) to start earning from daily challenges.",
     "permTextPartial": "Some Health Connect permissions are missing (active calories or distance). Grant them to unlock all challenge types.",
@@ -581,10 +649,26 @@
     "donate": "DONATE",
     "donateAll": "DONATE ALL · {{n}} MORALE",
     "resources": {
-      "iron": { "label": "IRON", "spend": "Spend to contest territories", "earn": "Earn from calorie challenges & contest wins" },
-      "stone": { "label": "STONE", "spend": "Spend to defend & develop territories", "earn": "Earn from step challenges & defence wins" },
-      "gold": { "label": "GOLD", "spend": "Spend to claim territories", "earn": "Earn from all challenges & claims" },
-      "morale": { "label": "MORALE", "spend": "Donate to alliance war chest", "earn": "Earn from challenges & alliance missions" }
+      "iron": {
+        "label": "IRON",
+        "spend": "Spend to contest territories",
+        "earn": "Earn from calorie challenges & contest wins"
+      },
+      "stone": {
+        "label": "STONE",
+        "spend": "Spend to defend & develop territories",
+        "earn": "Earn from step challenges & defence wins"
+      },
+      "gold": {
+        "label": "GOLD",
+        "spend": "Spend to claim territories",
+        "earn": "Earn from all challenges & claims"
+      },
+      "morale": {
+        "label": "MORALE",
+        "spend": "Donate to alliance war chest",
+        "earn": "Earn from challenges & alliance missions"
+      }
     }
   },
   "chat": {
@@ -803,18 +887,48 @@
     "takeCommand": "Take command",
     "enterAlliance": "Enter alliance →",
     "benefitsFounded": [
-      { "title": "Collective defence", "sub": "Alliance members can defend your territories." },
-      { "title": "Shared War Chest", "sub": "Pool resources to fund alliance abilities." },
-      { "title": "Alliance colour", "sub": "Alliance-held territories now display in Alliance green." },
-      { "title": "Alliance missions", "sub": "Weekly shared goals. Complete together for resources." },
-      { "title": "Recruit up to 19 Commanders", "sub": "Invite by username. Bring in players who haven't joined yet." }
+      {
+        "title": "Collective defence",
+        "sub": "Alliance members can defend your territories."
+      },
+      {
+        "title": "Shared War Chest",
+        "sub": "Pool resources to fund alliance abilities."
+      },
+      {
+        "title": "Alliance colour",
+        "sub": "Alliance-held territories now display in Alliance green."
+      },
+      {
+        "title": "Alliance missions",
+        "sub": "Weekly shared goals. Complete together for resources."
+      },
+      {
+        "title": "Recruit up to 19 Commanders",
+        "sub": "Invite by username. Bring in players who haven't joined yet."
+      }
     ],
     "benefitsJoined": [
-      { "title": "Collective defence", "sub": "Alliance members can defend your territories." },
-      { "title": "Shared War Chest", "sub": "Pool resources to fund alliance abilities." },
-      { "title": "Alliance colour", "sub": "Your territories now display in Alliance green." },
-      { "title": "Alliance missions", "sub": "Weekly shared goals. Complete together for resources." },
-      { "title": "Welcome the Commander", "sub": "Existing members will see you in their roster." }
+      {
+        "title": "Collective defence",
+        "sub": "Alliance members can defend your territories."
+      },
+      {
+        "title": "Shared War Chest",
+        "sub": "Pool resources to fund alliance abilities."
+      },
+      {
+        "title": "Alliance colour",
+        "sub": "Your territories now display in Alliance green."
+      },
+      {
+        "title": "Alliance missions",
+        "sub": "Weekly shared goals. Complete together for resources."
+      },
+      {
+        "title": "Welcome the Commander",
+        "sub": "Existing members will see you in their roster."
+      }
     ]
   },
   "map": {
@@ -904,5 +1018,77 @@
       "network": "Network issue. Try again.",
       "generic": "Something went wrong. Try again."
     }
+  },
+  "walkthrough": {
+    "skip": "SKIP",
+    "gotIt": "GOT IT",
+    "nextA11y": "Next tip",
+    "map": {
+      "kicker": "THE MAP",
+      "intro": "This is {{city}}. Every outlined shape is real territory that you can occupy by walking.",
+      "introNoCity": "This is your city. Every outlined shape is real territory that you can occupy by walking.",
+      "colours": "Empty territories are unclaimed. Red marks what you hold. Green marks your allies. Blue marks your rivals.",
+      "card": "Tap any territory to see its name, its owner, and the distance you'd walk to take it.",
+      "sideRail": "City chat, the leaderboards, and a live log of your activity in Dominia.",
+      "tabBar": "Activity pays you for moving. Alliance comes later. Profile is your record."
+    },
+    "activity": {
+      "streak": "Move every day and the streak grows. Longer streaks earn a bonus when attacking and defending territories.",
+      "health": "Dominia reads steps, distance, and calories from Health Connect. No data, no earnings.",
+      "challenges": "One discipline per day, Monday to Friday. Pick a tier, hit the number, collect the resources — the featured discipline pays extra.",
+      "achievements": "Your daily performance, measured against your best."
+    },
+    "alliance": {
+      "solo": "You fight solo for now. Alliances open at Level 3 — up to 20 Commanders holding land together.",
+      "list": "These alliances already hold ground in your city. Join when you are eligible, or found your own."
+    },
+    "profile": {
+      "identity": "This is how the city sees you — name, rank, record.",
+      "power": "Power is your total strength: activity, territory, and legacy combined.",
+      "xp": "Challenges and contests earn XP. Fill the bar, take the next rank.",
+      "territories": "Every territory you hold, listed here. It starts filling up when you claim territories.",
+      "resources": "Your war chest. Tap in to see what each resource buys."
+    },
+    "leaderboards": {
+      "boards": "Three boards — Power, Territory, Battles — ranked across your whole city.",
+      "toggle": "Flip between Commanders and Alliances."
+    },
+    "chat": {
+      "room": "City chat — every Commander in {{city}} can hear you. Alliance chat opens when you join one.",
+      "roomNoCity": "City chat — every Commander in your city can hear you. Alliance chat opens when you join one."
+    },
+    "activityLog": {
+      "feed": "Every claim, contest, and fall in the city, as it happens."
+    },
+    "wallet": {
+      "intro": "What you've earned and what it buys. Each card shows how to earn it and where to spend it."
+    }
+  },
+  "firstClaim": {
+    "kicker": "FIRST CLAIM · FREE",
+    "instruction": "Walk {{distance}} to claim {{name}}. Free.",
+    "cta": "LET'S WALK",
+    "tapClaim": "This is the one. Start the claim.",
+    "activeHint": "Walk the perimeter. The line fills as you go.",
+    "successKicker": "FIRST TERRITORY",
+    "successBody": "Your first territory. It pays Influence every day you hold it.",
+    "nudgeTitle": "Two more claims are free.",
+    "nudgeBody": "Nearby: {{a}} and {{b}}.",
+    "nudgeBodyOne": "Nearby: {{a}}.",
+    "claimAnother": "CLAIM ANOTHER",
+    "enough": "ENOUGH FOR TODAY"
+  },
+  "resourceIntro": {
+    "stone": "Stone earned. Spend it to defend and develop your territories.",
+    "iron": "Iron earned. Spend it to contest enemy territory.",
+    "gold": "Gold earned. Spend it to claim territory.",
+    "morale": "Morale earned. It feeds your alliance war chest — when you have one.",
+    "xp": "XP earned. Fill the bar, take the next rank.",
+    "influence": "Influence flows from every territory you hold."
+  },
+  "notifPrime": {
+    "title": "Dominia warns you when your land is under attack.",
+    "allow": "ALLOW NOTIFICATIONS",
+    "later": "NOT NOW"
   }
 }

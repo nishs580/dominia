@@ -3,7 +3,7 @@
 // Typography: Geist Mono 500 11px labels, Inter 500 14px names — mirrors ActivityLogScreen patterns.
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,6 +19,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { getLeaderboard } from '../lib/leaderboardApi';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 import { supabase } from '../lib/supabase';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 
@@ -147,6 +148,17 @@ function BattlesRow({ t, row, subject, isSelfRow }) {
 export default function LeaderboardsScreen() {
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
+
+  // First-view walkthrough targets (board strip + players/alliances strip).
+  const walkthroughBoardsRef = useRef(null);
+  const walkthroughSubjectRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'boards', text: t('walkthrough.leaderboards.boards'), getRect: () => rectFromRef(walkthroughBoardsRef) },
+      { key: 'toggle', text: t('walkthrough.leaderboards.toggle'), getRect: () => rectFromRef(walkthroughSubjectRef) },
+    ],
+    [t],
+  );
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const fetchSeqRef = useRef(0);
@@ -304,7 +316,7 @@ export default function LeaderboardsScreen() {
         <View style={styles.hairlineStrong} />
       </View>
 
-      <View style={styles.boardStrip}>
+      <View ref={walkthroughBoardsRef} collapsable={false} style={styles.boardStrip}>
         {(
           [
             { key: 'power', label: t('leaderboards.boardPower') },
@@ -328,7 +340,7 @@ export default function LeaderboardsScreen() {
       </View>
       <View style={styles.hairline} />
 
-      <View style={styles.subjectStrip}>
+      <View ref={walkthroughSubjectRef} collapsable={false} style={styles.subjectStrip}>
         {(
           [
             { key: 'players', label: t('leaderboards.subjectPlayers') },
@@ -352,6 +364,12 @@ export default function LeaderboardsScreen() {
       <View style={styles.hairline} />
 
       {renderBody()}
+
+      <WalkthroughOverlay
+        screenKey="leaderboards"
+        userId={userId}
+        steps={walkthroughSteps}
+      />
     </View>
   );
 }

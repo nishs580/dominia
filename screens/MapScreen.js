@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, PermissionsAndroid, Platform, Pressable, StatusBar, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -31,6 +31,10 @@ import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
 import { BASE_TIERS, baseTierForLevel, baseXml } from '../lib/homeBases';
 import { battleChipFor } from '../lib/battleChips';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import NotifPrimeModal from '../components/NotifPrimeModal';
+import { hasFired, markFired } from '../lib/walkthroughFlags';
+import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
 // stepping through these dasharrays reads as the border crawling).
@@ -137,7 +141,7 @@ function contestStartErrorMessage(t, error) {
   }
 }
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [] }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [], objectiveTerritoryId = null }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -506,6 +510,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           </Pressable>
 
           {/* Action buttons — kept from original logic */}
+          {isUnclaimed && !isAtCap && territory.id === objectiveTerritoryId && (
+            <Text style={styles.sheetObjectiveHint}>{t('firstClaim.tapClaim')}</Text>
+          )}
           {isUnclaimed && !isAtCap && (
             <Pressable
               accessibilityRole="button"
@@ -705,6 +712,38 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   );
 }
 
+// Pulsing claim-red ring anchored over the first-claim objective territory.
+// Pure attention device — taps fall through to the territory polygon below.
+function ObjectivePulse() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+        Animated.delay(500),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View pointerEvents="none" style={styles.objectivePulseWrap}>
+      <Animated.View
+        style={[
+          styles.objectivePulseRing,
+          {
+            opacity: pulse.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.9, 0] }),
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) }],
+          },
+        ]}
+      />
+      <View style={styles.objectivePulseCore} />
+    </View>
+  );
+}
+
 export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -745,6 +784,186 @@ export default function MapScreen() {
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
+  // ── First-run walkthrough + persistent first-claim objective ──────────────
+  const { width: winW, height: winH } = useWindowDimensions();
+  const mapWrapRef = useRef(null);
+  const sideRailWrapRef = useRef(null);
+  const [objective, setObjective] = useState(null);
+  const [heldCount, setHeldCount] = useState(null);
+  const [walkthroughRunning, setWalkthroughRunning] = useState(false);
+  const [showNotifPrime, setShowNotifPrime] = useState(false);
+
+  // Position is resolved server-side from the home pin — deterministic and
+  // matches where the first claim should feel grounded.
+  const fetchObjective = useCallback(async () => {
+    const res = await fetchFirstClaimObjective({ clerkGetToken: () => getTokenRef.current() });
+    if (!res.ok) {
+      // Never block the tour on a failed objective fetch — run it without the
+      // finale; the banner surfaces on a later successful refetch.
+      setHeldCount((prev) => (prev == null ? 0 : prev));
+      return;
+    }
+    setHeldCount(res.data.held_count ?? 0);
+    setObjective(res.data.target ?? null);
+  }, []);
+
+  const objectiveFeature = useMemo(() => {
+    if (!objective?.geojson) return null;
+    return {
+      type: 'Feature',
+      id: objective.id,
+      properties: {
+        id: objective.id,
+        name: objective.name,
+        owner: 'Unclaimed',
+        alliance: null,
+        tier: objective.tier ?? 'Small',
+        level: 'D0',
+        ownerStreak: 0,
+        streakBand: 'base',
+        developmentLevel: 0,
+        labelSub: '',
+        emblemIcon: '',
+        contested: false,
+        battleChip: '',
+        chipColor: SLATE2,
+        perimeter: objective.perimeter_distance,
+        color: 'transparent',
+      },
+      geometry: objective.geojson,
+    };
+  }, [objective]);
+
+  const objectiveActive = heldCount === 0 && objectiveFeature != null;
+
+  const openObjectiveSheet = useCallback(() => {
+    if (!objectiveFeature) return;
+    const cached = featureCacheRef.current.get(objectiveFeature.id);
+    setSelected({ feature: cached ?? objectiveFeature, allFeatures: territories.features });
+  }, [objectiveFeature, territories.features]);
+
+  const flyToObjective = useCallback(() => {
+    if (!objective) return;
+    if (cameraRef.current) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [objective.longitude, objective.latitude],
+        zoomLevel: 15,
+        animationDuration: 650,
+      });
+    }
+    setTimeout(openObjectiveSheet, 700);
+  }, [objective, openObjectiveSheet]);
+
+  // Final walkthrough step target: fly to the objective, then project its
+  // centre into window coordinates (map-view point + map-view window offset).
+  const objectiveStepRect = useCallback(async () => {
+    if (!objective || !mapRef.current || !cameraRef.current) return null;
+    cameraRef.current.setCamera({
+      centerCoordinate: [objective.longitude, objective.latitude],
+      zoomLevel: 15,
+      animationDuration: 700,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    let pt = null;
+    try {
+      pt = await mapRef.current.getPointInView([objective.longitude, objective.latitude]);
+    } catch {
+      return null;
+    }
+    const px = Array.isArray(pt) ? pt[0] : pt?.x;
+    const py = Array.isArray(pt) ? pt[1] : pt?.y;
+    if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+    const wrap = await rectFromRef(mapWrapRef);
+    return {
+      x: (wrap?.x ?? 0) + px - 70,
+      y: (wrap?.y ?? 0) + py - 70,
+      width: 140,
+      height: 140,
+    };
+  }, [objective]);
+
+  const walkthroughSteps = useMemo(() => {
+    const mapRect = async () => {
+      const wrap = await rectFromRef(mapWrapRef);
+      if (!wrap) return { x: 16, y: winH * 0.2, width: winW - 32, height: winH * 0.4 };
+      return { x: wrap.x + 14, y: wrap.y + wrap.height * 0.16, width: wrap.width - 28, height: wrap.height * 0.5 };
+    };
+    const city = myPlayer?.home_city;
+    const steps = [
+      {
+        key: 'intro',
+        kicker: t('walkthrough.map.kicker'),
+        text: city ? t('walkthrough.map.intro', { city }) : t('walkthrough.map.introNoCity'),
+        getRect: mapRect,
+      },
+      { key: 'colours', text: t('walkthrough.map.colours'), getRect: mapRect },
+      { key: 'card', text: t('walkthrough.map.card'), getRect: mapRect },
+      { key: 'sideRail', text: t('walkthrough.map.sideRail'), getRect: () => rectFromRef(sideRailWrapRef) },
+      {
+        key: 'tabBar',
+        text: t('walkthrough.map.tabBar'),
+        getRect: async () => ({ x: winW / 2 - 40, y: winH - 4, width: 80, height: 2 }),
+      },
+    ];
+    if (objective && heldCount === 0) {
+      steps.push({
+        key: 'objective',
+        kicker: t('firstClaim.kicker'),
+        text: t('firstClaim.instruction', {
+          distance: formatWalkDistance(objective.distance_m),
+          name: objective.name,
+        }),
+        cta: t('firstClaim.cta'),
+        getRect: objectiveStepRect,
+      });
+    }
+    return steps;
+  }, [heldCount, myPlayer?.home_city, objective, objectiveStepRect, t, winH, winW]);
+
+  // Prime for the notification permission right after the tour — but never
+  // show it to someone who already granted the OS permission.
+  const maybeShowNotifPrime = useCallback(async () => {
+    if (!userId) return;
+    if (await hasFired(userId, 'notifPrime')) return;
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      try {
+        const granted = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        if (granted) {
+          markFired(userId, 'notifPrime');
+          markFired(userId, 'notifAllow');
+          return;
+        }
+      } catch {
+        // Fall through to priming.
+      }
+      setShowNotifPrime(true);
+    } else {
+      // No runtime notification prompt to prime for on this platform.
+      markFired(userId, 'notifPrime');
+      markFired(userId, 'notifAllow');
+    }
+  }, [userId]);
+
+  // Sessions where the map tour already fired but the prime was never
+  // answered (e.g. app killed between the two) still get the prime.
+  useEffect(() => {
+    if (heldCount === null || !userId) return;
+    (async () => {
+      if (await hasFired(userId, 'map')) maybeShowNotifPrime();
+    })();
+  }, [heldCount, maybeShowNotifPrime, userId]);
+
+  const objectiveFillStyle = useMemo(
+    () => ({ fillColor: CLAIM, fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
+    [],
+  );
+  const objectiveLineStyle = useMemo(
+    () => ({ lineColor: CLAIM, lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
+    [],
+  );
+
   const showTopBanner = useCallback((message) => {
     setTopBannerMessage(message);
   }, []);
@@ -784,7 +1003,7 @@ export default function MapScreen() {
   const fetchPlayer = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, home_pin_lat, home_pin_lng')
+      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, home_pin_lat, home_pin_lng, home_city')
       .eq('clerk_id', userId)
       .maybeSingle();
     setMyPlayer(playerRow);
@@ -1159,7 +1378,10 @@ export default function MapScreen() {
     useCallback(() => {
       fetchResourceBanner();
       fetchPlayer();
-    }, [fetchResourceBanner, fetchPlayer])
+      // Re-check on every focus: the objective clears itself the moment the
+      // first claim lands (held_count > 0) and persists across sessions until.
+      fetchObjective();
+    }, [fetchResourceBanner, fetchPlayer, fetchObjective])
   );
 
   // Center the map on the player's home pin the first time it becomes available.
@@ -1520,6 +1742,21 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
+      {objectiveActive && !walkthroughRunning ? (
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.objectiveBanner, pressed && { opacity: 0.9 }]}
+          onPress={flyToObjective}
+        >
+          <Text style={styles.objectiveBannerKicker}>{t('firstClaim.kicker')}</Text>
+          <Text style={styles.objectiveBannerText}>
+            {t('firstClaim.instruction', {
+              distance: formatWalkDistance(objective.distance_m),
+              name: objective.name,
+            })}
+          </Text>
+        </Pressable>
+      ) : null}
       {topBannerMessage ? (
         <View style={styles.topBanner}>
           <Text style={styles.topBannerText}>{topBannerMessage}</Text>
@@ -1533,6 +1770,7 @@ export default function MapScreen() {
           </View>
         </View>
       ) : null}
+      <View ref={mapWrapRef} collapsable={false} style={styles.map}>
       <MapboxGL.MapView
         ref={mapRef}
         style={styles.map}
@@ -1621,7 +1859,24 @@ export default function MapScreen() {
           <MapboxGL.SymbolLayer id="bases-icons" slot="top" minZoomLevel={12} style={baseIconStyle} />
           <MapboxGL.SymbolLayer id="bases-pennants" slot="top" minZoomLevel={13} filter={pennantFilter} style={pennantStyle} />
         </MapboxGL.ShapeSource>
+
+        {objectiveActive ? (
+          <MapboxGL.ShapeSource id="first-claim-objective" shape={objectiveFeature} onPress={openObjectiveSheet}>
+            <MapboxGL.FillLayer id="objective-fill" style={objectiveFillStyle} />
+            <MapboxGL.LineLayer id="objective-line" style={objectiveLineStyle} />
+          </MapboxGL.ShapeSource>
+        ) : null}
+        {objectiveActive && selected == null ? (
+          <MapboxGL.MarkerView
+            coordinate={[objective.longitude, objective.latitude]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <ObjectivePulse />
+          </MapboxGL.MarkerView>
+        ) : null}
       </MapboxGL.MapView>
+      </View>
 
       <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
         <Text style={styles.locateIcon}>⌖</Text>
@@ -1639,8 +1894,33 @@ export default function MapScreen() {
         setMyPlayer={setMyPlayer}
         getTokenRef={getTokenRef}
         showTopBanner={showTopBanner}
+        objectiveTerritoryId={objectiveActive ? objective.id : null}
       />
-      <MapSideRail hidden={selected != null} />
+      <MapSideRail hidden={selected != null} wrapRef={sideRailWrapRef} />
+
+      <WalkthroughOverlay
+        screenKey="map"
+        userId={userId}
+        steps={walkthroughSteps}
+        enabled={heldCount !== null && myPlayer != null}
+        onStart={() => setWalkthroughRunning(true)}
+        onDone={() => {
+          setWalkthroughRunning(false);
+          maybeShowNotifPrime();
+        }}
+      />
+      <NotifPrimeModal
+        visible={showNotifPrime}
+        onAllow={() => {
+          setShowNotifPrime(false);
+          markFired(userId, 'notifPrime');
+          markFired(userId, 'notifAllow');
+        }}
+        onLater={() => {
+          setShowNotifPrime(false);
+          markFired(userId, 'notifPrime');
+        }}
+      />
     </View>
   );
 }
@@ -1654,6 +1934,56 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+
+  objectiveBanner: {
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: CLAIM,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 0,
+  },
+  objectiveBannerKicker: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    color: CLAIM,
+    letterSpacing: 1.4,
+    marginBottom: 2,
+  },
+  objectiveBannerText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: BONE,
+    letterSpacing: 0.4,
+  },
+  sheetObjectiveHint: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    color: CLAIM,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  objectivePulseWrap: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  objectivePulseRing: {
+    position: 'absolute',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: CLAIM,
+  },
+  objectivePulseCore: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: CLAIM,
   },
 
   topBanner: {

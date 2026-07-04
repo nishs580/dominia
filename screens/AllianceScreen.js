@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/alli
 import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -175,6 +176,7 @@ function NonMemberContent({
   joinSaving,
   setJoinSaving,
   getToken,
+  listWrapRef,
 }) {
   const { t } = useTranslation();
   const [joinError, setJoinError] = useState('');
@@ -260,7 +262,7 @@ function NonMemberContent({
   // Empty list state
   if (!alliances?.length) {
     return (
-      <View style={styles.scroll}>
+      <View ref={listWrapRef} collapsable={false} style={styles.scroll}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.alliancesIn')}</Text>
           <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
@@ -286,7 +288,7 @@ function NonMemberContent({
 
   // Default — list view
   return (
-    <View style={styles.scroll}>
+    <View ref={listWrapRef} collapsable={false} style={styles.scroll}>
       <View style={styles.sectionRow}>
         <Text style={styles.sectionLabelText}>{t('alliance.alliancesIn')}</Text>
         <Text style={styles.sectionLabelAccent}> {playerHomeCity ?? '—'}</Text>
@@ -1143,6 +1145,18 @@ export default function AllianceScreen() {
 
   const isMember = Boolean(myAlliance?.id);
 
+  // First-view walkthrough (unaffiliated state only — both targets are absent
+  // for members, so every step self-skips and the tour simply never runs).
+  const walkthroughHeaderRef = useRef(null);
+  const walkthroughListRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'solo', text: t('walkthrough.alliance.solo'), getRect: () => rectFromRef(walkthroughHeaderRef) },
+      { key: 'list', text: t('walkthrough.alliance.list'), getRect: () => rectFromRef(walkthroughListRef) },
+    ],
+    [t],
+  );
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered]}>
@@ -1202,7 +1216,7 @@ export default function AllianceScreen() {
         </View>
       )}
       {!isMember && !confirmAlliance && (
-        <View style={styles.header}>
+        <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
           <HeaderKicker>{t('alliance.kicker')}</HeaderKicker>
           <Text style={styles.headerTitle}>{t('alliance.noAllianceTitle')}</Text>
           <Text style={styles.headerSubtitle}>{t('alliance.unaffiliated')}</Text>
@@ -1241,8 +1255,16 @@ export default function AllianceScreen() {
           joinSaving={joinSaving}
           setJoinSaving={setJoinSaving}
           getToken={getToken}
+          listWrapRef={walkthroughListRef}
         />
       )}
+
+      <WalkthroughOverlay
+        screenKey="alliance"
+        userId={userId}
+        enabled={!loading && !isMember}
+        steps={walkthroughSteps}
+      />
     </View>
   );
 }

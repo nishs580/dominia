@@ -28,6 +28,7 @@ import {
   patchReadState,
   postMessage,
 } from '../lib/chatApi';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 import {
   connectChatRealtime,
   disconnectChatRealtime,
@@ -50,7 +51,16 @@ function genClientTempId() {
 
 export default function ChatScreen() {
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
+
+  // First-view walkthrough — single step over the room tabs.
+  const walkthroughTabsRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'room', text: t('walkthrough.chat.roomNoCity'), getRect: () => rectFromRef(walkthroughTabsRef) },
+    ],
+    [t],
+  );
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const navigation = useNavigation();
@@ -450,7 +460,7 @@ export default function ChatScreen() {
         <View style={styles.hairlineStrong} />
       </View>
 
-      <View style={styles.tabStrip}>
+      <View ref={walkthroughTabsRef} collapsable={false} style={styles.tabStrip}>
         {(
           [
             { key: 'city', label: t('chat.tabCity'), visible: true },
@@ -526,6 +536,8 @@ export default function ChatScreen() {
           </View>
         </View>
       ) : null}
+
+      <WalkthroughOverlay screenKey="chat" userId={userId} steps={walkthroughSteps} />
     </KeyboardAvoidingView>
   );
 }

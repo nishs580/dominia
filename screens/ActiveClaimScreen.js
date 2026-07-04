@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useRef } from 'react';
+import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
@@ -15,6 +15,7 @@ import {
 } from 'react-native-health-connect';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
+import { hasFired, markFired } from '../lib/walkthroughFlags';
 import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
@@ -348,7 +349,21 @@ export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
+
+  // One-time first-walk hint (fires once per player, ever — the first claim
+  // walk is the only time the fill mechanic needs words).
+  const [showFirstWalkHint, setShowFirstWalkHint] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (await hasFired(userId, 'activeClaimHint')) return;
+      if (cancelled) return;
+      markFired(userId, 'activeClaimHint');
+      setShowFirstWalkHint(true);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
@@ -696,6 +711,9 @@ export default function ActiveClaimScreen() {
             <Text style={styles.metresText}>{`${formatMetres(claimState.distanceM)} / ${formatMetres(progressThresholdM)} m`}</Text>
           </View>
         </View>
+        {showFirstWalkHint ? (
+          <Text style={styles.firstWalkHint}>{t('firstClaim.activeHint')}</Text>
+        ) : null}
       </View>
 
       <View style={styles.statsPanel}>
@@ -781,6 +799,7 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },
   statValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 14, letterSpacing: 0.2 },
 
+  firstWalkHint: { fontFamily: 'Inter_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
   bannerZone: { marginTop: 12, minHeight: 36 },
   banner: { borderWidth: 1, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'transparent' },
   bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },

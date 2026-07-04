@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import {
   GoldGlyph,
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 
 const INK = '#0E1014';
 const BONE = '#F2EEE6';
@@ -52,7 +53,17 @@ function SectionDivider({ label }) {
 export default function WalletScreen({ route }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
+
+  // First-view walkthrough — single step; the resource cards carry their own
+  // permanent earn/spend lines, so no per-resource copy here.
+  const walkthroughWalletRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'intro', text: t('walkthrough.wallet.intro'), getRect: () => rectFromRef(walkthroughWalletRef) },
+    ],
+    [t],
+  );
   const { playerId = null, username = '' } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
@@ -165,7 +176,7 @@ export default function WalletScreen({ route }) {
 
         {!loading && !error ? (
           <>
-            <View style={styles.walletBlock}>
+            <View ref={walkthroughWalletRef} collapsable={false} style={styles.walletBlock}>
               <SectionDivider label={t('wallet.walletSection')} />
               {RESOURCES.map((r, index) => (
                 <View key={r.key}>
@@ -214,6 +225,13 @@ export default function WalletScreen({ route }) {
           </>
         ) : null}
       </ScrollView>
+
+      <WalkthroughOverlay
+        screenKey="wallet"
+        userId={userId}
+        enabled={!loading}
+        steps={walkthroughSteps}
+      />
 
       <Modal
         visible={donateModalVisible}

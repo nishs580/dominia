@@ -23,7 +23,7 @@ function withCount(base, count) {
   return `${base} · ${count}`;
 }
 
-export default function MapSideRail({ hidden = false }) {
+export default function MapSideRail({ hidden = false, wrapRef }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const { getToken } = useAuth();
@@ -64,7 +64,7 @@ export default function MapSideRail({ hidden = false }) {
   ];
 
   return (
-    <View style={styles.container}>
+    <View ref={wrapRef} collapsable={false} style={styles.container}>
       {items.map((item, i) => (
         <Pressable
           key={item.key}

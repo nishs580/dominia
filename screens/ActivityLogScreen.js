@@ -4,7 +4,7 @@
 // Territory colors: delegated to ActivityLogEvent row accent bars (Claim, Alliance, Enemy, Slate)
 // Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen, end-of-list signaled by hairline + Geist Mono label (grids are visible — brand rule).
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,10 +19,20 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import ActivityLogEvent from '../components/ActivityLogEvent';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 
 export default function ActivityLogScreen() {
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
+
+  // First-view walkthrough — single step over the header.
+  const walkthroughHeaderRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'feed', text: t('walkthrough.activityLog.feed'), getRect: () => rectFromRef(walkthroughHeaderRef) },
+    ],
+    [t],
+  );
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
@@ -127,7 +137,7 @@ export default function ActivityLogScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
         <Text style={styles.sectionLabel}>{t('activityLog.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
@@ -147,6 +157,8 @@ export default function ActivityLogScreen() {
           />
         }
       />
+
+      <WalkthroughOverlay screenKey="activityLog" userId={userId} steps={walkthroughSteps} />
     </View>
   );
 }

@@ -4,6 +4,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { completeClaim } from '../lib/claimApi';
+import { fetchFirstClaimObjective } from '../lib/firstClaimApi';
+import { markFired } from '../lib/walkthroughFlags';
+import { maybeExplainResources } from '../lib/resourceIntro';
 
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
@@ -27,9 +30,10 @@ export default function ClaimSuccessScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+  const [isFirstClaim, setIsFirstClaim] = useState(false);
 
   const {
     territoryName = t('common.territoryFallback'),
@@ -57,12 +61,30 @@ export default function ClaimSuccessScreen() {
       if (cancelled) return;
       if (result.ok) {
         setEnvelope(result.data);
+        if (result.data?.already_completed === false) {
+          // First-earn education: gold + XP land on every claim; one lesson max.
+          maybeExplainResources(userId, {
+            xp: result.data?.xp_awarded,
+            gold: result.data?.resources_awarded?.gold,
+          });
+          // held_count === 1 right after completion means this was the first
+          // claim ever — switch the screen to its first-claim variant.
+          const objective = await fetchFirstClaimObjective({
+            clerkGetToken: () => getTokenRef.current(),
+          });
+          if (!cancelled && objective.ok && objective.data?.held_count === 1) {
+            setIsFirstClaim(true);
+            // The first-claim copy already teaches Influence — flag it so the
+            // earn-moment toast never repeats the lesson (shared fires-once).
+            markFired(userId, 'resource:influence');
+          }
+        }
       } else {
         setCompleteError({ code: result.code, context: result.context, status: result.status });
       }
     })();
     return () => { cancelled = true; };
-  }, [territoryId, playerId]);
+  }, [territoryId, playerId, userId]);
 
   const handleRetry = async () => {
     setCompleteError(null);
@@ -166,6 +188,9 @@ export default function ClaimSuccessScreen() {
         <Animated.View style={[styles.center, animatedStyle]}>
           <View style={styles.iconSquare} />
 
+          {isFirstClaim ? (
+            <Text style={styles.firstClaimKicker}>{t('firstClaim.successKicker')}</Text>
+          ) : null}
           <Text style={styles.territory}>{territoryName}</Text>
           <Text style={styles.territoryCaption}>{t('claimSuccess.isYours')}</Text>
           {showRewardBeats ? (
@@ -178,7 +203,9 @@ export default function ClaimSuccessScreen() {
               ) : null}
             </>
           ) : null}
-          <Text style={styles.message}>{t('claimSuccess.defendIt')}</Text>
+          <Text style={styles.message}>
+            {isFirstClaim ? t('firstClaim.successBody') : t('claimSuccess.defendIt')}
+          </Text>
 
           <View style={styles.cardsRow}>
             <View style={styles.card}>
@@ -328,14 +355,37 @@ export default function ClaimSuccessScreen() {
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('claimSuccess.backToMap')}
-        onPress={() => navigation.navigate('MainTabs')}
-        style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
-      >
-        <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>
-      </Pressable>
+      {isFirstClaim && !completeError ? (
+        // Expansion nudge (spec step 9): claims 2 and 3 stay optional.
+        <View style={styles.nudgeCard}>
+          <Text style={styles.nudgeTitle}>{t('firstClaim.nudgeTitle')}</Text>
+          <View style={styles.nudgeButtonsRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('MainTabs')}
+              style={({ pressed }) => [styles.nudgePrimary, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.ctaText}>{t('firstClaim.claimAnother')}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('MainTabs')}
+              style={({ pressed }) => [styles.nudgeSecondary, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.nudgeSecondaryText}>{t('firstClaim.enough')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('claimSuccess.backToMap')}
+          onPress={() => navigation.navigate('MainTabs')}
+          style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -467,6 +517,64 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  firstClaimKicker: {
+    fontFamily: 'GeistMono_500Medium',
+    color: CLAIM,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+
+  nudgeCard: {
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
+    padding: 14,
+  },
+
+  nudgeTitle: {
+    fontFamily: 'Inter_500Medium',
+    color: BONE,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+
+  nudgeButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  nudgePrimary: {
+    flex: 1,
+    backgroundColor: CLAIM,
+    borderRadius: 0,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  nudgeSecondary: {
+    flex: 1,
+    backgroundColor: INK,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  nudgeSecondaryText: {
+    fontFamily: 'GeistMono_500Medium',
+    color: SLATE2,
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
 
   ctaText: {

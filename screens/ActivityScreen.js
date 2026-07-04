@@ -44,6 +44,8 @@ function levelFromXp(xp) {
   return { level, title: getLevelTitle(level) };
 }
 import { colors, fonts, spacing } from '../lib/theme';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { maybeExplainResources } from '../lib/resourceIntro';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
 
@@ -219,6 +221,33 @@ export default function ActivityScreen() {
   const { t, i18n } = useTranslation();
   const weekDayLabels = useMemo(() => t('activity.weekDays', { returnObjects: true }), [t]);
   const { userId, getToken } = useAuth();
+
+  // First-view walkthrough targets. The perm-card step self-skips when the
+  // card isn't rendered (permissions already granted) — its ref stays null.
+  const walkthroughHeaderRef = useRef(null);
+  const walkthroughPermRef = useRef(null);
+  const walkthroughChallengesRef = useRef(null);
+  const walkthroughAchievementsRef = useRef(null);
+  const walkthroughScrollRef = useRef(null);
+  const walkthroughSteps = useMemo(
+    () => [
+      { key: 'streak', text: t('walkthrough.activity.streak'), getRect: () => rectFromRef(walkthroughHeaderRef) },
+      { key: 'health', text: t('walkthrough.activity.health'), getRect: () => rectFromRef(walkthroughPermRef) },
+      { key: 'challenges', text: t('walkthrough.activity.challenges'), getRect: () => rectFromRef(walkthroughChallengesRef) },
+      {
+        key: 'achievements',
+        text: t('walkthrough.activity.achievements'),
+        getRect: async () => {
+          // Below the fold on most screens — bring it into view first.
+          walkthroughScrollRef.current?.scrollToEnd({ animated: true });
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          return rectFromRef(walkthroughAchievementsRef);
+        },
+      },
+    ],
+    [t],
+  );
+
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -543,6 +572,14 @@ export default function ActivityScreen() {
       setPlayerLevel(levelFromXp(d.total_xp));
       setCurrentStreak(d.streak.current);
 
+      // First-earn resource education (one lesson per completion, fires once
+      // per resource per player — see lib/resourceIntro.js).
+      try {
+        maybeExplainResources(userId, { xp: ch.xp, ...calcResourceEarn(ch.earnKey) });
+      } catch {
+        // Unknown earnKey must never break the completion path.
+      }
+
       if (d.streak_re_entry === true) {
         Toast.show({
           type: 'info',
@@ -792,7 +829,7 @@ export default function ActivityScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.headerBlock}>
+      <View ref={walkthroughHeaderRef} collapsable={false} style={styles.headerBlock}>
         <Text style={styles.commanderLabel}>{formatToday(today, i18n.language)}</Text>
         <Text style={styles.commanderName}>{t('activity.title')}</Text>
         <Text style={styles.rankLine}>
@@ -804,12 +841,13 @@ export default function ActivityScreen() {
       </View>
 
       <ScrollView
+        ref={walkthroughScrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {hcReady && !(hasStepsPerm && hasKcalPerm && hasDistPerm) ? (
-          <View style={styles.permBanner}>
+          <View ref={walkthroughPermRef} collapsable={false} style={styles.permBanner}>
             <Text style={styles.permBannerLabel}>{t('activity.permLabel')}</Text>
             <Text style={styles.permBannerText}>
               {!hasStepsPerm ? t('activity.permText') : t('activity.permTextPartial')}
@@ -845,7 +883,7 @@ export default function ActivityScreen() {
         ) : null}
 
         {!isChallengeDay ? (
-          <View style={styles.challengeBlock}>
+          <View ref={walkthroughChallengesRef} collapsable={false} style={styles.challengeBlock}>
             <View style={styles.challengeHeaderRow}>
               <Text style={styles.challengeSectionLabel}>{t('activity.attackDay')}</Text>
               <View style={styles.challengeHairline} />
@@ -856,7 +894,7 @@ export default function ActivityScreen() {
             </View>
           </View>
         ) : (
-        <View style={styles.challengeBlock}>
+        <View ref={walkthroughChallengesRef} collapsable={false} style={styles.challengeBlock}>
           <View style={styles.challengeHeaderRow}>
             <Text style={styles.challengeSectionLabel}>{t('activity.dailyChallenges')}</Text>
             <View style={styles.challengeHairline} />
@@ -1000,7 +1038,7 @@ export default function ActivityScreen() {
         </View>
         )}
 
-        <View style={styles.achievementsBlock}>
+        <View ref={walkthroughAchievementsRef} collapsable={false} style={styles.achievementsBlock}>
           <View style={styles.achievementsSectionRow}>
             <Text style={styles.achievementsSectionLabel}>{t('activity.dailyAchievements')}</Text>
             <View style={styles.achievementsHairline} />
@@ -1037,6 +1075,13 @@ export default function ActivityScreen() {
           <WeeklyBarChart data={weekly} />
         </View>
       </ScrollView>
+
+      <WalkthroughOverlay
+        screenKey="activity"
+        userId={userId}
+        enabled={challengesLoaded}
+        steps={walkthroughSteps}
+      />
     </View>
   );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { supabase } from '../lib/supabase';
+import { hasFired, onWalkthroughFired } from '../lib/walkthroughFlags';
 import Toast from 'react-native-toast-message';
 import {
   registerFcmToken,
@@ -17,6 +19,50 @@ import i18n from '../i18n';
 export default function FcmLifecycle() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const [hasOnboarded, setHasOnboarded] = useState(null);
+  // First-run sequencing: on Android 13+ fresh installs, hold FCM registration
+  // (whose side effect is the OS notification prompt) until the player answers
+  // the in-app prime that follows the map walkthrough. Anyone who already
+  // granted the permission registers immediately — no change for existing users.
+  const [notifReady, setNotifReady] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setNotifReady(false);
+      return undefined;
+    }
+    if (Platform.OS !== 'android' || Platform.Version < 33) {
+      setNotifReady(true);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const granted = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        if (!cancelled && granted) {
+          setNotifReady(true);
+          return;
+        }
+      } catch {
+        // Treat a failed check as not granted and wait for the prime.
+      }
+      if (!cancelled && (await hasFired(userId, 'notifAllow'))) {
+        setNotifReady(true);
+      }
+    })();
+
+    const unsubscribe = onWalkthroughFired(({ name }) => {
+      if (name === 'notifAllow') setNotifReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +101,7 @@ export default function FcmLifecycle() {
   }, [getToken]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !userId || hasOnboarded !== true) {
+    if (!isLoaded || !isSignedIn || !userId || hasOnboarded !== true || !notifReady) {
       return;
     }
 
@@ -80,7 +126,7 @@ export default function FcmLifecycle() {
     return () => {
       unsubscribe();
     };
-  }, [isLoaded, isSignedIn, userId, hasOnboarded]);
+  }, [isLoaded, isSignedIn, userId, hasOnboarded, notifReady]);
 
   // Effect 3 — foreground push (app open).
   useEffect(() => {

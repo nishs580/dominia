@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, Image, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
+import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
 import {
   calcLevel,
   calcLevelProgress,
@@ -126,6 +127,40 @@ export default function ProfileScreen() {
   const { t } = useTranslation();
   const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
+
+  // First-view walkthrough targets. Sections below the fold are scrolled into
+  // view before measuring (measureInWindow returns window coordinates, so the
+  // current scroll offset feeds the reveal maths).
+  const walkthroughIdentityRef = useRef(null);
+  const walkthroughPowerRef = useRef(null);
+  const walkthroughXpRef = useRef(null);
+  const walkthroughTerritoriesRef = useRef(null);
+  const walkthroughResourcesRef = useRef(null);
+  const walkthroughScrollRef = useRef(null);
+  const walkthroughScrollY = useRef(0);
+
+  const walkthroughSteps = useMemo(() => {
+    const reveal = async (ref) => {
+      let rect = await rectFromRef(ref);
+      if (!rect) return null;
+      const winH = Dimensions.get('window').height;
+      const visibleBottom = winH - 140;
+      if (rect.y < 80 || rect.y + Math.min(rect.height, 220) > visibleBottom) {
+        const targetY = Math.max(0, walkthroughScrollY.current + rect.y - winH * 0.28);
+        walkthroughScrollRef.current?.scrollTo({ y: targetY, animated: true });
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        rect = await rectFromRef(ref);
+      }
+      return rect;
+    };
+    return [
+      { key: 'identity', text: t('walkthrough.profile.identity'), getRect: () => rectFromRef(walkthroughIdentityRef) },
+      { key: 'power', text: t('walkthrough.profile.power'), getRect: () => reveal(walkthroughPowerRef) },
+      { key: 'xp', text: t('walkthrough.profile.xp'), getRect: () => reveal(walkthroughXpRef) },
+      { key: 'territories', text: t('walkthrough.profile.territories'), getRect: () => reveal(walkthroughTerritoriesRef) },
+      { key: 'resources', text: t('walkthrough.profile.resources'), getRect: () => reveal(walkthroughResourcesRef) },
+    ];
+  }, [t]);
   const { user } = useUser();
 
   const [loading, setLoading] = useState(true);
@@ -374,6 +409,7 @@ export default function ProfileScreen() {
     <View style={styles.screen}>
       {!loading && playerRow ? (
         <Pressable
+          ref={walkthroughIdentityRef}
           style={styles.headerBlock}
           onLongPress={() => navigation.navigate('HealthConnectDebug')}
           delayLongPress={1000}
@@ -418,7 +454,13 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={walkthroughScrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        onScroll={(e) => { walkthroughScrollY.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+      >
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
@@ -434,7 +476,7 @@ export default function ProfileScreen() {
 
         {!loading && playerRow ? (
           <>
-          <View style={styles.powerSection}>
+          <View ref={walkthroughPowerRef} collapsable={false} style={styles.powerSection}>
             <View style={styles.influenceHeader}>
               <Text style={styles.influenceLabel}>{t('profile.power')}</Text>
               <View style={styles.influenceHairline} />
@@ -532,7 +574,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View ref={walkthroughXpRef} collapsable={false} style={styles.card}>
             <SectionDivider label={t('profile.xpProgress')} />
             <Text style={styles.xpNumbers}>
               {t('profile.xpNumbers', { into: xpIntoLevel, needed: xpNeeded })}
@@ -552,7 +594,7 @@ export default function ProfileScreen() {
             <Text style={styles.unlockText}>{unlockText}</Text>
           </View>
 
-          <View>
+          <View ref={walkthroughTerritoriesRef} collapsable={false}>
             <View style={{ marginTop: 24 }}>
               <SectionDivider label={t('profile.yourTerritories')} />
             </View>
@@ -579,7 +621,7 @@ export default function ProfileScreen() {
 
       {!loading ? (
         <>
-          <View style={styles.walletSection}>
+          <View ref={walkthroughResourcesRef} collapsable={false} style={styles.walletSection}>
             <SectionDivider label={t('profile.resources')} />
             <Pressable
               style={styles.walletButton}
@@ -637,6 +679,13 @@ export default function ProfileScreen() {
         </>
       ) : null}
       </ScrollView>
+
+      <WalkthroughOverlay
+        screenKey="profile"
+        userId={userId}
+        enabled={!loading && playerRow != null}
+        steps={walkthroughSteps}
+      />
     </View>
   );
 }
