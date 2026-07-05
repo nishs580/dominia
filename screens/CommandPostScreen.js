@@ -184,38 +184,47 @@ function WeeklyOrders({ menu, pickSaving, onPick, t }) {
           {menu.cards.map((card) => {
             const selected = card.task_type === currentPick;
             return (
-              <Pressable
+              <View
                 key={card.task_type}
-                disabled={!menu.can_pick || pickSaving}
-                onPress={() => onPick(card.task_type)}
-                style={({ pressed }) => [
-                  styles.orderCard,
-                  selected && styles.orderCardSelected,
-                  pressed && { opacity: 0.75 },
-                ]}
+                style={[styles.orderCard, selected && styles.orderCardSelected]}
               >
-                <View style={styles.orderTopRow}>
-                  <Text style={[styles.orderName, selected && styles.orderNameSelected]}>
-                    {t(`weeklyTask.name.${card.task_type}`)}
+                <View style={styles.orderBody}>
+                  <View style={styles.orderTopRow}>
+                    <Text style={styles.orderName}>
+                      {t(`weeklyTask.name.${card.task_type}`)}
+                    </Text>
+                  </View>
+                  <Text style={styles.orderMeta}>
+                    {t('weeklyTask.quotaLine', {
+                      quota: formatTaskValue(t, card.unit, card.per_member_quota),
+                    })}
+                    {'  ·  '}
+                    {t('weeklyTask.projectedLine', {
+                      target: formatTaskValue(t, card.unit, card.projected_target),
+                      n: menu.live_member_count,
+                    })}
                   </Text>
-                  {selected ? (
-                    <Text style={styles.orderSelectedTag}>{t('weeklyTask.pickedTag')}</Text>
-                  ) : null}
+                  <Text style={styles.orderReward}>
+                    {t('weeklyTask.rewardLabel')} {rewardLine(t, card.personal_payout)}
+                  </Text>
                 </View>
-                <Text style={styles.orderMeta}>
-                  {t('weeklyTask.quotaLine', {
-                    quota: formatTaskValue(t, card.unit, card.per_member_quota),
-                  })}
-                  {'  ·  '}
-                  {t('weeklyTask.projectedLine', {
-                    target: formatTaskValue(t, card.unit, card.projected_target),
-                    n: menu.live_member_count,
-                  })}
-                </Text>
-                <Text style={styles.orderReward}>
-                  {t('weeklyTask.rewardLabel')} {rewardLine(t, card.personal_payout)}
-                </Text>
-              </Pressable>
+                {selected ? (
+                  <View style={styles.chosenTagBox}>
+                    <Text style={styles.orderSelectedTag}>{t('weeklyTask.pickedTag')}</Text>
+                  </View>
+                ) : menu.can_pick ? (
+                  <Pressable
+                    disabled={pickSaving}
+                    onPress={() => onPick(card.task_type)}
+                    style={({ pressed }) => [
+                      styles.chooseBtn,
+                      (pressed || pickSaving) && { opacity: 0.6 },
+                    ]}
+                  >
+                    <Text style={styles.chooseBtnText}>{t('weeklyTask.chooseBtn')}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             );
           })}
           <Text style={styles.radarFootnote}>
@@ -574,15 +583,33 @@ const styles = StyleSheet.create({
     borderColor: colors.hairlineStrong,
     padding: spacing.md,
     marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   orderCardSelected: { borderColor: colors.claim, borderLeftWidth: 2, borderLeftColor: colors.claim },
+  orderBody: { flex: 1 },
   orderTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   orderName: { fontFamily: fonts.bodyMedium, fontSize: fontSize.base, color: colors.bone },
-  orderNameSelected: { color: colors.bone },
   orderSelectedTag: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.xs,
     color: colors.claim,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  chosenTagBox: { paddingHorizontal: spacing.sm },
+  chooseBtn: {
+    backgroundColor: colors.claim,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chooseBtnText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.xs,
+    color: colors.bone,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },

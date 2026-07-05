@@ -398,10 +398,11 @@
     "pickedTag": "CHOSEN",
     "quotaLine": "{{quota}} per member",
     "projectedLine": "≈{{target}} · {{n}} members",
-    "pickFootnote": "Tap to set the order. You can change it until Sunday midnight.",
+    "pickFootnote": "Orders can be changed until Sunday midnight.",
     "pickViewOnly": "Only the Founder and Marshals set orders.",
     "breakdownPanel": "THE MARCH",
-    "breakdownFootnote": "Contributions count from the Monday roster. New joiners march from next Monday."
+    "breakdownFootnote": "Contributions count from the Monday roster. New joiners march from next Monday.",
+    "chooseBtn": "CHOOSE"
   },
   "warRoom": {
     "back": "← ALLIANCE",
