@@ -122,7 +122,22 @@
     "noAccount": "Нет аккаунта? ",
     "haveAccount": "Уже есть аккаунт? ",
     "signUpLink": "Регистрация",
-    "signInLink": "Войти"
+    "signInLink": "Войти",
+    "forgotPassword": "Забыли пароль?"
+  },
+  "forgotPassword": {
+    "title": "Сброс пароля",
+    "emailSubtitle": "Введите почту — мы отправим код для сброса.",
+    "resetSubtitle": "Код отправлен на {{email}}. Введите его и новый пароль.",
+    "codePlaceholder": "Код из письма",
+    "newPasswordPlaceholder": "Новый пароль",
+    "sendCode": "Отправить код",
+    "resetPassword": "Сбросить пароль",
+    "resendCode": "Отправить код ещё раз",
+    "backToSignIn": "Назад ко входу",
+    "codeResent": "Новый код отправлен.",
+    "sendFailed": "Не удалось отправить код. Проверьте почту и попробуйте ещё раз.",
+    "resetFailed": "Не удалось сбросить пароль. Проверьте код и попробуйте ещё раз."
   },
   "username": {
     "title": "Выберите имя",
@@ -458,6 +473,13 @@
     "signOut": "Выйти",
     "signOutConfirm": "Вы уверены, что хотите выйти?",
     "cancel": "Отмена",
+    "changePassword": "Сменить пароль",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "changePasswordConfirm": "Обновить",
+    "passwordChangedTitle": "Пароль изменён",
+    "passwordChangedBody": "На других устройствах выполнен выход.",
+    "passwordChangeFailed": "Не удалось сменить пароль. Проверьте текущий пароль.",
     "deleteAccount": "Удалить аккаунт",
     "deleteModalTitle": "Удаление аккаунта",
     "deleteModalBody": "Ваш командир и всё, что с ним связано — территории, XP, серии, медали, ресурсы и сообщения в чате — будут стёрты навсегда. Пути назад нет.",

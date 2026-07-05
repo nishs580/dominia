@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
 import { patchMe, deleteAccount } from '../lib/meApi';
+import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
@@ -206,6 +207,118 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
                   <ActivityIndicator size="small" color={BONE} />
                 ) : (
                   <Text style={styles.deleteModalConfirmText}>{t('profile.deleteModalConfirm')}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+// Hidden for SSO-only accounts — they have no password credential to change
+// (user.passwordEnabled is false). Clerk keeps the current session alive and
+// signOutOfOtherSessions revokes every other device.
+function ChangePasswordSection() {
+  const { t } = useTranslation();
+  const { user } = useUser();
+  const [visible, setVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  if (!user?.passwordEnabled) return null;
+
+  const close = () => {
+    if (saving) return;
+    setVisible(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setError('');
+  };
+
+  const onConfirm = async () => {
+    if (saving) return;
+    if (newPassword.length < PASSWORD_MIN) {
+      setError(t('signIn.passwordTooShort', { min: PASSWORD_MIN }));
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await user.updatePassword({ currentPassword, newPassword, signOutOfOtherSessions: true });
+      setSaving(false);
+      setVisible(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      Alert.alert(t('profile.passwordChangedTitle'), t('profile.passwordChangedBody'));
+    } catch (err) {
+      setSaving(false);
+      setError(err.errors?.[0]?.message ?? t('profile.passwordChangeFailed'));
+    }
+  };
+
+  return (
+    <>
+      <View style={styles.listDivider} />
+      <Pressable
+        onPress={() => setVisible(true)}
+        style={styles.settingsRow}
+        accessibilityRole="button"
+        accessibilityLabel={t('profile.changePassword')}
+      >
+        <Text style={styles.settingsLabel}>{t('profile.changePassword')}</Text>
+        <Text style={styles.settingsChevron}>›</Text>
+      </Pressable>
+
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+        <View style={styles.deleteModalBackdrop}>
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>{t('profile.changePassword')}</Text>
+            <Text style={styles.deleteModalPrompt}>{t('profile.currentPassword')}</Text>
+            <TextInput
+              style={styles.deleteModalInput}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!saving}
+            />
+            <Text style={styles.deleteModalPrompt}>{t('profile.newPassword')}</Text>
+            <TextInput
+              style={styles.deleteModalInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={PASSWORD_MAX}
+              editable={!saving}
+            />
+            {error ? <Text style={styles.changePasswordError}>{error}</Text> : null}
+            <View style={styles.deleteModalActions}>
+              <Pressable
+                onPress={close}
+                disabled={saving}
+                style={({ pressed }) => [styles.deleteModalCancel, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.deleteModalCancelText}>{t('profile.cancel')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={onConfirm}
+                disabled={saving || !currentPassword || !newPassword}
+                style={[
+                  styles.deleteModalConfirm,
+                  (saving || !currentPassword || !newPassword) && { opacity: 0.4 },
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={BONE} />
+                ) : (
+                  <Text style={styles.deleteModalConfirmText}>{t('profile.changePasswordConfirm')}</Text>
                 )}
               </Pressable>
             </View>
@@ -738,6 +851,7 @@ export default function ProfileScreen() {
               />
               <View style={styles.listDivider} />
               <SettingsRow label={t('profile.notificationSettings')} />
+              <ChangePasswordSection />
               <View style={styles.listDivider} />
               <Pressable
                 onPress={() => {
@@ -1219,6 +1333,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: BONE,
+  },
+  changePasswordError: {
+    marginTop: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: CLAIM,
   },
   deleteModalActions: {
     marginTop: 20,

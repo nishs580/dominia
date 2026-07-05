@@ -5,13 +5,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ensurePlayer } from '../lib/auth';
-
-// Password bounds. Min 8 follows NIST 800-63B; max 72 is the bcrypt byte
-// ceiling and matches Clerk's own limit (Clerk is the source of truth and
-// also runs breach detection — these are client-side guards for fast,
-// localized feedback before the network round-trip).
-const PASSWORD_MIN = 8;
-const PASSWORD_MAX = 72;
+import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
 
 export default function SignInScreen({ navigation }) {
   const { t } = useTranslation();
@@ -93,6 +87,15 @@ export default function SignInScreen({ navigation }) {
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {isSignIn ? (
+        <Pressable
+          style={styles.forgotButton}
+          onPress={() => navigation.navigate('ForgotPassword')}
+        >
+          <Text style={styles.forgotText}>{t('signIn.forgotPassword')}</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable
         style={[styles.button, loading && { opacity: 0.7 }]}
@@ -176,6 +179,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     textAlign: 'center',
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+  },
+  forgotText: {
+    color: '#6B7280',
+    fontSize: 13,
   },
   toggleButton: {
     marginTop: 24,

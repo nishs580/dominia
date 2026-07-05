@@ -122,7 +122,22 @@
     "noAccount": "Don't have an account? ",
     "haveAccount": "Already have an account? ",
     "signUpLink": "Sign Up",
-    "signInLink": "Sign In"
+    "signInLink": "Sign In",
+    "forgotPassword": "Forgot password?"
+  },
+  "forgotPassword": {
+    "title": "Reset password",
+    "emailSubtitle": "Enter your email. We'll send a reset code.",
+    "resetSubtitle": "Code sent to {{email}}. Enter it with your new password.",
+    "codePlaceholder": "Reset code",
+    "newPasswordPlaceholder": "New password",
+    "sendCode": "Send Code",
+    "resetPassword": "Reset Password",
+    "resendCode": "Resend code",
+    "backToSignIn": "Back to sign in",
+    "codeResent": "New code sent.",
+    "sendFailed": "Couldn't send the code. Check the email and try again.",
+    "resetFailed": "Reset failed. Check the code and try again."
   },
   "username": {
     "title": "Choose your name",
@@ -448,6 +463,13 @@
     "signOut": "Sign out",
     "signOutConfirm": "Are you sure you want to sign out?",
     "cancel": "Cancel",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "changePasswordConfirm": "Update",
+    "passwordChangedTitle": "Password changed",
+    "passwordChangedBody": "Other devices have been signed out.",
+    "passwordChangeFailed": "Couldn't change password. Check your current password.",
     "deleteAccount": "Delete account",
     "deleteModalTitle": "Delete account",
     "deleteModalBody": "This permanently erases your commander and everything tied to it — territories, XP, streaks, medals, resources and chat messages. There is no way back.",
