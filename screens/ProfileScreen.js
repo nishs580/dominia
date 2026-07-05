@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
-import { patchMe } from '../lib/meApi';
+import { patchMe, deleteAccount } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
@@ -119,6 +119,100 @@ function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
         {enabled ? t('profile.on') : t('profile.off')}
       </Text>
     </Pressable>
+  );
+}
+
+// Play Store account-deletion requirement: an in-app path that permanently
+// deletes the account. The modal requires re-typing the username so a stray
+// tap can never fire the irreversible DELETE /me/account call.
+function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) {
+  const { t } = useTranslation();
+  const [visible, setVisible] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const expected = (username ?? '').trim().toLowerCase();
+  const matches = expected.length > 0 && confirmText.trim().toLowerCase() === expected;
+
+  const close = () => {
+    if (deleting) return;
+    setVisible(false);
+    setConfirmText('');
+  };
+
+  const onConfirm = async () => {
+    if (!matches || deleting) return;
+    setDeleting(true);
+    const res = await deleteAccount({ clerkGetToken });
+    if (!res.ok) {
+      setDeleting(false);
+      Alert.alert(t('profile.deleteFailedTitle'), t('profile.deleteFailedBody'));
+      return;
+    }
+    try {
+      const signOutTimeout = new Promise((resolve) => setTimeout(resolve, 5000));
+      await Promise.race([signOut(), signOutTimeout]);
+    } catch (err) {
+      // The Clerk user is already gone server-side; a signOut error is moot.
+      console.warn('[deleteAccount] signOut error:', err?.message);
+    }
+    navigation.replace('SignIn');
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setVisible(true)}
+        style={styles.settingsRow}
+        accessibilityRole="button"
+        accessibilityLabel={t('profile.deleteAccount')}
+      >
+        <Text style={styles.settingsSignOut}>{t('profile.deleteAccount')}</Text>
+        <Text style={styles.settingsChevron}>›</Text>
+      </Pressable>
+
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+        <View style={styles.deleteModalBackdrop}>
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>{t('profile.deleteModalTitle')}</Text>
+            <Text style={styles.deleteModalBody}>{t('profile.deleteModalBody')}</Text>
+            <Text style={styles.deleteModalPrompt}>
+              {t('profile.deleteModalPrompt', { username: username ?? '' })}
+            </Text>
+            <TextInput
+              style={styles.deleteModalInput}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={username ?? ''}
+              placeholderTextColor={SLATE}
+              editable={!deleting}
+            />
+            <View style={styles.deleteModalActions}>
+              <Pressable
+                onPress={close}
+                disabled={deleting}
+                style={({ pressed }) => [styles.deleteModalCancel, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.deleteModalCancelText}>{t('profile.cancel')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={onConfirm}
+                disabled={!matches || deleting}
+                style={[styles.deleteModalConfirm, (!matches || deleting) && { opacity: 0.4 }]}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={BONE} />
+                ) : (
+                  <Text style={styles.deleteModalConfirmText}>{t('profile.deleteModalConfirm')}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -674,6 +768,13 @@ export default function ProfileScreen() {
                 <Text style={styles.settingsSignOut}>{t('profile.signOut')}</Text>
                 <Text style={styles.settingsChevron}>›</Text>
               </Pressable>
+              <View style={styles.listDivider} />
+              <DeleteAccountSection
+                username={playerRow?.username}
+                clerkGetToken={getToken}
+                signOut={signOut}
+                navigation={navigation}
+              />
             </View>
           </View>
         </>
@@ -1071,6 +1172,88 @@ const styles = StyleSheet.create({
   settingsSignOut: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
+    color: CLAIM,
+  },
+  deleteModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(14,16,20,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  deleteModalCard: {
+    alignSelf: 'stretch',
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    padding: 20,
+  },
+  deleteModalTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 20,
+    color: CLAIM,
+    textTransform: 'uppercase',
+    letterSpacing: -0.01,
+  },
+  deleteModalBody: {
+    marginTop: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: BONE,
+  },
+  deleteModalPrompt: {
+    marginTop: 16,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: SLATE2,
+  },
+  deleteModalInput: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: BONE,
+  },
+  deleteModalActions: {
+    marginTop: 20,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  deleteModalCancel: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalCancelText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: BONE,
+  },
+  deleteModalConfirm: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: CLAIM,
+    backgroundColor: 'rgba(214,69,37,0.12)',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalConfirmText: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
     color: CLAIM,
   },
   powerSection: {
