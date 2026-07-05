@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import AllianceEmblem from '../components/AllianceEmblem';
 import AllianceLogEvent from '../components/AllianceLogEvent';
+import WeeklyTaskCard from '../components/WeeklyTaskCard';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
@@ -799,22 +800,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <Text style={styles.sectionLabelAccent}>{t('alliance.collectiveMission')}</Text>
           <View style={styles.sectionHairline} />
         </View>
-        <View style={styles.missionCard}>
-          <View style={styles.missionTopRow}>
-            <Text style={styles.missionStatusLabel}>MISSION IN PROGRESS</Text>
-            <Text style={styles.missionTimer}>RESETS IN 4D</Text>
-          </View>
-          <Text style={styles.missionTitle}>Collective Fitness — 500,000 steps</Text>
-          <Text style={styles.missionDesc}>Every member's daily step count contributes.</Text>
-          <View style={styles.missionProgressRow}>
-            <Text style={styles.missionProgressValue}>300,000 steps</Text>
-            <Text style={styles.missionProgressTotal}>/ 500,000</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: '60%' }]} />
-          </View>
-          <Text style={styles.missionReward}>REWARD — +40 GOLD EACH · +300 XP</Text>
-        </View>
+        <WeeklyTaskCard allianceId={allianceId} getToken={getToken} />
 
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.allianceMessages')}</Text>

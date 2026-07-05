@@ -14,6 +14,8 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { getCommandPost, getWeekInReview } from '../lib/commandPostApi';
+import { getWeeklyTask, getWeeklyTaskMenu, pickWeeklyTask } from '../lib/weeklyTaskApi';
+import { formatTaskValue, rewardLine } from '../lib/weeklyTaskFormat';
 
 function formatInt(n) {
   if (n == null || Number.isNaN(n)) return '0';
@@ -154,6 +156,113 @@ function RosterReadiness({ readiness, sort, onSort, t }) {
   );
 }
 
+// --- Weekly Orders — the Sat–Sun pick ritual -----------------------------------
+function WeeklyOrders({ menu, pickSaving, onPick, t }) {
+  if (!menu) return null;
+  const windowOpen = menu.pick_window_open;
+  const currentPick = menu.current_pick?.task_type ?? null;
+
+  return (
+    <View style={styles.panel}>
+      <SectionLabel
+        left={t('weeklyTask.ordersPanel')}
+        accent={windowOpen ? t('weeklyTask.windowOpen') : t('weeklyTask.windowClosed')}
+      />
+      {!windowOpen ? (
+        <View style={styles.clearBlock}>
+          <Text style={styles.clearSub}>
+            {currentPick
+              ? t('weeklyTask.pickLockedWith', { task: t(`weeklyTask.name.${currentPick}`) })
+              : t('weeklyTask.pickOpensSaturday')}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <Text style={styles.ordersLead}>
+            {t('weeklyTask.pickLead', { date: menu.picks_for_week })}
+          </Text>
+          {menu.cards.map((card) => {
+            const selected = card.task_type === currentPick;
+            return (
+              <Pressable
+                key={card.task_type}
+                disabled={!menu.can_pick || pickSaving}
+                onPress={() => onPick(card.task_type)}
+                style={({ pressed }) => [
+                  styles.orderCard,
+                  selected && styles.orderCardSelected,
+                  pressed && { opacity: 0.75 },
+                ]}
+              >
+                <View style={styles.orderTopRow}>
+                  <Text style={[styles.orderName, selected && styles.orderNameSelected]}>
+                    {t(`weeklyTask.name.${card.task_type}`)}
+                  </Text>
+                  {selected ? (
+                    <Text style={styles.orderSelectedTag}>{t('weeklyTask.pickedTag')}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.orderMeta}>
+                  {t('weeklyTask.quotaLine', {
+                    quota: formatTaskValue(t, card.unit, card.per_member_quota),
+                  })}
+                  {'  ·  '}
+                  {t('weeklyTask.projectedLine', {
+                    target: formatTaskValue(t, card.unit, card.projected_target),
+                    n: menu.live_member_count,
+                  })}
+                </Text>
+                <Text style={styles.orderReward}>
+                  {t('weeklyTask.rewardLabel')} {rewardLine(t, card.personal_payout)}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Text style={styles.radarFootnote}>
+            {menu.can_pick
+              ? t('weeklyTask.pickFootnote')
+              : t('weeklyTask.pickViewOnly')}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+// --- The March — per-member contribution breakdown -----------------------------
+function MarchBreakdown({ weekly, t }) {
+  const task = weekly?.task;
+  const breakdown = weekly?.breakdown;
+  if (!task || !breakdown || breakdown.length === 0) return null;
+
+  return (
+    <View style={styles.panel}>
+      <SectionLabel
+        left={t('weeklyTask.breakdownPanel')}
+        accent={t(`weeklyTask.name.${task.task_type}`)}
+      />
+      {breakdown.map((m, i) => (
+        <View
+          key={m.player_id}
+          style={[styles.riskRow, i < breakdown.length - 1 && styles.rowBorder]}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initialsOf(m.username)}</Text>
+          </View>
+          <View style={styles.riskBody}>
+            <Text style={styles.riskName}>{m.username ?? '—'}</Text>
+          </View>
+          <Text style={m.share_earned ? styles.marchValueEarned : styles.marchValue}>
+            {formatTaskValue(t, task.unit, m.contribution)}
+            {m.share_earned ? ' ✓' : ''}
+          </Text>
+        </View>
+      ))}
+      <Text style={styles.radarFootnote}>{t('weeklyTask.breakdownFootnote')}</Text>
+    </View>
+  );
+}
+
 function WeekInReview({ card, allianceName, shortName, t }) {
   const onShare = useCallback(async () => {
     if (!card) return;
@@ -225,6 +334,9 @@ export default function CommandPostScreen({ route }) {
   const [error, setError] = useState(null);
   const [cp, setCp] = useState(null);
   const [wir, setWir] = useState(null);
+  const [menu, setMenu] = useState(null);
+  const [weekly, setWeekly] = useState(null);
+  const [pickSaving, setPickSaving] = useState(false);
   const [sort, setSort] = useState('readiness');
 
   // Clerk's getToken is a fresh reference on every render. Hold it in a ref so
@@ -254,9 +366,11 @@ export default function CommandPostScreen({ route }) {
       if (!hasLoadedRef.current) setLoading(true);
       try {
         const clerkGetToken = () => getTokenRef.current();
-        const [cpRes, wirRes] = await Promise.all([
+        const [cpRes, wirRes, menuRes, weeklyRes] = await Promise.all([
           getCommandPost({ clerkGetToken, allianceId, sort }),
           getWeekInReview({ clerkGetToken, allianceId }),
+          getWeeklyTaskMenu({ clerkGetToken, allianceId }),
+          getWeeklyTask({ clerkGetToken, allianceId }),
         ]);
         if (cancelled) return;
 
@@ -269,6 +383,8 @@ export default function CommandPostScreen({ route }) {
           setError('load_failed');
         }
         if (wirRes.ok) setWir(wirRes.data?.week_in_review ?? null);
+        if (menuRes.ok) setMenu(menuRes.data);
+        if (weeklyRes.ok) setWeekly(weeklyRes.data);
       } catch (_) {
         if (!cancelled) setError('load_failed');
       } finally {
@@ -285,6 +401,25 @@ export default function CommandPostScreen({ route }) {
   }, [isFocused, allianceId, sort]);
 
   const onSort = useCallback((next) => setSort(next), []);
+
+  const onPick = useCallback(async (taskType) => {
+    if (!allianceId || pickSaving) return;
+    setPickSaving(true);
+    try {
+      const clerkGetToken = () => getTokenRef.current();
+      const res = await pickWeeklyTask({ clerkGetToken, allianceId, taskType });
+      if (res.ok) {
+        // Reflect the pick without a full reload.
+        setMenu((prev) =>
+          prev
+            ? { ...prev, current_pick: { task_type: taskType, picked_by: null } }
+            : prev,
+        );
+      }
+    } finally {
+      setPickSaving(false);
+    }
+  }, [allianceId, pickSaving]);
 
   return (
     <View style={styles.screen}>
@@ -311,6 +446,8 @@ export default function CommandPostScreen({ route }) {
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          <WeeklyOrders menu={menu} pickSaving={pickSaving} onPick={onPick} t={t} />
+          <MarchBreakdown weekly={weekly} t={t} />
           <LapseRadar radar={cp?.lapse_radar} t={t} />
           <RosterReadiness
             readiness={cp?.roster_readiness}
@@ -428,6 +565,38 @@ const styles = StyleSheet.create({
   sortOpt: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate, textTransform: 'uppercase', letterSpacing: 1.0 },
   sortOptActive: { color: colors.bone },
   sortSep: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate },
+
+  // weekly orders
+  ordersLead: { fontFamily: fonts.body, fontSize: fontSize.md, color: colors.slate2, marginBottom: spacing.md },
+  orderCard: {
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  orderCardSelected: { borderColor: colors.claim, borderLeftWidth: 2, borderLeftColor: colors.claim },
+  orderTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  orderName: { fontFamily: fonts.bodyMedium, fontSize: fontSize.base, color: colors.bone },
+  orderNameSelected: { color: colors.bone },
+  orderSelectedTag: {
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.xs,
+    color: colors.claim,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  orderMeta: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate2, marginTop: 6, letterSpacing: 0.4 },
+  orderReward: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.xs,
+    color: colors.slate,
+    marginTop: 6,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  marchValue: { fontFamily: fonts.monoMedium, fontSize: fontSize.md, color: colors.slate2 },
+  marchValueEarned: { fontFamily: fonts.monoMedium, fontSize: fontSize.md, color: colors.alliance },
 
   // week in review card
   card: { backgroundColor: colors.ink2, borderWidth: 1, borderColor: colors.hairlineStrong, padding: spacing.lg },
