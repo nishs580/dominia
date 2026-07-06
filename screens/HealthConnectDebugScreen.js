@@ -129,7 +129,7 @@ function ErrorBlock({ message }) {
 
 export default function HealthConnectDebugScreen() {
   const navigation = useNavigation();
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
 
   const [playerId, setPlayerId] = useState(null);
   const [hcReady, setHcReady] = useState(false);
@@ -160,11 +160,11 @@ export default function HealthConnectDebugScreen() {
     async (where, err) => {
       const msg = err?.message ?? String(err);
       if (playerId) {
-        await logDebug(playerId, 'error', { where, msg });
+        await logDebug(getToken, 'error', { where, msg });
       }
       return msg;
     },
-    [playerId],
+    [playerId, getToken],
   );
 
   useEffect(() => {
@@ -335,7 +335,7 @@ export default function HealthConnectDebugScreen() {
     setLogConfirm(null);
     try {
       const records = rawResponse?.records ?? [];
-      await logDebug(playerId, 'health_connect_snapshot', {
+      await logDebug(getToken, 'health_connect_snapshot', {
         sdkStatus: sdkStatusLabel(sdkStatus),
         permissionsGranted: granted,
         todaySteps,

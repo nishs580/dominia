@@ -293,7 +293,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
     if (DIAG_CALIBRATION && claimState.playerId) {
       const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
-      logDebug(claimState.playerId, 'claim_calibration_tick', {
+      logDebug(() => getTokenRef.current(), 'claim_calibration_tick', {
         accuracyM: round3(calTickDiag?.accuracyM ?? (fix ? fix.accuracy ?? 9999 : null)),
         speedKmh: round3(speedKmh),
         windowMs: round3(calTickDiag?.windowMs ?? null),
