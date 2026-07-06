@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
+import { registerDemoRect } from '../lib/demoRegistry';
 import {
   calcLevel,
   calcLevelProgress,
@@ -355,6 +356,10 @@ export default function ProfileScreen() {
     [t],
   );
   const tips = useFirstTapTips({ screenKey: 'profile', userId, tips: profileTips });
+
+  // Guided-demo targets (read beats 11 and 12 of the first-run tour).
+  useEffect(() => registerDemoRect('profile.power', () => rectFromRef(walkthroughPowerRef)), []);
+  useEffect(() => registerDemoRect('profile.resources', () => rectFromRef(walkthroughResourcesRef)), []);
   const { user } = useUser();
 
   const [loading, setLoading] = useState(true);

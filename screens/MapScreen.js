@@ -34,6 +34,7 @@ import { battleChipFor } from '../lib/battleChips';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
+import { emitDemoEvent, onDemoEvent, registerDemoAction, registerDemoRect } from '../lib/demoRegistry';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
@@ -877,6 +878,54 @@ export default function MapScreen() {
 
   const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips });
 
+  // ── Guided demo wiring ─────────────────────────────────────────────────
+  // Rect provider for the demo's territory step: fly the camera to the
+  // objective, then project its centre into window coordinates.
+  useEffect(() => {
+    return registerDemoRect('map.objectiveRect', async () => {
+      if (!objective || !mapRef.current || !cameraRef.current) return null;
+      cameraRef.current.setCamera({
+        centerCoordinate: [objective.longitude, objective.latitude],
+        zoomLevel: 15,
+        animationDuration: 700,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      let pt = null;
+      try {
+        pt = await mapRef.current.getPointInView([objective.longitude, objective.latitude]);
+      } catch {
+        return null;
+      }
+      const px = Array.isArray(pt) ? pt[0] : pt?.x;
+      const py = Array.isArray(pt) ? pt[1] : pt?.y;
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+      const wrap = await rectFromRef(mapWrapRef);
+      return {
+        x: (wrap?.x ?? 0) + px - 70,
+        y: (wrap?.y ?? 0) + py - 70,
+        width: 140,
+        height: 140,
+      };
+    });
+  }, [objective]);
+
+  useEffect(() => registerDemoAction('map.closeObjectiveSheet', () => setSelected(null)), []);
+
+  // Tell the demo the first-claim data is settled (it waits on this to build
+  // its step list — with or without the claim beats).
+  useEffect(() => {
+    if (heldCount === null || myPlayer == null) return;
+    emitDemoEvent('map.objectiveResolved', { objective, city: myPlayer?.home_city ?? null });
+  }, [heldCount, objective, myPlayer]);
+
+  // The demo's territory step advances when the objective's sheet opens.
+  useEffect(() => {
+    const selId = selected?.feature?.id ?? selected?.feature?.properties?.id;
+    if (selId && objective && selId === objective.id) {
+      emitDemoEvent('map.objectiveSheetOpened');
+    }
+  }, [selected, objective]);
+
   // Prime for the notification permission early in the first map session —
   // but never show it to someone who already granted the OS permission.
   const maybeShowNotifPrime = useCallback(async () => {
@@ -903,13 +952,27 @@ export default function MapScreen() {
     }
   }, [userId]);
 
-  // With no auto-running tour, the prime fires shortly after the first map
-  // session settles (objective fetch resolved). hasFired inside
-  // maybeShowNotifPrime keeps it once-ever.
+  // The prime follows the guided demo (completed or skipped). Later sessions
+  // where the demo is already done but the prime was never answered get it
+  // shortly after the map settles. hasFired inside maybeShowNotifPrime keeps
+  // it once-ever.
   useEffect(() => {
     if (heldCount === null || !userId) return undefined;
-    const timer = setTimeout(() => maybeShowNotifPrime(), 1200);
-    return () => clearTimeout(timer);
+    let timer = null;
+    const unsubscribe = onDemoEvent((name) => {
+      if (name === 'demo.ended') {
+        timer = setTimeout(() => maybeShowNotifPrime(), 600);
+      }
+    });
+    (async () => {
+      if (await hasFired(userId, 'demo')) {
+        timer = setTimeout(() => maybeShowNotifPrime(), 1200);
+      }
+    })();
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
   }, [heldCount, maybeShowNotifPrime, userId]);
 
   const objectiveFillStyle = useMemo(

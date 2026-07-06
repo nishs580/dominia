@@ -1151,7 +1151,7 @@
     "instruction": "Walk {{distance}} to claim {{name}}. Free.",
     "cta": "LET'S WALK",
     "tapClaim": "This is the one. Start the claim.",
-    "activeHint": "Walk the perimeter. The line fills as you go.",
+    "activeHint": "Walk anywhere. The ring fills as your distance adds up.",
     "successKicker": "FIRST TERRITORY",
     "successBody": "Your first territory. It pays Influence every day you hold it.",
     "nudgeTitle": "Two more claims are free.",
@@ -1172,5 +1172,14 @@
     "title": "Dominia warns you when your land is under attack.",
     "allow": "ALLOW NOTIFICATIONS",
     "later": "NOT NOW"
+  },
+  "demo": {
+    "skip": "SKIP TOUR",
+    "tapTerritory": "{{name}} is unclaimed. Tap it.",
+    "fromAnywhere": "Walk from anywhere — the distance counts, not your location.",
+    "tapActivity": "Your effort pays here. Tap Activity.",
+    "tapAlliance": "You won't fight alone forever. Tap Alliance.",
+    "tapProfile": "Your record lives here. Tap Profile.",
+    "tapMap": "One thing left — land. Tap Map."
   }
 }

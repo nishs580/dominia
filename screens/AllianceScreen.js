@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
+import { registerDemoRect } from '../lib/demoRegistry';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -1143,6 +1144,9 @@ export default function AllianceScreen() {
     [t],
   );
   const tips = useFirstTapTips({ screenKey: 'alliance', userId, tips: allianceTips });
+
+  // Guided-demo target (read beat 9; null for members — the demo skips it).
+  useEffect(() => registerDemoRect('alliance.solo', () => rectFromRef(walkthroughHeaderRef)), []);
 
   if (loading) {
     return (
