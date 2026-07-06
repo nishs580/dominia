@@ -133,8 +133,33 @@ function AllianceKickedRow({ event }) {
   );
 }
 
+function TerritoryDevelopedRow({ event }) {
+  const { t } = useTranslation();
+  const subject = subjectName(t, event);
+  const territoryName = String(getMeta(event, 'territory_name') ?? '—').toUpperCase();
+  const newLevel = getMeta(event, 'new_level');
+  const levelName = String(
+    Number.isInteger(Number(newLevel))
+      ? t(`map.devLevelName.${newLevel}`)
+      : getMeta(event, 'level_name') ?? '—',
+  ).toUpperCase();
+
+  return (
+    <View style={[styles.row, { borderLeftColor: ALLIANCE_GREEN }]}>
+      <View style={styles.topRow}>
+        <Text style={styles.headline}>
+          {t('allianceEvent.developed', { subject, territory: territoryName, levelName })}
+        </Text>
+        <Text style={styles.timeAgo}>{timeAgo(event.occurred_at)}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function AllianceLogEvent({ event }) {
   switch (event.event_type) {
+    case 'territory_developed':
+      return <TerritoryDevelopedRow event={event} />;
     case 'alliance_founded':
       return <AllianceFoundedRow event={event} />;
     case 'alliance_joined':

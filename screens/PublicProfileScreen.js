@@ -79,6 +79,7 @@ export default function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [playerRow, setPlayerRow] = useState(null);
   const [ownedTerritories, setOwnedTerritories] = useState([]);
+  const [citadelRecords, setCitadelRecords] = useState([]);
   const [profileError, setProfileError] = useState(null);
   const [allianceName, setAllianceName] = useState(null);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -132,11 +133,13 @@ export default function PublicProfileScreen() {
       setCurrentStreak(Math.max(0, Number(player.current_streak) || 0));
       setLongestStreak(Math.max(0, Number(player.longest_streak) || 0));
 
-      const [allianceResult, territoriesResult] = await Promise.all([
+      const [allianceResult, territoriesResult, citadelResult] = await Promise.all([
         player.alliance_id
           ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
           : Promise.resolve({ data: null }),
         supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank, upkeep_overdue').eq('owner_id', player.id),
+        // Permanent record: territories this player developed to Citadel (D4).
+        supabase.from('development_records').select('id, territory_name, reached_at').eq('player_id', player.id).order('reached_at', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -146,6 +149,7 @@ export default function PublicProfileScreen() {
       } else {
         setOwnedTerritories(territoriesResult.data ?? []);
       }
+      setCitadelRecords(citadelResult.error ? [] : citadelResult.data ?? []);
 
       const { data, error } = await supabase.rpc('get_activity_stats_30d', {
         p_player_id: player.id,
@@ -425,6 +429,25 @@ export default function PublicProfileScreen() {
                 ))}
               </View>
             </View>
+
+            {citadelRecords.length > 0 ? (
+              <View>
+                <View style={{ marginTop: 24 }}>
+                  <SectionDivider label={t('profile.citadels')} />
+                </View>
+                <View style={styles.list}>
+                  {citadelRecords.map((record, index) => (
+                    <React.Fragment key={record.id}>
+                      {index > 0 ? <View style={styles.listDivider} /> : null}
+                      <OwnedTerritoryRow
+                        name={record.territory_name ?? t('common.territoryFallback')}
+                        tier={t('profile.citadelRecord')}
+                      />
+                    </React.Fragment>
+                  ))}
+                </View>
+              </View>
+            ) : null}
 
             <View>
               <View style={{ marginTop: 24 }}>

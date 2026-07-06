@@ -23,7 +23,9 @@ import {
   StoneGlyph,
   GoldGlyph,
   MoraleGlyph,
+  InfluenceGlyph,
 } from '../components/ResourceGlyphs';
+import { influenceToDisplay } from '../lib/formulas';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 const INK = '#0E1014';
@@ -33,11 +35,18 @@ const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 // Display copy (label/spend/earn) lives in locales under wallet.resources.<key>.
+// Influence is stored fixed-point ×10; format renders it in display units.
 const RESOURCES = [
   { key: 'iron', Glyph: IronGlyph, glyphColor: '#F2EEE6' },
   { key: 'stone', Glyph: StoneGlyph, glyphColor: '#F2EEE6' },
   { key: 'gold', Glyph: GoldGlyph, glyphColor: '#F2EEE6' },
   { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#F2EEE6' },
+  {
+    key: 'influence',
+    Glyph: InfluenceGlyph,
+    glyphColor: '#F2EEE6',
+    format: (fixedPoint) => influenceToDisplay(fixedPoint).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  },
 ];
 
 function SectionDivider({ label }) {
@@ -68,7 +77,7 @@ export default function WalletScreen({ route }) {
   const { playerId = null, username = '' } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
-  const [wallet, setWallet] = useState({ iron: 0, stone: 0, gold: 0, morale: 0 });
+  const [wallet, setWallet] = useState({ iron: 0, stone: 0, gold: 0, morale: 0, influence: 0 });
   const [allianceId, setAllianceId] = useState(null);
   const [error, setError] = useState(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -90,7 +99,7 @@ export default function WalletScreen({ route }) {
 
       const { data, error: fetchError } = await supabase
         .from('players')
-        .select('iron, stone, gold, morale, alliance_id')
+        .select('iron, stone, gold, morale, influence, alliance_id')
         .eq('id', playerId)
         .maybeSingle();
 
@@ -107,6 +116,7 @@ export default function WalletScreen({ route }) {
         stone: data?.stone ?? 0,
         gold: data?.gold ?? 0,
         morale: data?.morale ?? 0,
+        influence: data?.influence ?? 0,
       });
       setAllianceId(data?.alliance_id ?? null);
       setLoading(false);
@@ -204,7 +214,7 @@ export default function WalletScreen({ route }) {
                           )}
                         </View>
                         <Text style={styles.resourceBalance}>
-                          {wallet[r.key].toLocaleString()}
+                          {r.format ? r.format(wallet[r.key]) : wallet[r.key].toLocaleString()}
                         </Text>
                       </View>
                     );

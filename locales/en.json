@@ -505,6 +505,8 @@
     "maxLevel": "Max level",
     "yourTerritories": "YOUR TERRITORIES",
     "noTerritories": "No territories held.",
+    "citadels": "CITADELS",
+    "citadelRecord": "Citadel · D4",
     "resources": "RESOURCES",
     "myResources": "MY RESOURCES",
     "tapToEnter": "tap to enter",
@@ -750,6 +752,11 @@
         "label": "MORALE",
         "spend": "Donate to alliance war chest",
         "earn": "Earn from challenges & alliance missions"
+      },
+      "influence": {
+        "label": "INFLUENCE",
+        "spend": "Invest in territory development",
+        "earn": "Held territories generate it daily"
       }
     }
   },
@@ -799,7 +806,8 @@
     "demoted": "{{actor}} DEMOTED {{subject}}",
     "roleChange": "▸ {{prev}} → {{next}}",
     "kicked": "{{actor}} KICKED {{subject}}",
-    "kickedBody": "▸ WAS {{role}}"
+    "kickedBody": "▸ WAS {{role}}",
+    "developed": "{{subject}} DEVELOPED {{territory}} TO {{levelName}}"
   },
   "activityEvent": {
     "streakMilestone": "STREAK MILESTONE",
@@ -817,6 +825,11 @@
     "walkedOf": "{{walked}}m of {{required}}m walked",
     "attemptedOf": "{{walked}}m of {{required}}m attempted",
     "walkedInDefence": "{{walked}}m walked in defence",
+    "territoryDeveloped": "TERRITORY DEVELOPED",
+    "developedHeadline": "{{territory}} — {{levelName}}.",
+    "developedSub": "DEVELOPMENT D{{level}}",
+    "influenceMilestone": "INFLUENCE",
+    "influenceAccumulated": "INFLUENCE ACCUMULATED",
     "fallback": "ACTIVITY",
     "stub": {
       "challenge_completed": "CHALLENGE COMPLETED",
@@ -1071,6 +1084,38 @@
     "goToActivity": "Go to Activity",
     "countdownMin": "{{n}} min",
     "countdownSec": "{{n}} sec",
+    "develop": "Develop",
+    "developTitle": "Develop",
+    "developTo": "Develop to {{levelName}}",
+    "devConfirmCta": "Build {{levelName}}",
+    "devNext": "Next",
+    "devBecomes": "Becomes",
+    "devLevelName": {
+      "0": "Raw",
+      "1": "Established",
+      "2": "Fortified",
+      "3": "Stronghold",
+      "4": "Citadel"
+    },
+    "devResource": {
+      "stone": "Stone",
+      "iron": "Iron",
+      "gold": "Gold",
+      "influence": "Influence"
+    },
+    "devCostHave": "{{cost}} · held {{have}}",
+    "devCostAfter": "−{{cost}} → {{after}}",
+    "devGate": "{{levelName}} opens at Level {{level}}.",
+    "devCitadelComplete": "Citadel. Fully developed.",
+    "devDone": "{{name}} — {{levelName}}.",
+    "devD4Weight": "{{name}} becomes a Citadel. Permanent. It will outlast every commander who holds it — including you.",
+    "back": "Back",
+    "devErr": {
+      "insufficient": "Not enough resources.",
+      "levelGate": "Opens at Level {{level}}.",
+      "changed": "Development state changed. Reopen the territory.",
+      "notOwner": "Only the holder can develop this territory."
+    },
     "startErr": {
       "levelTooLow": "Reach level {{level}} to claim {{tier}} territories",
       "insufficientGold": "Need {{n}} more gold",

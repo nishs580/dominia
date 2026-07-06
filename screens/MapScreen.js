@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { startClaim } from '../lib/claimApi';
 import { startContest } from '../lib/contestWalkApi';
 import { abandonTerritory } from '../lib/territoryApi';
+import { developTerritory } from '../lib/developApi';
 import { supabase } from '../lib/supabase';
 import * as F from '../lib/formulas';
 import {
@@ -146,13 +147,18 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const navigation = useNavigation();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm'
+  const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm' | 'develop' | 'developConfirm'
   const [contestMode, setContestMode] = useState(false);
   const [startError, setStartError] = useState(null);
   const [contestStartError, setContestStartError] = useState(null);
   const [contestAlreadyActiveInfo, setContestAlreadyActiveInfo] = useState(null);
   const [isDeducting, setIsDeducting] = useState(false);
   const [isAttacking, setIsAttacking] = useState(false);
+  const [isDeveloping, setIsDeveloping] = useState(false);
+  const [developError, setDevelopError] = useState(null);
+  // Development level after an in-sheet develop — the feature object under the
+  // sheet is a snapshot, so the sheet tracks its own copy until the refetch.
+  const [localDevLevel, setLocalDevLevel] = useState(null);
   const [, tickClock] = useState(0);
   const [legacyRank, setLegacyRank] = useState(null);
   const [historyStats, setHistoryStats] = useState({
@@ -170,6 +176,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     setContestAlreadyActiveInfo(null);
     setIsDeducting(false);
     setIsAttacking(false);
+    setIsDeveloping(false);
+    setDevelopError(null);
+    setLocalDevLevel(null);
   }, [territory?.id]);
 
   useEffect(() => {
@@ -208,7 +217,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const owner = !isUnclaimed ? ownerRaw : null;
 
   const tier = territory.properties?.tier ?? 'Medium';
-  const developmentLevel = territory.properties?.developmentLevel ?? 0;
+  const developmentLevel = localDevLevel ?? territory.properties?.developmentLevel ?? 0;
   const alliance = territory.properties?.alliance ?? null;
   const ownerStreakDays = territory.properties?.ownerStreak ?? 0;
 
@@ -293,6 +302,96 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const currentIron = myPlayer?.iron ?? 0;
   const ironBalanceAfter = currentIron - ironCost;
   const canAffordContest = currentIron >= ironCost;
+
+  // --- Development (own territory only) ---------------------------------
+  // One atomic spend per level; influence wallet is fixed-point ×10.
+  const devLevelName = (n) => t(`map.devLevelName.${n}`);
+  const myLevel = F.calcLevel(playerXp);
+  const isMaxDev = developmentLevel >= 4;
+  const devTarget = isMaxDev ? null : developmentLevel + 1;
+  const devCost = devTarget ? F.calcDevCost(developmentLevel, devTarget) : null;
+  const devGateLevel = devTarget === 4 ? 9 : devTarget === 3 ? 8 : 1;
+  const devGateOk = devTarget != null && myLevel >= devGateLevel;
+  const devWallet = {
+    stone: myPlayer?.stone ?? 0,
+    iron: myPlayer?.iron ?? 0,
+    gold: myPlayer?.gold ?? 0,
+    influence: F.influenceToDisplay(myPlayer?.influence ?? 0),
+  };
+  const devRows = devCost
+    ? [
+        { key: 'stone', cost: devCost.stone, have: devWallet.stone },
+        { key: 'iron', cost: devCost.iron, have: devWallet.iron },
+        { key: 'gold', cost: devCost.gold, have: devWallet.gold },
+        { key: 'influence', cost: devCost.influence, have: devWallet.influence },
+      ]
+    : [];
+  const canAffordDev = devRows.length > 0 && devRows.every((r) => r.have >= r.cost);
+
+  const developErrorMessage = developError
+    ? (() => {
+        switch (developError.code) {
+          case 'insufficient_resources':
+            return t('map.devErr.insufficient');
+          case 'level_gate':
+            return t('map.devErr.levelGate', {
+              level: developError.context?.required_player_level ?? devGateLevel,
+            });
+          case 'level_changed':
+          case 'develop_conflict':
+            return t('map.devErr.changed');
+          case 'not_owner':
+            return t('map.devErr.notOwner');
+          case 'network_error':
+            return t('map.startErr.network');
+          case 'no_token':
+          case 'unauthorized':
+            return t('map.startErr.signIn');
+          default:
+            return t('map.startErr.generic');
+        }
+      })()
+    : null;
+
+  const handleConfirmDevelop = async () => {
+    if (!devTarget) return;
+    setIsDeveloping(true);
+    setDevelopError(null);
+    try {
+      const result = await developTerritory({
+        clerkGetToken: () => getTokenRef.current(),
+        territoryId: territory.id,
+        confirmLevel: devTarget,
+      });
+      if (result.ok) {
+        const data = result.data;
+        setLocalDevLevel(data.development_level);
+        setMyPlayer((prev) =>
+          prev
+            ? {
+                ...prev,
+                stone: data.balances.stone,
+                iron: data.balances.iron,
+                gold: data.balances.gold,
+                influence: data.balances.influence,
+                xp: data.total_xp,
+              }
+            : prev,
+        );
+        setSheetState('develop');
+        showTopBanner?.(
+          t('map.devDone', { name, levelName: devLevelName(data.development_level) }),
+        );
+        onTerritoriesRefetched?.(territory.id);
+        onResourceBannerRefresh?.();
+      } else {
+        const code = result.error?.error ?? (result.status === 0 ? 'network_error' : 'generic');
+        setDevelopError({ code, context: result.error });
+      }
+    } finally {
+      setIsDeveloping(false);
+    }
+  };
 
   const startErrorMessage = startError
     ? (() => {
@@ -395,7 +494,11 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
       <View style={styles.sheetTopRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sheetStateLabel}>
-            {sheetState === 'confirm' ? (contestMode ? t('map.confirmContest') : t('map.confirmClaim')) : stateLabel}
+            {sheetState === 'confirm'
+              ? (contestMode ? t('map.confirmContest') : t('map.confirmClaim'))
+              : sheetState === 'develop' || sheetState === 'developConfirm'
+                ? t('map.developTitle')
+                : stateLabel}
           </Text>
           <View style={styles.sheetTitleRow}>
             <Text style={styles.sheetTitle}>{name}</Text>
@@ -528,6 +631,25 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             <View style={styles.sheetActionDisabled}>
               <Text style={styles.sheetActionDisabledText}>{t('map.capReached')}</Text>
               <Text style={styles.sheetActionDisabledSub}>{t('map.capReachedSub')}</Text>
+            </View>
+          )}
+
+          {isOwnTerritory && !isMaxDev && (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
+              onPress={() => {
+                setDevelopError(null);
+                setSheetState('develop');
+              }}
+            >
+              <Text style={styles.sheetActionText}>{t('map.develop')}</Text>
+            </Pressable>
+          )}
+
+          {isOwnTerritory && isMaxDev && (
+            <View style={styles.sheetActionDisabled}>
+              <Text style={styles.sheetActionDisabledText}>{t('map.devCitadelComplete')}</Text>
             </View>
           )}
 
@@ -704,6 +826,138 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 onPress={() => setSheetState('info')}
               >
                 <Text style={styles.sheetCancelText}>{t('map.cancel')}</Text>
+              </Pressable>
+            </>
+          )}
+        </>
+      )}
+
+      {(sheetState === 'develop' || sheetState === 'developConfirm') && (
+        <>
+          {isMaxDev ? (
+            <>
+              <View style={styles.sheetConfirmDataBlock}>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>{t('map.development')}</Text>
+                  <Text style={styles.sheetConfirmValue}>D4 · {devLevelName(4)}</Text>
+                </View>
+                <Text style={styles.sheetConfirmHelpText}>{t('map.devCitadelComplete')}</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
+                onPress={() => setSheetState('info')}
+              >
+                <Text style={styles.sheetCancelText}>{t('map.cancel')}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <View style={styles.sheetConfirmDataBlock}>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>{t('map.development')}</Text>
+                  <Text style={styles.sheetConfirmValue}>
+                    D{developmentLevel} · {devLevelName(developmentLevel)}
+                  </Text>
+                </View>
+                <View style={styles.sheetConfirmDataRow}>
+                  <Text style={styles.sheetConfirmLabel}>
+                    {sheetState === 'developConfirm' ? t('map.devBecomes') : t('map.devNext')}
+                  </Text>
+                  <Text style={styles.sheetConfirmValue}>
+                    D{devTarget} · {devLevelName(devTarget)}
+                  </Text>
+                </View>
+                {devRows.map((r) => (
+                  <View key={r.key} style={styles.sheetConfirmDataRow}>
+                    <Text style={styles.sheetConfirmLabel}>{t(`map.devResource.${r.key}`)}</Text>
+                    <Text
+                      style={[
+                        styles.sheetConfirmValue,
+                        { color: r.have >= r.cost ? '#3F8F4E' : '#D64525' },
+                      ]}
+                    >
+                      {sheetState === 'developConfirm'
+                        ? t('map.devCostAfter', {
+                            cost: r.cost.toLocaleString(),
+                            after: (r.key === 'influence'
+                              ? Math.round((r.have - r.cost) * 10) / 10
+                              : r.have - r.cost
+                            ).toLocaleString(),
+                          })
+                        : t('map.devCostHave', {
+                            cost: r.cost.toLocaleString(),
+                            have: r.have.toLocaleString(),
+                          })}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {!devGateOk && (
+                <Text style={styles.sheetConfirmHelpText}>
+                  {t('map.devGate', { levelName: devLevelName(devTarget), level: devGateLevel })}
+                </Text>
+              )}
+
+              {sheetState === 'developConfirm' && devTarget === 4 && (
+                <Text style={styles.sheetConfirmHelpText}>
+                  {t('map.devD4Weight', { name })}
+                </Text>
+              )}
+
+              {developErrorMessage && (
+                <Text style={styles.sheetConfirmError}>{developErrorMessage}</Text>
+              )}
+
+              {sheetState === 'develop' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!canAffordDev || !devGateOk}
+                  style={({ pressed }) => [
+                    styles.sheetAction,
+                    pressed && { opacity: 0.92 },
+                    (!canAffordDev || !devGateOk) && { opacity: 0.4 },
+                  ]}
+                  onPress={() => {
+                    setDevelopError(null);
+                    setSheetState('developConfirm');
+                  }}
+                >
+                  <Text style={styles.sheetActionText}>
+                    {t('map.developTo', { levelName: devLevelName(devTarget) })}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isDeveloping || !canAffordDev || !devGateOk}
+                  style={({ pressed }) => [
+                    styles.sheetAction,
+                    pressed && { opacity: 0.92 },
+                    (isDeveloping || !canAffordDev || !devGateOk) && { opacity: 0.6 },
+                  ]}
+                  onPress={handleConfirmDevelop}
+                >
+                  <Text style={styles.sheetActionText}>
+                    {isDeveloping
+                      ? t('map.processing')
+                      : t('map.devConfirmCta', { levelName: devLevelName(devTarget) })}
+                  </Text>
+                </Pressable>
+              )}
+
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
+                onPress={() => {
+                  setDevelopError(null);
+                  setSheetState(sheetState === 'developConfirm' ? 'develop' : 'info');
+                }}
+              >
+                <Text style={styles.sheetCancelText}>
+                  {sheetState === 'developConfirm' ? t('map.back') : t('map.cancel')}
+                </Text>
               </Pressable>
             </>
           )}
@@ -1011,7 +1265,7 @@ export default function MapScreen() {
     if (!resourcePlayerId) return;
     const { data, error } = await supabase
       .from('players')
-      .select('iron, stone, gold, morale')
+      .select('iron, stone, gold, morale, influence')
       .eq('id', resourcePlayerId)
       .single();
     if (error) {
@@ -1023,7 +1277,7 @@ export default function MapScreen() {
   const fetchPlayer = useCallback(async () => {
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, home_pin_lat, home_pin_lng, home_city')
+      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_pin_lat, home_pin_lng, home_city')
       .eq('clerk_id', userId)
       .maybeSingle();
     setMyPlayer(playerRow);

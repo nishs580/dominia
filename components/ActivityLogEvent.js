@@ -156,6 +156,34 @@ function ContestDefendedRow({ event }) {
   );
 }
 
+function TerritoryDevelopedRow({ event }) {
+  const { t } = useTranslation();
+  const territoryName = getMeta(event, 'territory_name', 'territoryName') ?? '—';
+  const newLevel = getMeta(event, 'new_level', 'newLevel') ?? '—';
+  // Backend metadata carries the English level_name; translate from the
+  // numeric level when we can so ru renders localised names.
+  const levelName = Number.isInteger(Number(newLevel))
+    ? t(`map.devLevelName.${newLevel}`)
+    : getMeta(event, 'level_name', 'levelName') ?? '';
+  return (
+    <RowShell accentColor={CLAIM} label={t('activityEvent.territoryDeveloped')} labelColor={CLAIM} event={event}>
+      <Headline>{t('activityEvent.developedHeadline', { territory: territoryName, levelName })}</Headline>
+      <Text style={styles.supporting}>{t('activityEvent.developedSub', { level: newLevel })}</Text>
+    </RowShell>
+  );
+}
+
+function InfluenceMilestoneRow({ event }) {
+  const { t } = useTranslation();
+  const milestone = getMeta(event, 'milestone') ?? '—';
+  return (
+    <RowShell accentColor={SLATE} label={t('activityEvent.influenceMilestone')} labelColor={SLATE2} event={event}>
+      <Text style={styles.heroNumber}>{Number(milestone).toLocaleString()}</Text>
+      <Text style={styles.supporting}>{t('activityEvent.influenceAccumulated')}</Text>
+    </RowShell>
+  );
+}
+
 function GenericRow({ event, title }) {
   return (
     <RowShell accentColor={SLATE} label={title} labelColor={SLATE2} event={event} />
@@ -181,6 +209,10 @@ export default function ActivityLogEvent({ event }) {
       return <ContestDefendedRow event={event} />;
     case 'leveled_up':
       return <LeveledUpRow event={event} />;
+    case 'territory_developed':
+      return <TerritoryDevelopedRow event={event} />;
+    case 'influence_milestone':
+      return <InfluenceMilestoneRow event={event} />;
     default: {
       const stubKey = `activityEvent.stub.${event.event_type}`;
       const title = (i18n.exists(stubKey) ? t(stubKey) : '') || t('activityEvent.fallback');

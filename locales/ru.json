@@ -521,6 +521,8 @@
     "maxLevel": "Макс. уровень",
     "yourTerritories": "ВАШИ ТЕРРИТОРИИ",
     "noTerritories": "Нет удерживаемых территорий.",
+    "citadels": "ЦИТАДЕЛИ",
+    "citadelRecord": "Цитадель · D4",
     "resources": "РЕСУРСЫ",
     "myResources": "МОИ РЕСУРСЫ",
     "tapToEnter": "нажмите, чтобы войти",
@@ -766,6 +768,11 @@
         "label": "МОРАЛЬ",
         "spend": "Жертвуется в военную казну альянса",
         "earn": "Зарабатывается на испытаниях и миссиях альянса"
+      },
+      "influence": {
+        "label": "ВЛИЯНИЕ",
+        "spend": "Вкладывается в развитие территорий",
+        "earn": "Удерживаемые территории приносят его ежедневно"
       }
     }
   },
@@ -815,7 +822,8 @@
     "demoted": "{{actor}} ПОНИЗИЛ {{subject}}",
     "roleChange": "▸ {{prev}} → {{next}}",
     "kicked": "{{actor}} ИСКЛЮЧИЛ {{subject}}",
-    "kickedBody": "▸ БЫЛ {{role}}"
+    "kickedBody": "▸ БЫЛ {{role}}",
+    "developed": "{{subject}} РАЗВИЛ {{territory}} ДО УРОВНЯ «{{levelName}}»"
   },
   "activityEvent": {
     "streakMilestone": "ВЕХА СЕРИИ",
@@ -833,6 +841,11 @@
     "walkedOf": "{{walked}}м из {{required}}м пройдено",
     "attemptedOf": "{{walked}}м из {{required}}м попытка",
     "walkedInDefence": "{{walked}}м пройдено в обороне",
+    "territoryDeveloped": "ТЕРРИТОРИЯ РАЗВИТА",
+    "developedHeadline": "{{territory}} — {{levelName}}.",
+    "developedSub": "РАЗВИТИЕ D{{level}}",
+    "influenceMilestone": "ВЛИЯНИЕ",
+    "influenceAccumulated": "ВЛИЯНИЯ НАКОПЛЕНО",
     "fallback": "АКТИВНОСТЬ",
     "stub": {
       "challenge_completed": "ИСПЫТАНИЕ ВЫПОЛНЕНО",
@@ -1087,6 +1100,38 @@
     "goToActivity": "К активности",
     "countdownMin": "{{n}} мин",
     "countdownSec": "{{n}} сек",
+    "develop": "Развить",
+    "developTitle": "Развитие",
+    "developTo": "Развить — {{levelName}}",
+    "devConfirmCta": "Подтвердить — {{levelName}}",
+    "devNext": "Далее",
+    "devBecomes": "Станет",
+    "devLevelName": {
+      "0": "Дикая",
+      "1": "Освоенная",
+      "2": "Укреплённая",
+      "3": "Оплот",
+      "4": "Цитадель"
+    },
+    "devResource": {
+      "stone": "Камень",
+      "iron": "Железо",
+      "gold": "Золото",
+      "influence": "Влияние"
+    },
+    "devCostHave": "{{cost}} · есть {{have}}",
+    "devCostAfter": "−{{cost}} → {{after}}",
+    "devGate": "«{{levelName}}» открывается на {{level}} уровне.",
+    "devCitadelComplete": "Цитадель. Развитие завершено.",
+    "devDone": "{{name}} — {{levelName}}.",
+    "devD4Weight": "{{name}} становится Цитаделью. Навсегда. Она переживёт каждого командира — включая вас.",
+    "back": "Назад",
+    "devErr": {
+      "insufficient": "Недостаточно ресурсов.",
+      "levelGate": "Откроется на {{level}} уровне.",
+      "changed": "Состояние развития изменилось. Откройте территорию заново.",
+      "notOwner": "Развивать территорию может только её владелец."
+    },
     "startErr": {
       "levelTooLow": "Достигните {{level}} уровня, чтобы захватывать территории {{tier}}",
       "insufficientGold": "Нужно ещё {{n}} золота",
