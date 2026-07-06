@@ -31,7 +31,7 @@ import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
 import { BASE_TIERS, baseTierForLevel, baseXml } from '../lib/homeBases';
 import { battleChipFor } from '../lib/battleChips';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
@@ -784,13 +784,11 @@ export default function MapScreen() {
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
-  // ── First-run walkthrough + persistent first-claim objective ──────────────
+  // ── First-tap tips + persistent first-claim objective ─────────────────────
   const { width: winW, height: winH } = useWindowDimensions();
   const mapWrapRef = useRef(null);
-  const sideRailWrapRef = useRef(null);
   const [objective, setObjective] = useState(null);
   const [heldCount, setHeldCount] = useState(null);
-  const [walkthroughRunning, setWalkthroughRunning] = useState(false);
   const [showNotifPrime, setShowNotifPrime] = useState(false);
 
   // Position is resolved server-side from the home pin — deterministic and
@@ -854,42 +852,18 @@ export default function MapScreen() {
     setTimeout(openObjectiveSheet, 700);
   }, [objective, openObjectiveSheet]);
 
-  // Final walkthrough step target: fly to the objective, then project its
-  // centre into window coordinates (map-view point + map-view window offset).
-  const objectiveStepRect = useCallback(async () => {
-    if (!objective || !mapRef.current || !cameraRef.current) return null;
-    cameraRef.current.setCamera({
-      centerCoordinate: [objective.longitude, objective.latitude],
-      zoomLevel: 15,
-      animationDuration: 700,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    let pt = null;
-    try {
-      pt = await mapRef.current.getPointInView([objective.longitude, objective.latitude]);
-    } catch {
-      return null;
-    }
-    const px = Array.isArray(pt) ? pt[0] : pt?.x;
-    const py = Array.isArray(pt) ? pt[1] : pt?.y;
-    if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
-    const wrap = await rectFromRef(mapWrapRef);
-    return {
-      x: (wrap?.x ?? 0) + px - 70,
-      y: (wrap?.y ?? 0) + py - 70,
-      width: 140,
-      height: 140,
-    };
-  }, [objective]);
-
-  const walkthroughSteps = useMemo(() => {
+  // Layered map-area tips: the first three touches anywhere on the map fire
+  // intro → colours → card, one per touch. Tab bar and side rail have no
+  // observable tap here (navigation swallows them) — those screens teach
+  // themselves on arrival instead.
+  const mapTips = useMemo(() => {
     const mapRect = async () => {
       const wrap = await rectFromRef(mapWrapRef);
       if (!wrap) return { x: 16, y: winH * 0.2, width: winW - 32, height: winH * 0.4 };
-      return { x: wrap.x + 14, y: wrap.y + wrap.height * 0.16, width: wrap.width - 28, height: wrap.height * 0.5 };
+      return { x: wrap.x, y: wrap.y, width: wrap.width, height: wrap.height };
     };
     const city = myPlayer?.home_city;
-    const steps = [
+    return [
       {
         key: 'intro',
         kicker: t('walkthrough.map.kicker'),
@@ -898,30 +872,13 @@ export default function MapScreen() {
       },
       { key: 'colours', text: t('walkthrough.map.colours'), getRect: mapRect },
       { key: 'card', text: t('walkthrough.map.card'), getRect: mapRect },
-      { key: 'sideRail', text: t('walkthrough.map.sideRail'), getRect: () => rectFromRef(sideRailWrapRef) },
-      {
-        key: 'tabBar',
-        text: t('walkthrough.map.tabBar'),
-        getRect: async () => ({ x: winW / 2 - 40, y: winH - 4, width: 80, height: 2 }),
-      },
     ];
-    if (objective && heldCount === 0) {
-      steps.push({
-        key: 'objective',
-        kicker: t('firstClaim.kicker'),
-        text: t('firstClaim.instruction', {
-          distance: formatWalkDistance(objective.distance_m),
-          name: objective.name,
-        }),
-        cta: t('firstClaim.cta'),
-        getRect: objectiveStepRect,
-      });
-    }
-    return steps;
-  }, [heldCount, myPlayer?.home_city, objective, objectiveStepRect, t, winH, winW]);
+  }, [myPlayer?.home_city, t, winH, winW]);
 
-  // Prime for the notification permission right after the tour — but never
-  // show it to someone who already granted the OS permission.
+  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips });
+
+  // Prime for the notification permission early in the first map session —
+  // but never show it to someone who already granted the OS permission.
   const maybeShowNotifPrime = useCallback(async () => {
     if (!userId) return;
     if (await hasFired(userId, 'notifPrime')) return;
@@ -946,13 +903,13 @@ export default function MapScreen() {
     }
   }, [userId]);
 
-  // Sessions where the map tour already fired but the prime was never
-  // answered (e.g. app killed between the two) still get the prime.
+  // With no auto-running tour, the prime fires shortly after the first map
+  // session settles (objective fetch resolved). hasFired inside
+  // maybeShowNotifPrime keeps it once-ever.
   useEffect(() => {
-    if (heldCount === null || !userId) return;
-    (async () => {
-      if (await hasFired(userId, 'map')) maybeShowNotifPrime();
-    })();
+    if (heldCount === null || !userId) return undefined;
+    const timer = setTimeout(() => maybeShowNotifPrime(), 1200);
+    return () => clearTimeout(timer);
   }, [heldCount, maybeShowNotifPrime, userId]);
 
   const objectiveFillStyle = useMemo(
@@ -1720,7 +1677,7 @@ export default function MapScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View style={styles.resourceBanner}>
         <View style={styles.resourceBannerItem}>
           <IronGlyph size={12} color="#F2EEE6" />
@@ -1742,7 +1699,7 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
-      {objectiveActive && !walkthroughRunning ? (
+      {objectiveActive ? (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [styles.objectiveBanner, pressed && { opacity: 0.9 }]}
@@ -1896,19 +1853,9 @@ export default function MapScreen() {
         showTopBanner={showTopBanner}
         objectiveTerritoryId={objectiveActive ? objective.id : null}
       />
-      <MapSideRail hidden={selected != null} wrapRef={sideRailWrapRef} />
+      <MapSideRail hidden={selected != null} />
 
-      <WalkthroughOverlay
-        screenKey="map"
-        userId={userId}
-        steps={walkthroughSteps}
-        enabled={heldCount !== null && myPlayer != null}
-        onStart={() => setWalkthroughRunning(true)}
-        onDone={() => {
-          setWalkthroughRunning(false);
-          maybeShowNotifPrime();
-        }}
-      />
+      {tips.tipElement}
       <NotifPrimeModal
         visible={showNotifPrime}
         onAllow={() => {

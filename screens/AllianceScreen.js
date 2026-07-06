@@ -11,7 +11,7 @@ import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/alli
 import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -1131,17 +1131,18 @@ export default function AllianceScreen() {
 
   const isMember = Boolean(myAlliance?.id);
 
-  // First-view walkthrough (unaffiliated state only — both targets are absent
-  // for members, so every step self-skips and the tour simply never runs).
+  // First-tap tips (unaffiliated state only — both targets are absent for
+  // members, so no touch can ever match and nothing fires).
   const walkthroughHeaderRef = useRef(null);
   const walkthroughListRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  const allianceTips = useMemo(
     () => [
       { key: 'solo', text: t('walkthrough.alliance.solo'), getRect: () => rectFromRef(walkthroughHeaderRef) },
       { key: 'list', text: t('walkthrough.alliance.list'), getRect: () => rectFromRef(walkthroughListRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'alliance', userId, tips: allianceTips });
 
   if (loading) {
     return (
@@ -1168,7 +1169,7 @@ export default function AllianceScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       {isMember && (
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
@@ -1245,12 +1246,7 @@ export default function AllianceScreen() {
         />
       )}
 
-      <WalkthroughOverlay
-        screenKey="alliance"
-        userId={userId}
-        enabled={!loading && !isMember}
-        steps={walkthroughSteps}
-      />
+      {tips.tipElement}
     </View>
   );
 }

@@ -44,7 +44,7 @@ function levelFromXp(xp) {
   return { level, title: getLevelTitle(level) };
 }
 import { colors, fonts, spacing } from '../lib/theme';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { maybeExplainResources } from '../lib/resourceIntro';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
@@ -222,31 +222,23 @@ export default function ActivityScreen() {
   const weekDayLabels = useMemo(() => t('activity.weekDays', { returnObjects: true }), [t]);
   const { userId, getToken } = useAuth();
 
-  // First-view walkthrough targets. The perm-card step self-skips when the
-  // card isn't rendered (permissions already granted) — its ref stays null.
+  // First-tap tips. A tip fires when the player's finger first lands on the
+  // section (a missing section — e.g. perm card already granted — has a null
+  // ref and simply never matches).
   const walkthroughHeaderRef = useRef(null);
   const walkthroughPermRef = useRef(null);
   const walkthroughChallengesRef = useRef(null);
   const walkthroughAchievementsRef = useRef(null);
-  const walkthroughScrollRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  const activityTips = useMemo(
     () => [
       { key: 'streak', text: t('walkthrough.activity.streak'), getRect: () => rectFromRef(walkthroughHeaderRef) },
       { key: 'health', text: t('walkthrough.activity.health'), getRect: () => rectFromRef(walkthroughPermRef) },
       { key: 'challenges', text: t('walkthrough.activity.challenges'), getRect: () => rectFromRef(walkthroughChallengesRef) },
-      {
-        key: 'achievements',
-        text: t('walkthrough.activity.achievements'),
-        getRect: async () => {
-          // Below the fold on most screens — bring it into view first.
-          walkthroughScrollRef.current?.scrollToEnd({ animated: true });
-          await new Promise((resolve) => setTimeout(resolve, 450));
-          return rectFromRef(walkthroughAchievementsRef);
-        },
-      },
+      { key: 'achievements', text: t('walkthrough.activity.achievements'), getRect: () => rectFromRef(walkthroughAchievementsRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'activity', userId, tips: activityTips });
 
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
@@ -828,7 +820,7 @@ export default function ActivityScreen() {
   }, [weeklySteps, liveSteps, hasStepsPerm, weekDayLabels]);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View ref={walkthroughHeaderRef} collapsable={false} style={styles.headerBlock}>
         <Text style={styles.commanderLabel}>{formatToday(today, i18n.language)}</Text>
         <Text style={styles.commanderName}>{t('activity.title')}</Text>
@@ -841,7 +833,6 @@ export default function ActivityScreen() {
       </View>
 
       <ScrollView
-        ref={walkthroughScrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -1076,12 +1067,7 @@ export default function ActivityScreen() {
         </View>
       </ScrollView>
 
-      <WalkthroughOverlay
-        screenKey="activity"
-        userId={userId}
-        enabled={challengesLoaded}
-        steps={walkthroughSteps}
-      />
+      {tips.tipElement}
     </View>
   );
 }

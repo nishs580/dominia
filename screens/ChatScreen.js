@@ -28,7 +28,7 @@ import {
   patchReadState,
   postMessage,
 } from '../lib/chatApi';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import {
   connectChatRealtime,
   disconnectChatRealtime,
@@ -53,14 +53,15 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
-  // First-view walkthrough — single step over the room tabs.
+  // First-tap tip on the room tabs.
   const walkthroughTabsRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  const chatTips = useMemo(
     () => [
       { key: 'room', text: t('walkthrough.chat.roomNoCity'), getRect: () => rectFromRef(walkthroughTabsRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'chat', userId, tips: chatTips });
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const navigation = useNavigation();
@@ -454,6 +455,7 @@ export default function ChatScreen() {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      onTouchStart={tips.onTouchStart}
     >
       <View style={styles.header}>
         <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
@@ -537,7 +539,7 @@ export default function ChatScreen() {
         </View>
       ) : null}
 
-      <WalkthroughOverlay screenKey="chat" userId={userId} steps={walkthroughSteps} />
+      {tips.tipElement}
     </KeyboardAvoidingView>
   );
 }

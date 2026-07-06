@@ -19,20 +19,21 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import ActivityLogEvent from '../components/ActivityLogEvent';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 export default function ActivityLogScreen() {
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
-  // First-view walkthrough — single step over the header.
-  const walkthroughHeaderRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  // First-tap tip anywhere on the screen (header + feed are one surface).
+  const walkthroughRootRef = useRef(null);
+  const logTips = useMemo(
     () => [
-      { key: 'feed', text: t('walkthrough.activityLog.feed'), getRect: () => rectFromRef(walkthroughHeaderRef) },
+      { key: 'feed', text: t('walkthrough.activityLog.feed'), getRect: () => rectFromRef(walkthroughRootRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'activityLog', userId, tips: logTips });
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
@@ -136,8 +137,8 @@ export default function ActivityLogScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
+    <View ref={walkthroughRootRef} collapsable={false} style={styles.screen} onTouchStart={tips.onTouchStart}>
+      <View style={styles.header}>
         <Text style={styles.sectionLabel}>{t('activityLog.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
@@ -158,7 +159,7 @@ export default function ActivityLogScreen() {
         }
       />
 
-      <WalkthroughOverlay screenKey="activityLog" userId={userId} steps={walkthroughSteps} />
+      {tips.tipElement}
     </View>
   );
 }

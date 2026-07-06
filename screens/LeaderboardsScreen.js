@@ -19,7 +19,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { getLeaderboard } from '../lib/leaderboardApi';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { supabase } from '../lib/supabase';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 
@@ -149,16 +149,17 @@ export default function LeaderboardsScreen() {
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
-  // First-view walkthrough targets (board strip + players/alliances strip).
+  // First-tap tips (board strip + players/alliances strip).
   const walkthroughBoardsRef = useRef(null);
   const walkthroughSubjectRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  const boardTips = useMemo(
     () => [
       { key: 'boards', text: t('walkthrough.leaderboards.boards'), getRect: () => rectFromRef(walkthroughBoardsRef) },
       { key: 'toggle', text: t('walkthrough.leaderboards.toggle'), getRect: () => rectFromRef(walkthroughSubjectRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'leaderboards', userId, tips: boardTips });
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const fetchSeqRef = useRef(0);
@@ -310,7 +311,7 @@ export default function LeaderboardsScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View style={styles.header}>
         <Text style={styles.sectionLabel}>{t('leaderboards.title')}</Text>
         <View style={styles.hairlineStrong} />
@@ -365,11 +366,7 @@ export default function LeaderboardsScreen() {
 
       {renderBody()}
 
-      <WalkthroughOverlay
-        screenKey="leaderboards"
-        userId={userId}
-        steps={walkthroughSteps}
-      />
+      {tips.tipElement}
     </View>
   );
 }

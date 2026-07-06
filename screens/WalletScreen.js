@@ -24,7 +24,7 @@ import {
   GoldGlyph,
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 const INK = '#0E1014';
 const BONE = '#F2EEE6';
@@ -55,15 +55,16 @@ export default function WalletScreen({ route }) {
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
-  // First-view walkthrough — single step; the resource cards carry their own
-  // permanent earn/spend lines, so no per-resource copy here.
+  // First-tap tip; the resource cards carry their own permanent earn/spend
+  // lines, so no per-resource copy here.
   const walkthroughWalletRef = useRef(null);
-  const walkthroughSteps = useMemo(
+  const walletTips = useMemo(
     () => [
       { key: 'intro', text: t('walkthrough.wallet.intro'), getRect: () => rectFromRef(walkthroughWalletRef) },
     ],
     [t],
   );
+  const tips = useFirstTapTips({ screenKey: 'wallet', userId, tips: walletTips });
   const { playerId = null, username = '' } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
@@ -150,7 +151,7 @@ export default function WalletScreen({ route }) {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View style={styles.headerBlock}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>{t('wallet.back')}</Text>
@@ -226,12 +227,7 @@ export default function WalletScreen({ route }) {
         ) : null}
       </ScrollView>
 
-      <WalkthroughOverlay
-        screenKey="wallet"
-        userId={userId}
-        enabled={!loading}
-        steps={walkthroughSteps}
-      />
+      {tips.tipElement}
 
       <Modal
         visible={donateModalVisible}

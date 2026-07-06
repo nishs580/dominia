@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -11,7 +11,7 @@ import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { logDebug } from '../lib/debug';
-import WalkthroughOverlay, { rectFromRef } from '../components/WalkthroughOverlay';
+import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import {
   calcLevel,
   calcLevelProgress,
@@ -335,39 +335,26 @@ export default function ProfileScreen() {
   const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
 
-  // First-view walkthrough targets. Sections below the fold are scrolled into
-  // view before measuring (measureInWindow returns window coordinates, so the
-  // current scroll offset feeds the reveal maths).
+  // First-tap tips — each section explains itself the first time the player's
+  // finger lands on it (rects are measured at touch time, so scroll position
+  // is always current).
   const walkthroughIdentityRef = useRef(null);
   const walkthroughPowerRef = useRef(null);
   const walkthroughXpRef = useRef(null);
   const walkthroughTerritoriesRef = useRef(null);
   const walkthroughResourcesRef = useRef(null);
-  const walkthroughScrollRef = useRef(null);
-  const walkthroughScrollY = useRef(0);
 
-  const walkthroughSteps = useMemo(() => {
-    const reveal = async (ref) => {
-      let rect = await rectFromRef(ref);
-      if (!rect) return null;
-      const winH = Dimensions.get('window').height;
-      const visibleBottom = winH - 140;
-      if (rect.y < 80 || rect.y + Math.min(rect.height, 220) > visibleBottom) {
-        const targetY = Math.max(0, walkthroughScrollY.current + rect.y - winH * 0.28);
-        walkthroughScrollRef.current?.scrollTo({ y: targetY, animated: true });
-        await new Promise((resolve) => setTimeout(resolve, 450));
-        rect = await rectFromRef(ref);
-      }
-      return rect;
-    };
-    return [
+  const profileTips = useMemo(
+    () => [
       { key: 'identity', text: t('walkthrough.profile.identity'), getRect: () => rectFromRef(walkthroughIdentityRef) },
-      { key: 'power', text: t('walkthrough.profile.power'), getRect: () => reveal(walkthroughPowerRef) },
-      { key: 'xp', text: t('walkthrough.profile.xp'), getRect: () => reveal(walkthroughXpRef) },
-      { key: 'territories', text: t('walkthrough.profile.territories'), getRect: () => reveal(walkthroughTerritoriesRef) },
-      { key: 'resources', text: t('walkthrough.profile.resources'), getRect: () => reveal(walkthroughResourcesRef) },
-    ];
-  }, [t]);
+      { key: 'power', text: t('walkthrough.profile.power'), getRect: () => rectFromRef(walkthroughPowerRef) },
+      { key: 'xp', text: t('walkthrough.profile.xp'), getRect: () => rectFromRef(walkthroughXpRef) },
+      { key: 'territories', text: t('walkthrough.profile.territories'), getRect: () => rectFromRef(walkthroughTerritoriesRef) },
+      { key: 'resources', text: t('walkthrough.profile.resources'), getRect: () => rectFromRef(walkthroughResourcesRef) },
+    ],
+    [t],
+  );
+  const tips = useFirstTapTips({ screenKey: 'profile', userId, tips: profileTips });
   const { user } = useUser();
 
   const [loading, setLoading] = useState(true);
@@ -613,7 +600,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       {!loading && playerRow ? (
         <Pressable
           ref={walkthroughIdentityRef}
@@ -661,13 +648,7 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView
-        ref={walkthroughScrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
-        onScroll={(e) => { walkthroughScrollY.current = e.nativeEvent.contentOffset.y; }}
-        scrollEventThrottle={16}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
@@ -895,12 +876,7 @@ export default function ProfileScreen() {
       ) : null}
       </ScrollView>
 
-      <WalkthroughOverlay
-        screenKey="profile"
-        userId={userId}
-        enabled={!loading && playerRow != null}
-        steps={walkthroughSteps}
-      />
+      {tips.tipElement}
     </View>
   );
 }
