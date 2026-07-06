@@ -1112,7 +1112,16 @@
       "colours": "Empty territories are unclaimed. Red marks what you hold. Green marks your allies. Blue marks your rivals.",
       "card": "Tap any territory to see its name, its owner, and the distance you'd walk to take it.",
       "sideRail": "City chat, the leaderboards, and a live log of your activity in Dominia.",
-      "tabBar": "Activity pays you for moving. Alliance comes later. Profile is your record."
+      "tabBar": "Activity pays you for moving. Alliance comes later. Profile is your record.",
+      "coloursParts": {
+        "pre": "Empty territories are unclaimed. ",
+        "red": "Red",
+        "redRest": " marks what you hold. ",
+        "green": "Green",
+        "greenRest": " marks your allies. ",
+        "blue": "Blue",
+        "blueRest": " marks your rivals."
+      }
     },
     "activity": {
       "streak": "Move every day and the streak grows. Longer streaks earn a bonus when attacking and defending territories.",

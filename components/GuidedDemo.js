@@ -25,16 +25,18 @@ const SCRIM = 'rgba(14,16,20,0.72)';
  * Mounted above the tab navigator so it can cover the tab bar. Two step
  * kinds: "read" steps dim everything, leave the explained element undimmed,
  * and advance on a tap anywhere; "directed" steps block everything except one
- * hole (a territory, a tab button) and advance only when the player performs
- * that exact tap — the app underneath handles it for real. There is no
- * system-driven motion: the only animation is a 280ms card fade, per brand
- * motion rules. SKIP TOUR is always available and ends the tour without
- * marking the per-element tips, so the reactive tips backfill anything a
- * skipper never read.
+ * hole (a territory, a tab button) — framed in Claim red so the eye lands on
+ * it — and advance only when the player performs that exact tap for real.
+ * No system-driven motion beyond a 280ms card fade, per brand motion rules.
  *
- * The tour ends where the mechanic starts: the first-claim instruction. It
- * never force-taps the Claim button (that would open a real, expiring claim
- * intent) — the persistent objective banner owns the player from there.
+ * The tour starts immediately (no waiting on the network). The first-claim
+ * beats resolve lazily when the tour reaches them: the objective fetch gets
+ * the whole duration of the first two read beats to survive a backend cold
+ * start. Territory holders (held_count > 0) never get the claim beats.
+ *
+ * SKIP TOUR is always available and ends the tour without marking the
+ * per-element tips, so the reactive tips backfill anything a skipper never
+ * read. Completing marks them — nothing is explained twice.
  */
 export default function GuidedDemo() {
   const { userId } = useAuth();
@@ -52,6 +54,7 @@ export default function GuidedDemo() {
   const statusRef = useRef('idle');
   const shownTipFlagsRef = useRef([]);
   const layoutRef = useRef(null);
+  const objectiveRef = useRef(null);
   const cardOpacity = useRef(new Animated.Value(0)).current;
 
   const tabBarHeight = 62 + insets.bottom;
@@ -68,52 +71,56 @@ export default function GuidedDemo() {
   });
 
   const buildSteps = useCallback(
-    (objective, city) => {
-      const steps = [
-        {
-          key: 'intro',
-          kind: 'read',
-          tipFlag: 'tip:map:intro',
-          text: city
-            ? t('walkthrough.map.intro', { city })
-            : t('walkthrough.map.introNoCity'),
-        },
-        { key: 'colours', kind: 'read', tipFlag: 'tip:map:colours', text: t('walkthrough.map.colours') },
-      ];
-      if (objective) {
-        steps.push(
-          {
-            key: 'tapTerritory',
-            kind: 'target-territory',
-            tipFlag: 'tip:map:card',
-            kicker: t('firstClaim.kicker'),
-            text: t('demo.tapTerritory', { name: objective.name }),
-          },
-          {
-            key: 'sheet',
-            kind: 'sheet',
-            kicker: t('firstClaim.kicker'),
-            text: `${t('firstClaim.instruction', {
-              distance: formatWalkDistance(objective.distance_m),
-              name: objective.name,
-            })} ${t('demo.fromAnywhere')}`,
-            cta: t('walkthrough.gotIt'),
-          },
-        );
-      }
-      steps.push(
-        { key: 'tapActivity', kind: 'target-tab', tab: 'Activity', text: t('demo.tapActivity') },
-        { key: 'streak', kind: 'read', rectKey: 'activity.streak', tipFlag: 'tip:activity:streak', text: t('walkthrough.activity.streak') },
-        { key: 'challenges', kind: 'read', rectKey: 'activity.challenges', tipFlag: 'tip:activity:challenges', text: t('walkthrough.activity.challenges') },
-        { key: 'tapAlliance', kind: 'target-tab', tab: 'Alliance', text: t('demo.tapAlliance') },
-        { key: 'solo', kind: 'read', rectKey: 'alliance.solo', tipFlag: 'tip:alliance:solo', skipIfNoRect: true, text: t('walkthrough.alliance.solo') },
-        { key: 'tapProfile', kind: 'target-tab', tab: 'Profile', text: t('demo.tapProfile') },
-        { key: 'power', kind: 'read', rectKey: 'profile.power', tipFlag: 'tip:profile:power', text: t('walkthrough.profile.power') },
-        { key: 'resources', kind: 'read', rectKey: 'profile.resources', tipFlag: 'tip:profile:resources', text: t('walkthrough.profile.resources') },
-        { key: 'tapMap', kind: 'target-tab', tab: 'Map', text: t('demo.tapMap') },
-      );
-      return steps;
-    },
+    (city) => [
+      {
+        key: 'intro',
+        kind: 'read',
+        tipFlag: 'tip:map:intro',
+        text: city
+          ? t('walkthrough.map.intro', { city })
+          : t('walkthrough.map.introNoCity'),
+      },
+      {
+        key: 'colours',
+        kind: 'read',
+        tipFlag: 'tip:map:colours',
+        // Colour words typeset in their own territory colour (map screen —
+        // the max-two-territory-colours rule does not apply here).
+        segments: [
+          { text: t('walkthrough.map.coloursParts.pre') },
+          { text: t('walkthrough.map.coloursParts.red'), color: colors.claim },
+          { text: t('walkthrough.map.coloursParts.redRest') },
+          { text: t('walkthrough.map.coloursParts.green'), color: colors.alliance },
+          { text: t('walkthrough.map.coloursParts.greenRest') },
+          { text: t('walkthrough.map.coloursParts.blue'), color: colors.enemy },
+          { text: t('walkthrough.map.coloursParts.blueRest') },
+        ],
+        text: t('walkthrough.map.colours'),
+      },
+      {
+        key: 'tapTerritory',
+        kind: 'target-territory',
+        tipFlag: 'tip:map:card',
+        kicker: t('firstClaim.kicker'),
+        dynamic: true,
+      },
+      {
+        key: 'sheet',
+        kind: 'sheet',
+        kicker: t('firstClaim.kicker'),
+        cta: t('walkthrough.gotIt'),
+        dynamic: true,
+      },
+      { key: 'tapActivity', kind: 'target-tab', tab: 'Activity', text: t('demo.tapActivity') },
+      { key: 'streak', kind: 'read', rectKey: 'activity.streak', tipFlag: 'tip:activity:streak', text: t('walkthrough.activity.streak') },
+      { key: 'challenges', kind: 'read', rectKey: 'activity.challenges', tipFlag: 'tip:activity:challenges', text: t('walkthrough.activity.challenges') },
+      { key: 'tapAlliance', kind: 'target-tab', tab: 'Alliance', text: t('demo.tapAlliance') },
+      { key: 'solo', kind: 'read', rectKey: 'alliance.solo', tipFlag: 'tip:alliance:solo', skipIfNoRect: true, text: t('walkthrough.alliance.solo') },
+      { key: 'tapProfile', kind: 'target-tab', tab: 'Profile', text: t('demo.tapProfile') },
+      { key: 'power', kind: 'read', rectKey: 'profile.power', tipFlag: 'tip:profile:power', text: t('walkthrough.profile.power') },
+      { key: 'resources', kind: 'read', rectKey: 'profile.resources', tipFlag: 'tip:profile:resources', text: t('walkthrough.profile.resources') },
+      { key: 'tapMap', kind: 'target-tab', tab: 'Map', text: t('demo.tapMap') },
+    ],
     [t],
   );
 
@@ -129,14 +136,22 @@ export default function GuidedDemo() {
     [tabBarHeight],
   );
 
+  // Latest first-claim state from MapScreen; undefined = not yet resolved.
+  const waitForObjectiveResolution = useCallback(async (timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const payload = getLastDemoEvent('map.objectiveResolved');
+      if (payload !== undefined) return payload ?? null;
+      if (Date.now() >= deadline) return null;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }, []);
+
   const finish = useCallback(
     (completed) => {
       if (statusRef.current === 'done') return;
       markFired(userId, 'demo');
       if (completed) {
-        // Completing the tour counts as having read these — the reactive
-        // first-tap tips must not repeat them. Skipping leaves them unread,
-        // so the tips backfill later.
         shownTipFlagsRef.current.forEach((flag) => markFired(userId, flag));
       }
       setDemoActive(false);
@@ -169,15 +184,39 @@ export default function GuidedDemo() {
           return;
         }
       } else if (step.kind === 'target-territory') {
-        // Provider flies the camera to the objective and projects it — slow
-        // by design, so few tries.
+        // Lazy first-claim resolution: the backend had the two read beats to
+        // wake up. Holders (held_count > 0) resolve to a null objective and
+        // skip both claim beats by design.
+        const payload = await waitForObjectiveResolution(12000);
+        const objective = payload?.objective ?? null;
+        objectiveRef.current = objective;
+        if (!objective) {
+          console.log(
+            '[demo] claim beats skipped:',
+            payload == null
+              ? 'objective unresolved (timeout or fetch failed)'
+              : 'no claimable target (player already holds territory, or none exists)',
+          );
+          runStep(index + 2);
+          return;
+        }
+        step.text = t('demo.tapTerritory', { name: objective.name });
         rect = await resolveDemoRect('map.objectiveRect', { tries: 3, delayMs: 300 });
         if (!rect) {
-          // No claimable target measurable — drop the claim beats entirely.
+          console.log('[demo] claim beats skipped: objective rect unmeasurable');
           runStep(index + 2);
           return;
         }
       } else if (step.kind === 'sheet') {
+        const objective = objectiveRef.current;
+        if (!objective) {
+          runStep(index + 1);
+          return;
+        }
+        step.text = `${t('firstClaim.instruction', {
+          distance: formatWalkDistance(objective.distance_m),
+          name: objective.name,
+        })} ${t('demo.fromAnywhere')}`;
         const box = layoutRef.current;
         if (box) rect = { x: 0, y: box.height * 0.52, width: box.width, height: box.height * 0.48 };
       } else if (step.kind === 'target-tab') {
@@ -190,19 +229,19 @@ export default function GuidedDemo() {
       setCardVisible(true);
       Animated.timing(cardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     },
-    [cardOpacity, finish, tabRect],
+    [cardOpacity, finish, t, tabRect, waitForObjectiveResolution],
   );
 
   const advance = useCallback(() => {
     runStep(stepIndexRef.current + 1);
   }, [runStep]);
 
-  // Boot: wait for MapScreen to resolve the first-claim objective, then run.
+  // Boot: block interaction from the first frame, give the player fetch a
+  // moment to supply the city name, then run — the tour never waits on the
+  // first-claim endpoint here.
   useEffect(() => {
     if (!userId || statusRef.current !== 'idle') return undefined;
     let cancelled = false;
-    let unsubscribe = () => {};
-    let fallbackTimer = null;
 
     (async () => {
       if (await hasFired(userId, 'demo')) {
@@ -210,41 +249,30 @@ export default function GuidedDemo() {
         return;
       }
       if (cancelled) return;
-      // Block interaction from the first frame so there is no window of
-      // free play before the tour takes over.
       setDemoActive(true);
       setStatus('blocking');
       statusRef.current = 'blocking';
 
-      const start = (objective, city) => {
-        if (cancelled || statusRef.current === 'running' || statusRef.current === 'done') return;
-        stepsRef.current = buildSteps(objective, city);
-        setStatus('running');
-        statusRef.current = 'running';
-        runStep(0);
-      };
-
-      unsubscribe = onDemoEvent((name, payload) => {
-        if (name === 'map.objectiveResolved') {
-          start(payload?.objective ?? null, payload?.city ?? null);
+      const deadline = Date.now() + 1200;
+      let city = null;
+      while (Date.now() < deadline && !cancelled) {
+        const payload = getLastDemoEvent('map.objectiveResolved');
+        if (payload !== undefined) {
+          city = payload?.city ?? null;
+          break;
         }
-      });
-      // The map may have resolved the objective before this subscription
-      // existed (both mount in the same commit; this effect awaits storage).
-      const replay = getLastDemoEvent('map.objectiveResolved');
-      if (replay !== undefined) {
-        start(replay?.objective ?? null, replay?.city ?? null);
-        return;
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-      // Objective fetch failed or is slow — tour the screens without the
-      // claim beats rather than holding the player hostage.
-      fallbackTimer = setTimeout(() => start(null, null), 8000);
+      if (cancelled || statusRef.current !== 'blocking') return;
+
+      stepsRef.current = buildSteps(city);
+      setStatus('running');
+      statusRef.current = 'running';
+      runStep(0);
     })();
 
     return () => {
       cancelled = true;
-      unsubscribe();
-      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [buildSteps, runStep, userId]);
 
@@ -310,6 +338,23 @@ export default function GuidedDemo() {
         <View style={[styles.scrim, StyleSheet.absoluteFill]} />
       )}
 
+      {interactiveHole && holeRect ? (
+        // The tap target must catch the eye: Claim frame around the hole
+        // (Claim = the single urgent action, and these steps are that action).
+        <View
+          pointerEvents="none"
+          style={[
+            styles.holeFrame,
+            {
+              left: holeRect.x,
+              top: holeRect.y,
+              width: holeRect.width,
+              height: holeRect.height,
+            },
+          ]}
+        />
+      ) : null}
+
       {step && !interactiveHole && step.kind !== 'sheet' ? (
         // Read steps: the hole is visual only — a tap anywhere advances.
         <Pressable style={StyleSheet.absoluteFill} onPress={advance} accessibilityRole="button" />
@@ -323,9 +368,22 @@ export default function GuidedDemo() {
       {cardVisible && step ? (
         <Animated.View style={[styles.card, cardPos, { opacity: cardOpacity }]} pointerEvents="box-none">
           {step.kicker ? <Text style={styles.kicker}>{step.kicker}</Text> : null}
-          <Text style={styles.body} accessibilityLiveRegion="polite">
-            {step.text}
-          </Text>
+          {step.segments ? (
+            <Text style={styles.body} accessibilityLiveRegion="polite">
+              {step.segments.map((seg, i) => (
+                <Text
+                  key={`${step.key}-${i}`}
+                  style={seg.color ? { color: seg.color, fontFamily: fonts.bodyMedium } : null}
+                >
+                  {seg.text}
+                </Text>
+              ))}
+            </Text>
+          ) : (
+            <Text style={styles.body} accessibilityLiveRegion="polite">
+              {step.text}
+            </Text>
+          )}
           {step.cta ? (
             <Pressable
               accessibilityRole="button"
@@ -357,6 +415,11 @@ const styles = StyleSheet.create({
   scrim: {
     position: 'absolute',
     backgroundColor: SCRIM,
+  },
+  holeFrame: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: colors.claim,
   },
   card: {
     position: 'absolute',
