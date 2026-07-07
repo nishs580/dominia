@@ -9,7 +9,8 @@ import {
   getGrantedPermissions,
   requestPermission,
   openHealthConnectSettings,
-  readRecords,
+  aggregateRecord,
+  aggregateGroupByPeriod,
 } from 'react-native-health-connect';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,6 +50,17 @@ import { maybeExplainResources } from '../lib/resourceIntro';
 import { registerDemoRect } from '../lib/demoRegistry';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
+
+// A challenge auto-complete can 403 (backend's accepted aggregate under the
+// tier threshold) even when the on-device live metric is already over target:
+// the live foreground counter runs ahead of the Health Connect data that gets
+// flushed and aggregated server-side, and HC can take minutes to finalize
+// recent steps/distance. So a 403 is usually transient — retry on a cooldown
+// while the metric stays over target, letting the server catch up, rather than
+// blocking the tier for the rest of the day. Bounded so an axis that never
+// catches up (e.g. a stride over-estimate) doesn't retry forever.
+const CHALLENGE_403_COOLDOWN_MS = 60_000;
+const CHALLENGE_403_MAX_ATTEMPTS = 8;
 
 // Per-day conscious axis choice (memory: daily-challenge-redesign). The
 // server locks the axis on first completion; before that, this records the
@@ -261,6 +273,10 @@ export default function ActivityScreen() {
   const [challengesLoaded, setChallengesLoaded] = useState(false);
   const [permRequesting, setPermRequesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState(0);
+  // Live measured distance (HC Distance aggregate) — the same metric the backend
+  // gates distance challenges on. Kept separate from the steps×stride estimate,
+  // which is now only a fallback for players without the Distance permission.
+  const [liveDistanceM, setLiveDistanceM] = useState(0);
   const [strideM, setStrideM] = useState(0.75);
   // 4-axis daily menu — server-authoritative state from /me/challenges/today.
   const [todayMenu, setTodayMenu] = useState(null);
@@ -270,7 +286,8 @@ export default function ActivityScreen() {
   const [viewAxis, setViewAxis] = useState(null);
   // Daily Achievements: today's totals + all-time best single-day totals,
   // aggregated server-side from accepted activity_samples. Distance today is
-  // shown from on-device steps × stride (live); everything else comes from here.
+  // shown live from measured HC distance (axisCurrent); the best column and
+  // active-minutes come from here.
   const [bests, setBests] = useState({
     today: { distance_m: 0, active_minutes: 0 },
     best: { distance_m: 0, active_minutes: 0 },
@@ -286,13 +303,18 @@ export default function ActivityScreen() {
   // otherwise a failing refresh floods the backend with doomed 401 calls.
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
-  // Challenges the backend has rejected this session because its accepted
-  // daily_steps total is still under threshold (a deterministic 403). Maps
-  // ch.key -> the liveSteps reading when it was rejected, so the auto-complete
-  // effect won't re-attempt until the player has actually walked further.
-  // Without this, the effect re-fires on every completedKeys/isCompleting
-  // toggle and floods the backend with identical, doomed requests.
+  // Challenges the backend rejected this session with a 403 (accepted aggregate
+  // still under the tier threshold). Maps ch.key -> { at, attempts }: `at` is
+  // the last-rejection time (cooldown anchor) and `attempts` caps total retries.
+  // A 403 is treated as transient (see CHALLENGE_403_* above) — the tier is
+  // retried after each cooldown while its live metric stays over target, so a
+  // completion that's only blocked by HC/flush lag lands once the server catches
+  // up, instead of being stuck for the rest of the day.
   const blockedKeysRef = useRef(new Map());
+  // Bumped by a timer while any tier is in 403 cooldown, so the auto-complete
+  // effect re-evaluates even when liveSteps is flat (player idle, waiting for
+  // the server aggregate to catch up).
+  const [retryTick, setRetryTick] = useState(0);
 
   const today = useMemo(() => new Date(), []);
   // Device-local day key — used only for the per-day axis-choice storage.
@@ -445,12 +467,17 @@ export default function ActivityScreen() {
       const agg = todayMenu?.aggregates;
       if (axis === 'steps') return Math.max(liveSteps, Number(agg?.daily_steps) || 0);
       if (axis === 'distance') {
-        return Math.max(Math.floor(liveSteps * strideM), Number(agg?.daily_distance_m) || 0);
+        // Prefer measured distance — the same source the backend accumulates in
+        // daily_distance_m — so the row and the completion gate agree. The
+        // steps×stride estimate is only a fallback when the Distance permission
+        // isn't granted, mirroring the backend's per-sample sensor-else-stride rule.
+        const liveM = hasDistPerm ? liveDistanceM : Math.floor(liveSteps * strideM);
+        return Math.max(liveM, Number(agg?.daily_distance_m) || 0);
       }
       if (axis === 'calories') return Number(agg?.daily_calories) || 0;
       return Number(agg?.daily_tempo_tier) || 0;
     },
-    [todayMenu, liveSteps, strideM],
+    [todayMenu, liveSteps, liveDistanceM, hasDistPerm, strideM],
   );
 
   const activeAxis = viewAxis ?? armedAxis ?? 'steps';
@@ -532,11 +559,16 @@ export default function ActivityScreen() {
         // Revert optimistic UI.
         console.log('[onCompleteChallenge] backend failed', result.status, result.error);
         // A 403 here is the under-threshold gate: the backend's accepted
-        // aggregate is below this tier's target even after we flushed. It's
-        // deterministic, so block auto-retries until the axis metric grows —
-        // otherwise the auto-complete effect spins on it forever.
+        // aggregate is below this tier's target even after we flushed. This is
+        // usually transient HC/flush lag, so arm a cooldown + attempt counter
+        // (CHALLENGE_403_*) instead of blocking for the day — the auto-complete
+        // effect retries after each cooldown until it lands or runs out of budget.
         if (result.status === 403) {
-          blockedKeysRef.current.set(ch.key, axisCurrent(ch.axis));
+          const prev = blockedKeysRef.current.get(ch.key);
+          blockedKeysRef.current.set(ch.key, {
+            at: Date.now(),
+            attempts: (prev?.attempts ?? 0) + 1,
+          });
         }
         // 409 axis_locked: the server knows a lock this client hasn't seen
         // yet (another device, or a stale menu). Resync and inform.
@@ -634,22 +666,47 @@ export default function ActivityScreen() {
     try {
       const start = startOfLocalDay();
       const end = new Date();
-      const result = await readRecords('Steps', {
+      // Use the aggregate API (COUNT_TOTAL), NOT a sum of raw records. Health
+      // Connect holds step records from multiple sources (Google Fit, the phone
+      // provider, other fitness apps) that overlap in time; summing raw records
+      // double-counts that overlap, which inflated liveSteps to ~2x. Aggregation
+      // de-duplicates by source priority — the same deduped total the producer
+      // flushes and the backend gates challenges on, so display == server truth.
+      const result = await aggregateRecord({
+        recordType: 'Steps',
         timeRangeFilter: {
           operator: 'between',
           startTime: start.toISOString(),
           endTime: end.toISOString(),
         },
       });
-      const total = (result?.records ?? []).reduce(
-        (s, r) => s + (Number(r?.count) || 0),
-        0,
-      );
-      setLiveSteps(total);
+      setLiveSteps(Number(result?.COUNT_TOTAL) || 0);
     } catch (e) {
       console.warn('[HC] read failed:', e?.message ?? e);
     }
   }, [hcReady, hasStepsPerm]);
+
+  // Live measured distance for the day — deduped HC Distance aggregate, matching
+  // the backend's daily_distance_m source. Only meaningful with the Distance
+  // permission; without it the distance axis falls back to the step estimate.
+  const readTodayDistance = useCallback(async () => {
+    if (!hcReady || !hasDistPerm) return;
+    try {
+      const start = startOfLocalDay();
+      const end = new Date();
+      const result = await aggregateRecord({
+        recordType: 'Distance',
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+        },
+      });
+      setLiveDistanceM(Number(result?.DISTANCE?.inMeters) || 0);
+    } catch (e) {
+      console.warn('[HC] distance read failed:', e?.message ?? e);
+    }
+  }, [hcReady, hasDistPerm]);
 
   const readWeeklySteps = useCallback(async () => {
     if (!hcReady || !hasStepsPerm) return;
@@ -658,20 +715,24 @@ export default function ActivityScreen() {
       const start = startOfLocalDay();
       start.setDate(start.getDate() - 6);
 
-      const result = await readRecords('Steps', {
+      // Per-day aggregate (deduped), not a sum of raw records — see
+      // readTodaySteps: raw records overlap across sources and double-count.
+      const groups = await aggregateGroupByPeriod({
+        recordType: 'Steps',
         timeRangeFilter: {
           operator: 'between',
           startTime: start.toISOString(),
           endTime: end.toISOString(),
         },
+        timeRangeSlicer: { period: 'DAYS', length: 1 },
       });
 
       const buckets = {};
-      for (const r of result?.records ?? []) {
-        const t = r?.startTime ?? r?.endTime;
+      for (const g of groups ?? []) {
+        const t = g?.startTime;
         if (!t) continue;
         const key = localDayKey(new Date(t));
-        buckets[key] = (buckets[key] || 0) + (Number(r?.count) || 0);
+        buckets[key] = (buckets[key] || 0) + (Number(g?.result?.COUNT_TOTAL) || 0);
       }
 
       const rows = [];
@@ -717,20 +778,24 @@ export default function ActivityScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hcReady || !hasStepsPerm) return;
-      readTodaySteps();
+      const pollLive = () => {
+        readTodaySteps();
+        readTodayDistance();
+      };
+      pollLive();
       readWeeklySteps();
       loadBests();
       loadTodayMenu();
-      pollRef.current = setInterval(readTodaySteps, 10000);
-      // kcal / distance / tempo aggregates only move server-side (producer
-      // flushes every ~2 min) — refresh the menu on a slower cadence.
+      pollRef.current = setInterval(pollLive, 10000);
+      // kcal / tempo aggregates only move server-side (producer flushes every
+      // ~2 min) — refresh the menu on a slower cadence.
       const menuPoll = setInterval(loadTodayMenu, 60000);
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
         clearInterval(menuPoll);
       };
-    }, [hcReady, hasStepsPerm, readTodaySteps, readWeeklySteps, loadBests, loadTodayMenu]),
+    }, [hcReady, hasStepsPerm, readTodaySteps, readTodayDistance, readWeeklySteps, loadBests, loadTodayMenu]),
   );
 
   async function handleRequestStepsPerm() {
@@ -781,12 +846,14 @@ export default function ActivityScreen() {
         if (completedKeys.has(def.earnKey)) continue;
         if (inFlightTiersRef.current.has(def.earnKey)) continue;
         if (isCompleting.has(def.earnKey)) continue;
-        // Skip a challenge the backend already rejected as under-threshold
-        // until the axis metric has actually grown past the rejection point.
-        // Each retry re-blocks at the higher value if it 403s again, so
-        // retries track real progress instead of hammering a doomed request.
-        const blockedAt = blockedKeysRef.current.get(def.earnKey);
-        if (blockedAt != null && current <= blockedAt) continue;
+        // A challenge the backend rejected as under-threshold is retried on a
+        // cooldown (the rejection is usually just HC/flush lag) until it either
+        // lands or exhausts its attempt budget — see CHALLENGE_403_* above.
+        const blocked = blockedKeysRef.current.get(def.earnKey);
+        if (blocked != null) {
+          if (blocked.attempts >= CHALLENGE_403_MAX_ATTEMPTS) continue;
+          if (Date.now() - blocked.at < CHALLENGE_403_COOLDOWN_MS) continue;
+        }
         inFlightTiersRef.current.add(def.earnKey);
         try {
           await onCompleteChallenge({
@@ -812,7 +879,25 @@ export default function ActivityScreen() {
     completedKeys,
     isCompleting,
     challengesLoaded,
+    retryTick,
   ]);
+
+  // Drive 403-cooldown retries when liveSteps is flat (idle player): while any
+  // rejected tier still has retry budget, poke the auto-complete effect once
+  // per cooldown so it re-attempts as the server aggregate catches up.
+  useEffect(() => {
+    const id = setInterval(() => {
+      let anyRetryable = false;
+      for (const b of blockedKeysRef.current.values()) {
+        if (b.attempts < CHALLENGE_403_MAX_ATTEMPTS) {
+          anyRetryable = true;
+          break;
+        }
+      }
+      if (anyRetryable) setRetryTick((n) => n + 1);
+    }, CHALLENGE_403_COOLDOWN_MS);
+    return () => clearInterval(id);
+  }, []);
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
@@ -1050,7 +1135,7 @@ export default function ActivityScreen() {
 
           <View style={styles.achievementsRow}>
             <Text style={styles.achievementsLabel}>{t('activity.distance')}</Text>
-            <Text style={styles.achievementsToday}>{fmtKm(liveSteps * strideM)}</Text>
+            <Text style={styles.achievementsToday}>{fmtKm(axisCurrent('distance'))}</Text>
             <Text style={styles.achievementsBest}>{fmtKm(bests.best.distance_m)}</Text>
           </View>
 
