@@ -22,6 +22,7 @@ import {
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import Svg, { Path } from 'react-native-svg';
 import {
   getMessages,
   getRooms,
@@ -525,6 +526,7 @@ export default function ChatScreen() {
             <Text style={styles.counterText}>{remainingChars}</Text>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={t('chat.send')}
               onPress={handleSend}
               disabled={sendDisabled}
               style={({ pressed }) => [
@@ -533,7 +535,9 @@ export default function ChatScreen() {
                 pressed && !sendDisabled && { opacity: 0.7 },
               ]}
             >
-              <Text style={styles.sendBtnText}>{t('chat.send')}</Text>
+              <Svg width={18} height={18} viewBox="0 0 24 24">
+                <Path d="M3 20.5v-6l9-2.5-9-2.5v-6l19 8.5-19 8.5z" fill="#F2EEE6" />
+              </Svg>
             </Pressable>
           </View>
         </View>
@@ -816,17 +820,9 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     backgroundColor: '#D64525',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minWidth: 64,
+    width: 44,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sendBtnText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 11,
-    letterSpacing: 1.76,
-    textTransform: 'uppercase',
-    color: '#F2EEE6',
   },
 });
