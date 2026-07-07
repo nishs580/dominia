@@ -413,6 +413,16 @@
     "influenceSublabel": "ALLIANCE INFLUENCE / DAY",
     "influenceContext": "Earned daily from alliance-held territories",
     "nextAttackDay": "NEXT ATTACK DAY",
+    "attackDayLive": "ATTACK DAY · LIVE NOW",
+    "attackDayCloses": "CONTESTS CLOSE 23:00",
+    "attackDayName": {
+      "today": "TODAY",
+      "saturday": "SATURDAY",
+      "sunday": "SUNDAY"
+    },
+    "unitD": "D",
+    "unitH": "H",
+    "unitM": "M",
     "warChest": "WAR CHEST",
     "warChestAccent": "ALLIANCE MORALE",
     "moraleLabel": "MORALE",

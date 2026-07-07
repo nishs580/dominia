@@ -34,11 +34,58 @@ const ABILITIES = [
 ];
 
 // "7H 59M" / "42M" — countdown for cooldown + active-buff labels.
-function formatCountdown(msRemaining) {
+// Unit letters come from locales (warRoom.unitH etc.) so ru renders Ч/М.
+function formatCountdown(msRemaining, u) {
   const totalMin = Math.max(1, Math.ceil(msRemaining / 60000));
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return h > 0 ? `${h}H ${m}M` : `${m}M`;
+  return h > 0 ? `${h}${u.h} ${m}${u.m}` : `${m}${u.m}`;
+}
+
+// "2D 14H" / "14H 32M" / "45M" — long-range countdown for the Attack Day card.
+function formatDayCountdown(msRemaining, u) {
+  const totalMin = Math.max(1, Math.ceil(msRemaining / 60000));
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `${d}${u.d} ${h}${u.h}`;
+  if (h > 0) return `${h}${u.h} ${m}${u.m}`;
+  return `${m}${u.m}`;
+}
+
+// Attack Days are Sat/Sun; contests run 05:00–23:00 device-local (mirrors the
+// backend gate, which uses the player's home timezone — same thing unless the
+// player is travelling). Returns the live window or the next opening.
+function nextAttackWindow(now) {
+  const atHour = (base, h) => {
+    const x = new Date(base);
+    x.setHours(h, 0, 0, 0);
+    return x;
+  };
+  const day = now.getDay(); // Sun=0 … Sat=6
+  const isWeekend = day === 0 || day === 6;
+
+  if (isWeekend) {
+    const opensAt = atHour(now, 5);
+    const closesAt = atHour(now, 23);
+    if (now >= opensAt && now < closesAt) {
+      return { live: true, closesAt };
+    }
+    if (now < opensAt) {
+      return { live: false, opensAt, dayKey: 'today' };
+    }
+    if (day === 6) {
+      // Saturday after close → Sunday 05:00.
+      const sunday = new Date(now);
+      sunday.setDate(now.getDate() + 1);
+      return { live: false, opensAt: atHour(sunday, 5), dayKey: 'sunday' };
+    }
+  }
+
+  // Weekday, or Sunday after close → next Saturday 05:00.
+  const saturday = new Date(now);
+  saturday.setDate(now.getDate() + (day === 0 ? 6 : 6 - day));
+  return { live: false, opensAt: atHour(saturday, 5), dayKey: 'saturday' };
 }
 
 function SectionLabel({ left, accent }) {
@@ -192,6 +239,16 @@ export default function WarRoomScreen({ route }) {
     );
   }
 
+  // Localised time-unit letters for the countdowns (en: D/H/M, ru: Д/Ч/М).
+  const timeUnits = {
+    d: t('warRoom.unitD'),
+    h: t('warRoom.unitH'),
+    m: t('warRoom.unitM'),
+  };
+
+  // Recomputed every render; nowMs ticks every 10s so the card stays live.
+  const attackWindow = nextAttackWindow(new Date(nowMs));
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -245,10 +302,34 @@ export default function WarRoomScreen({ route }) {
           </View>
 
           {/* ATTACK DAY COUNTDOWN */}
-          <SectionLabel left={t('warRoom.nextAttackDay')} />
-          <View style={styles.countdownCard}>
-            <Text style={styles.countdownValue}>2D 14H</Text>
-            <Text style={styles.countdownDay}>SATURDAY · 05:00 – 23:00</Text>
+          <SectionLabel
+            left={attackWindow.live ? t('warRoom.attackDayLive') : t('warRoom.nextAttackDay')}
+          />
+          <View
+            style={[
+              styles.countdownCard,
+              attackWindow.live && styles.countdownCardLive,
+            ]}
+          >
+            {attackWindow.live ? (
+              <>
+                <Text style={[styles.countdownValue, styles.countdownValueLive]}>
+                  {formatDayCountdown(attackWindow.closesAt.getTime() - nowMs, timeUnits)}
+                </Text>
+                <Text style={styles.countdownDay}>
+                  {t('warRoom.attackDayCloses')}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.countdownValue}>
+                  {formatDayCountdown(attackWindow.opensAt.getTime() - nowMs, timeUnits)}
+                </Text>
+                <Text style={styles.countdownDay}>
+                  {t(`warRoom.attackDayName.${attackWindow.dayKey}`)} · 05:00 – 23:00
+                </Text>
+              </>
+            )}
           </View>
 
           {/* WAR CHEST — MORALE ONLY */}
@@ -290,7 +371,7 @@ export default function WarRoomScreen({ route }) {
               !windowClosed && canAfford;
 
             let btnLabel = t('warRoom.activate');
-            if (onCooldown) btnLabel = formatCountdown(cooldownMs);
+            if (onCooldown) btnLabel = formatCountdown(cooldownMs, timeUnits);
             else if (usedThisWeek) btnLabel = t('warRoom.usedBtn');
 
             return (
@@ -304,7 +385,7 @@ export default function WarRoomScreen({ route }) {
                   <Text style={styles.abilityEffect}>{t(`warRoom.abilities.${a.id}.effect`)}</Text>
                   {activeMs > 0 ? (
                     <Text style={styles.abilityActive}>
-                      {t('warRoom.activeLabel')} · {formatCountdown(activeMs)}
+                      {t('warRoom.activeLabel')} · {formatCountdown(activeMs, timeUnits)}
                     </Text>
                   ) : null}
                   {usedThisWeek && !onCooldown && activeMs <= 0 ? (
@@ -485,11 +566,18 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.claim,
     padding: spacing.lg,
   },
+  countdownCardLive: {
+    borderLeftColor: colors.claim,
+    backgroundColor: colors.claimSoft,
+  },
   countdownValue: {
     fontFamily: fonts.displayMedium,
     fontSize: 40,
     color: colors.bone,
     letterSpacing: -0.02,
+  },
+  countdownValueLive: {
+    color: colors.claim,
   },
   countdownDay: {
     fontFamily: fonts.mono,

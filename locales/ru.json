@@ -421,6 +421,16 @@
     "influenceSublabel": "ВЛИЯНИЕ АЛЬЯНСА / ДЕНЬ",
     "influenceContext": "Начисляется ежедневно с территорий альянса",
     "nextAttackDay": "СЛЕДУЮЩИЙ ДЕНЬ АТАКИ",
+    "attackDayLive": "ДЕНЬ АТАКИ · СЕЙЧАС",
+    "attackDayCloses": "СРАЖЕНИЯ ЗАКРЫВАЮТСЯ В 23:00",
+    "attackDayName": {
+      "today": "СЕГОДНЯ",
+      "saturday": "СУББОТА",
+      "sunday": "ВОСКРЕСЕНЬЕ"
+    },
+    "unitD": "Д",
+    "unitH": "Ч",
+    "unitM": "М",
     "warChest": "ВОЕННАЯ КАЗНА",
     "warChestAccent": "МОРАЛЬ АЛЬЯНСА",
     "moraleLabel": "МОРАЛЬ",
