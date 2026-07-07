@@ -15,22 +15,31 @@ import { useTranslation } from 'react-i18next';
 import { MoraleGlyph, InfluenceGlyph } from '../components/ResourceGlyphs';
 import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { supabase } from '../lib/supabase';
-import { spendAllianceMorale } from '../lib/allianceApi';
+import { getAllianceAbilities, activateAllianceAbility } from '../lib/allianceApi';
 import { calcDailyInfluence } from '../lib/formulas';
 
 const normaliseTier = t =>
   t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'Small';
 
 // Display copy (name/cost/duration/effect) lives in locales under
-// warRoom.abilities.<id>; only the id and numeric morale cost live here.
+// warRoom.abilities.<id>. Costs, durations, windows, cooldowns and buff
+// state are server-authoritative (GET /alliances/:id/abilities); `ability`
+// is the backend id.
 const ABILITIES = [
-  { id: 'warSurge', morale: 80 },
-  { id: 'ironBulwark', morale: 80 },
-  { id: 'rallyCry', morale: 60 },
-  { id: 'steadfast', morale: 60 },
-  { id: 'supplyLine', morale: 40 },
-  { id: 'unifiedFront', morale: 100 },
+  { id: 'warSurge', ability: 'war_surge' },
+  { id: 'ironBulwark', ability: 'iron_bulwark' },
+  { id: 'rallyCry', ability: 'rally_cry' },
+  { id: 'steadfast', ability: 'steadfast' },
+  { id: 'supplyLine', ability: 'supply_line' },
 ];
+
+// "7H 59M" / "42M" — countdown for cooldown + active-buff labels.
+function formatCountdown(msRemaining) {
+  const totalMin = Math.max(1, Math.ceil(msRemaining / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}H ${m}M` : `${m}M`;
+}
 
 function SectionLabel({ left, accent }) {
   return (
@@ -50,14 +59,32 @@ export default function WarRoomScreen({ route }) {
     allianceId = null,
     allianceName = 'Alliance',
     shortName = '—',
-    currentPlayerId = null,
   } = route?.params ?? {};
 
   const [loading, setLoading] = useState(true);
   const [warChestMorale, setWarChestMorale] = useState(0);
   const [allianceInfluence, setAllianceInfluence] = useState(0);
-  const [isFounder, setIsFounder] = useState(false);
+  const [canManage, setCanManage] = useState(false);
+  const [abilityStates, setAbilityStates] = useState({});
+  const [nowMs, setNowMs] = useState(Date.now());
   const [error, setError] = useState(null);
+
+  // Drives the cooldown / active-buff countdowns.
+  useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 10000);
+    return () => clearInterval(tick);
+  }, []);
+
+  function applyAbilityPayload(payload) {
+    const byAbility = {};
+    for (const st of payload?.abilities ?? []) byAbility[st.id] = st;
+    setAbilityStates(byAbility);
+    setCanManage(payload?.can_manage === true);
+    if (typeof payload?.alliance_morale === 'number') {
+      setWarChestMorale(payload.alliance_morale);
+    }
+    setNowMs(Date.now());
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +98,7 @@ export default function WarRoomScreen({ route }) {
       setLoading(true);
       setError(null);
 
-      const [allianceResult, territoriesResult, founderResult] = await Promise.all([
+      const [allianceResult, territoriesResult, abilitiesResult] = await Promise.all([
         supabase
           .from('alliances')
           .select('morale')
@@ -81,11 +108,7 @@ export default function WarRoomScreen({ route }) {
           .from('territories')
           .select('tier, development_level, legacy_rank')
           .eq('alliance_id', allianceId),
-        supabase
-          .from('alliances')
-          .select('founder_id')
-          .eq('id', allianceId)
-          .maybeSingle(),
+        getAllianceAbilities({ clerkGetToken: getToken, allianceId }),
       ]);
 
       if (cancelled) return;
@@ -97,7 +120,9 @@ export default function WarRoomScreen({ route }) {
       }
 
       setWarChestMorale(allianceResult.data?.morale ?? 0);
-      setIsFounder(founderResult.data?.founder_id === currentPlayerId);
+      if (abilitiesResult.ok) {
+        applyAbilityPayload(abilitiesResult.data);
+      }
 
       const territories = territoriesResult.data ?? [];
       const totalInfluence = territories.reduce((sum, t) => {
@@ -120,11 +145,26 @@ export default function WarRoomScreen({ route }) {
     return () => { cancelled = true; };
   }, [allianceId]);
 
-  async function confirmActivate(ability, costAmount) {
-    if (warChestMorale < costAmount) return;
+  function activationErrorMessage(code, windowType) {
+    switch (code) {
+      case 'insufficient_morale':
+        return t('warRoom.errMorale');
+      case 'cooldown_active':
+        return t('warRoom.errCooldown');
+      case 'ability_used_this_week':
+        return t('warRoom.errUsedWeek');
+      case 'outside_window':
+        return windowType === 'weekday'
+          ? t('warRoom.errWindowWeekday')
+          : t('warRoom.errWindowWeekend');
+      default:
+        return t('warRoom.alertFailedBody');
+    }
+  }
 
+  function confirmActivate(abilityKey, name, costAmount, windowType) {
     Alert.alert(
-      t('warRoom.alertActivateTitle', { ability }),
+      t('warRoom.alertActivateTitle', { ability: name }),
       t('warRoom.alertActivateBody', { cost: costAmount }),
       [
         { text: t('warRoom.alertCancel'), style: 'cancel' },
@@ -132,11 +172,19 @@ export default function WarRoomScreen({ route }) {
           text: t('warRoom.alertActivateConfirm'),
           style: 'destructive',
           onPress: async () => {
-            const res = await spendAllianceMorale({ clerkGetToken: getToken, allianceId, amount: costAmount });
+            const res = await activateAllianceAbility({
+              clerkGetToken: getToken,
+              allianceId,
+              ability: abilityKey,
+            });
             if (!res.ok) {
-              Alert.alert(t('warRoom.alertFailedTitle'), t('warRoom.alertFailedBody'));
+              const code = typeof res.error === 'object' ? res.error?.error : res.error;
+              Alert.alert(
+                t('warRoom.alertFailedTitle'),
+                activationErrorMessage(code, windowType),
+              );
             } else {
-              setWarChestMorale(res.data.alliance_morale);
+              applyAbilityPayload(res.data);
             }
           },
         },
@@ -222,30 +270,56 @@ export default function WarRoomScreen({ route }) {
           <SectionLabel left={t('warRoom.abilitiesLabel')} accent={t('warRoom.abilitiesAccent')} />
           {ABILITIES.map((a, i) => {
             const name = t(`warRoom.abilities.${a.id}.name`);
+            const st = abilityStates[a.ability] ?? null;
+            const windowType = st?.window ?? (a.ability === 'supply_line' ? 'weekday' : 'weekend');
+            const costAmount = st?.morale_cost ?? 0;
+
+            const cooldownMs = st?.cooldown_until
+              ? new Date(st.cooldown_until).getTime() - nowMs
+              : 0;
+            const activeMs = st?.active_until
+              ? new Date(st.active_until).getTime() - nowMs
+              : 0;
+            const onCooldown = cooldownMs > 0;
+            const usedThisWeek = st?.used_this_week === true;
+            const windowClosed = st?.reason === 'outside_window';
+            const canAfford = st !== null && warChestMorale >= costAmount;
+
+            const enabled =
+              canManage && st !== null && !onCooldown && !usedThisWeek &&
+              !windowClosed && canAfford;
+
+            let btnLabel = t('warRoom.activate');
+            if (onCooldown) btnLabel = formatCountdown(cooldownMs);
+            else if (usedThisWeek) btnLabel = t('warRoom.usedBtn');
+
             return (
             <React.Fragment key={a.id}>
               <View style={styles.abilityRow}>
                 <View style={styles.abilityLeft}>
                   <Text style={styles.abilityName}>{name}</Text>
-                  <Text style={styles.abilityCost}>{t(`warRoom.abilities.${a.id}.cost`)} · {t(`warRoom.abilities.${a.id}.duration`)}</Text>
+                  <Text style={styles.abilityCost}>
+                    {t(`warRoom.abilities.${a.id}.cost`)} · {t(`warRoom.abilities.${a.id}.duration`)} · {windowType === 'weekday' ? t('warRoom.windowWeekday') : t('warRoom.windowWeekend')}
+                  </Text>
                   <Text style={styles.abilityEffect}>{t(`warRoom.abilities.${a.id}.effect`)}</Text>
+                  {activeMs > 0 ? (
+                    <Text style={styles.abilityActive}>
+                      {t('warRoom.activeLabel')} · {formatCountdown(activeMs)}
+                    </Text>
+                  ) : null}
+                  {usedThisWeek && !onCooldown && activeMs <= 0 ? (
+                    <Text style={styles.abilityUsed}>{t('warRoom.resetsMonday')}</Text>
+                  ) : null}
                 </View>
-                {(() => {
-                  const costAmount = a.morale;
-                  const canAfford = warChestMorale >= costAmount;
-                  const active = isFounder && canAfford;
-                  return (
-                    <Pressable
-                      style={[styles.activateBtn, !active && styles.activateBtnDisabled]}
-                      onPress={active ? () => confirmActivate(name, costAmount) : undefined}
-                      disabled={!active}
-                    >
-                      <Text style={[styles.activateBtnText, active && styles.activateBtnTextActive]}>
-                        {t('warRoom.activate')}
-                      </Text>
-                    </Pressable>
-                  );
-                })()}
+                <Pressable
+                  style={[styles.activateBtn, !enabled && styles.activateBtnDisabled]}
+                  onPress={enabled ? () => confirmActivate(a.ability, name, costAmount, windowType) : undefined}
+                  disabled={!enabled}
+                >
+                  <Text style={[styles.activateBtnText, enabled && styles.activateBtnTextActive]}>
+                    {btnLabel}
+                  </Text>
+                </Pressable>
               </View>
               {i < ABILITIES.length - 1 && <View style={styles.rowDivider} />}
             </React.Fragment>
@@ -490,6 +564,22 @@ const styles = StyleSheet.create({
     color: colors.slate2,
     marginTop: spacing.xs,
     lineHeight: 18,
+  },
+  abilityActive: {
+    fontFamily: fonts.monoMedium,
+    fontSize: fontSize.sm,
+    color: colors.alliance,
+    letterSpacing: 1.2,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  abilityUsed: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
   },
   activateBtn: {
     borderWidth: 1,

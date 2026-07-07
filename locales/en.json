@@ -426,6 +426,16 @@
     "alertActivateConfirm": "Activate",
     "alertFailedTitle": "Failed",
     "alertFailedBody": "Could not activate ability. Try again.",
+    "windowWeekend": "SAT–SUN",
+    "windowWeekday": "MON–FRI · 1×/WEEK",
+    "activeLabel": "ACTIVE",
+    "usedBtn": "USED",
+    "resetsMonday": "RESETS MONDAY",
+    "errMorale": "Not enough Morale in the war chest.",
+    "errCooldown": "Ability is cooling down. Wait for the timer.",
+    "errUsedWeek": "Supply Line already ran this week. Resets Monday.",
+    "errWindowWeekend": "Attack Day ability. Saturday and Sunday only.",
+    "errWindowWeekday": "Supply Line runs Monday to Friday only.",
     "abilities": {
       "warSurge": {
         "name": "WAR SURGE",
@@ -455,13 +465,7 @@
         "name": "SUPPLY LINE",
         "cost": "40 MORALE",
         "duration": "24 HOURS",
-        "effect": "All resource earn events give +20% for all members."
-      },
-      "unifiedFront": {
-        "name": "UNIFIED FRONT",
-        "cost": "100 MORALE",
-        "duration": "48 HOURS",
-        "effect": "No member can have their streak broken during this window."
+        "effect": "All earn events pay +20% XP and resources for all members."
       }
     }
   },
