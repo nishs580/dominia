@@ -917,6 +917,7 @@
     "allianceMessages": "СООБЩЕНИЯ АЛЬЯНСА",
     "wire": " · ЛЕНТА",
     "topContributors": "ЛУЧШИЕ УЧАСТНИКИ",
+    "topContributorsEmpty": "На этой неделе ещё никто не выступил в поход.",
     "thisWeekAccent": " · ЗА НЕДЕЛЮ",
     "roster": "СОСТАВ",
     "activeAccent": " · {{n}} АКТИВНЫХ",

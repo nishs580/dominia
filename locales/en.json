@@ -901,6 +901,7 @@
     "allianceMessages": "ALLIANCE MESSAGES",
     "wire": " · WIRE",
     "topContributors": "TOP CONTRIBUTORS",
+    "topContributorsEmpty": "No one has marched yet this week.",
     "thisWeekAccent": " · THIS WEEK",
     "roster": "ROSTER",
     "activeAccent": " · {{n}} ACTIVE",

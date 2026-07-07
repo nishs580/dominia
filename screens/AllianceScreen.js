@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AllianceEmblem from '../components/AllianceEmblem';
 import AllianceLogEvent from '../components/AllianceLogEvent';
 import WeeklyTaskCard from '../components/WeeklyTaskCard';
+import WeeklyTopContributors from '../components/WeeklyTopContributors';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder } from '../lib/allianceApi';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
@@ -783,12 +784,6 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     );
   }
 
-  const TOP_CONTRIBUTORS = [
-    { rank: '1.', name: 'NISH_S', role: 'FOUNDR', streak: 'UNBROKEN 30D', steps: '24,210' },
-    { rank: '2.', name: 'RUBIK', role: 'MEMBER', streak: 'RELIABLE 14D', steps: '18,432' },
-    { rank: '3.', name: 'MAYA-K', role: 'MEMBER', streak: 'COMMITTED 6D', steps: '12,104' },
-  ];
-
   return (
     <>
       <ScrollView
@@ -855,21 +850,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <View style={styles.sectionHairline} />
         </View>
 
-        {TOP_CONTRIBUTORS.map((c, i) => (
-          <React.Fragment key={c.name}>
-            <View style={styles.contributorRow}>
-              <Text style={styles.contributorRank}>{c.rank}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.contributorName}>{c.name}</Text>
-                <Text style={styles.contributorMeta}>
-                  {c.role} · {c.streak}
-                </Text>
-              </View>
-              <Text style={styles.contributorSteps}>{c.steps}</Text>
-            </View>
-            {i < TOP_CONTRIBUTORS.length - 1 && <View style={styles.rowDivider} />}
-          </React.Fragment>
-        ))}
+        <WeeklyTopContributors allianceId={allianceId} getToken={getToken} />
 
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.roster')}</Text>
@@ -1745,41 +1726,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     marginTop: 12,
     textTransform: 'uppercase',
-  },
-  contributorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  contributorRank: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 11,
-    color: CLAIM,
-    width: 20,
-  },
-  contributorName: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: BONE,
-    textTransform: 'uppercase',
-  },
-  contributorMeta: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginTop: 3,
-  },
-  contributorSteps: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 13,
-    color: BONE,
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: HAIRLINE,
   },
   rosterRow: {
     flexDirection: 'row',
