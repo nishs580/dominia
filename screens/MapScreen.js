@@ -255,13 +255,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   // Your streak
   const myStreak = myPlayer?.current_streak ?? 0;
 
-  // Influence per day (upkeepOverdue: false === former upkeepActive: true)
+  // Influence per day (upkeep removed — §5.3.1 retired)
   const influence = Math.round(
     F.calcDailyInfluence({
       tier: F.normaliseTier(tier),
       developmentLevel,
       legacyRank: legacyRank ?? 1,
-      upkeepOverdue: false,
     })
   );
 

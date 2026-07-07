@@ -79,7 +79,7 @@ export default function WarRoomScreen({ route }) {
           .maybeSingle(),
         supabase
           .from('territories')
-          .select('tier, development_level, legacy_rank, upkeep_overdue')
+          .select('tier, development_level, legacy_rank')
           .eq('alliance_id', allianceId),
         supabase
           .from('alliances')
@@ -106,7 +106,6 @@ export default function WarRoomScreen({ route }) {
             tier: normaliseTier(t.tier),
             developmentLevel: t.development_level ?? 0,
             legacyRank: t.legacy_rank ?? 1,
-            upkeepOverdue: t.upkeep_overdue ?? false,
           });
         } catch {
           return sum;

@@ -137,7 +137,7 @@ export default function PublicProfileScreen() {
         player.alliance_id
           ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank, upkeep_overdue').eq('owner_id', player.id),
+        supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank').eq('owner_id', player.id),
         // Permanent record: territories this player developed to Citadel (D4).
         supabase.from('development_records').select('id, territory_name, reached_at').eq('player_id', player.id).order('reached_at', { ascending: true }),
       ]);
@@ -360,7 +360,6 @@ export default function PublicProfileScreen() {
                             tier,
                             developmentLevel: terr.development_level ?? 0,
                             legacyRank: terr.legacy_rank ?? 1,
-                            upkeepOverdue: terr.upkeep_overdue ?? false,
                           });
                         } catch {
                           return sum;
