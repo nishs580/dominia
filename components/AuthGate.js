@@ -4,6 +4,33 @@ import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 
+// Onboarding check is a trivial indexed lookup, so a slow response means the
+// network path (e.g. a Cloudflare 522 to the Supabase origin) is stalling, not
+// the query. Bound each attempt and retry transient failures a few times before
+// falling through to the manual retry screen.
+const MAX_ATTEMPTS = 3;
+const ATTEMPT_TIMEOUT_MS = 8000;
+const RETRY_BACKOFF_MS = [500, 1500];
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransient(error) {
+  if (!error) return false;
+  if (error.name === 'AbortError') return true;
+  const msg = String(error.message || error).toLowerCase();
+  return (
+    msg.includes('abort') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('network') ||
+    msg.includes('fetch failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('gateway') ||
+    // Cloudflare edge/origin errors: 502 Bad Gateway, 503, 504, 520-524
+    /\b(50[234]|52[0-4])\b/.test(msg)
+  );
+}
+
 export default function AuthGate({ navigation }) {
   const { t } = useTranslation();
   const { isSignedIn, isLoaded, userId, getToken } = useAuth();
@@ -51,32 +78,64 @@ export default function AuthGate({ navigation }) {
       setCheckingOnboarding(true);
       setGateError(null);
 
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, has_onboarded')
-        .eq('clerk_id', userId)
-        .maybeSingle();
+      let lastError = null;
+
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        if (attempt > 0) {
+          await delay(RETRY_BACKOFF_MS[attempt - 1] ?? 1500);
+          if (cancelled) return;
+        }
+
+        let data = null;
+        let error = null;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+        try {
+          const res = await supabase
+            .from('players')
+            .select('id, has_onboarded')
+            .eq('clerk_id', userId)
+            .abortSignal(controller.signal)
+            .maybeSingle();
+          data = res.data;
+          error = res.error;
+        } catch (e) {
+          error = e;
+        } finally {
+          clearTimeout(timer);
+        }
+
+        if (cancelled) return;
+
+        if (!error) {
+          setCheckingOnboarding(false);
+          if (!data) {
+            navigation.replace('SessionMismatch');
+            return;
+          }
+          if (data.has_onboarded === true) {
+            navigation.replace('MainTabs');
+          } else {
+            navigation.replace('Onboarding', { playerId: data.id });
+          }
+          return;
+        }
+
+        lastError = error;
+        // Non-transient errors (e.g. auth/permission) won't fix themselves —
+        // fail fast to the retry screen instead of burning attempts.
+        if (!isTransient(error)) break;
+        console.warn(
+          `AuthGate onboarding check attempt ${attempt + 1}/${MAX_ATTEMPTS} failed (transient), retrying:`,
+          error?.message || error,
+        );
+      }
 
       if (cancelled) return;
-
       setCheckingOnboarding(false);
-
-      if (error) {
-        console.error('AuthGate runGate failed:', error);
-        setGateError(error);
-        return;
-      }
-
-      if (!data) {
-        navigation.replace('SessionMismatch');
-        return;
-      }
-
-      if (data.has_onboarded === true) {
-        navigation.replace('MainTabs');
-      } else {
-        navigation.replace('Onboarding', { playerId: data.id });
-      }
+      console.error('AuthGate runGate failed after retries:', lastError);
+      setGateError(lastError);
     }
 
     runGate();
