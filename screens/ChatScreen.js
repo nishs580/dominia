@@ -10,7 +10,6 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   StatusBar,
@@ -455,7 +454,7 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       onTouchStart={tips.onTouchStart}
     >
       <View style={styles.header}>
