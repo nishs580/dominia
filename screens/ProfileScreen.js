@@ -59,13 +59,26 @@ function SectionDivider({ label }) {
   );
 }
 
-function OwnedTerritoryRow({ name, tier }) {
+function OwnedTerritoryRow({ name, tier, onPress }) {
   const tierLabel = tier ?? '—';
-  return (
-    <View style={styles.territoryRow}>
+  const content = (
+    <>
       <Text style={styles.territoryName}>{name}</Text>
       <Text style={styles.territoryTier}>{tierLabel}</Text>
-    </View>
+      {onPress ? <Text style={styles.territoryChevron}>›</Text> : null}
+    </>
+  );
+  if (!onPress) {
+    return <View style={styles.territoryRow}>{content}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.territoryRow, pressed && styles.territoryRowPressed]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -431,7 +444,7 @@ export default function ProfileScreen() {
         player.alliance_id
           ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank').eq('owner_id', player.id),
+        supabase.from('territories').select('id, territory_name, tier, development_level, legacy_rank, latitude, longitude').eq('owner_id', player.id),
         // Permanent record: territories this player developed to Citadel (D4).
         supabase.from('development_records').select('id, territory_name, reached_at').eq('player_id', player.id).order('reached_at', { ascending: true }),
       ]);
@@ -798,12 +811,24 @@ export default function ProfileScreen() {
               {ownedTerritories.length === 0 ? (
                 <Text style={styles.emptyText}>{t('profile.noTerritories')}</Text>
               ) : null}
-              {ownedTerritories.map((terr, index) => (
-                <React.Fragment key={terr.id ?? `${terr.territory_name}-${index}`}>
-                  {index > 0 ? <View style={styles.listDivider} /> : null}
-                  <OwnedTerritoryRow name={terr.territory_name ?? t('common.territoryFallback')} tier={terr.tier} />
-                </React.Fragment>
-              ))}
+              {ownedTerritories.map((terr, index) => {
+                const lat = Number(terr.latitude);
+                const lng = Number(terr.longitude);
+                const canLocate = Number.isFinite(lat) && Number.isFinite(lng);
+                return (
+                  <React.Fragment key={terr.id ?? `${terr.territory_name}-${index}`}>
+                    {index > 0 ? <View style={styles.listDivider} /> : null}
+                    <OwnedTerritoryRow
+                      name={terr.territory_name ?? t('common.territoryFallback')}
+                      tier={terr.tier}
+                      onPress={canLocate ? () => navigation.navigate('Map', {
+                        focusTerritory: { id: terr.id, name: terr.territory_name, latitude: lat, longitude: lng },
+                        focusNonce: Date.now(),
+                      }) : undefined}
+                    />
+                  </React.Fragment>
+                );
+              })}
             </View>
           </View>
 
@@ -1228,6 +1253,16 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     color: SLATE2,
+  },
+  territoryRowPressed: {
+    opacity: 0.55,
+  },
+  territoryChevron: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 18,
+    lineHeight: 18,
+    color: SLATE2,
+    marginLeft: 2,
   },
   powerBlock: {
     paddingTop: spacing.lg,

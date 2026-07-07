@@ -1022,6 +1022,11 @@ export default function MapScreen() {
   // the map opens on AMSTERDAM_CENTER (the Camera's static prop) instead of where
   // the player placed their home pin during onboarding.
   const didInitialCenterRef = useRef(false);
+  // Focus-from-profile: fly to a territory the player tapped in their profile.
+  // lastFocusNonceRef dedupes repeated navigations; pendingFocusIdRef opens the
+  // detail sheet once the target loads into the feature cache.
+  const lastFocusNonceRef = useRef(null);
+  const pendingFocusIdRef = useRef(null);
   const [lastUserCoord, setLastUserCoord] = useState(null);
   const [selected, setSelected] = useState(null);
   const [territories, setTerritories] = useState({ type: 'FeatureCollection', features: [] });
@@ -1675,6 +1680,49 @@ export default function MapScreen() {
       animationDuration: 0,
     });
   }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng]);
+
+  // Fly to a territory tapped in the profile's "Your Territories" list. The
+  // caller passes a fresh focusNonce each tap so re-selecting the same
+  // territory still fires. Marks didInitialCenter so the home-centering effect
+  // above never yanks the camera back afterwards.
+  useEffect(() => {
+    const target = route.params?.focusTerritory;
+    const nonce = route.params?.focusNonce;
+    if (!target || nonce == null || nonce === lastFocusNonceRef.current) return;
+    lastFocusNonceRef.current = nonce;
+    const lat = Number(target.latitude);
+    const lng = Number(target.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    didInitialCenterRef.current = true;
+    if (cameraRef.current) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [lng, lat],
+        zoomLevel: 15.5,
+        animationDuration: 650,
+      });
+    }
+    // Open the detail sheet: use the cached feature if it's already loaded,
+    // otherwise defer until the viewport fetch (triggered by the fly) delivers it.
+    const cached = target.id ? featureCacheRef.current.get(target.id) : null;
+    if (cached) {
+      pendingFocusIdRef.current = null;
+      setSelected({ feature: cached, allFeatures: territories.features });
+    } else {
+      pendingFocusIdRef.current = target.id ?? null;
+    }
+  }, [route.params?.focusTerritory, route.params?.focusNonce, territories.features]);
+
+  // Once the focused territory arrives in the feature cache (from the viewport
+  // fetch the fly triggered), open its detail sheet.
+  useEffect(() => {
+    const id = pendingFocusIdRef.current;
+    if (!id) return;
+    const feat = featureCacheRef.current.get(id);
+    if (feat) {
+      pendingFocusIdRef.current = null;
+      setSelected({ feature: feat, allFeatures: territories.features });
+    }
+  }, [territories]);
 
   const fillStyle = useMemo(
     () => ({
