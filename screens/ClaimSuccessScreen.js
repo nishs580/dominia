@@ -18,6 +18,10 @@ const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 const ALLIANCE = '#3F8F4E';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
+// Set to true to show buttons that open ContestResultScreen with canned
+// payloads, for iterating on that screen without walking a real contest.
+const DEV_SHOW_CONTEST_TEST_BUTTONS = false;
+
 function formatMeters(m) {
   const v = Math.max(0, Math.round(Number(m) || 0));
   return `${v}m`;
@@ -228,6 +232,7 @@ export default function ClaimSuccessScreen() {
 
       <View style={{ flex: 1 }} />
 
+      {DEV_SHOW_CONTEST_TEST_BUTTONS && (
       <View style={styles.testSection}>
         <Text style={styles.testTitle}>Test contest result</Text>
         <View style={styles.testButtonsRow}>
@@ -360,6 +365,7 @@ export default function ClaimSuccessScreen() {
           </Pressable>
         </View>
       </View>
+      )}
 
       {isFirstClaim && !completeError ? (
         // Expansion nudge (spec step 9): claims 2 and 3 stay optional.

@@ -627,7 +627,7 @@ export default function ProfileScreen() {
         <Pressable
           ref={walkthroughIdentityRef}
           style={styles.headerBlock}
-          onLongPress={() => navigation.navigate('HealthConnectDebug')}
+          onLongPress={__DEV__ ? () => navigation.navigate('HealthConnectDebug') : undefined}
           delayLongPress={1000}
         >
           <View style={styles.headerTopRow}>
