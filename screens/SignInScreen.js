@@ -3,6 +3,7 @@ import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ensurePlayer } from '../lib/auth';
 import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
@@ -17,6 +18,7 @@ export default function SignInScreen({ navigation }) {
   const [error, setError] = useState('');
   const [mode, setMode] = useState('signin');
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular });
   if (!fontsLoaded) return null;
@@ -61,10 +63,10 @@ export default function SignInScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Text style={styles.title}>DOMINIA <Text style={styles.claimMark}>■</Text></Text>
+      <Text style={styles.title} maxFontSizeMultiplier={1.2}>DOMINIA <Text style={styles.claimMark}>■</Text></Text>
       <Text style={styles.subtitle}>{t('signIn.tagline')}</Text>
 
       <TextInput

@@ -34,7 +34,7 @@ import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
 import StreakBreakLifecycle from './components/StreakBreakLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MapGlyph,
   ActivityGlyph,
@@ -81,6 +81,8 @@ function makeTabOptions(label, Icon) {
     tabBarIcon: ({ color }) => <Icon size={20} color={color} />,
     tabBarLabel: ({ focused, color }) => (
       <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
         style={{
           fontFamily: focused ? 'GeistMono_500Medium' : 'GeistMono_400Regular',
           fontSize: 10,
@@ -155,6 +157,7 @@ export default function App() {
       publishableKey="pk_test_bGVuaWVudC1nb29zZS01My5jbGVyay5hY2NvdW50cy5kZXYk"
       tokenCache={tokenCache}
     >
+      <SafeAreaProvider>
       <ActivitySyncLifecycle />
       <FcmLifecycle />
       <StreakBreakLifecycle />
@@ -202,6 +205,7 @@ export default function App() {
       </NavigationContainer>
       <NotificationCard />
       <Toast />
+      </SafeAreaProvider>
     </ClerkProvider>
   );
 }

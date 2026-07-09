@@ -18,6 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +52,7 @@ function genClientTempId() {
 
 export default function ChatScreen() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userId, getToken } = useAuth();
 
   // First-tap tip on the room tabs.
@@ -483,6 +485,7 @@ export default function ChatScreen() {
                 ]}
               >
                 <Text
+                  maxFontSizeMultiplier={1.3}
                   style={[styles.tabLabel, selected && styles.tabLabelActive]}
                 >
                   {label}
@@ -510,7 +513,7 @@ export default function ChatScreen() {
       ) : null}
 
       {canCompose ? (
-        <View style={styles.composer}>
+        <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
           <TextInput
             style={styles.composerInput}
             placeholder={t('chat.messagePlaceholder')}

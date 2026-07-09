@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,7 @@ const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 export default function DefenderAcceptScreen() {
   const { contestId } = useRoute().params ?? {};
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
@@ -175,10 +177,14 @@ export default function DefenderAcceptScreen() {
   const handleTerminalGotIt = () => navigation.goBack();
 
   const renderTerminal = (eyebrow, headline, subline) => (
-    <View style={styles.screen}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: INK }}
+      contentContainerStyle={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.terminalInner}>
         <Text style={[styles.eyebrow, { color: SLATE_2 }]}>{eyebrow}</Text>
-        <Text style={styles.headline}>{headline}</Text>
+        <Text style={styles.headline} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{headline}</Text>
         <Text style={styles.terminalSubline}>{subline}</Text>
       </View>
       <View style={styles.ctaStack}>
@@ -191,7 +197,7 @@ export default function DefenderAcceptScreen() {
           <Text style={styles.ctaPrimaryText}>{t('defenderAccept.gotIt')}</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 
   if (loadingPreview) {
@@ -238,10 +244,14 @@ export default function DefenderAcceptScreen() {
     : 0;
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.statusSpacer} />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: INK }}
+      contentContainerStyle={[styles.screen, { paddingBottom: insets.bottom + 16 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.statusSpacer, { height: insets.top + 20 }]} />
       <Text style={[styles.eyebrow, { color: ALLIANCE }]}>{t('defenderAccept.eyebrowDefend')}</Text>
-      <Text style={styles.territoryName}>{previewData.territory_name.toUpperCase()}</Text>
+      <Text style={styles.territoryName} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{previewData.territory_name.toUpperCase()}</Text>
       <Text style={styles.tierSubtitle}>{t('defenderAccept.tier', { tier: previewData.territory_tier })}</Text>
       <Text style={styles.attackerLine}>{t('defenderAccept.attackerAttacking', { username: previewData.attacker_username })}</Text>
 
@@ -325,13 +335,13 @@ export default function DefenderAcceptScreen() {
           <Text style={styles.ctaSecondaryText}>{t('defenderAccept.cancel')}</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: INK,
     paddingHorizontal: 24,
     paddingBottom: 24,

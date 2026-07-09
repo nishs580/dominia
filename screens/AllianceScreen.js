@@ -221,7 +221,7 @@ function NonMemberContent({
       >
         <View style={styles.confirmWrap}>
           <Text style={styles.confirmKicker}>{t('alliance.joinKicker')}</Text>
-          <Text style={styles.confirmTitle}>{t('alliance.joinTitle', { name: confirmAlliance.name })}</Text>
+          <Text style={styles.confirmTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{t('alliance.joinTitle', { name: confirmAlliance.name })}</Text>
           <Text style={styles.confirmTag}>[{confirmAlliance.short_name}]</Text>
 
           <Pressable
@@ -599,7 +599,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       >
         <View style={styles.confirmWrap}>
           <Text style={styles.confirmKicker}>{t('alliance.allianceKicker')}</Text>
-          <Text style={styles.confirmTitle}>{t('alliance.transferTitle')}</Text>
+          <Text style={styles.confirmTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{t('alliance.transferTitle')}</Text>
           <Text style={styles.confirmBody}>{transferBody}</Text>
 
           <TextInput
@@ -665,7 +665,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       >
         <View style={styles.confirmWrap}>
           <Text style={styles.confirmKicker}>{t('alliance.manageKicker')}</Text>
-          <Text style={styles.confirmTitle}>{(manageTarget.username ?? '—').toUpperCase()}</Text>
+          <Text style={styles.confirmTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{(manageTarget.username ?? '—').toUpperCase()}</Text>
           <Text style={styles.confirmTag}>{formatAllianceRole(t, manageTarget.role)}</Text>
 
           {availableActions.map((action, idx) => {
@@ -741,7 +741,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       >
         <View style={styles.confirmWrap}>
           <Text style={styles.confirmKicker}>{t('alliance.allianceKicker')}</Text>
-          <Text style={styles.confirmTitle}>{title}</Text>
+          <Text style={styles.confirmTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{title}</Text>
           {leaveConfirmCase !== 'blocked' && myAlliance?.short_name ? (
             <Text style={styles.confirmTag}>[{myAlliance.short_name}]</Text>
           ) : null}
@@ -1165,7 +1165,7 @@ export default function AllianceScreen() {
             </View>
           </View>
 
-          <Text style={styles.headerTitle}>{myAlliance?.name ?? t('alliance.allianceFallback')}</Text>
+          <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{myAlliance?.name ?? t('alliance.allianceFallback')}</Text>
 
           <Text style={styles.headerCity}>
             {t('alliance.headerCity', { city: (myAlliance?.city ?? '—').toUpperCase() })}
@@ -1190,7 +1190,7 @@ export default function AllianceScreen() {
       {!isMember && !confirmAlliance && (
         <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
           <HeaderKicker>{t('alliance.kicker')}</HeaderKicker>
-          <Text style={styles.headerTitle}>{t('alliance.noAllianceTitle')}</Text>
+          <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>{t('alliance.noAllianceTitle')}</Text>
           <Text style={styles.headerSubtitle}>{t('alliance.unaffiliated')}</Text>
         </View>
       )}

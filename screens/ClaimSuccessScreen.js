@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +30,7 @@ function completeErrorShowsRetry(code) {
 export default function ClaimSuccessScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
@@ -163,7 +165,11 @@ export default function ClaimSuccessScreen() {
   const completeErrorRetry = completeError && completeErrorShowsRetry(completeError.code);
 
   return (
-    <View style={styles.screen}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: INK }}
+      contentContainerStyle={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={{ flex: 1 }} />
 
       {completeError ? (
@@ -191,7 +197,7 @@ export default function ClaimSuccessScreen() {
           {isFirstClaim ? (
             <Text style={styles.firstClaimKicker}>{t('firstClaim.successKicker')}</Text>
           ) : null}
-          <Text style={styles.territory}>{territoryName}</Text>
+          <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
           <Text style={styles.territoryCaption}>{t('claimSuccess.isYours')}</Text>
           {showRewardBeats ? (
             <>
@@ -386,13 +392,13 @@ export default function ClaimSuccessScreen() {
           <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>
         </Pressable>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: INK,
     paddingHorizontal: 18,
     paddingTop: 48,

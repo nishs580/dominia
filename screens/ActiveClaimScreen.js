@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -348,6 +349,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
@@ -676,11 +678,15 @@ export default function ActiveClaimScreen() {
   const isCalibrated = claimState.strideSessions >= 3;
 
   return (
-    <View style={styles.screen}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: INK }}
+      contentContainerStyle={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.topRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.claimingLabel, { marginTop: 32 }]}>{mode === 'contest' ? t('activeClaim.contesting') : t('activeClaim.claiming')}</Text>
-          <Text style={styles.territoryName}>{territoryName}</Text>
+          <Text style={styles.territoryName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
         </View>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{t('activeClaim.inProgress')}</Text>
@@ -707,7 +713,7 @@ export default function ActiveClaimScreen() {
             />
           </Svg>
           <View style={styles.ringCenter}>
-            <Text style={styles.pctText}>{pct}%</Text>
+            <Text style={styles.pctText} maxFontSizeMultiplier={1.2}>{pct}%</Text>
             <Text style={styles.metresText}>{`${formatMetres(claimState.distanceM)} / ${formatMetres(progressThresholdM)} m`}</Text>
           </View>
         </View>
@@ -760,7 +766,7 @@ export default function ActiveClaimScreen() {
       >
         <Text style={styles.cancelText}>{t('activeClaim.cancelClaim')}</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -782,7 +788,7 @@ function Banner({ color, label }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
+  screen: { flexGrow: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
   territoryName: { fontFamily: 'Archivo_900Black', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },

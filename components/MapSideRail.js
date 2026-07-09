@@ -77,7 +77,7 @@ export default function MapSideRail({ hidden = false }) {
           ]}
         >
           <item.Icon size={ICON_SIZE} color="#F2EEE6" />
-          <Text style={styles.label}>{item.label}</Text>
+          <Text style={styles.label} maxFontSizeMultiplier={1.3}>{item.label}</Text>
         </Pressable>
       ))}
     </View>

@@ -56,7 +56,7 @@ function StreakMilestoneRow({ event }) {
   const days = getMeta(event, 'streakDays', 'streak_days') ?? '—';
   return (
     <RowShell accentColor={CLAIM} label={t('activityEvent.streakMilestone')} labelColor={CLAIM} event={event}>
-      <Text style={styles.heroNumber}>{days}</Text>
+      <Text style={styles.heroNumber} maxFontSizeMultiplier={1.2}>{days}</Text>
       <Text style={styles.supporting}>{t('activityEvent.dayStreak')}</Text>
     </RowShell>
   );
@@ -67,7 +67,7 @@ function LeveledUpRow({ event }) {
   const levelAfter = getMeta(event, 'level_after', 'levelAfter') ?? '—';
   return (
     <RowShell accentColor={CLAIM} label={t('activityEvent.leveledUp')} labelColor={CLAIM} event={event}>
-      <Text style={styles.heroNumber}>{levelAfter}</Text>
+      <Text style={styles.heroNumber} maxFontSizeMultiplier={1.2}>{levelAfter}</Text>
       <Text style={styles.supporting}>{t('activityEvent.levelReached')}</Text>
     </RowShell>
   );
@@ -178,7 +178,7 @@ function InfluenceMilestoneRow({ event }) {
   const milestone = getMeta(event, 'milestone') ?? '—';
   return (
     <RowShell accentColor={SLATE} label={t('activityEvent.influenceMilestone')} labelColor={SLATE2} event={event}>
-      <Text style={styles.heroNumber}>{Number(milestone).toLocaleString()}</Text>
+      <Text style={styles.heroNumber} maxFontSizeMultiplier={1.2}>{Number(milestone).toLocaleString()}</Text>
       <Text style={styles.supporting}>{t('activityEvent.influenceAccumulated')}</Text>
     </RowShell>
   );

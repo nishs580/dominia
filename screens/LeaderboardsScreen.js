@@ -15,6 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -147,6 +148,7 @@ function BattlesRow({ t, row, subject, isSelfRow }) {
 
 export default function LeaderboardsScreen() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userId, getToken } = useAuth();
 
   // First-tap tips (board strip + players/alliances strip).
@@ -282,6 +284,7 @@ export default function LeaderboardsScreen() {
     return (
       <FlatList
         data={rows}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
         keyExtractor={(item) =>
           subject === 'players' ? String(item.player_id) : String(item.alliance_id)
         }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -141,6 +142,7 @@ function NumberedRow({ num, title, subtitle, last = false }) {
 export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userId: clerkUserId, getToken } = useAuth();
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
   const [resolveError, setResolveError] = useState(null);
@@ -288,7 +290,7 @@ export default function OnboardingScreen({ route }) {
       return (
         <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
-            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
               DOMINIA
             </Text>
             <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: CLAIM, marginLeft: 4, marginBottom: 6 }}>
@@ -561,6 +563,10 @@ export default function OnboardingScreen({ route }) {
           </Text>
         </View>
         <Text
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
           style={{
             fontFamily: 'Archivo_900Black',
             fontSize: 32,
@@ -644,8 +650,15 @@ export default function OnboardingScreen({ route }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 }}>
-      <View style={{ flex: 1, justifyContent: step === 0 || step === 1 || step === 2 ? 'center' : 'flex-start' }}>{content}</View>
+    <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: step === 0 || step === 1 || step === 2 ? 'center' : 'flex-start' }}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={step !== 3}
+      >
+        {content}
+      </ScrollView>
       <View style={{ gap: 10 }}>
         {step >= 1 && step <= 3 ? (
           <Pressable accessibilityRole="button" accessibilityLabel={t('onboarding.back')} onPress={() => setStep((s) => s - 1)}>

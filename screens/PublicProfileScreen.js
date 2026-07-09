@@ -7,6 +7,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +70,7 @@ function OwnedTerritoryRow({ name, tier }) {
 export default function PublicProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { getToken } = useAuth();
 
@@ -271,7 +273,7 @@ export default function PublicProfileScreen() {
           </View>
           <View style={styles.headerTextCol}>
             <Text style={styles.commanderLabel}>{t('publicProfile.commanderLabel')}</Text>
-            <Text style={styles.commanderName}>{playerName}</Text>
+            <Text style={styles.commanderName} maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{playerName}</Text>
             <Text style={styles.rankLine}>
               <Text style={styles.rankTitle}>{t('levelTitle.' + rankBadge)}</Text>
               <Text style={styles.rankSeparator}> · </Text>
@@ -286,7 +288,7 @@ export default function PublicProfileScreen() {
         <View style={styles.hairlineStrong} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />

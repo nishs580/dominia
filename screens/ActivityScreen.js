@@ -913,7 +913,7 @@ export default function ActivityScreen() {
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View ref={walkthroughHeaderRef} collapsable={false} style={styles.headerBlock}>
         <Text style={styles.commanderLabel}>{formatToday(today, i18n.language)}</Text>
-        <Text style={styles.commanderName}>{t('activity.title')}</Text>
+        <Text style={styles.commanderName} maxFontSizeMultiplier={1.2}>{t('activity.title')}</Text>
         <Text style={styles.rankLine}>
           <Text style={styles.rankTitle}>{username || '—'} · {t('levelTitle.' + playerLevel.title).toUpperCase()}</Text>
           <Text style={styles.rankSeparator}> · </Text>

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -53,6 +56,7 @@ function mapFoundAllianceError(t, error) {
 
 export default function CreateAllianceScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
@@ -206,7 +210,7 @@ export default function CreateAllianceScreen() {
   };
 
   const renderBackRow = () => (
-    <View style={styles.backRow}>
+    <View style={[styles.backRow, { paddingTop: insets.top + 16 }]}>
       <Pressable
         accessibilityRole="button"
         onPress={handleBack}
@@ -225,13 +229,16 @@ export default function CreateAllianceScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       {renderBackRow()}
 
       {step === 1 && (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -331,7 +338,7 @@ export default function CreateAllianceScreen() {
       )}
 
       {step === 2 && (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
           <View style={styles.kickerRow}>
             <Text style={styles.kickerText}>{t('createAlliance.kicker', { step: '02' })}</Text>
             <View style={styles.kickerRule} />
@@ -416,7 +423,7 @@ export default function CreateAllianceScreen() {
       )}
 
       {step === 3 && (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
           <View style={styles.kickerRow}>
             <Text style={styles.kickerText}>{t('createAlliance.kicker', { step: '03' })}</Text>
             <View style={styles.kickerRule} />
@@ -478,7 +485,7 @@ export default function CreateAllianceScreen() {
           {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
         </ScrollView>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

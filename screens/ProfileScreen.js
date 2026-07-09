@@ -654,7 +654,7 @@ export default function ProfileScreen() {
             </Pressable>
             <View style={styles.headerTextCol}>
               <Text style={styles.commanderLabel}>{t('profile.commanderLabel')}</Text>
-              <Text style={styles.commanderName}>{playerName}</Text>
+              <Text style={styles.commanderName} maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{playerName}</Text>
               <Text style={styles.rankLine}>
                 <Text style={styles.rankTitle}>{t('levelTitle.' + rankBadge)}</Text>
                 <Text style={styles.rankSeparator}> · </Text>

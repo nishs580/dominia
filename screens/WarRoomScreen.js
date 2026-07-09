@@ -9,6 +9,7 @@ import {
   Pressable,
   StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -100,6 +101,7 @@ function SectionLabel({ left, accent }) {
 
 export default function WarRoomScreen({ route }) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { getToken } = useAuth();
   const {
@@ -257,7 +259,7 @@ export default function WarRoomScreen({ route }) {
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>{t('warRoom.back')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>{t('warRoom.title')}</Text>
+        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>{t('warRoom.title')}</Text>
         <Text style={styles.headerSub}>[{shortName}] · {allianceName.toUpperCase()}</Text>
         <View style={styles.headerDivider} />
       </View>
@@ -278,7 +280,7 @@ export default function WarRoomScreen({ route }) {
       {!loading && !error ? (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* ALLIANCE INFLUENCE */}
@@ -315,7 +317,7 @@ export default function WarRoomScreen({ route }) {
           >
             {attackWindow.live ? (
               <>
-                <Text style={[styles.countdownValue, styles.countdownValueLive]}>
+                <Text style={[styles.countdownValue, styles.countdownValueLive]} maxFontSizeMultiplier={1.2}>
                   {formatDayCountdown(attackWindow.closesAt.getTime() - nowMs, timeUnits)}
                 </Text>
                 <Text style={styles.countdownDay}>
@@ -324,7 +326,7 @@ export default function WarRoomScreen({ route }) {
               </>
             ) : (
               <>
-                <Text style={styles.countdownValue}>
+                <Text style={styles.countdownValue} maxFontSizeMultiplier={1.2}>
                   {formatDayCountdown(attackWindow.opensAt.getTime() - nowMs, timeUnits)}
                 </Text>
                 <Text style={styles.countdownDay}>
@@ -338,7 +340,7 @@ export default function WarRoomScreen({ route }) {
           <SectionLabel left={t('warRoom.warChest')} accent={t('warRoom.warChestAccent')} />
           <View style={styles.warChestMoraleCell}>
             <View style={styles.warChestMoraleLeft}>
-              <Text style={styles.warChestMoraleValue}>
+              <Text style={styles.warChestMoraleValue} maxFontSizeMultiplier={1.2}>
                 {warChestMorale.toLocaleString()}
               </Text>
               <Text style={styles.warChestLabel}>{t('warRoom.moraleLabel')}</Text>

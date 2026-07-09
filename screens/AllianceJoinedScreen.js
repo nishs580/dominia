@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,7 @@ const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { allianceId, context } = route.params ?? {};
   const isJoined = context === 'joined';
@@ -116,7 +118,7 @@ export default function AllianceJoinedScreen() {
   const memberCount = members.length;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.accent} />
 
       <View style={styles.body}>
@@ -128,7 +130,7 @@ export default function AllianceJoinedScreen() {
         </View>
 
         {/* Hero alliance name */}
-        <Text style={styles.allianceName}>{alliance?.name ?? t('allianceJoined.defaultName')}</Text>
+        <Text style={styles.allianceName} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{alliance?.name ?? t('allianceJoined.defaultName')}</Text>
         <Text style={styles.tag}>[{alliance?.short_name ?? 'XXX'}]</Text>
 
         {/* Milestone subtitle */}

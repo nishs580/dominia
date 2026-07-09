@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -61,6 +62,7 @@ function SectionDivider({ label }) {
 
 export default function WalletScreen({ route }) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
@@ -167,11 +169,11 @@ export default function WalletScreen({ route }) {
           <Text style={styles.backBtnText}>{t('wallet.back')}</Text>
         </Pressable>
         <Text style={styles.headerLabel}>{username}</Text>
-        <Text style={styles.headerTitle}>{t('wallet.title')}</Text>
+        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>{t('wallet.title')}</Text>
         <View style={styles.hairlineStrong} />
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />

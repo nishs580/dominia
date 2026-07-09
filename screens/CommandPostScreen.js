@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -331,6 +332,7 @@ function WeekInReview({ card, allianceName, shortName, t }) {
 
 export default function CommandPostScreen({ route }) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { getToken } = useAuth();
   const {
@@ -436,7 +438,7 @@ export default function CommandPostScreen({ route }) {
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>{t('commandPost.back')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>{t('commandPost.title')}</Text>
+        <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>{t('commandPost.title')}</Text>
         <Text style={styles.headerSub}>[{shortName}] · {(allianceName ?? '').toUpperCase()}</Text>
         <View style={styles.headerDivider} />
       </View>
@@ -454,7 +456,7 @@ export default function CommandPostScreen({ route }) {
           <Text style={styles.errorText}>{t('commandPost.errLoad')}</Text>
         </View>
       ) : (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}>
           <WeeklyOrders menu={menu} pickSaving={pickSaving} onPick={onPick} t={t} />
           <MarchBreakdown weekly={weekly} t={t} />
           <LapseRadar radar={cp?.lapse_radar} t={t} />

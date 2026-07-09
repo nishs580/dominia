@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +14,7 @@ const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 export default function SessionMismatchScreen({ navigation }) {
   const { t } = useTranslation();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
   const [signingOut, setSigningOut] = useState(false);
 
   const onSignOut = async () => {
@@ -32,12 +34,12 @@ export default function SessionMismatchScreen({ navigation }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 }}>
+    <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
           {t('sessionMismatch.label')}
         </Text>
-        <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>
           {t('sessionMismatch.title')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginTop: 18, marginBottom: 18 }} />

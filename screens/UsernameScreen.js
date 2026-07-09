@@ -3,6 +3,7 @@ import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/ge
 import { Inter_400Regular } from '@expo-google-fonts/inter';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { checkUsernameAvailable, patchMe } from '../lib/meApi';
@@ -27,6 +28,7 @@ export default function UsernameScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   // 'idle' | 'checking' | 'available' | 'taken'
   const [status, setStatus] = useState('idle');
+  const insets = useSafeAreaInsets();
 
   const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, Inter_400Regular });
 
@@ -95,7 +97,7 @@ export default function UsernameScreen({ navigation, route }) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>

@@ -500,7 +500,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 : stateLabel}
           </Text>
           <View style={styles.sheetTitleRow}>
-            <Text style={styles.sheetTitle}>{name}</Text>
+            <Text style={[styles.sheetTitle, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{name}</Text>
             <View style={styles.sheetTierBadge}>
               <Text style={styles.sheetTierBadgeText}>{tier}</Text>
             </View>
@@ -2080,7 +2080,7 @@ export default function MapScreen() {
       ) : null}
       {topBannerMessage ? (
         <View style={styles.topBanner}>
-          <Text style={styles.topBannerText}>{topBannerMessage}</Text>
+          <Text style={styles.topBannerText} maxFontSizeMultiplier={1.3}>{topBannerMessage}</Text>
         </View>
       ) : null}
       {showLoading && !topBannerMessage ? (
@@ -2372,7 +2372,7 @@ const styles = StyleSheet.create({
   },
   hudLeft: {
     position: 'absolute',
-    top: 104,
+    top: (StatusBar.currentHeight ?? 0) + 76,
     left: 16,
     backgroundColor: '#1A1D24',
     borderRadius: 0,
@@ -2398,7 +2398,7 @@ const styles = StyleSheet.create({
 
   hudRight: {
     position: 'absolute',
-    top: 104,
+    top: (StatusBar.currentHeight ?? 0) + 76,
     right: 16,
     alignItems: 'flex-end',
   },

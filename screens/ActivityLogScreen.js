@@ -15,6 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import ActivityLogEvent from '../components/ActivityLogEvent';
@@ -23,6 +24,7 @@ import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 export default function ActivityLogScreen() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userId, getToken } = useAuth();
 
   // First-tap tip anywhere on the screen (header + feed are one surface).
@@ -144,6 +146,7 @@ export default function ActivityLogScreen() {
       </View>
       <FlatList
         data={events}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <ActivityLogEvent event={item} />}
         onEndReached={fetchNextPage}

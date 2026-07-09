@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { mobileStateFromOutcome } from '../lib/contestResultHelpers';
@@ -45,6 +46,7 @@ function consequenceLine(t, cfg, myM, oppM, opponentName) {
 export default function ContestResultScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
   const {
@@ -104,8 +106,12 @@ export default function ContestResultScreen() {
   void firstContestWin;
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.statusSpacer} />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: INK }}
+      contentContainerStyle={[styles.screen, { paddingBottom: insets.bottom + 16 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.statusSpacer, { height: insets.top + 20 }]} />
 
       <Text style={[styles.eyebrow, { color: markColor }]}>{t(`contestResult.${cfg.i18nKey}.eyebrow`)}</Text>
 
@@ -132,7 +138,7 @@ export default function ContestResultScreen() {
         )}
       </View>
 
-      <Text style={styles.territoryName}>{territoryName.toUpperCase()}</Text>
+      <Text style={styles.territoryName} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName.toUpperCase()}</Text>
       <Text style={styles.headline}>{t(`contestResult.${cfg.i18nKey}.headline`)}</Text>
 
       {territoryPerimeter ? <Text style={styles.perimeter}>{t('contestResult.perimeter', { km: territoryPerimeter })}</Text> : null}
@@ -186,13 +192,13 @@ export default function ContestResultScreen() {
           <Text style={styles.ctaSecondaryText}>{t('contestResult.backToMap')}</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: INK,
     paddingHorizontal: 24,
     paddingBottom: 24,
