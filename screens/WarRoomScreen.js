@@ -196,6 +196,8 @@ export default function WarRoomScreen({ route }) {
     switch (code) {
       case 'insufficient_morale':
         return t('warRoom.errMorale');
+      case 'ability_active':
+        return t('warRoom.errActive');
       case 'cooldown_active':
         return t('warRoom.errCooldown');
       case 'ability_used_this_week':
@@ -355,23 +357,27 @@ export default function WarRoomScreen({ route }) {
             const windowType = st?.window ?? (a.ability === 'supply_line' ? 'weekday' : 'weekend');
             const costAmount = st?.morale_cost ?? 0;
 
-            const cooldownMs = st?.cooldown_until
-              ? new Date(st.cooldown_until).getTime() - nowMs
-              : 0;
             const activeMs = st?.active_until
               ? new Date(st.active_until).getTime() - nowMs
               : 0;
-            const onCooldown = cooldownMs > 0;
+            const cooldownMs = st?.cooldown_until
+              ? new Date(st.cooldown_until).getTime() - nowMs
+              : 0;
+            const isActive = activeMs > 0;          // buff running (duration)
+            const onCooldown = cooldownMs > 0;      // buff ended, 8h cooldown
             const usedThisWeek = st?.used_this_week === true;
             const windowClosed = st?.reason === 'outside_window';
             const canAfford = st !== null && warChestMorale >= costAmount;
 
             const enabled =
-              canManage && st !== null && !onCooldown && !usedThisWeek &&
-              !windowClosed && canAfford;
+              canManage && st !== null && !isActive && !onCooldown &&
+              !usedThisWeek && !windowClosed && canAfford;
 
+            // ACTIVATE → ACTIVATED (while the buff runs) → cooldown countdown
+            // (after it ends) → ACTIVATE again once the cooldown clears.
             let btnLabel = t('warRoom.activate');
-            if (onCooldown) btnLabel = formatCountdown(cooldownMs, timeUnits);
+            if (isActive) btnLabel = t('warRoom.activatedBtn');
+            else if (onCooldown) btnLabel = formatCountdown(cooldownMs, timeUnits);
             else if (usedThisWeek) btnLabel = t('warRoom.usedBtn');
 
             return (
@@ -383,21 +389,32 @@ export default function WarRoomScreen({ route }) {
                     {t(`warRoom.abilities.${a.id}.cost`)} · {t(`warRoom.abilities.${a.id}.duration`)} · {windowType === 'weekday' ? t('warRoom.windowWeekday') : t('warRoom.windowWeekend')}
                   </Text>
                   <Text style={styles.abilityEffect}>{t(`warRoom.abilities.${a.id}.effect`)}</Text>
-                  {activeMs > 0 ? (
+                  {isActive ? (
                     <Text style={styles.abilityActive}>
                       {t('warRoom.activeLabel')} · {formatCountdown(activeMs, timeUnits)}
                     </Text>
-                  ) : null}
-                  {usedThisWeek && !onCooldown && activeMs <= 0 ? (
+                  ) : onCooldown ? (
+                    <Text style={styles.abilityCooldown}>{t('warRoom.cooldownLabel')}</Text>
+                  ) : usedThisWeek ? (
                     <Text style={styles.abilityUsed}>{t('warRoom.resetsMonday')}</Text>
                   ) : null}
                 </View>
                 <Pressable
-                  style={[styles.activateBtn, !enabled && styles.activateBtnDisabled]}
+                  style={[
+                    styles.activateBtn,
+                    isActive && styles.activateBtnRunning,
+                    !isActive && !enabled && styles.activateBtnDisabled,
+                  ]}
                   onPress={enabled ? () => confirmActivate(a.ability, name, costAmount, windowType) : undefined}
                   disabled={!enabled}
                 >
-                  <Text style={[styles.activateBtnText, enabled && styles.activateBtnTextActive]}>
+                  <Text
+                    style={[
+                      styles.activateBtnText,
+                      enabled && styles.activateBtnTextActive,
+                      isActive && styles.activateBtnRunningText,
+                    ]}
+                  >
                     {btnLabel}
                   </Text>
                 </Pressable>
@@ -669,6 +686,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textTransform: 'uppercase',
   },
+  abilityCooldown: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.sm,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
   activateBtn: {
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
@@ -682,6 +707,9 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     opacity: 0.4,
   },
+  activateBtnRunning: {
+    borderColor: colors.alliance,
+  },
   activateBtnText: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.sm,
@@ -691,6 +719,9 @@ const styles = StyleSheet.create({
   },
   activateBtnTextActive: {
     color: colors.bone,
+  },
+  activateBtnRunningText: {
+    color: colors.alliance,
   },
   rowDivider: {
     height: 1,
