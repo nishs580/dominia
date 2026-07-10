@@ -480,7 +480,7 @@ export default function ActiveClaimScreen() {
     startClaim({ territoryId, playerId, perimeterM, mode, territoryName });
 
     (async () => {
-      const { strideM: loadedStride, sessions, samples } = await loadPlayerStride(playerId);
+      const { strideM: loadedStride, sessions, samples } = await loadPlayerStride(() => getTokenRef.current());
       if (cancelled) return;
       currentStrideM = loadedStride;
       currentStrideSessions = sessions;

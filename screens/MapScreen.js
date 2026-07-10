@@ -37,6 +37,7 @@ import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { emitDemoEvent, onDemoEvent, registerDemoAction, registerDemoRect } from '../lib/demoRegistry';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
+import { getMe } from '../lib/meApi';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
 // stepping through these dasharrays reads as the border crawling).
@@ -1279,12 +1280,25 @@ export default function MapScreen() {
   }, [resourcePlayerId]);
 
   const fetchPlayer = useCallback(async () => {
+    // Non-sensitive game state is still readable from the players table…
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_pin_lat, home_pin_lng, home_city')
+      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_city')
       .eq('clerk_id', userId)
       .maybeSingle();
-    setMyPlayer(playerRow);
+
+    // …but home_pin_lat/lng are no longer anon-readable. Fetch them for our own
+    // row via the authenticated backend and merge them in.
+    let homePin = {};
+    const meRes = await getMe({ clerkGetToken: () => getTokenRef.current() });
+    if (meRes.ok && meRes.data?.player) {
+      homePin = {
+        home_pin_lat: meRes.data.player.home_pin_lat,
+        home_pin_lng: meRes.data.player.home_pin_lng,
+      };
+    }
+    const merged = playerRow ? { ...playerRow, ...homePin } : playerRow;
+    setMyPlayer(merged);
 
     if (playerRow?.alliance_id) {
       const { data: allianceRow } = await supabase
@@ -1520,7 +1534,7 @@ export default function MapScreen() {
 
     let sawSelf = false;
     const features = (data ?? []).map((b) => {
-      const isSelf = b.clerk_id === userId;
+      const isSelf = myPlayer?.id != null && b.player_id === myPlayer.id;
       if (isSelf) sawSelf = true;
       const isOwnAlliance = Boolean(myPlayer?.alliance_id && b.alliance_id === myPlayer.alliance_id);
       return {

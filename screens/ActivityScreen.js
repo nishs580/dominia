@@ -759,7 +759,7 @@ export default function ActivityScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const { strideM: m } = await loadPlayerStride(playerId);
+        const { strideM: m } = await loadPlayerStride(() => getTokenRef.current());
         if (!cancelled && Number.isFinite(m) && m > 0) setStrideM(m);
       } catch (e) {
         console.warn('[activity] loadPlayerStride failed:', e?.message ?? e);
