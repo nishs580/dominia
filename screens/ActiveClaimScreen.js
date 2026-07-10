@@ -42,6 +42,11 @@ const LOCATION_TASK_NAME = 'dominia-active-claim-location';
 
 let latestTaskFix = null;
 
+// Bridge the component's Clerk token getter into module scope so the
+// background location task can authenticate its calibration-sample push and
+// debug logs. The component keeps this in sync with useAuth().getToken.
+let taskGetToken = null;
+
 // Calibration / step state (module scope — survives screen blur)
 let baselineSteps = null;
 let lastSteps = 0;
@@ -278,7 +283,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         calTickDiag = { accuracyM, speedKmh, windowMs, stepsInWindow, gpsDistM: gpsDist, candidateStride, qualifies, rejectReason };
         if (windowMs >= 30000) {
           if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
-            const result = await pushCalibrationSample(() => getTokenRef.current(), gpsDist, stepsInWindow);
+            const result = await pushCalibrationSample(() => (taskGetToken ? taskGetToken() : null), gpsDist, stepsInWindow);
             if (result) {
               calibrationSamples = result.samples;
               currentStrideM = result.strideM;
@@ -294,7 +299,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
     if (DIAG_CALIBRATION && claimState.playerId) {
       const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
-      logDebug(() => getTokenRef.current(), 'claim_calibration_tick', {
+      logDebug(() => (taskGetToken ? taskGetToken() : null), 'claim_calibration_tick', {
         accuracyM: round3(calTickDiag?.accuracyM ?? (fix ? fix.accuracy ?? 9999 : null)),
         speedKmh: round3(speedKmh),
         windowMs: round3(calTickDiag?.windowMs ?? null),
@@ -367,7 +372,10 @@ export default function ActiveClaimScreen() {
     return () => { cancelled = true; };
   }, [userId]);
   const getTokenRef = useRef(getToken);
-  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+    taskGetToken = getToken; // keep the module-scope location task authenticated
+  }, [getToken]);
 
   const {
     territoryName = t('activeClaim.territoryFallback'),
