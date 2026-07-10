@@ -116,6 +116,6 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
     letterSpacing: 1.6,
-    color: '#FF6B35',
+    color: '#D64525',
   },
 });

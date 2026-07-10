@@ -169,7 +169,7 @@ export default function AuthGate({ navigation }) {
           </Pressable>
         </>
       ) : showSpinner ? (
-        <ActivityIndicator color="#FF6B35" />
+        <ActivityIndicator color="#D64525" />
       ) : null}
     </View>
   );
