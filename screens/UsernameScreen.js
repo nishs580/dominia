@@ -89,10 +89,12 @@ export default function UsernameScreen({ navigation, route }) {
     }
   };
 
+  // The availability check is advisory — PATCH /me re-checks authoritatively on
+  // submit — so a slow or failed check must never hard-block Next. Only an
+  // explicit 'taken' (or an invalid shape) disables submission.
   const disabled =
     loading ||
     validateUsername(username) !== null ||
-    status === 'checking' ||
     status === 'taken';
 
   return (
