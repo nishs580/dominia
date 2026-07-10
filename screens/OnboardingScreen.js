@@ -152,6 +152,9 @@ export default function OnboardingScreen({ route }) {
   const [savingPin, setSavingPin] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
   const [homePin, setHomePin] = useState(null);
+  // City resolved server-side from the dropped pin (e.g. "Saint Petersburg").
+  // Drives the step-4 copy so it names the player's actual city, not a default.
+  const [homeCity, setHomeCity] = useState(null);
   const [userCoord, setUserCoord] = useState(null);
   const homeCameraRef = useRef(null);
   const didCenterOnUserRef = useRef(false);
@@ -579,14 +582,14 @@ export default function OnboardingScreen({ route }) {
           {username || t('onboarding.defaultCommander')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours')}</Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours', { city: homeCity || t('onboarding.cityFallback') })}</Text>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
           {t('onboarding.threeNearby')}
         </Text>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
-  }, [step, homePin, userCoord, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
+  }, [step, homePin, homeCity, userCoord, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
 
   const onNext = async () => {
     if (step === 2) {
@@ -619,6 +622,7 @@ export default function OnboardingScreen({ route }) {
           Alert.alert(t('onboarding.alertCouldNotSaveTitle'), result.error || t('onboarding.alertCouldNotSaveBody'));
           return;
         }
+        if (result.data?.home_city) setHomeCity(result.data.home_city);
         setStep(4);
       } finally {
         setSavingPin(false);
