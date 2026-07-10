@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { colors, fonts } from '../lib/theme';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
-import { isDemoActive } from '../lib/demoRegistry';
 
 const AUTO_DISMISS_MS = 7000;
 
@@ -100,9 +99,6 @@ export function useFirstTapTips({ screenKey, userId, tips, enabled = true }) {
         dismiss();
         return;
       }
-      // The guided demo owns the screen while it runs — its beats already
-      // cover (and mark) the headline tips, so none may double-fire here.
-      if (isDemoActive()) return;
       if (!enabled || busyRef.current || !Number.isFinite(pageX) || !Number.isFinite(pageY)) {
         return;
       }

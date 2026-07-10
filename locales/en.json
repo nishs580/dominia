@@ -1166,26 +1166,13 @@
     }
   },
   "walkthrough": {
-    "skip": "SKIP",
-    "gotIt": "GOT IT",
-    "nextA11y": "Next tip",
     "map": {
       "kicker": "THE MAP",
       "intro": "This is {{city}}. Every outlined shape is real territory that you can occupy by walking.",
       "introNoCity": "This is your city. Every outlined shape is real territory that you can occupy by walking.",
       "colours": "Empty territories are unclaimed. Red marks what you hold. Green marks your allies. Blue marks your rivals.",
       "card": "Tap any territory to see its name, its owner, and the distance you'd walk to take it.",
-      "sideRail": "City chat, the leaderboards, and a live log of your activity in Dominia.",
-      "tabBar": "Activity pays you for moving. Alliance comes later. Profile is your record.",
-      "coloursParts": {
-        "pre": "Empty territories are unclaimed. ",
-        "red": "Red",
-        "redRest": " marks what you hold. ",
-        "green": "Green",
-        "greenRest": " marks your allies. ",
-        "blue": "Blue",
-        "blueRest": " marks your rivals."
-      }
+      "resources": "Iron, stone, gold, morale. Your war chest, earned by moving."
     },
     "activity": {
       "streak": "Move every day and the streak grows. Longer streaks earn a bonus when attacking and defending territories.",
@@ -1222,14 +1209,16 @@
   "firstClaim": {
     "kicker": "FIRST CLAIM · FREE",
     "instruction": "Walk {{distance}} to claim {{name}}. Free.",
-    "cta": "LET'S WALK",
+    "objectiveLine": "That's {{name}}. Unclaimed. Take it.",
+    "sheetLine": "Walk {{distance}} around it and your name goes on the map. Your first three claims are free.",
+    "claimIt": "CLAIM IT",
+    "later": "LATER",
+    "couchClose": "Every colour on this map is a real person who walked for it.",
     "tapClaim": "This is the one. Start the claim.",
     "activeHint": "Walk anywhere. The ring fills as your distance adds up.",
     "successKicker": "FIRST TERRITORY",
     "successBody": "Your first territory. It pays Influence every day you hold it.",
     "nudgeTitle": "Two more claims are free.",
-    "nudgeBody": "Nearby: {{a}} and {{b}}.",
-    "nudgeBodyOne": "Nearby: {{a}}.",
     "claimAnother": "CLAIM ANOTHER",
     "enough": "ENOUGH FOR TODAY"
   },
@@ -1245,14 +1234,5 @@
     "title": "Dominia warns you when your land is under attack.",
     "allow": "ALLOW NOTIFICATIONS",
     "later": "NOT NOW"
-  },
-  "demo": {
-    "skip": "SKIP TOUR",
-    "tapTerritory": "{{name}} is unclaimed. Tap it.",
-    "fromAnywhere": "Walk from anywhere — the distance counts, not your location.",
-    "tapActivity": "Your effort pays here. Tap Activity.",
-    "tapAlliance": "You won't fight alone forever. Tap Alliance.",
-    "tapProfile": "Your record lives here. Tap Profile.",
-    "tapMap": "One thing left — land. Tap Map."
   }
 }

@@ -35,8 +35,10 @@ import { battleChipFor } from '../lib/battleChips';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
-import { emitDemoEvent, onDemoEvent, registerDemoAction, registerDemoRect } from '../lib/demoRegistry';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
+import { SPINE_EVENTS, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
+import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
+import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
 import { getMe } from '../lib/meApi';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
@@ -71,6 +73,43 @@ MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
 const AMSTERDAM_CENTER = [4.9041, 52.3676];
 const INITIAL_ZOOM = 14;
+
+// Beat 1 camera hook (first-claim spine): city-wide open, a beat of stillness,
+// then one flight down to the home pin + objective. No copy over the move.
+const FLIGHT_CITY_ZOOM = 10.5;
+const FLIGHT_HOLD_MS = 1500;
+const FLIGHT_MS = 2600;
+const FLIGHT_SETTLE_BUFFER_MS = 250;
+// How long the hold may stretch waiting for the objective to resolve (backend
+// cold starts) before the flight gives up and settles on the home pin alone.
+const FLIGHT_TARGET_TIMEOUT_MS = 10000;
+
+// Bounding box framing the home pin and the objective territory's polygon,
+// for the single flyTo of Beat 1.
+function flightBounds(homeLng, homeLat, target) {
+  let minLng = homeLng;
+  let maxLng = homeLng;
+  let minLat = homeLat;
+  let maxLat = homeLat;
+  const extend = (lng, lat) => {
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  };
+  extend(Number(target?.longitude), Number(target?.latitude));
+  const ring =
+    target?.geojson?.type === 'Polygon'
+      ? target.geojson.coordinates?.[0]
+      : target?.geojson?.type === 'MultiPolygon'
+        ? target.geojson.coordinates?.[0]?.[0]
+        : null;
+  if (Array.isArray(ring)) {
+    for (const vertex of ring) extend(Number(vertex?.[0]), Number(vertex?.[1]));
+  }
+  return { ne: [maxLng, maxLat], sw: [minLng, minLat] };
+}
 
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
@@ -144,7 +183,7 @@ function contestStartErrorMessage(t, error) {
   }
 }
 
-function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [], objectiveTerritoryId = null }) {
+function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [], objectiveTerritoryId = null, spineActive = false, onSpineClaim }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -421,6 +460,20 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
   const startErrorAllowsRetry = startError
     && !['level_too_low', 'insufficient_gold', 'territory_already_claimed', 'active_claim_in_progress', 'no_token', 'unauthorized'].includes(startError.code);
 
+  // Beat 3 of the first-claim spine: the objective's sheet in its focused
+  // state — perimeter distance as the single highlighted number, one
+  // supporting line, CLAIM IT / LATER. CLAIM IT is the existing confirm
+  // action (handleAcceptClaim → startClaim) relabelled; one tap starts the
+  // claim. LATER is the existing dismiss path, labelled. Everywhere else the
+  // sheet is completely standard.
+  const spineFocus =
+    spineActive &&
+    sheetState === 'info' &&
+    isUnclaimed &&
+    !isAtCap &&
+    objectiveTerritoryId != null &&
+    territory.id === objectiveTerritoryId;
+
   const handleAcceptClaim = async () => {
     setIsDeducting(true);
     setStartError(null);
@@ -512,7 +565,48 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
         </Pressable>
       </View>
 
-      {sheetState === 'info' && (
+      {spineFocus && (
+        <>
+          <View style={styles.spineHeroBlock}>
+            <Text style={styles.spineHeroLabel}>{t('map.walkToClaim')}</Text>
+            <Text style={styles.spineHeroValue}>
+              {t('map.walkDistanceValue', { metres: walkDistance.toLocaleString() })}
+            </Text>
+            <Text style={styles.spineSupportLine}>
+              {t('firstClaim.sheetLine', { distance: formatWalkDistance(walkDistance) })}
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={isDeducting}
+            style={({ pressed }) => [
+              styles.sheetAction,
+              pressed && { opacity: 0.92 },
+              isDeducting && { opacity: 0.6 },
+            ]}
+            onPress={() => {
+              onSpineClaim?.();
+              setSheetState('confirm');
+              handleAcceptClaim();
+            }}
+          >
+            <Text style={styles.sheetActionText}>
+              {isDeducting ? t('map.processing') : t('firstClaim.claimIt')}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.sheetCancel, pressed && { opacity: 0.92 }]}
+            onPress={onClose}
+          >
+            <Text style={styles.sheetCancelText}>{t('firstClaim.later')}</Text>
+          </Pressable>
+        </>
+      )}
+
+      {sheetState === 'info' && !spineFocus && (
         <>
           {/* Primary intel rows */}
           <View style={styles.sheetIntelBlock}>
@@ -1049,33 +1143,116 @@ export default function MapScreen() {
   const mapWrapRef = useRef(null);
   const [objective, setObjective] = useState(null);
   const [heldCount, setHeldCount] = useState(null);
+  // Server confirmed held_count 0 with no small/medium target — the client
+  // fallback (nearest unclaimed of any tier, from loaded features) may apply.
+  const [serverHadNoTarget, setServerHadNoTarget] = useState(false);
   const [showNotifPrime, setShowNotifPrime] = useState(false);
+
+  // ── First-claim spine (Beats 1–3, once per account) ───────────────────────
+  // spine is null until the persisted state loads; spineRef mirrors it
+  // synchronously so same-tick handlers (claim → close) see the transition.
+  const [spine, setSpine] = useState(null);
+  const spineRef = useRef(null);
+  const [flightPhase, setFlightPhase] = useState('idle'); // idle | hold | await-target | flying
+
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    loadSpineState(userId).then((state) => {
+      if (cancelled) return;
+      spineRef.current = state;
+      setSpine(state);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const dispatchSpine = useCallback(
+    (event) => {
+      const current = spineRef.current;
+      if (!current) return;
+      const next = spineReduce(current, event);
+      if (next === current) return;
+      spineRef.current = next;
+      setSpine(next);
+      saveSpineState(userId, next);
+    },
+    [userId],
+  );
+
+  const spineActive = spine != null && !isSpineComplete(spine);
+  const flightActive = flightPhase !== 'idle';
+  // True from mount until Beat 1 settles (covers the wait before the
+  // choreography starts) — no objective copy or pulse may show before it.
+  const spineFlightPending = spineActive && spine.beat === 'flight';
 
   // Position is resolved server-side from the home pin — deterministic and
   // matches where the first claim should feel grounded.
   const fetchObjective = useCallback(async () => {
     const res = await fetchFirstClaimObjective({ clerkGetToken: () => getTokenRef.current() });
     if (!res.ok) {
-      // Never block the tour on a failed objective fetch — run it without the
-      // finale; the banner surfaces on a later successful refetch.
+      // Never block the spine on a failed objective fetch — the banner
+      // surfaces on a later successful refetch.
       setHeldCount((prev) => (prev == null ? 0 : prev));
       return;
     }
     setHeldCount(res.data.held_count ?? 0);
     setObjective(res.data.target ?? null);
+    setServerHadNoTarget((res.data.held_count ?? 0) === 0 && res.data.target == null);
   }, []);
 
+  // D2 fallback: when no unclaimed small/medium exists realm-wide, target the
+  // nearest unclaimed territory of any tier among the features already loaded.
+  const fallbackObjective = useMemo(() => {
+    if (!serverHadNoTarget || heldCount !== 0) return null;
+    const sel = selectFirstClaimTarget({
+      homeLat: Number(myPlayer?.home_pin_lat),
+      homeLng: Number(myPlayer?.home_pin_lng),
+      features: territories.features,
+    });
+    if (!sel) return null;
+    const props = sel.feature.properties ?? {};
+    return {
+      id: sel.feature.id,
+      name: props.name,
+      tier: props.tier,
+      perimeter_distance: props.perimeter,
+      longitude: sel.longitude,
+      latitude: sel.latitude,
+      distance_m: sel.distance_m,
+      geojson: sel.feature.geometry,
+    };
+  }, [serverHadNoTarget, heldCount, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, territories.features]);
+
+  const target = objective ?? fallbackObjective;
+
+  // Spine exits that arrive from data rather than taps: a landed player
+  // (held_count > 0, e.g. claimed on another device or pre-spine) never sees
+  // it; no claimable target at all routes to the standard map.
+  useEffect(() => {
+    if (spine == null || isSpineComplete(spine)) return;
+    if (heldCount == null) return;
+    if (heldCount > 0) {
+      dispatchSpine(SPINE_EVENTS.CLAIM_COMPLETED);
+      return;
+    }
+    if (serverHadNoTarget && fallbackObjective == null && territories.features.length > 0) {
+      dispatchSpine(SPINE_EVENTS.NO_OBJECTIVE);
+    }
+  }, [spine, heldCount, serverHadNoTarget, fallbackObjective, territories.features.length, dispatchSpine]);
+
   const objectiveFeature = useMemo(() => {
-    if (!objective?.geojson) return null;
+    if (!target?.geojson) return null;
     return {
       type: 'Feature',
-      id: objective.id,
+      id: target.id,
       properties: {
-        id: objective.id,
-        name: objective.name,
+        id: target.id,
+        name: target.name,
         owner: 'Unclaimed',
         alliance: null,
-        tier: objective.tier ?? 'Small',
+        tier: target.tier ?? 'Small',
         level: 'D0',
         ownerStreak: 0,
         streakBand: 'base',
@@ -1085,12 +1262,12 @@ export default function MapScreen() {
         contested: false,
         battleChip: '',
         chipColor: SLATE2,
-        perimeter: objective.perimeter_distance,
+        perimeter: target.perimeter_distance,
         color: 'transparent',
       },
-      geometry: objective.geojson,
+      geometry: target.geojson,
     };
-  }, [objective]);
+  }, [target]);
 
   const objectiveActive = heldCount === 0 && objectiveFeature != null;
 
@@ -1101,21 +1278,22 @@ export default function MapScreen() {
   }, [objectiveFeature, territories.features]);
 
   const flyToObjective = useCallback(() => {
-    if (!objective) return;
+    if (!target) return;
     if (cameraRef.current) {
       cameraRef.current.setCamera({
-        centerCoordinate: [objective.longitude, objective.latitude],
+        centerCoordinate: [target.longitude, target.latitude],
         zoomLevel: 15,
         animationDuration: 650,
       });
     }
     setTimeout(openObjectiveSheet, 700);
-  }, [objective, openObjectiveSheet]);
+  }, [target, openObjectiveSheet]);
 
   // Layered map-area tips: the first three touches anywhere on the map fire
-  // intro → colours → card, one per touch. Tab bar and side rail have no
-  // observable tap here (navigation swallows them) — those screens teach
-  // themselves on arrival instead.
+  // intro → colours → card, one per touch. The resource strip has its own
+  // tip. Tab bar and side rail have no observable tap here (navigation
+  // swallows them) — those screens teach themselves on arrival instead.
+  const resourceBannerRef = useRef(null);
   const mapTips = useMemo(() => {
     const mapRect = async () => {
       const wrap = await rectFromRef(mapWrapRef);
@@ -1124,6 +1302,7 @@ export default function MapScreen() {
     };
     const city = myPlayer?.home_city;
     return [
+      { key: 'resources', text: t('walkthrough.map.resources'), getRect: () => rectFromRef(resourceBannerRef) },
       {
         key: 'intro',
         kicker: t('walkthrough.map.kicker'),
@@ -1135,55 +1314,16 @@ export default function MapScreen() {
     ];
   }, [myPlayer?.home_city, t, winH, winW]);
 
-  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips });
+  // Tips stay quiet during the Beat 1 flight — nothing may compete with it.
+  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive });
 
-  // ── Guided demo wiring ─────────────────────────────────────────────────
-  // Rect provider for the demo's territory step: fly the camera to the
-  // objective, then project its centre into window coordinates.
-  useEffect(() => {
-    return registerDemoRect('map.objectiveRect', async () => {
-      if (!objective || !mapRef.current || !cameraRef.current) return null;
-      cameraRef.current.setCamera({
-        centerCoordinate: [objective.longitude, objective.latitude],
-        zoomLevel: 15,
-        animationDuration: 700,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      let pt = null;
-      try {
-        pt = await mapRef.current.getPointInView([objective.longitude, objective.latitude]);
-      } catch {
-        return null;
-      }
-      const px = Array.isArray(pt) ? pt[0] : pt?.x;
-      const py = Array.isArray(pt) ? pt[1] : pt?.y;
-      if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
-      const wrap = await rectFromRef(mapWrapRef);
-      return {
-        x: (wrap?.x ?? 0) + px - 70,
-        y: (wrap?.y ?? 0) + py - 70,
-        width: 140,
-        height: 140,
-      };
-    });
-  }, [objective]);
-
-  useEffect(() => registerDemoAction('map.closeObjectiveSheet', () => setSelected(null)), []);
-
-  // Tell the demo the first-claim data is settled (it waits on this to build
-  // its step list — with or without the claim beats).
-  useEffect(() => {
-    if (heldCount === null || myPlayer == null) return;
-    emitDemoEvent('map.objectiveResolved', { objective, city: myPlayer?.home_city ?? null });
-  }, [heldCount, objective, myPlayer]);
-
-  // The demo's territory step advances when the objective's sheet opens.
+  // Beat 2 → Beat 3: the spine advances when the objective's sheet opens.
   useEffect(() => {
     const selId = selected?.feature?.id ?? selected?.feature?.properties?.id;
-    if (selId && objective && selId === objective.id) {
-      emitDemoEvent('map.objectiveSheetOpened');
+    if (selId && target && selId === target.id) {
+      dispatchSpine(SPINE_EVENTS.SHEET_OPENED);
     }
-  }, [selected, objective]);
+  }, [selected, target, dispatchSpine]);
 
   // Prime for the notification permission early in the first map session —
   // but never show it to someone who already granted the OS permission.
@@ -1211,28 +1351,18 @@ export default function MapScreen() {
     }
   }, [userId]);
 
-  // The prime follows the guided demo (completed or skipped). Later sessions
-  // where the demo is already done but the prime was never answered get it
-  // shortly after the map settles. hasFired inside maybeShowNotifPrime keeps
-  // it once-ever.
+  // The prime follows the spine (any exit). Later sessions where the spine is
+  // already done but the prime was never answered get it shortly after the
+  // map settles. hasFired inside maybeShowNotifPrime keeps it once-ever, and
+  // the focus check keeps it off ActiveClaim after a CLAIM IT exit.
   useEffect(() => {
     if (heldCount === null || !userId) return undefined;
-    let timer = null;
-    const unsubscribe = onDemoEvent((name) => {
-      if (name === 'demo.ended') {
-        timer = setTimeout(() => maybeShowNotifPrime(), 600);
-      }
-    });
-    (async () => {
-      if (await hasFired(userId, 'demo')) {
-        timer = setTimeout(() => maybeShowNotifPrime(), 1200);
-      }
-    })();
-    return () => {
-      unsubscribe();
-      if (timer) clearTimeout(timer);
-    };
-  }, [heldCount, maybeShowNotifPrime, userId]);
+    if (spine == null || !isSpineComplete(spine)) return undefined;
+    const timer = setTimeout(() => {
+      if (navigation.isFocused()) maybeShowNotifPrime();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [heldCount, spine, maybeShowNotifPrime, navigation, userId]);
 
   const objectiveFillStyle = useMemo(
     () => ({ fillColor: CLAIM, fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
@@ -1681,19 +1811,88 @@ export default function MapScreen() {
   // at mount — before myPlayer has loaded — so we imperatively fly to the home pin
   // once it arrives. Guarded by didInitialCenterRef so later player refetches (e.g.
   // resource-banner updates) don't yank the camera back while the user is panning.
+  //
+  // First-ever mount (spine flight pending) opens city-wide instead: Beat 1
+  // holds there, then flies down once. Every other open snaps straight to the
+  // home pin, unchanged.
+  const flightHomeRef = useRef(null);
   useEffect(() => {
     if (didInitialCenterRef.current) return;
+    if (spine == null) return; // camera waits for the persisted spine state
     const lat = Number(myPlayer?.home_pin_lat);
     const lng = Number(myPlayer?.home_pin_lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     if (!cameraRef.current) return;
     didInitialCenterRef.current = true;
-    cameraRef.current.setCamera({
-      centerCoordinate: [lng, lat],
-      zoomLevel: INITIAL_ZOOM,
-      animationDuration: 0,
-    });
-  }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng]);
+    if (resumeBeat(spine) === 'flight') {
+      flightHomeRef.current = [lng, lat];
+      cameraRef.current.setCamera({
+        centerCoordinate: [lng, lat],
+        zoomLevel: FLIGHT_CITY_ZOOM,
+        animationDuration: 0,
+      });
+      setFlightPhase('hold');
+    } else {
+      cameraRef.current.setCamera({
+        centerCoordinate: [lng, lat],
+        zoomLevel: INITIAL_ZOOM,
+        animationDuration: 0,
+      });
+    }
+  }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, spine]);
+
+  // Beat 1, hold: ~1.5s of stillness at city scale before the flight.
+  useEffect(() => {
+    if (flightPhase !== 'hold') return undefined;
+    const timer = setTimeout(() => setFlightPhase('await-target'), FLIGHT_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [flightPhase]);
+
+  // Beat 1, flight: one smooth flyTo framing the home pin and the objective.
+  // If the objective hasn't resolved yet the hold stretches (bounded) — a
+  // cold backend gets the whole hold to answer; past the bound the flight
+  // settles on the home pin neighbourhood alone.
+  useEffect(() => {
+    if (flightPhase !== 'await-target') return undefined;
+    const home = flightHomeRef.current;
+    const fly = (frameTarget) => {
+      if (cameraRef.current && home) {
+        if (frameTarget) {
+          const { ne, sw } = flightBounds(home[0], home[1], frameTarget);
+          cameraRef.current.setCamera({
+            bounds: { ne, sw },
+            padding: { paddingTop: 140, paddingBottom: 120, paddingLeft: 60, paddingRight: 60 },
+            animationMode: 'flyTo',
+            animationDuration: FLIGHT_MS,
+          });
+        } else {
+          cameraRef.current.setCamera({
+            centerCoordinate: home,
+            zoomLevel: INITIAL_ZOOM,
+            animationMode: 'flyTo',
+            animationDuration: FLIGHT_MS,
+          });
+        }
+      }
+      setFlightPhase('flying');
+    };
+    if (target) {
+      fly(target);
+      return undefined;
+    }
+    const timer = setTimeout(() => fly(null), FLIGHT_TARGET_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [flightPhase, target]);
+
+  // Beat 1, settle: the flight ends, the spine advances, the HUD returns.
+  useEffect(() => {
+    if (flightPhase !== 'flying') return undefined;
+    const timer = setTimeout(() => {
+      setFlightPhase('idle');
+      dispatchSpine(SPINE_EVENTS.FLIGHT_SETTLED);
+    }, FLIGHT_MS + FLIGHT_SETTLE_BUFFER_MS);
+    return () => clearTimeout(timer);
+  }, [flightPhase, dispatchSpine]);
 
   // Fly to a territory tapped in the profile's "Your Territories" list. The
   // caller passes a fresh focusNonce each tap so re-selecting the same
@@ -2040,6 +2239,47 @@ export default function MapScreen() {
     [],
   );
 
+  // D6 — the couch close. Any dismissal of the Beat 3 sheet without claiming
+  // completes the spine: the objective stays pinned (existing behaviour), the
+  // camera pulls back up to city view, and one line shows once, auto-dismissing.
+  // pullBack is skipped when the player dismissed by opening another territory
+  // — yanking the camera away from what they chose to look at breaks the
+  // "always doing or seeing something" rule.
+  const couchClose = useCallback(
+    ({ pullBack }) => {
+      dispatchSpine(SPINE_EVENTS.SHEET_DISMISSED);
+      if (pullBack && cameraRef.current) {
+        const home = flightHomeRef.current;
+        const lat = Number(myPlayer?.home_pin_lat);
+        const lng = Number(myPlayer?.home_pin_lng);
+        const centerCoordinate =
+          Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : home;
+        if (centerCoordinate) {
+          cameraRef.current.setCamera({
+            centerCoordinate,
+            zoomLevel: FLIGHT_CITY_ZOOM,
+            animationMode: 'flyTo',
+            animationDuration: 1600,
+          });
+        }
+      }
+      showTopBanner(t('firstClaim.couchClose'));
+    },
+    [dispatchSpine, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, showTopBanner, t],
+  );
+
+  // Sheet close routed through the spine: while Beat 3 is live and the
+  // objective's sheet is the one closing, a plain close is the LATER fork.
+  const handleSheetClose = useCallback(() => {
+    const wasObjectiveSheet =
+      target != null && (selected?.feature?.id ?? selected?.feature?.properties?.id) === target.id;
+    setSelected(null);
+    const s = spineRef.current;
+    if (wasObjectiveSheet && s && !s.complete && s.beat === 'sheet') {
+      couchClose({ pullBack: true });
+    }
+  }, [couchClose, selected, target]);
+
   const recenter = () => {
     if (!cameraRef.current) return;
     const homeLat = Number(myPlayer?.home_pin_lat);
@@ -2056,7 +2296,14 @@ export default function MapScreen() {
 
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
-      <View style={styles.resourceBanner}>
+      {/* Beat 1 suppresses the HUD visually (opacity, not layout — no reflow
+          when it returns). The flight plays clean; everything comes back on
+          settle. */}
+      <View
+        ref={resourceBannerRef}
+        collapsable={false}
+        style={[styles.resourceBanner, flightActive && { opacity: 0 }]}
+      >
         <View style={styles.resourceBannerItem}>
           <IronGlyph size={12} color="#F2EEE6" />
           <Text style={styles.resourceBannerValue}>{myPlayer?.iron ?? 0}</Text>
@@ -2077,7 +2324,7 @@ export default function MapScreen() {
           <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
         </View>
       </View>
-      {objectiveActive ? (
+      {objectiveActive && !flightActive && !spineFlightPending ? (
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [styles.objectiveBanner, pressed && { opacity: 0.9 }]}
@@ -2085,10 +2332,12 @@ export default function MapScreen() {
         >
           <Text style={styles.objectiveBannerKicker}>{t('firstClaim.kicker')}</Text>
           <Text style={styles.objectiveBannerText}>
-            {t('firstClaim.instruction', {
-              distance: formatWalkDistance(objective.distance_m),
-              name: objective.name,
-            })}
+            {spineActive
+              ? t('firstClaim.objectiveLine', { name: target.name })
+              : t('firstClaim.instruction', {
+                  distance: formatWalkDistance(target.distance_m),
+                  name: target.name,
+                })}
           </Text>
         </Pressable>
       ) : null}
@@ -2097,7 +2346,7 @@ export default function MapScreen() {
           <Text style={styles.topBannerText} maxFontSizeMultiplier={1.3}>{topBannerMessage}</Text>
         </View>
       ) : null}
-      {showLoading && !topBannerMessage ? (
+      {showLoading && !topBannerMessage && !flightActive ? (
         <View pointerEvents="none" style={styles.loadingWrap}>
           <View style={styles.loadingPill}>
             <ActivityIndicator size="small" color="#F2EEE6" />
@@ -2161,7 +2410,16 @@ export default function MapScreen() {
           shape={territories}
           onPress={(e) => {
             const f = e?.features?.[0];
-            if (f) setSelected({ feature: f, allFeatures: territories.features });
+            if (!f) return;
+            // Opening a different territory while the Beat 3 sheet is up is a
+            // dismissal without claiming — the LATER fork, minus the camera
+            // pull-back (the player is mid-exploration).
+            const s = spineRef.current;
+            const prevId = selected?.feature?.id ?? selected?.feature?.properties?.id;
+            if (s && !s.complete && s.beat === 'sheet' && target && prevId === target.id && f.id !== target.id) {
+              couchClose({ pullBack: false });
+            }
+            setSelected({ feature: f, allFeatures: territories.features });
           }}
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
@@ -2201,9 +2459,9 @@ export default function MapScreen() {
             <MapboxGL.LineLayer id="objective-line" style={objectiveLineStyle} />
           </MapboxGL.ShapeSource>
         ) : null}
-        {objectiveActive && selected == null ? (
+        {objectiveActive && selected == null && !flightActive && !spineFlightPending ? (
           <MapboxGL.MarkerView
-            coordinate={[objective.longitude, objective.latitude]}
+            coordinate={[target.longitude, target.latitude]}
             anchor={{ x: 0.5, y: 0.5 }}
             allowOverlap
           >
@@ -2213,25 +2471,29 @@ export default function MapScreen() {
       </MapboxGL.MapView>
       </View>
 
-      <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
-        <Text style={styles.locateIcon}>⌖</Text>
-        <Text style={styles.locateText}>{t('map.locateMe')}</Text>
-      </Pressable>
+      {flightActive ? null : (
+        <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
+          <Text style={styles.locateIcon}>⌖</Text>
+          <Text style={styles.locateText}>{t('map.locateMe')}</Text>
+        </Pressable>
+      )}
 
       <TerritorySheet
         territory={selected?.feature ?? selected}
         allFeatures={selected?.allFeatures ?? []}
         userId={userId}
-        onClose={() => setSelected(null)}
+        onClose={handleSheetClose}
         onTerritoriesRefetched={handleTerritoriesRefetched}
         onResourceBannerRefresh={fetchResourceBanner}
         myPlayer={myPlayer}
         setMyPlayer={setMyPlayer}
         getTokenRef={getTokenRef}
         showTopBanner={showTopBanner}
-        objectiveTerritoryId={objectiveActive ? objective.id : null}
+        objectiveTerritoryId={objectiveActive ? target.id : null}
+        spineActive={spineActive}
+        onSpineClaim={() => dispatchSpine(SPINE_EVENTS.CLAIM_STARTED)}
       />
-      <MapSideRail hidden={selected != null} />
+      <MapSideRail hidden={selected != null || flightActive} />
 
       {tips.tipElement}
       <NotifPrimeModal
@@ -2281,6 +2543,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.4,
+  },
+  // Beat 3 focused sheet — the perimeter distance is the largest element on
+  // the sheet (Archivo), with one Inter supporting line under it.
+  spineHeroBlock: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(242,238,230,0.08)',
+  },
+  spineHeroLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: '#8B8F98',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  spineHeroValue: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 40,
+    color: '#F2EEE6',
+    letterSpacing: -0.4,
+  },
+  spineSupportLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: 'rgba(242,238,230,0.85)',
+    lineHeight: 19,
+    marginTop: 10,
   },
   sheetObjectiveHint: {
     fontFamily: 'GeistMono_500Medium',

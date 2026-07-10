@@ -9,7 +9,6 @@ import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AllianceScreen from './screens/AllianceScreen';
 import MapScreen from './screens/MapScreen';
-import GuidedDemo from './components/GuidedDemo';
 import ActiveClaimScreen from './screens/ActiveClaimScreen';
 import ClaimSuccessScreen from './screens/ClaimSuccessScreen';
 import ContestResultScreen from './screens/ContestResultScreen';
@@ -124,7 +123,6 @@ const TabNavigator = () => {
       <Tab.Screen name="Alliance" options={makeTabOptions(t('tabs.alliance'), AllianceGlyph)} component={AllianceScreen} />
       <Tab.Screen name="Profile" options={makeTabOptions(t('tabs.profile'), ProfileGlyph)} component={ProfileScreen} />
     </Tab.Navigator>
-    <GuidedDemo />
     </View>
   );
 };

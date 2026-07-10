@@ -47,7 +47,6 @@ function levelFromXp(xp) {
 import { colors, fonts, spacing } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { maybeExplainResources } from '../lib/resourceIntro';
-import { registerDemoRect } from '../lib/demoRegistry';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
 
@@ -252,10 +251,6 @@ export default function ActivityScreen() {
     [t],
   );
   const tips = useFirstTapTips({ screenKey: 'activity', userId, tips: activityTips });
-
-  // Guided-demo targets (read beats 6 and 7 of the first-run tour).
-  useEffect(() => registerDemoRect('activity.streak', () => rectFromRef(walkthroughHeaderRef)), []);
-  useEffect(() => registerDemoRect('activity.challenges', () => rectFromRef(walkthroughChallengesRef)), []);
 
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
