@@ -28,6 +28,9 @@ import {
 } from '../components/ResourceGlyphs';
 import MapSideRail from '../components/MapSideRail';
 import ResourceDeltaValue from '../components/ResourceDeltaValue';
+import SitrepCard from '../components/SitrepCard';
+import DevGlyph from '../components/DevGlyph';
+import { geojsonBboxCenter } from '../lib/territoryShape';
 import { SvgXml } from 'react-native-svg';
 import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
@@ -936,7 +939,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>{t('map.development')}</Text>
-                  <Text style={styles.sheetConfirmValue}>D4 · {devLevelName(4)}</Text>
+                  <View style={styles.devValueRow}>
+                    <DevGlyph level={4} />
+                    <Text style={styles.sheetConfirmValue}>D4 · {devLevelName(4)}</Text>
+                  </View>
                 </View>
                 <Text style={styles.sheetConfirmHelpText}>{t('map.devCitadelComplete')}</Text>
               </View>
@@ -953,17 +959,23 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
               <View style={styles.sheetConfirmDataBlock}>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>{t('map.development')}</Text>
-                  <Text style={styles.sheetConfirmValue}>
-                    D{developmentLevel} · {devLevelName(developmentLevel)}
-                  </Text>
+                  <View style={styles.devValueRow}>
+                    <DevGlyph level={developmentLevel} />
+                    <Text style={styles.sheetConfirmValue}>
+                      D{developmentLevel} · {devLevelName(developmentLevel)}
+                    </Text>
+                  </View>
                 </View>
                 <View style={styles.sheetConfirmDataRow}>
                   <Text style={styles.sheetConfirmLabel}>
                     {sheetState === 'developConfirm' ? t('map.devBecomes') : t('map.devNext')}
                   </Text>
-                  <Text style={styles.sheetConfirmValue}>
-                    D{devTarget} · {devLevelName(devTarget)}
-                  </Text>
+                  <View style={styles.devValueRow}>
+                    <DevGlyph level={devTarget} />
+                    <Text style={styles.sheetConfirmValue}>
+                      D{devTarget} · {devLevelName(devTarget)}
+                    </Text>
+                  </View>
                 </View>
                 {devRows.map((r) => (
                   <View key={r.key} style={styles.sheetConfirmDataRow}>
@@ -1396,6 +1408,55 @@ export default function MapScreen() {
       navigation.setParams({ topBannerMessage: undefined });
     }
   }, [route?.params?.topBannerMessage]);
+
+  // Map capture celebration — result screens pass { geojson, mode } via the
+  // same nested-params channel as topBannerMessage. Fly to the ground, flood
+  // it in the outcome colour, hold, then fade over the ambient 2000ms. The
+  // flight's viewport refetch repaints the territory in its authoritative
+  // colour beneath the overlay.
+  const [celebration, setCelebration] = useState(null);
+  useEffect(() => {
+    const c = route?.params?.celebration;
+    if (!c) return undefined;
+    navigation.setParams({ celebration: undefined });
+    const centre = geojsonBboxCenter(c.geojson);
+    if (!centre || !c.mode) return undefined;
+    setCelebration({ geojson: c.geojson, mode: c.mode, fading: false });
+    cameraRef.current?.setCamera({
+      centerCoordinate: centre,
+      zoomLevel: 14.5,
+      animationDuration: 600,
+    });
+    const fadeTimer = setTimeout(() => {
+      setCelebration((prev) => (prev ? { ...prev, fading: true } : prev));
+    }, 1000);
+    const clearTimer = setTimeout(() => setCelebration(null), 3200);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [route?.params?.celebration]);
+
+  const celebrationStyles = useMemo(() => {
+    if (!celebration) return null;
+    const color =
+      celebration.mode === 'held' ? ALLIANCE : celebration.mode === 'lost' ? ENEMY : CLAIM;
+    return {
+      fill: {
+        fillColor: color,
+        fillOpacity: celebration.fading ? 0 : celebration.mode === 'lost' ? 0.12 : 0.3,
+        fillOpacityTransition: { duration: 2000, delay: 0 },
+        fillEmissiveStrength: 1.0,
+      },
+      line: {
+        lineColor: color,
+        lineWidth: 3,
+        lineOpacity: celebration.fading ? 0 : 1,
+        lineOpacityTransition: { duration: 2000, delay: 0 },
+        lineEmissiveStrength: 1.0,
+      },
+    };
+  }, [celebration]);
 
   const resourcePlayerId = myPlayer?.id;
 
@@ -2327,6 +2388,9 @@ export default function MapScreen() {
           <ResourceDeltaValue value={myPlayer ? (myPlayer.morale ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
       </View>
+      <SitrepCard
+        suppressed={objectiveActive || spineActive || flightActive || spineFlightPending}
+      />
       {objectiveActive && !flightActive && !spineFlightPending ? (
         <Pressable
           accessibilityRole="button"
@@ -2470,6 +2534,15 @@ export default function MapScreen() {
           >
             <ObjectivePulse />
           </MapboxGL.MarkerView>
+        ) : null}
+        {celebration && celebrationStyles ? (
+          <MapboxGL.ShapeSource
+            id="celebration"
+            shape={{ type: 'Feature', properties: {}, geometry: celebration.geojson }}
+          >
+            <MapboxGL.FillLayer id="celebration-fill" style={celebrationStyles.fill} />
+            <MapboxGL.LineLayer id="celebration-line" style={celebrationStyles.line} />
+          </MapboxGL.ShapeSource>
         ) : null}
       </MapboxGL.MapView>
       </View>
@@ -3010,6 +3083,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'baseline',
     marginBottom: 10,
+  },
+  devValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sheetConfirmLabel: {
     fontFamily: 'GeistMono_400Regular',

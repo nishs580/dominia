@@ -31,6 +31,8 @@ import { fetchActivityBests } from '../lib/activityBestsApi';
 import { loadPlayerStride } from '../lib/claim';
 import { showCard } from '../lib/notifications/cardController';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
+import { streakMilestoneItem } from '../lib/milestones';
+import MilestoneTakeover from '../components/MilestoneTakeover';
 import {
   ACTIVITY_READ_PERMS,
   hasForegroundStepsRead,
@@ -255,6 +257,7 @@ export default function ActivityScreen() {
   const [playerId, setPlayerId] = useState(null);
   const [playerXp, setPlayerXp] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [streakMilestone, setStreakMilestone] = useState(null);
   const [username, setUsername] = useState('');
   const [territoryCount, setTerritoryCount] = useState(0);
   const [completedKeys, setCompletedKeys] = useState(() => new Set());
@@ -595,6 +598,12 @@ export default function ActivityScreen() {
       setPlayerXp(d.total_xp);
       setPlayerLevel(levelFromXp(d.total_xp));
       setCurrentStreak(d.streak.current);
+
+      // Streak milestone ceremony — server decided the crossing (7/14/21/
+      // 30/60/90) and granted the XP; the client only plays the moment.
+      if (d.streak_milestone) {
+        setStreakMilestone(streakMilestoneItem(t, d.streak_milestone, d.streak.tier_name));
+      }
 
       // First-earn resource education (one lesson per completion, fires once
       // per resource per player — see lib/resourceIntro.js).
@@ -1153,6 +1162,7 @@ export default function ActivityScreen() {
       </ScrollView>
 
       {tips.tipElement}
+      <MilestoneTakeover item={streakMilestone} onDismiss={() => setStreakMilestone(null)} />
     </View>
   );
 }

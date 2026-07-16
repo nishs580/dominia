@@ -115,6 +115,25 @@ export default function ContestResultScreen() {
     contestHaptic();
   }, []);
 
+  // Back to the board: the map celebrates ground taken (claim red), held
+  // (alliance green), or lost (enemy blue). A failed attack changes nothing
+  // on the board, so it gets no ceremony.
+  const goToMap = () => {
+    const mode =
+      stateKey === 'attack_won' ? 'captured'
+      : stateKey === 'defend_won' ? 'held'
+      : stateKey === 'defend_lost' ? 'lost'
+      : null;
+    if (mode && effectiveGeojson) {
+      navigation.navigate('MainTabs', {
+        screen: 'Map',
+        params: { celebration: { geojson: effectiveGeojson, mode } },
+      });
+    } else {
+      navigation.navigate('MainTabs');
+    }
+  };
+
   // Milestone takeovers — level-up first, first contest win after dismiss.
   useEffect(() => {
     const queue = [];
@@ -236,7 +255,7 @@ export default function ContestResultScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t(`contestResult.${cfg.i18nKey}.cta`)}
-          onPress={() => navigation.navigate('MainTabs')}
+          onPress={goToMap}
           style={({ pressed }) => [styles.ctaPrimary, pressed && { opacity: 0.85 }]}
         >
           <Text style={styles.ctaPrimaryText}>{t(`contestResult.${cfg.i18nKey}.cta`)}</Text>
@@ -245,7 +264,7 @@ export default function ContestResultScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('contestResult.backToMap')}
-          onPress={() => navigation.navigate('MainTabs')}
+          onPress={goToMap}
           style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.7 }]}
         >
           <Text style={styles.ctaSecondaryText}>{t('contestResult.backToMap')}</Text>

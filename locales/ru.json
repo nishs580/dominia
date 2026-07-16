@@ -35,7 +35,37 @@
     "firstWinKicker": "▪ ВЕХА",
     "firstWinTitle": "Первое сражение выиграно",
     "firstWinBody": "Ваша первая территория, взятая силой.",
+    "streakKicker": "▪ СЕРИЯ",
+    "streakTitle_one": "{{count}} день",
+    "streakTitle_few": "{{count}} дня",
+    "streakTitle_many": "{{count}} дней",
+    "streakTitle_other": "{{count}} дней",
+    "streakBody": "{{tier}}. +{{xp}} осадного опыта.",
     "continue": "ПРОДОЛЖИТЬ"
+  },
+  "streakTierName": {
+    "newcomer": "Новобранец",
+    "committed": "Преданный",
+    "proven": "Проверенный",
+    "reliable": "Надёжный",
+    "iron_guard": "Железная гвардия",
+    "unbroken": "Несокрушимый",
+    "legendary": "Легендарный"
+  },
+  "sitrep": {
+    "kicker": "▪ СЕГОДНЯ",
+    "dismiss": "СКРЫТЬ",
+    "streak_one": "Серия: {{count}} день.",
+    "streak_few": "Серия: {{count}} дня.",
+    "streak_many": "Серия: {{count}} дней.",
+    "streak_other": "Серия: {{count}} дней.",
+    "streakAtRisk_one": "Серия под угрозой — на кону {{count}} день.",
+    "streakAtRisk_few": "Серия под угрозой — на кону {{count}} дня.",
+    "streakAtRisk_many": "Серия под угрозой — на кону {{count}} дней.",
+    "streakAtRisk_other": "Серия под угрозой — на кону {{count}} дней.",
+    "challengeOpen": "Сегодняшнее испытание открыто.",
+    "challengeDone": "Испытание выполнено. Серия держится.",
+    "attackDay": "День атаки. Атаки и оборона открыты."
   },
   "categoryLabel": {
     "combat": "БОЙ",

@@ -156,6 +156,19 @@ export default function ClaimSuccessScreen() {
 
   const showRewardBeats = envelope != null && envelope.already_completed === false;
 
+  // Back to the board: a fresh completed claim with geometry plays the map
+  // capture celebration (camera flight + claim-red flood) on arrival.
+  const goToMap = () => {
+    if (!completeError && envelope?.already_completed === false && territoryGeojson) {
+      navigation.navigate('MainTabs', {
+        screen: 'Map',
+        params: { celebration: { geojson: territoryGeojson, mode: 'captured' } },
+      });
+    } else {
+      navigation.navigate('MainTabs');
+    }
+  };
+
   const completeErrorMessage = completeError
     ? (() => {
         const { code } = completeError;
@@ -412,14 +425,14 @@ export default function ClaimSuccessScreen() {
           <View style={styles.nudgeButtonsRow}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate('MainTabs')}
+              onPress={goToMap}
               style={({ pressed }) => [styles.nudgePrimary, pressed && { opacity: 0.9 }]}
             >
               <Text style={styles.ctaText}>{t('firstClaim.claimAnother')}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate('MainTabs')}
+              onPress={goToMap}
               style={({ pressed }) => [styles.nudgeSecondary, pressed && { opacity: 0.7 }]}
             >
               <Text style={styles.nudgeSecondaryText}>{t('firstClaim.enough')}</Text>
@@ -430,7 +443,7 @@ export default function ClaimSuccessScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('claimSuccess.backToMap')}
-          onPress={() => navigation.navigate('MainTabs')}
+          onPress={goToMap}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
         >
           <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>

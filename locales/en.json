@@ -35,7 +35,31 @@
     "firstWinKicker": "▪ MILESTONE",
     "firstWinTitle": "First contest won",
     "firstWinBody": "Your first territory taken by force.",
+    "streakKicker": "▪ STREAK",
+    "streakTitle_one": "{{count}} day",
+    "streakTitle_other": "{{count}} days",
+    "streakBody": "{{tier}}. +{{xp}} Siege XP.",
     "continue": "CONTINUE"
+  },
+  "streakTierName": {
+    "newcomer": "Newcomer",
+    "committed": "Committed",
+    "proven": "Proven",
+    "reliable": "Reliable",
+    "iron_guard": "Iron Guard",
+    "unbroken": "Unbroken",
+    "legendary": "Legendary"
+  },
+  "sitrep": {
+    "kicker": "▪ TODAY",
+    "dismiss": "DISMISS",
+    "streak_one": "Streak: {{count}} day.",
+    "streak_other": "Streak: {{count}} days.",
+    "streakAtRisk_one": "Streak at risk — {{count}} day on the line.",
+    "streakAtRisk_other": "Streak at risk — {{count}} days on the line.",
+    "challengeOpen": "Today's challenge is open.",
+    "challengeDone": "Challenge complete. Streak holds.",
+    "attackDay": "Attack Day. Attacks and defences open."
   },
   "categoryLabel": {
     "combat": "COMBAT",
