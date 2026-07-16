@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -152,12 +152,17 @@ function MedalCell({ medal, onPress }) {
  * Legacy Medals profile section: category summary row -> tap a category to see
  * its 2x2 medal grid -> tap a medal for its detail card. Fetches the player's
  * medal state from the backend (self by default; pass playerId to view another).
+ *
+ * focusMedalKey (deep-link from a medal push): once the state loads, open that
+ * medal's category and detail modal, then report consumption via
+ * onFocusConsumed so re-renders and later visits never replay it.
  */
-export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
+export default function LegacyMedalsSection({ clerkGetToken, playerId, focusMedalKey = null, onFocusConsumed }) {
   const { t } = useTranslation();
   const [state, setState] = useState({ loading: true, error: null, medals: null });
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailMedal, setDetailMedal] = useState(null);
+  const focusConsumedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +181,22 @@ export default function LegacyMedalsSection({ clerkGetToken, playerId }) {
   }, [clerkGetToken, playerId]);
 
   const { loading, error, medals } = state;
+
+  useEffect(() => {
+    if (!focusMedalKey) {
+      // Param cleared by the parent — re-arm for the next deep-link.
+      focusConsumedRef.current = false;
+      return;
+    }
+    if (!medals || focusConsumedRef.current) return;
+    focusConsumedRef.current = true;
+    const medal = medals.find((m) => m.key === focusMedalKey);
+    if (medal) {
+      setActiveCategory(medal.category);
+      setDetailMedal(medal);
+    }
+    onFocusConsumed?.();
+  }, [focusMedalKey, medals, onFocusConsumed]);
 
   return (
     <View>

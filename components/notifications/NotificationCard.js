@@ -6,7 +6,7 @@ import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { subscribe, hideCard, getCurrentCard } from '../../lib/notifications/cardController';
 import { navigateTo } from '../../lib/navigation';
-import MedalEarnCard from '../medals/MedalEarnCard';
+import MedalEarnTakeover from '../medals/MedalEarnTakeover';
 
 const isMedalKind = (kind) =>
   typeof kind === 'string' && kind.startsWith('legacy_medal_');
@@ -30,20 +30,26 @@ export default function NotificationCard() {
     hideCard();
   };
 
+  // Medal earns are milestone moments — full-ceremony takeover, explicit CTAs
+  // only (no backdrop-tap dismissal). Every other kind keeps the dialog card.
+  if (isMedalKind(kind)) {
+    return (
+      <Modal visible animationType="none" statusBarTranslucent onRequestClose={hideCard}>
+        <MedalEarnTakeover data={data} onViewMedal={goToTarget} onDismiss={hideCard} />
+      </Modal>
+    );
+  }
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={hideCard}>
       <Pressable style={styles.backdrop} onPress={hideCard}>
-        {isMedalKind(kind) ? (
-          <MedalEarnCard data={data} onPress={goToTarget} onDismiss={hideCard} />
-        ) : (
-          <Pressable style={styles.card} onPress={goToTarget}>
-            <Text style={styles.title}>{title}</Text>
-            {body ? <Text style={styles.body}>{body}</Text> : null}
-            <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
-              <Text style={styles.dismissText}>{t('notif.dismiss')}</Text>
-            </Pressable>
+        <Pressable style={styles.card} onPress={goToTarget}>
+          <Text style={styles.title}>{title}</Text>
+          {body ? <Text style={styles.body}>{body}</Text> : null}
+          <Pressable style={styles.dismiss} onPress={hideCard} hitSlop={8}>
+            <Text style={styles.dismissText}>{t('notif.dismiss')}</Text>
           </Pressable>
-        )}
+        </Pressable>
       </Pressable>
     </Modal>
   );

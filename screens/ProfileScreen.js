@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
@@ -344,9 +344,12 @@ function ChangePasswordSection() {
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { t } = useTranslation();
   const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
+  // Medal-push deep-link: land on the earned medal's detail card.
+  const focusMedalKey = route?.params?.medalKey ?? null;
 
   // First-tap tips — each section explains itself the first time the player's
   // finger lands on it (rects are measured at touch time, so scroll position
@@ -848,7 +851,11 @@ export default function ProfileScreen() {
 
           <View>
             <View style={{ marginTop: 24 }}>
-              <LegacyMedalsSection clerkGetToken={getToken} />
+              <LegacyMedalsSection
+                clerkGetToken={getToken}
+                focusMedalKey={focusMedalKey}
+                onFocusConsumed={() => navigation.setParams({ medalKey: undefined })}
+              />
             </View>
           </View>
         </>

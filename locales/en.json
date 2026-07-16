@@ -833,6 +833,7 @@
     "sendFailed": "Send failed. Try again."
   },
   "medal": {
+    "viewMedal": "VIEW MEDAL",
     "medalEarned": "MEDAL EARNED",
     "medalEarnedFallback": "Medal earned",
     "countX": "× {{count}}",

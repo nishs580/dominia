@@ -855,6 +855,7 @@
     "sendFailed": "Отправка не удалась. Попробуйте снова."
   },
   "medal": {
+    "viewMedal": "К МЕДАЛИ",
     "medalEarned": "МЕДАЛЬ ПОЛУЧЕНА",
     "medalEarnedFallback": "Медаль получена",
     "countX": "× {{count}}",
