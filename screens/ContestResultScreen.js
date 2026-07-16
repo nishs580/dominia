@@ -1,9 +1,16 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { mobileStateFromOutcome } from '../lib/contestResultHelpers';
+import { contestHaptic } from '../lib/haptics';
+import { levelUpMilestone, firstContestWinMilestone } from '../lib/milestones';
+import { territorySvgPath } from '../lib/territoryShape';
+import { fetchTerritoryShape } from '../lib/territoryShapeApi';
+import CountUpText from '../components/CountUpText';
+import MilestoneTakeover from '../components/MilestoneTakeover';
+import TerritorySilhouette from '../components/TerritorySilhouette';
 
 // Display strings live in locales/<lng>.json under contestResult.<i18nKey>.*;
 // only the role/outcome logic and the i18n key live here.
@@ -52,13 +59,16 @@ export default function ContestResultScreen() {
   const {
     outcome = 'attacker_won',
     role = 'attacker',
-    territoryName = t('common.territoryFallback'),
+    territoryName: territoryNameParam,
     territoryPerimeter,
+    territoryId,
+    territoryGeojson = null,
     myDistance = 0,
     opponentDistance = 0,
     opponentName = 'opponent',
     resourcesAwarded = { iron: 0, stone: 0, gold: 0, morale: 0 },
     xpGained = 0,
+    balances = {},
     leveledUp = false,
     firstContestWin = false,
   } = route?.params ?? {};
@@ -81,6 +91,43 @@ export default function ContestResultScreen() {
 
   const fillOpacity = useRef(new Animated.Value(0)).current;
   const borderAnim = useRef(new Animated.Value(0)).current;
+  const [milestones, setMilestones] = useState([]);
+
+  // The walk-resolved path carries geometry by param; defender-accept and
+  // notification-opened results carry only territoryId — fetch the shape
+  // (and the name, absent on the notification path) so they get the same mark.
+  const [fetchedShape, setFetchedShape] = useState(null);
+  useEffect(() => {
+    if (territoryGeojson || !territoryId) return;
+    let cancelled = false;
+    fetchTerritoryShape(territoryId).then((shape) => {
+      if (!cancelled && shape) setFetchedShape(shape);
+    });
+    return () => { cancelled = true; };
+  }, [territoryGeojson, territoryId]);
+
+  const effectiveGeojson = territoryGeojson ?? fetchedShape?.geojson ?? null;
+  const territoryName = territoryNameParam ?? fetchedShape?.name ?? t('common.territoryFallback');
+  const hasSilhouette = useMemo(() => territorySvgPath(effectiveGeojson) != null, [effectiveGeojson]);
+
+  // Contest completion (win or loss): double haptic (brand: three moments only).
+  useEffect(() => {
+    contestHaptic();
+  }, []);
+
+  // Milestone takeovers — level-up first, first contest win after dismiss.
+  useEffect(() => {
+    const queue = [];
+    if (leveledUp === true && Number(balances?.level_after) >= 1) {
+      queue.push(levelUpMilestone(t, Number(balances.level_after)));
+    }
+    if (firstContestWin === true && cfg.outcome === 'won') {
+      queue.push(firstContestWinMilestone(t));
+    }
+    if (queue.length > 0) setMilestones(queue);
+    // Mount-only: the result payload never changes under this screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (cfg.outcome === 'won') {
@@ -100,11 +147,6 @@ export default function ContestResultScreen() {
     }
   }, [cfg.outcome]);
 
-  // TODO: leveled-up celebration UI — gate on leveledUp when polish slice ships.
-  void leveledUp;
-  // TODO: first-contest-win badge — gate on firstContestWin when polish slice ships.
-  void firstContestWin;
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: INK }}
@@ -116,7 +158,14 @@ export default function ContestResultScreen() {
       <Text style={[styles.eyebrow, { color: markColor }]}>{t(`contestResult.${cfg.i18nKey}.eyebrow`)}</Text>
 
       <View style={styles.markWrap}>
-        {cfg.outcome === 'won' ? (
+        {hasSilhouette ? (
+          <TerritorySilhouette
+            geojson={effectiveGeojson}
+            size={96}
+            color={markColor}
+            variant={cfg.outcome === 'won' ? 'fill' : 'outline'}
+          />
+        ) : cfg.outcome === 'won' ? (
           <Animated.View
             style={{
               width: 72,
@@ -165,12 +214,22 @@ export default function ContestResultScreen() {
       <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
         <Text style={styles.consequenceText}>{consequenceLine(t, cfg, myM, oppM, opponentName)}</Text>
       </View>
-      {(stateKey === 'attack_won' || stateKey === 'defend_won') ? (
-        <Text style={styles.earnedBeat}>
-          {stateKey === 'defend_won'
-            ? t('contestResult.earnedDefend', { xp: xpGained, stone: resourcesAwarded.stone, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })
-            : t('contestResult.earnedAttack', { xp: xpGained, iron: resourcesAwarded.iron, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })}
-        </Text>
+      {(stateKey === 'attack_won' || stateKey === 'defend_won') && clampNumber(xpGained, 0) > 0 ? (
+        <View style={styles.earnedBlock}>
+          <CountUpText
+            value={xpGained}
+            prefix="+"
+            countOnMount
+            style={styles.earnedXpValue}
+            maxFontSizeMultiplier={1.2}
+          />
+          <Text style={styles.earnedXpLabel}>{t('contestResult.siegeXpLabel')}</Text>
+          <Text style={styles.earnedBeat}>
+            {stateKey === 'defend_won'
+              ? t('contestResult.resourcesDefend', { stone: resourcesAwarded.stone, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })
+              : t('contestResult.resourcesAttack', { iron: resourcesAwarded.iron, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })}
+          </Text>
+        </View>
       ) : null}
 
       <View style={styles.ctaStack}>
@@ -192,6 +251,11 @@ export default function ContestResultScreen() {
           <Text style={styles.ctaSecondaryText}>{t('contestResult.backToMap')}</Text>
         </Pressable>
       </View>
+
+      <MilestoneTakeover
+        item={milestones[0] ?? null}
+        onDismiss={() => setMilestones((q) => q.slice(1))}
+      />
     </ScrollView>
   );
 }
@@ -296,14 +360,36 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     letterSpacing: 0.4,
   },
+  earnedBlock: {
+    alignItems: 'center',
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  earnedXpValue: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 32,
+    lineHeight: 34,
+    color: BONE,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  earnedXpLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    color: SLATE_2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+  },
   earnedBeat: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
     color: BONE,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    marginTop: -8,
-    marginBottom: 12,
+    textAlign: 'center',
   },
   ctaStack: {
     marginTop: 'auto',

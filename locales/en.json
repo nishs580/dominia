@@ -29,6 +29,14 @@
     "Sovereign": "Sovereign",
     "Dominator": "Dominator"
   },
+  "milestone": {
+    "levelKicker": "▪ LEVEL {{level}}",
+    "levelBodyAlliances": "Alliances unlocked.",
+    "firstWinKicker": "▪ MILESTONE",
+    "firstWinTitle": "First contest won",
+    "firstWinBody": "Your first territory taken by force.",
+    "continue": "CONTINUE"
+  },
   "categoryLabel": {
     "combat": "COMBAT",
     "defense": "DEFENSE",
@@ -237,8 +245,8 @@
   },
   "claimSuccess": {
     "isYours": "is yours.",
-    "xpEarned": "+{{xp}} SIEGE XP EARNED",
-    "goldEarned": "+{{gold}} GOLD EARNED",
+    "siegeXpLabel": "SIEGE XP EARNED",
+    "goldLabel": "GOLD EARNED",
     "defendIt": "Defend it.",
     "perimeterLabel": "PERIMETER",
     "statusLabel": "STATUS",
@@ -260,8 +268,9 @@
     "metresWalked": "METRES WALKED",
     "perimeter": "{{km}} KM PERIMETER",
     "backToMap": "BACK TO MAP",
-    "earnedDefend": "+{{xp}} SIEGE XP · +{{stone}} STONE · +{{gold}} GOLD · +{{morale}} MORALE",
-    "earnedAttack": "+{{xp}} SIEGE XP · +{{iron}} IRON · +{{gold}} GOLD · +{{morale}} MORALE",
+    "siegeXpLabel": "SIEGE XP EARNED",
+    "resourcesDefend": "+{{stone}} STONE · +{{gold}} GOLD · +{{morale}} MORALE",
+    "resourcesAttack": "+{{iron}} IRON · +{{gold}} GOLD · +{{morale}} MORALE",
     "attackWon": {
       "eyebrow": "▪ TERRITORY TAKEN",
       "headline": "Yours.",

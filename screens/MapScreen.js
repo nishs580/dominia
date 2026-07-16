@@ -27,6 +27,7 @@ import {
   MoraleGlyph,
 } from '../components/ResourceGlyphs';
 import MapSideRail from '../components/MapSideRail';
+import ResourceDeltaValue from '../components/ResourceDeltaValue';
 import { SvgXml } from 'react-native-svg';
 import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
@@ -489,6 +490,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           territoryName: selectedTerritory.name,
           perimeterDistance: selectedTerritory.perimeter,
           territoryId: territory.id,
+          territoryGeojson: territory?.geometry ?? null,
           playerId: myPlayer?.id,
           goldPaid: result.data.gold_paid,
           freeClaim: result.data.free_claim,
@@ -517,6 +519,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           mode: 'contest',
           territoryName: selectedTerritory.name,
           territoryId: territory.id,
+          territoryGeojson: territory?.geometry ?? null,
           contestId: env.contest_id,
           requiredWalkM: env.required_walk_m,
           attackerAllianceId: env.attacker_alliance_id,
@@ -2306,22 +2309,22 @@ export default function MapScreen() {
       >
         <View style={styles.resourceBannerItem}>
           <IronGlyph size={12} color="#F2EEE6" />
-          <Text style={styles.resourceBannerValue}>{myPlayer?.iron ?? 0}</Text>
+          <ResourceDeltaValue value={myPlayer ? (myPlayer.iron ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
           <StoneGlyph size={12} color="#F2EEE6" />
-          <Text style={styles.resourceBannerValue}>{myPlayer?.stone ?? 0}</Text>
+          <ResourceDeltaValue value={myPlayer ? (myPlayer.stone ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
           <GoldGlyph size={12} color="#F2EEE6" />
-          <Text style={styles.resourceBannerValue}>{myPlayer?.gold ?? 0}</Text>
+          <ResourceDeltaValue value={myPlayer ? (myPlayer.gold ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
           <MoraleGlyph size={12} color="#F2EEE6" />
-          <Text style={styles.resourceBannerValue}>{myPlayer?.morale ?? 0}</Text>
+          <ResourceDeltaValue value={myPlayer ? (myPlayer.morale ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
       </View>
       {objectiveActive && !flightActive && !spineFlightPending ? (

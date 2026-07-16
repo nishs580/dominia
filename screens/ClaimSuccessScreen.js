@@ -8,6 +8,12 @@ import { completeClaim } from '../lib/claimApi';
 import { fetchFirstClaimObjective } from '../lib/firstClaimApi';
 import { markFired } from '../lib/walkthroughFlags';
 import { maybeExplainResources } from '../lib/resourceIntro';
+import { claimHaptic } from '../lib/haptics';
+import { levelUpMilestone } from '../lib/milestones';
+import { territorySvgPath } from '../lib/territoryShape';
+import CountUpText from '../components/CountUpText';
+import MilestoneTakeover from '../components/MilestoneTakeover';
+import TerritorySilhouette from '../components/TerritorySilhouette';
 
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
@@ -45,6 +51,7 @@ export default function ClaimSuccessScreen() {
     territoryName = t('common.territoryFallback'),
     perimeterDistance = 0,
     territoryId,
+    territoryGeojson = null,
     playerId,
     goldPaid = 0,
     freeClaim = false,
@@ -55,6 +62,13 @@ export default function ClaimSuccessScreen() {
   const [envelope, setEnvelope] = useState(null);
   const [completeError, setCompleteError] = useState(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [milestones, setMilestones] = useState([]);
+  const hasSilhouette = useMemo(() => territorySvgPath(territoryGeojson) != null, [territoryGeojson]);
+
+  // Territory claim success: single firm haptic (brand: three moments only).
+  useEffect(() => {
+    claimHaptic();
+  }, []);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
@@ -68,6 +82,9 @@ export default function ClaimSuccessScreen() {
       if (result.ok) {
         setEnvelope(result.data);
         if (result.data?.already_completed === false) {
+          if (result.data?.leveled_up === true && result.data?.level_after) {
+            setMilestones((q) => [...q, levelUpMilestone(t, result.data.level_after)]);
+          }
           // First-earn education: gold + XP land on every claim; one lesson max.
           maybeExplainResources(userId, {
             xp: result.data?.xp_awarded,
@@ -112,17 +129,18 @@ export default function ClaimSuccessScreen() {
   };
 
   useEffect(() => {
+    // 280ms — sanctioned UI-transition duration, cubic-bezier(0.2,0,0,1).
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
-        duration: 520,
-        easing: Easing.out(Easing.cubic),
+        duration: 280,
+        easing: Easing.bezier(0.2, 0, 0, 1),
         useNativeDriver: true,
       }),
       Animated.timing(pop, {
         toValue: 1,
-        duration: 520,
-        easing: Easing.out(Easing.cubic),
+        duration: 280,
+        easing: Easing.bezier(0.2, 0, 0, 1),
         useNativeDriver: true,
       }),
     ]).start();
@@ -196,7 +214,13 @@ export default function ClaimSuccessScreen() {
         </Animated.View>
       ) : (
         <Animated.View style={[styles.center, animatedStyle]}>
-          <View style={styles.iconSquare} />
+          {hasSilhouette ? (
+            <View style={styles.silhouetteWrap}>
+              <TerritorySilhouette geojson={territoryGeojson} size={120} color={CLAIM} variant="fill" />
+            </View>
+          ) : (
+            <View style={styles.iconSquare} />
+          )}
 
           {isFirstClaim ? (
             <Text style={styles.firstClaimKicker}>{t('firstClaim.successKicker')}</Text>
@@ -204,14 +228,28 @@ export default function ClaimSuccessScreen() {
           <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
           <Text style={styles.territoryCaption}>{t('claimSuccess.isYours')}</Text>
           {showRewardBeats ? (
-            <>
-              <Text style={styles.goldEarnedBeat}>{t('claimSuccess.xpEarned', { xp: envelope.xp_awarded })}</Text>
-              <Text style={styles.goldEarnedBeat}>{t('claimSuccess.goldEarned', { gold: envelope.resources_awarded.gold })}</Text>
-              {envelope.leveled_up === true ? (
-                // TODO: level-up celebration card when design is ready
-                null
-              ) : null}
-            </>
+            <View style={styles.rewardRow}>
+              <View style={styles.rewardCell}>
+                <CountUpText
+                  value={envelope.xp_awarded}
+                  prefix="+"
+                  countOnMount
+                  style={styles.rewardValue}
+                  maxFontSizeMultiplier={1.2}
+                />
+                <Text style={styles.rewardLabel}>{t('claimSuccess.siegeXpLabel')}</Text>
+              </View>
+              <View style={styles.rewardCell}>
+                <CountUpText
+                  value={envelope.resources_awarded.gold}
+                  prefix="+"
+                  countOnMount
+                  style={styles.rewardValue}
+                  maxFontSizeMultiplier={1.2}
+                />
+                <Text style={styles.rewardLabel}>{t('claimSuccess.goldLabel')}</Text>
+              </View>
+            </View>
           ) : null}
           <Text style={styles.message}>
             {isFirstClaim ? t('firstClaim.successBody') : t('claimSuccess.defendIt')}
@@ -398,6 +436,11 @@ export default function ClaimSuccessScreen() {
           <Text style={styles.ctaText}>{t('claimSuccess.backToMap')}</Text>
         </Pressable>
       )}
+
+      <MilestoneTakeover
+        item={milestones[0] ?? null}
+        onDismiss={() => setMilestones((q) => q.slice(1))}
+      />
     </ScrollView>
   );
 }
@@ -421,6 +464,41 @@ const styles = StyleSheet.create({
     height: 64,
     backgroundColor: '#D64525',
     marginBottom: 24,
+  },
+
+  silhouetteWrap: {
+    marginBottom: 24,
+  },
+
+  rewardRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 40,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+
+  rewardCell: {
+    alignItems: 'center',
+  },
+
+  rewardValue: {
+    fontFamily: 'Archivo_700Bold',
+    color: BONE,
+    fontSize: 32,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+
+  rewardLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
   territory: {
@@ -453,17 +531,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 18,
   },
-  goldEarnedBeat: {
-    fontFamily: 'GeistMono_400Regular',
-    color: BONE,
-    fontSize: 9,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginTop: 2,
-    marginBottom: 12,
-  },
-
   errorMessage: {
     fontFamily: 'Inter_400Regular',
     color: BONE,

@@ -381,6 +381,7 @@ export default function ActiveClaimScreen() {
     territoryName = t('activeClaim.territoryFallback'),
     perimeterDistance = 0,
     territoryId,
+    territoryGeojson = null,
     playerId,
     mode = 'claim',
     goldPaid,
@@ -548,6 +549,7 @@ export default function ActiveClaimScreen() {
         role,
         territoryName: territoryNameRef.current,
         territoryId: territoryIdRef.current,
+        territoryGeojson,
         playerId: playerIdRef.current,
         opponentName: opponentNameRef.current,
         attackerAlliance: attackerAllianceIdRef.current ?? null,
@@ -598,7 +600,7 @@ export default function ActiveClaimScreen() {
       flushPartialContestWindow();
       contestWalk.stop();
     };
-  }, [mode, contestId, playerId, requiredWalkM, navigation, role]);
+  }, [mode, contestId, playerId, requiredWalkM, navigation, role, territoryGeojson]);
 
   // ─── GPS watch via foreground service ──────────────────────────────────
   useEffect(() => {
@@ -648,6 +650,7 @@ export default function ActiveClaimScreen() {
       territoryName,
       perimeterDistance: perimeterM,
       territoryId,
+      territoryGeojson,
       playerId,
       goldPaid,
       freeClaim,

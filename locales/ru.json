@@ -29,6 +29,14 @@
     "Sovereign": "Властитель",
     "Dominator": "Покоритель"
   },
+  "milestone": {
+    "levelKicker": "▪ УРОВЕНЬ {{level}}",
+    "levelBodyAlliances": "Альянсы открыты.",
+    "firstWinKicker": "▪ ВЕХА",
+    "firstWinTitle": "Первое сражение выиграно",
+    "firstWinBody": "Ваша первая территория, взятая силой.",
+    "continue": "ПРОДОЛЖИТЬ"
+  },
   "categoryLabel": {
     "combat": "БОЙ",
     "defense": "ОБОРОНА",
@@ -237,8 +245,8 @@
   },
   "claimSuccess": {
     "isYours": "ваша.",
-    "xpEarned": "+{{xp}} ОСАДНОГО ОПЫТА",
-    "goldEarned": "+{{gold}} ЗОЛОТА",
+    "siegeXpLabel": "ОСАДНОГО ОПЫТА",
+    "goldLabel": "ЗОЛОТА",
     "defendIt": "Защищайте её.",
     "perimeterLabel": "ПЕРИМЕТР",
     "statusLabel": "СТАТУС",
@@ -260,8 +268,9 @@
     "metresWalked": "ПРОЙДЕНО МЕТРОВ",
     "perimeter": "{{km}} КМ ПЕРИМЕТР",
     "backToMap": "НА КАРТУ",
-    "earnedDefend": "+{{xp}} ОСАДНОГО ОПЫТА · +{{stone}} КАМНЯ · +{{gold}} ЗОЛОТА · +{{morale}} МОРАЛИ",
-    "earnedAttack": "+{{xp}} ОСАДНОГО ОПЫТА · +{{iron}} ЖЕЛЕЗА · +{{gold}} ЗОЛОТА · +{{morale}} МОРАЛИ",
+    "siegeXpLabel": "ОСАДНОГО ОПЫТА",
+    "resourcesDefend": "+{{stone}} КАМНЯ · +{{gold}} ЗОЛОТА · +{{morale}} МОРАЛИ",
+    "resourcesAttack": "+{{iron}} ЖЕЛЕЗА · +{{gold}} ЗОЛОТА · +{{morale}} МОРАЛИ",
     "attackWon": {
       "eyebrow": "▪ ТЕРРИТОРИЯ ЗАХВАЧЕНА",
       "headline": "Ваша.",

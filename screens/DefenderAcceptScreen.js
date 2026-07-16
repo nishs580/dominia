@@ -157,6 +157,7 @@ export default function DefenderAcceptScreen() {
         mode: 'contest',
         role: 'defender',
         contestId: previewData.contest_id,
+        territoryId: previewData.territory_id,
         territoryName: previewData.territory_name,
         playerId: myPlayer.id,
         requiredWalkM: snapshotDefenderThreshold,
