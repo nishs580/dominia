@@ -11,7 +11,7 @@ import {
   openHealthConnectSettings,
   aggregateRecord,
   aggregateGroupByPeriod,
-} from 'react-native-health-connect';
+} from '../lib/health';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';

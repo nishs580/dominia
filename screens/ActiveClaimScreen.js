@@ -13,7 +13,7 @@ import {
   initialize,
   requestPermission,
   readRecords,
-} from 'react-native-health-connect';
+} from '../lib/health';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';

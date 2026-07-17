@@ -17,7 +17,7 @@ import {
   getGrantedPermissions,
   readRecords,
   SdkAvailabilityStatus,
-} from 'react-native-health-connect';
+} from '../lib/health';
 import { supabase } from '../lib/supabase';
 import { logDebug } from '../lib/debug';
 import { STEPS_READ_PERM, hasForegroundStepsRead, hasBackgroundStepsRead } from '../lib/healthConnect';
