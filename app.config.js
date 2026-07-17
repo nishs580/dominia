@@ -3,6 +3,8 @@ module.exports = {
     name: 'dominia',
     slug: 'dominia',
     version: '1.0.0',
+    // Deep-link / OAuth redirect scheme (Clerk SSO redirects on both platforms).
+    scheme: 'dominia',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -13,7 +15,24 @@ module.exports = {
       backgroundColor: '#ffffff',
     },
     ios: {
-      supportsTablet: true,
+      // A GPS walking game on iPad is a review/QA surface with zero upside.
+      supportsTablet: false,
+      // Android package (com.nish_s.dominia) has an underscore, illegal in an
+      // iOS bundle ID — the two never have to match.
+      bundleIdentifier: 'com.nishs.dominia',
+      googleServicesFile: process.env.GOOGLE_SERVICES_INFO_PLIST ?? './GoogleService-Info.plist',
+      infoPlist: {
+        // Location strings come from the expo-location plugin below.
+        NSMotionUsageDescription:
+          'Dominia counts your steps live during territory claims and contest walks.',
+        NSHealthShareUsageDescription:
+          'Dominia reads your steps, distance and active calories to power territory claims and daily challenges.',
+        // Standard HTTPS only — skips the App Store export-compliance questionnaire.
+        ITSAppUsesNonExemptEncryption: false,
+      },
+      entitlements: {
+        'com.apple.developer.healthkit': true,
+      },
     },
     android: {
       adaptiveIcon: {
@@ -42,7 +61,14 @@ module.exports = {
     plugins: [
       './plugins/withHealthConnect',
       '@react-native-firebase/app',
-      '@rnmapbox/maps',
+      [
+        '@rnmapbox/maps',
+        {
+          // iOS pod install needs the secret download token to fetch the
+          // Mapbox SDK (Android gets it via the gradle property of the same name).
+          RNMapboxMapsDownloadToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
+        },
+      ],
       'expo-web-browser',
       [
         'expo-location',
@@ -50,7 +76,9 @@ module.exports = {
           locationAlwaysAndWhenInUsePermission: 'Dominia needs your location to track walks for territory claims.',
           locationWhenInUsePermission: 'Dominia needs your location to track walks for territory claims.',
           isAndroidBackgroundLocationEnabled: true,
-          isIosBackgroundLocationEnabled: false,
+          // UIBackgroundModes: location — keeps GPS alive during screen-locked
+          // claim walks (iOS has no foreground services).
+          isIosBackgroundLocationEnabled: true,
         },
       ],
       'expo-sensors',
@@ -66,6 +94,11 @@ module.exports = {
         {
           android: {
             minSdkVersion: 26,
+          },
+          ios: {
+            // Mandatory for @react-native-firebase on iOS.
+            useFrameworks: 'static',
+            deploymentTarget: '15.1',
           },
         },
       ],
