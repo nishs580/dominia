@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -10,18 +10,22 @@ import { Pedometer } from 'expo-sensors';
 import { setHomePin as saveHomePin } from '../lib/homePinApi';
 import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
+import { colors, duration } from '../lib/theme';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
+const INK = colors.ink;
+const INK2 = colors.ink2;
+const BONE = colors.bone;
+const SLATE = colors.slate;
+const SLATE2 = colors.slate2;
+const CLAIM = colors.claim;
+const HAIRLINE_STRONG = colors.hairlineStrong;
+
+// Fallback map centres for the two beta cities when no location fix is available.
+// The ru locale cohort plays in Saint Petersburg; everyone else starts in Bengaluru.
+const FALLBACK_CENTRE_BENGALURU = [77.5946, 12.9716];
+const FALLBACK_CENTRE_SAINT_PETERSBURG = [30.3158, 59.9343];
 
 function coordsFromMapPress(payload) {
   if (!payload) return null;
@@ -34,7 +38,7 @@ function coordsFromMapPress(payload) {
 
 function ProgressBar({ step }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'center', marginBottom: 12 }}>
+    <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'center', marginBottom: 16 }}>
       {Array.from({ length: 5 }).map((_, idx) => (
         <View
           key={idx}
@@ -141,7 +145,7 @@ function NumberedRow({ num, title, subtitle, last = false }) {
 
 export default function OnboardingScreen({ route }) {
   const navigation = useNavigation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { userId: clerkUserId, getToken } = useAuth();
   const [resolvedPlayerId, setResolvedPlayerId] = useState(route.params?.playerId ?? null);
@@ -152,6 +156,8 @@ export default function OnboardingScreen({ route }) {
   const [savingPin, setSavingPin] = useState(false);
   const [finishingOnboarding, setFinishingOnboarding] = useState(false);
   const [homePin, setHomePin] = useState(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   // City resolved server-side from the dropped pin (e.g. "Saint Petersburg").
   // Drives the step-4 copy so it names the player's actual city, not a default.
   const [homeCity, setHomeCity] = useState(null);
@@ -159,8 +165,6 @@ export default function OnboardingScreen({ route }) {
   const homeCameraRef = useRef(null);
   const didCenterOnUserRef = useRef(false);
   const [username, setUsername] = useState('');
-  const [displayedTagline, setDisplayedTagline] = useState('');
-  const [displayedBody, setDisplayedBody] = useState('');
 
   useEffect(() => {
     if (resolvedPlayerId) return;
@@ -201,7 +205,10 @@ export default function OnboardingScreen({ route }) {
     (async () => {
       try {
         const perm = await Location.getForegroundPermissionsAsync();
-        if (!perm.granted) return;
+        if (!perm.granted) {
+          if (!cancelled) setLocationDenied(true);
+          return;
+        }
         const pos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -224,57 +231,30 @@ export default function OnboardingScreen({ route }) {
     };
   }, [step]);
 
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const bodyOpacity = useRef(new Animated.Value(0)).current;
-  const buttonTranslateY = useRef(new Animated.Value(60)).current;
-  const buttonOpacity = useRef(new Animated.Value(0)).current;
+  // Single container fade on the brand curve — text renders statically (type is
+  // never animated). Honours the system reduce-motion setting with an instant cut.
+  const introOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (step !== 0) return;
-    const fullTagline = t('onboarding.typewriterTagline');
-    setDisplayedTagline('');
-    setDisplayedBody('');
-    taglineOpacity.setValue(1);
-    bodyOpacity.setValue(0);
-    buttonOpacity.setValue(0);
-    buttonTranslateY.setValue(60);
-
-    let index = 0;
-    const interval = setInterval(() => {
-      index += 1;
-      setDisplayedTagline(fullTagline.slice(0, index));
-      if (index >= fullTagline.length) {
-        clearInterval(interval);
-        setTimeout(() => {
-          const fullBody = t('onboarding.typewriterBody');
-          let bodyIndex = 0;
-          const bodyInterval = setInterval(() => {
-            bodyIndex += 1;
-            setDisplayedBody(fullBody.slice(0, bodyIndex));
-            if (bodyIndex >= fullBody.length) {
-              clearInterval(bodyInterval);
-              Animated.parallel([
-                Animated.timing(buttonTranslateY, {
-                  toValue: 0,
-                  duration: 280,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }),
-                Animated.timing(buttonOpacity, {
-                  toValue: 1,
-                  duration: 280,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }
-          }, 55);
-        }, 200);
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled) return;
+      if (reduced) {
+        introOpacity.setValue(1);
+        return;
       }
-    }, 55);
-
-    return () => clearInterval(interval);
-  }, [step, t]);
+      Animated.timing(introOpacity, {
+        toValue: 1,
+        duration: duration.normal,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, introOpacity]);
 
   useEffect(() => {
     if (step !== 4 || !resolvedPlayerId) return;
@@ -291,16 +271,16 @@ export default function OnboardingScreen({ route }) {
   const content = useMemo(() => {
     if (step === 0) {
       return (
-        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4 }}>
+        <Animated.View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4, opacity: introOpacity }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
             <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
               DOMINIA
             </Text>
-            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: CLAIM, marginLeft: 4, marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: BONE, marginLeft: 4, marginBottom: 6 }}>
               ▪
             </Text>
           </View>
-          <Animated.View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
@@ -311,14 +291,14 @@ export default function OnboardingScreen({ route }) {
                 flexShrink: 0,
               }}
             >
-              {displayedTagline}
+              {t('onboarding.tagline')}
             </Text>
             <View style={{ flex: 1, height: 0.5, backgroundColor: HAIRLINE_STRONG }} />
-          </Animated.View>
-          <View>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{displayedBody}</Text>
           </View>
-        </View>
+          <View>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{t('onboarding.introBody')}</Text>
+          </View>
+        </Animated.View>
       );
     }
 
@@ -379,9 +359,9 @@ export default function OnboardingScreen({ route }) {
             style={{
               marginTop: 14,
               padding: 10,
-              backgroundColor: CLAIM_SOFT,
-              borderLeftWidth: 2,
-              borderLeftColor: CLAIM,
+              backgroundColor: INK2,
+              borderWidth: 0.5,
+              borderColor: HAIRLINE_STRONG,
             }}
           >
             <Text
@@ -389,7 +369,7 @@ export default function OnboardingScreen({ route }) {
                 fontFamily: 'GeistMono_400Regular',
                 fontSize: 8,
                 letterSpacing: 2,
-                color: CLAIM,
+                color: SLATE2,
                 textTransform: 'uppercase',
                 marginBottom: 4,
                 textAlign: 'left',
@@ -447,8 +427,10 @@ export default function OnboardingScreen({ route }) {
               <Camera
                 ref={homeCameraRef}
                 defaultSettings={{
-                  centerCoordinate: userCoord ?? [4.9041, 52.3676],
-                  zoomLevel: userCoord ? 14 : 12,
+                  centerCoordinate:
+                    userCoord ??
+                    (i18n.language?.startsWith('ru') ? FALLBACK_CENTRE_SAINT_PETERSBURG : FALLBACK_CENTRE_BENGALURU),
+                  zoomLevel: userCoord ? 14 : 11,
                 }}
               />
               {homePin ? (
@@ -458,7 +440,6 @@ export default function OnboardingScreen({ route }) {
                       style={{
                         width: 28,
                         height: 28,
-                        borderRadius: 14,
                         backgroundColor: BONE,
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -482,7 +463,7 @@ export default function OnboardingScreen({ route }) {
               ) : null}
             </MapView>
             {!homePin ? (
-              <View style={{ position: 'absolute', bottom: 12, alignSelf: 'center' }} pointerEvents="none">
+              <View style={{ position: 'absolute', bottom: 12, alignSelf: 'center', maxWidth: '92%' }} pointerEvents="none">
                 <Text
                   style={{
                     fontFamily: 'GeistMono_400Regular',
@@ -493,10 +474,10 @@ export default function OnboardingScreen({ route }) {
                     backgroundColor: 'rgba(14,16,20,0.75)',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
-                    textAlign: 'left',
+                    textAlign: 'center',
                   }}
                 >
-                  {t('onboarding.tapToPlace')}
+                  {locationDenied ? t('onboarding.locationUnavailable') : t('onboarding.tapToPlace')}
                 </Text>
               </View>
             ) : null}
@@ -506,11 +487,9 @@ export default function OnboardingScreen({ route }) {
               <View style={{ marginTop: 8, alignItems: 'center' }}>
                 <Text
                   style={{
-                    fontFamily: 'GeistMono_400Regular',
-                    fontSize: 9,
-                    color: CLAIM,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1.4,
+                    fontFamily: 'Inter_400Regular',
+                    fontSize: 13,
+                    color: BONE,
                     marginBottom: 8,
                     textAlign: 'center',
                   }}
@@ -520,6 +499,8 @@ export default function OnboardingScreen({ route }) {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setResolveRetryNonce((n) => n + 1)}
+                  style={{ paddingVertical: 12, paddingHorizontal: 24, alignSelf: 'center' }}
+                  hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}
                 >
                   <Text
                     style={{
@@ -561,15 +542,9 @@ export default function OnboardingScreen({ route }) {
           <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
             {t('onboarding.commanderLabel')}
           </Text>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE, textTransform: 'uppercase', letterSpacing: 1.4 }}>
-            #0004
-          </Text>
         </View>
         <Text
           maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
           style={{
             fontFamily: 'Archivo_900Black',
             fontSize: 32,
@@ -589,14 +564,19 @@ export default function OnboardingScreen({ route }) {
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
-  }, [step, homePin, homeCity, userCoord, taglineOpacity, bodyOpacity, username, displayedTagline, displayedBody, t]);
+  }, [step, homePin, homeCity, userCoord, introOpacity, username, resolvedPlayerId, resolveError, locationDenied, i18n.language, t]);
 
   const onNext = async () => {
     if (step === 2) {
       if (requesting) return;
       setRequesting(true);
       try {
-        await Promise.allSettled([Location.requestForegroundPermissionsAsync(), Pedometer.requestPermissionsAsync()]);
+        // Sequential requests so the OS dialogs arrive one at a time, in the same
+        // order as the rationale rows above; a location denial feeds the map's
+        // explicit fallback state instead of failing silently.
+        const loc = await Location.requestForegroundPermissionsAsync().catch(() => null);
+        if (!loc?.granted) setLocationDenied(true);
+        await Pedometer.requestPermissionsAsync().catch(() => null);
       } finally {
         setRequesting(false);
         setStep(3);
@@ -605,12 +585,9 @@ export default function OnboardingScreen({ route }) {
     }
 
     if (step === 3) {
-      if (!homePin || savingPin) return;
-      if (!resolvedPlayerId) {
-        Alert.alert(t('onboarding.alertSessionErrorTitle'), t('onboarding.alertSessionErrorBody'));
-        return;
-      }
+      if (!homePin || savingPin || !resolvedPlayerId) return;
       setSavingPin(true);
+      setSaveError(null);
       try {
         const result = await saveHomePin({
           clerkGetToken: getToken,
@@ -619,11 +596,14 @@ export default function OnboardingScreen({ route }) {
         });
         if (!result.ok) {
           console.error('Home pin save failed:', result.status, result.error);
-          Alert.alert(t('onboarding.alertCouldNotSaveTitle'), result.error || t('onboarding.alertCouldNotSaveBody'));
+          setSaveError(result.error || t('onboarding.saveFailedBody'));
           return;
         }
         if (result.data?.home_city) setHomeCity(result.data.home_city);
         setStep(4);
+      } catch (err) {
+        console.error('Home pin save threw:', err);
+        setSaveError(t('onboarding.saveFailedBody'));
       } finally {
         setSavingPin(false);
       }
@@ -631,19 +611,16 @@ export default function OnboardingScreen({ route }) {
     }
 
     if (step === 4) {
-      if (finishingOnboarding) return;
-      if (!resolvedPlayerId) {
-        Alert.alert(t('onboarding.alertSessionErrorTitle'), t('onboarding.alertSessionErrorBody'));
-        return;
-      }
+      if (finishingOnboarding || !resolvedPlayerId) return;
       setFinishingOnboarding(true);
+      setSaveError(null);
       try {
         const res = await patchMe({ clerkGetToken: getToken, fields: { has_onboarded: true } });
         if (!res.ok) throw new Error('update_failed');
         navigation.replace('MainTabs');
       } catch (err) {
         console.error('Onboarding finish failed:', err);
-        Alert.alert(t('onboarding.alertCouldNotSaveTitle'), t('onboarding.alertCouldNotSaveBody'));
+        setSaveError(t('onboarding.saveFailedBody'));
       } finally {
         setFinishingOnboarding(false);
       }
@@ -655,6 +632,7 @@ export default function OnboardingScreen({ route }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
+      <ProgressBar step={step} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1, justifyContent: step === 0 || step === 1 || step === 2 ? 'center' : 'flex-start' }}
@@ -664,8 +642,29 @@ export default function OnboardingScreen({ route }) {
         {content}
       </ScrollView>
       <View style={{ gap: 10 }}>
+        {saveError ? (
+          <Text
+            style={{
+              fontFamily: 'Inter_400Regular',
+              fontSize: 13,
+              color: BONE,
+              textAlign: 'center',
+            }}
+          >
+            {saveError}
+          </Text>
+        ) : null}
         {step >= 1 && step <= 3 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={t('onboarding.back')} onPress={() => setStep((s) => s - 1)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('onboarding.back')}
+            onPress={() => {
+              setSaveError(null);
+              setStep((s) => s - 1);
+            }}
+            style={{ paddingVertical: 12, paddingHorizontal: 24, alignSelf: 'center' }}
+            hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}
+          >
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
@@ -680,11 +679,8 @@ export default function OnboardingScreen({ route }) {
             </Text>
           </Pressable>
         ) : null}
-        <ProgressBar step={step} />
         {step === 0 ? (
-          <Animated.View style={{ opacity: buttonOpacity, transform: [{ translateY: buttonTranslateY }] }}>
-            <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 1, total: 5 })} actionLabel={t('onboarding.actionBegin')} onPress={onNext} disabled={false} />
-          </Animated.View>
+          <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 1, total: 5 })} actionLabel={t('onboarding.actionBegin')} onPress={onNext} disabled={false} />
         ) : null}
         {step === 1 ? (
           <PrimaryButton stepLabel={t('onboarding.stepCount', { current: 2, total: 5 })} actionLabel={t('onboarding.actionContinue')} onPress={onNext} disabled={false} />
@@ -701,7 +697,12 @@ export default function OnboardingScreen({ route }) {
           />
         ) : null}
         {step === 4 ? (
-          <PrimaryButton stepLabel={t('onboarding.lastStep')} actionLabel={t('onboarding.actionEnterMap')} onPress={onNext} disabled={finishingOnboarding} />
+          <PrimaryButton
+            stepLabel={t('onboarding.lastStep')}
+            actionLabel={t('onboarding.actionEnterMap')}
+            onPress={onNext}
+            disabled={finishingOnboarding || !resolvedPlayerId}
+          />
         ) : null}
       </View>
     </View>
