@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "title": "Design System: Dominia",
+  "extensions": {
+    "colorMeta": {
+      "claim-red": { "role": "primary", "displayName": "Claim Red", "canonical": "#D64525", "tonalRamp": ["#3A1109", "#5C1D0E", "#832A15", "#AB371C", "#D64525", "#E06A50", "#EA9280", "#F5C4B9"] },
+      "alliance-green": { "role": "secondary", "displayName": "Alliance Green", "canonical": "#3F8F4E", "tonalRamp": ["#0F2413", "#1A3D21", "#27592F", "#33743E", "#3F8F4E", "#63A870", "#8FC298", "#C2DEC7"] },
+      "enemy-slate-blue": { "role": "secondary", "displayName": "Enemy Slate-Blue", "canonical": "#4A6B8A", "tonalRamp": ["#131B23", "#20303F", "#2F485D", "#3C5973", "#4A6B8A", "#6C88A2", "#93A9BC", "#C1CedA"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#0E1014", "tonalRamp": ["#0E1014", "#1A1D24", "#252932", "#3A3F4A", "#5C6068", "#8B8F98", "#C4C1B8", "#F2EEE6"] },
+      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#1A1D24" },
+      "ink-3": { "role": "neutral", "displayName": "Ink 3", "canonical": "#252932" },
+      "bone": { "role": "neutral", "displayName": "Bone", "canonical": "#F2EEE6" },
+      "bone-2": { "role": "neutral", "displayName": "Bone 2", "canonical": "#E8E3D8" },
+      "slate": { "role": "neutral", "displayName": "Slate", "canonical": "#5C6068" },
+      "slate-2": { "role": "neutral", "displayName": "Slate 2", "canonical": "#8B8F98" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Ceremonial moments only — milestone takeovers, Legacy Titles. Always uppercase above 20pt." },
+      "body": { "displayName": "Body", "purpose": "Readable sentences. Sentence case only; never uppercase Inter." },
+      "label": { "displayName": "Label", "purpose": "Section labels and UI chrome. Uppercase, 0.12–0.18em tracking." },
+      "data": { "displayName": "Data", "purpose": "Measurements, timers, counts. Real-world case preserved (km, ×2.50, 9:41)." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "micro", "value": "120ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Button state changes, tap feedback." },
+      { "name": "normal", "value": "280ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Sheet open, screen change." },
+      { "name": "ambient", "value": "2000ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Contested-territory pulse, countdown signal. Ceremonial only." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The screen's single Claim Red element — one per screen outside the map.",
+      "html": "<button class=\"ds-btn-primary\">CLAIM IT</button>",
+      "css": ".ds-btn-primary { background: #D64525; color: #F2EEE6; font-family: 'Geist Mono', monospace; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; padding: 14px 24px; border: none; border-radius: 0; transition: background 120ms cubic-bezier(0.2, 0, 0, 1); cursor: pointer; } .ds-btn-primary:hover { background: #AB371C; } .ds-btn-primary:focus-visible { outline: 1px solid rgba(242,238,230,0.16); outline-offset: 2px; } .ds-btn-primary:active { background: #832A15; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ink instrument with hairline border for all non-primary actions.",
+      "html": "<button class=\"ds-btn-secondary\">HOLD POSITION</button>",
+      "css": ".ds-btn-secondary { background: #1A1D24; color: #F2EEE6; font-family: 'Geist Mono', monospace; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; padding: 14px 24px; border: 1px solid rgba(242,238,230,0.16); border-radius: 0; transition: background 120ms cubic-bezier(0.2, 0, 0, 1); cursor: pointer; } .ds-btn-secondary:hover { background: #252932; } .ds-btn-secondary:focus-visible { outline: 1px solid rgba(242,238,230,0.16); outline-offset: 2px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Ink 2 surface with hairline border; depth without shadows.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">TERRITORY</div><div class=\"ds-card-title\">Cubbon Park East</div><div class=\"ds-card-body\">Held for 12 days. Development level 2.</div></div>",
+      "css": ".ds-card { background: #1A1D24; border: 0.5px solid rgba(242,238,230,0.08); border-radius: 0; padding: 16px; } .ds-card-label { font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #8B8F98; margin-bottom: 8px; } .ds-card-title { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 16px; color: #F2EEE6; margin-bottom: 4px; } .ds-card-body { font-family: 'Inter', sans-serif; font-size: 13px; color: #E8E3D8; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Mono field; focus shifts the hairline, never glows.",
+      "html": "<input class=\"ds-input\" placeholder=\"COMMANDER NAME\" />",
+      "css": ".ds-input { background: #1A1D24; color: #F2EEE6; font-family: 'Geist Mono', monospace; font-size: 13px; letter-spacing: 0.08em; padding: 12px; border: 0.5px solid rgba(242,238,230,0.08); border-radius: 0; width: 100%; } .ds-input::placeholder { color: #5C6068; } .ds-input:focus { outline: none; border: 1px solid rgba(242,238,230,0.16); }"
+    },
+    {
+      "name": "Tab Navigation",
+      "kind": "nav",
+      "refersTo": "section-label",
+      "description": "Text-only mono tabs — no icons in navigation, per brand.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-item ds-nav-active\">MAP</span><span class=\"ds-nav-item\">ALLIANCE</span><span class=\"ds-nav-item\">ACTIVITY</span><span class=\"ds-nav-item\">PROFILE</span></nav>",
+      "css": ".ds-nav { display: flex; justify-content: space-around; background: #0E1014; border-top: 0.5px solid rgba(242,238,230,0.08); padding: 14px 8px; } .ds-nav-item { font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5C6068; cursor: pointer; } .ds-nav-item:hover { color: #8B8F98; } .ds-nav-active { color: #F2EEE6; font-weight: 500; }"
+    },
+    {
+      "name": "Resource Pill",
+      "kind": "chip",
+      "refersTo": "resource-pill",
+      "description": "The single rounded exception (4px) — map-bar resource counts.",
+      "html": "<span class=\"ds-pill\">IRON 240</span>",
+      "css": ".ds-pill { display: inline-block; background: #1A1D24; color: #F2EEE6; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: 0.12em; padding: 4px 8px; border: 0.5px solid rgba(242,238,230,0.08); border-radius: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Commander's Field Desk",
+    "overview": "A campaign map under a single lamp: dark surface, precise instruments, every mark earned. The entire interface is chrome around a sacred map — three steps of ink for depth, bone for text, and three territory colours whose meanings are locked. Ceremony is rationed: Archivo display type appears only at moments a Commander should remember.",
+    "keyCharacteristics": [
+      "Dark, flat, and square: 0px radius, no shadows, no gradients, no blur, anywhere.",
+      "Three typefaces, three jobs: Geist Mono for chrome and data, Inter for sentences, Archivo for ceremony.",
+      "Five colours only, meanings locked; Claim Red on at most one element per screen outside the map.",
+      "Depth by tonal ink steps and 0.5px hairlines, never by elevation effects.",
+      "Motion limited to three durations (120 / 280 / 2000ms) on one curve; type is never animated."
+    ],
+    "rules": [
+      { "name": "The One Claim Rule", "body": "Claim Red appears on at most one element per screen outside the map. A second red element is a bug, not an emphasis.", "section": "colors" },
+      { "name": "The Locked Meaning Rule", "body": "The three territory colours mean yours / ours / theirs and nothing else. They are never repurposed for generic success, error, or info states. There is no sixth colour.", "section": "colors" },
+      { "name": "The Controlling Rule", "body": "Measurement, state, label, or readout → Geist Mono. A sentence someone would actually read → Inter. A ceremonial moment the player should recall → Archivo. When in doubt → Geist Mono.", "section": "typography" },
+      { "name": "The Still Type Rule", "body": "Type is never animated. Numbers may count up; glyphs never slide, fade, or bounce.", "section": "typography" },
+      { "name": "The Flat Doctrine", "body": "If a surface needs to read as 'above', it gets the next ink step and a hairline — never a shadow. This rule has no exceptions and survives all future features.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep Claim Red to one element per screen outside the map — its rarity is its authority.",
+      "Do set every label, measurement, and readout in Geist Mono; every readable sentence in Inter; ceremony only in Archivo.",
+      "Do convey depth with ink steps and hairlines only (0.5px at 8%, 1px at 16%).",
+      "Do use only the three motion durations — 120ms / 280ms / 2000ms — on cubic-bezier(0.2, 0, 0, 1).",
+      "Do honour Android OS guarantees inside the brand skin: system Back, edge-to-edge insets, 48dp touch targets, sp-scaled text.",
+      "Do write British English, sentence-case Inter, no exclamation marks, no emoji."
+    ],
+    "donts": [
+      "Don't use gradients, glows, drop shadows, or blur — anywhere, ever.",
+      "Don't use pure white (#FFFFFF) or pure black (#000000).",
+      "Don't round corners except the app icon and 4px map resource pills.",
+      "Don't introduce a sixth colour, or repurpose Claim / Alliance / Enemy for generic UI states.",
+      "Don't put icons in navigation, or animate type.",
+      "Don't design like a fitness tracker, a casual gamified-exercise app, a glossy conventional mobile game, or a cute wellness brand — and never reach for weapons or armed-forces imagery.",
+      "Don't let copy imply travelling to a territory; the walk counts from anywhere."
+    ]
+  }
+}
