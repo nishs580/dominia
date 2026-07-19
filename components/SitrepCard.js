@@ -47,7 +47,15 @@ export default function SitrepCard({ suppressed = false }) {
     let cancelled = false;
     (async () => {
       const res = await fetchChallengesToday({ clerkGetToken: () => getTokenRef.current() });
-      if (cancelled || !res.ok) return;
+      if (cancelled || !res.ok) {
+        // Failure keeps the no-card silence, but releases the session claim so
+        // a transient network blip doesn't burn the brief for the whole session.
+        if (!res?.ok) {
+          claimedRef.current = false;
+          shownThisSession = false;
+        }
+        return;
+      }
       const d = res.data;
       const streak = Math.max(0, Number(d?.streak?.current) || 0);
       const done = Array.isArray(d?.completed) && d.completed.length > 0;

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { getRooms } from '../lib/chatApi';
 import { getActivityLog } from '../lib/activityLogApi';
 import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
+import { colors } from '../lib/theme';
 
 const ICON_SIZE = 15;
 
@@ -76,7 +77,7 @@ export default function MapSideRail({ hidden = false }) {
             pressed && styles.itemPressed,
           ]}
         >
-          <item.Icon size={ICON_SIZE} color="#F2EEE6" />
+          <item.Icon size={ICON_SIZE} color={colors.bone} />
           <Text style={styles.label} maxFontSizeMultiplier={1.3}>{item.label}</Text>
         </Pressable>
       ))}
@@ -90,9 +91,9 @@ const styles = StyleSheet.create({
     right: 12,
     bottom: 20,
     width: 124,
-    backgroundColor: '#1A1D24',
+    backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
     overflow: 'hidden',
     zIndex: 10,
@@ -117,6 +118,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F2EEE6',
+    color: colors.bone,
   },
 });

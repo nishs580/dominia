@@ -1079,6 +1079,16 @@
   },
   "map": {
     "loadingTerritories": "Loading territories",
+    "loadError": "Could not load the map.",
+    "emptyRegion": "No territories mapped here",
+    "legendKey": "Key",
+    "legendYours": "Yours",
+    "legendAlliance": "Alliance",
+    "legendTheirs": "Theirs",
+    "legendUnclaimed": "Unclaimed",
+    "legendSiege": "Under siege",
+    "influenceGloss": "Earned each day you hold this ground.",
+    "legacyGloss": "Legacy Rank grows with unbroken days held.",
     "chip": {
       "contested": "UNDER SIEGE",
       "fell": "FELL {{ago}} AGO",

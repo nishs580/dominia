@@ -165,7 +165,9 @@ A dark low-chroma field where the three territory colours are the only voices �
 Flat by doctrine. There are no shadows, glows, blurs, or gradients anywhere in the product — depth is conveyed exclusively by the three-step ink ramp (Ink → Ink 2 → Ink 3) and by hairline borders (0.5px at 8% bone, 1px at 16% for emphasis). A sheet sitting over the map is Ink 2 with a hairline-strong top edge, nothing more.
 
 ### Named Rules
-**The Flat Doctrine.** If a surface needs to read as "above", it gets the next ink step and a hairline — never a shadow. This rule has no exceptions and survives all future features.
+**The Flat Doctrine.** If a surface needs to read as "above", it gets the next ink step and a hairline — never a shadow. This rule has no exceptions in UI chrome and survives all future features.
+
+**The Map-Layer Exception.** Mapbox data-layer styling (fills, line layers, camera moves) is game-board rendering, not UI chrome. Two named exceptions are sanctioned there and only there: the selected-territory outline (pure white line with `lineBlur` glow — the selection affordance on a dark map, deliberately kept), and Mapbox camera flight durations (tuned per move; the three-duration vocabulary governs UI motion, not camera physics). The basemap is night-preset at all hours by decision — daytime sunlight legibility is solved through text and label contrast, never by lightening the map.
 
 ## 5. Components
 

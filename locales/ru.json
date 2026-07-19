@@ -1101,6 +1101,16 @@
   },
   "map": {
     "loadingTerritories": "Загрузка территорий",
+    "loadError": "Не удалось загрузить карту.",
+    "emptyRegion": "Здесь пока нет территорий",
+    "legendKey": "Легенда",
+    "legendYours": "Ваши",
+    "legendAlliance": "Альянс",
+    "legendTheirs": "Чужие",
+    "legendUnclaimed": "Свободно",
+    "legendSiege": "В осаде",
+    "influenceGloss": "Начисляется за каждый день владения этой землёй.",
+    "legacyGloss": "Ранг наследия растёт с непрерывными днями владения.",
     "chip": {
       "contested": "В ОСАДЕ",
       "fell": "ПАЛА {{ago}} НАЗАД",

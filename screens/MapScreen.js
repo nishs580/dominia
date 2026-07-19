@@ -9,6 +9,7 @@ import { startContest } from '../lib/contestWalkApi';
 import { abandonTerritory } from '../lib/territoryApi';
 import { developTerritory } from '../lib/developApi';
 import { supabase } from '../lib/supabase';
+import { colors } from '../lib/theme';
 import * as F from '../lib/formulas';
 import {
   developmentName,
@@ -75,7 +76,11 @@ function territoryCapForLevel(level) {
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
-const AMSTERDAM_CENTER = [4.9041, 52.3676];
+// Fallback map centres for the two beta cities, used only until the camera can
+// settle on the player's home pin or live position. The ru locale cohort plays
+// in Saint Petersburg; everyone else starts in Bengaluru.
+const FALLBACK_CENTRE_BENGALURU = [77.5946, 12.9716];
+const FALLBACK_CENTRE_SAINT_PETERSBURG = [30.3158, 59.9343];
 const INITIAL_ZOOM = 14;
 
 // Beat 1 camera hook (first-claim spine): city-wide open, a beat of stillness,
@@ -115,18 +120,18 @@ function flightBounds(homeLng, homeLat, target) {
   return { ne: [maxLng, maxLat], sw: [minLng, minLat] };
 }
 
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const ALLIANCE = '#3F8F4E';
-const ENEMY = '#4A6B8A';
+const INK = colors.ink;
+const INK2 = colors.ink2;
+const BONE = colors.bone;
+const SLATE = colors.slate;
+const SLATE2 = colors.slate2;
+const CLAIM = colors.claim;
+const ALLIANCE = colors.alliance;
+const ENEMY = colors.enemy;
 const UNCLAIMED = 'transparent';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
+const HAIRLINE = colors.hairline;
+const HAIRLINE_STRONG = colors.hairlineStrong;
+const CLAIM_SOFT = colors.claimSoft;
 
 function liveCountdown(t, expiresAtIso) {
   const remainingMs = Math.max(0, new Date(expiresAtIso).getTime() - Date.now());
@@ -566,7 +571,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             </View>
           </View>
         </View>
-        <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetClose}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={styles.sheetClose}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.sheetCloseText}>×</Text>
         </Pressable>
       </View>
@@ -637,9 +647,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             {!isUnclaimed && (
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>{t('map.streak')}</Text>
-                <Text style={[styles.sheetRowValue, ownerStreakDays >= 30 && { color: '#D64525' }]}>
-                  {streakTierName(ownerStreakTier.tier)}
-                </Text>
+                <Text style={styles.sheetRowValue}>{streakTierName(ownerStreakTier.tier)}</Text>
               </View>
             )}
             <View style={styles.sheetRow}>
@@ -656,6 +664,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             </View>
             <Text style={styles.sheetInfluenceValue}>{t('map.influenceValue', { n: influence })}</Text>
           </View>
+          <Text style={styles.sheetGloss}>{t('map.influenceGloss')}</Text>
 
           {/* Expanded detail */}
           {expanded && (
@@ -672,6 +681,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   {legacyRank == null ? '—' : `R${legacyRank} · ${F.legacyRankName(legacyRank)}`}
                 </Text>
               </View>
+              <Text style={styles.sheetGloss}>{t('map.legacyGloss')}</Text>
               {!isUnclaimed && (
                 <>
                   {formatHeldDays(historyStats.heldDays) !== null && (
@@ -709,7 +719,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           )}
 
           {/* Expand toggle — text only per brand rules */}
-          <Pressable accessibilityRole="button" onPress={() => setExpanded(e => !e)} style={styles.sheetToggle}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setExpanded(e => !e)}
+            style={styles.sheetToggle}
+            hitSlop={{ top: 10, bottom: 10, left: 24, right: 24 }}
+          >
             <Text style={styles.sheetToggleText}>{expanded ? t('map.less') : t('map.more')}</Text>
           </Pressable>
 
@@ -756,11 +771,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           {isOwnTerritory && !isAllianceTerritory && (
             <Pressable
               accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.sheetAction,
-                { backgroundColor: '#D64525', opacity: 0.7 },
-                pressed && { opacity: 0.92 },
-              ]}
+              style={({ pressed }) => [styles.sheetActionSecondary, pressed && { opacity: 0.92 }]}
               onPress={() => {
                 Alert.alert(t('map.abandonAlertTitle', { name }), t('map.abandonAlertBody'), [
                   { text: t('map.abandonCancel'), style: 'cancel' },
@@ -790,7 +801,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           {isOwned && !isYours && !isAllianceTerritory && (
             <Pressable
               accessibilityRole="button"
-              style={({ pressed }) => [styles.sheetAction, { backgroundColor: '#4A6B8A' }, pressed && { opacity: 0.92 }]}
+              style={({ pressed }) => [styles.sheetActionSecondary, pressed && { opacity: 0.92 }]}
               onPress={() => {
                 setContestMode(true);
                 setSheetState('confirm');
@@ -983,7 +994,9 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     <Text
                       style={[
                         styles.sheetConfirmValue,
-                        { color: r.have >= r.cost ? '#3F8F4E' : '#D64525' },
+                        // Affordability is weight-and-tone, never territory colour:
+                        // Bone when covered, Slate when short (Locked Meaning Rule).
+                        r.have < r.cost && { color: SLATE2 },
                       ]}
                     >
                       {sheetState === 'developConfirm'
@@ -1078,14 +1091,19 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
 // Pulsing claim-red ring anchored over the first-claim objective territory.
 // Pure attention device — taps fall through to the territory polygon below.
+// Cadence is the brand's ambient 2000ms on the brand curve.
 function ObjectivePulse() {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.bezier(0.2, 0, 0, 1),
+          useNativeDriver: true,
+        }),
         Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
-        Animated.delay(500),
       ]),
     );
     loop.start();
@@ -1111,7 +1129,10 @@ function ObjectivePulse() {
 export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const fallbackCentre = i18n.language?.startsWith('ru')
+    ? FALLBACK_CENTRE_SAINT_PETERSBURG
+    : FALLBACK_CENTRE_BENGALURU;
   const cameraRef = useRef(null);
   const mapRef = useRef(null);
   const idleTimeoutRef = useRef(null);
@@ -1129,8 +1150,8 @@ export default function MapScreen() {
   // Always points at the latest fetchTerritoriesForViewport so settle() can re-invoke it.
   const fetchRef = useRef(null);
   // Guards the one-time camera centering on the player's home pin. Without this,
-  // the map opens on AMSTERDAM_CENTER (the Camera's static prop) instead of where
-  // the player placed their home pin during onboarding.
+  // the map opens on the locale fallback centre (the Camera's static prop) instead
+  // of where the player placed their home pin during onboarding.
   const didInitialCenterRef = useRef(false);
   // Focus-from-profile: fly to a territory the player tapped in their profile.
   // lastFocusNonceRef dedupes repeated navigations; pendingFocusIdRef opens the
@@ -1145,6 +1166,14 @@ export default function MapScreen() {
   const basesFetchSeqRef = useRef(0);
   const [isFetchingTerritories, setIsFetchingTerritories] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
+  // Territory-fetch failure surfaced to the player (offline, flaky data). A
+  // successful fetch clears it; Retry re-fires the last viewport.
+  const [mapError, setMapError] = useState(false);
+  // Colour-key panel toggled from the KEY control beside LOCATE.
+  const [legendOpen, setLegendOpen] = useState(false);
+  // True after a successful fetch that left the feature cache empty — the
+  // player is looking at unmapped ground and deserves a line saying so.
+  const [emptyViewport, setEmptyViewport] = useState(false);
   const [myAllianceName, setMyAllianceName] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
   const [topBannerMessage, setTopBannerMessage] = useState(null);
@@ -1508,7 +1537,6 @@ export default function MapScreen() {
 
   const fetchTerritoriesForViewport = useCallback(async (bounds, zoomArg) => {
     if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
-    console.log('[vp fetch] START', { min_lon: bounds[1][0], min_lat: bounds[1][1], max_lon: bounds[0][0], max_lat: bounds[0][1], zoom: zoomArg });
     lastBoundsRef.current = bounds;
 
     const zoom =
@@ -1535,7 +1563,6 @@ export default function MapScreen() {
     // this viewport so settle() can fetch it once the in-flight request finishes.
     // Without this, a quick pan/zoom could leave the area the player lands on blank.
     if (abortControllerRef.current) {
-      console.log('[vp fetch] DEFER (recent in-flight, age', inFlightAge, 'ms)');
       pendingFetchRef.current = { bounds, zoom };
       return;
     }
@@ -1578,13 +1605,13 @@ export default function MapScreen() {
       error = res.error;
     } catch (err) {
       if (err?.name === 'AbortError' || err?.code === '20' || err?.code === 20) {
-        console.log('[vp fetch] ABORTED (caught in catch)');
         settle();
         return;
       }
-      console.log('[vp fetch] THREW', err?.message);
+      console.error('[vp fetch] threw:', err?.message ?? err);
+      setMapError(true);
       settle();
-      throw err;
+      return;
     }
 
     if (
@@ -1592,21 +1619,18 @@ export default function MapScreen() {
       error?.code === '20' ||
       error?.code === 20
     ) {
-      console.log('[vp fetch] ABORTED (returned as error)');
       settle();
       return;
     }
 
     if (error) {
-      console.log('[vp fetch] ERROR', error.message);
+      console.error('[vp fetch] error:', error.message);
+      setMapError(true);
       settle();
       return;
     }
+    setMapError(false);
     const rows = data ?? [];
-
-    if (rows.length > 0) {
-      const sample = rows[0];
-    }
 
     const features = rows.map((row) => {
       const developmentLevel = row.development_level ?? 0;
@@ -1694,7 +1718,7 @@ export default function MapScreen() {
       }
     }
 
-    console.log('[vp fetch] OK', { newRows: rows.length, cacheSize: cache.size });
+    setEmptyViewport(cache.size === 0);
     setTerritories({
       type: 'FeatureCollection',
       features: Array.from(cache.values()),
@@ -1718,7 +1742,7 @@ export default function MapScreen() {
     });
     if (seq !== basesFetchSeqRef.current) return;
     if (error) {
-      console.log('[bases fetch] ERROR', error.message);
+      console.error('[bases fetch] error:', error.message);
       return;
     }
 
@@ -1830,15 +1854,12 @@ export default function MapScreen() {
           map.getVisibleBounds(),
           zoomSafe(),
         ]);
-        if (!bounds) {
-          console.log('[viewport fetch] no bounds from getVisibleBounds');
-          return;
-        }
+        if (!bounds) return;
         fetchTerritoriesForViewport(bounds, zoom);
         // Bases layer is hidden below zoom 12 — skip the query when zoomed out.
         if (zoom >= 11.5) fetchBasesForViewport(bounds);
       } catch (err) {
-        console.log('[viewport fetch] getVisibleBounds threw:', err?.message);
+        console.error('[viewport fetch] getVisibleBounds threw:', err?.message);
       }
     }, 150);
   }, [fetchTerritoriesForViewport, fetchBasesForViewport]);
@@ -1871,7 +1892,7 @@ export default function MapScreen() {
   );
 
   // Center the map on the player's home pin the first time it becomes available.
-  // The Camera's centerCoordinate prop is static (AMSTERDAM_CENTER) and only used
+  // The Camera's centerCoordinate prop is static (the locale fallback centre) and only used
   // at mount — before myPlayer has loaded — so we imperatively fly to the home pin
   // once it arrives. Guarded by didInitialCenterRef so later player refetches (e.g.
   // resource-banner updates) don't yank the camera back while the user is panning.
@@ -2350,7 +2371,7 @@ export default function MapScreen() {
     const homeLng = Number(myPlayer?.home_pin_lng);
     const homeCoord =
       Number.isFinite(homeLat) && Number.isFinite(homeLng) ? [homeLng, homeLat] : null;
-    const centerCoordinate = lastUserCoord ?? homeCoord ?? AMSTERDAM_CENTER;
+    const centerCoordinate = lastUserCoord ?? homeCoord ?? fallbackCentre;
     cameraRef.current.setCamera({
       centerCoordinate,
       zoomLevel: INITIAL_ZOOM,
@@ -2421,6 +2442,28 @@ export default function MapScreen() {
           </View>
         </View>
       ) : null}
+      {mapError && !showLoading && !topBannerMessage && !flightActive ? (
+        <View style={styles.loadingWrap}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setMapError(false);
+              handleTerritoriesRefetched();
+            }}
+            style={({ pressed }) => [styles.mapErrorPill, pressed && { opacity: 0.92 }]}
+          >
+            <Text style={styles.mapErrorText} maxFontSizeMultiplier={1.3}>{t('map.loadError')}</Text>
+            <Text style={styles.mapErrorRetry}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {emptyViewport && !mapError && !showLoading && !topBannerMessage && !flightActive ? (
+        <View pointerEvents="none" style={styles.loadingWrap}>
+          <View style={styles.loadingPill}>
+            <Text style={styles.loadingText}>{t('map.emptyRegion')}</Text>
+          </View>
+        </View>
+      ) : null}
       <View ref={mapWrapRef} collapsable={false} style={styles.map}>
       <MapboxGL.MapView
         ref={mapRef}
@@ -2433,7 +2476,7 @@ export default function MapScreen() {
           existing
           config={{ lightPreset: 'night' }}
         />
-        <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={AMSTERDAM_CENTER} />
+        <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={fallbackCentre} />
 
         <MapboxGL.UserLocation
           visible
@@ -2548,11 +2591,45 @@ export default function MapScreen() {
       </View>
 
       {flightActive ? null : (
-        <Pressable accessibilityRole="button" style={styles.locateButton} onPress={recenter}>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.locateButton}
+          onPress={recenter}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text style={styles.locateIcon}>⌖</Text>
           <Text style={styles.locateText}>{t('map.locateMe')}</Text>
         </Pressable>
       )}
+
+      {/* Colour key — recognition over recall for the territory colours. */}
+      {flightActive ? null : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('map.legendKey')}
+          style={styles.legendButton}
+          onPress={() => setLegendOpen((o) => !o)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.locateText}>{t('map.legendKey')}</Text>
+        </Pressable>
+      )}
+      {legendOpen && !flightActive ? (
+        <View style={styles.legendPanel}>
+          {[
+            { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendYours') },
+            { key: 'alliance', fill: 'rgba(63,143,78,0.14)', border: ALLIANCE, label: t('map.legendAlliance') },
+            { key: 'theirs', fill: 'rgba(74,107,138,0.14)', border: ENEMY, label: t('map.legendTheirs') },
+            { key: 'unclaimed', fill: 'transparent', border: SLATE, label: t('map.legendUnclaimed') },
+            { key: 'siege', fill: 'transparent', border: CLAIM, label: t('map.legendSiege') },
+          ].map((row) => (
+            <View key={row.key} style={styles.legendRow}>
+              <View style={[styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
+              <Text style={styles.legendLabel}>{row.label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       <TerritorySheet
         territory={selected?.feature ?? selected}
@@ -2652,7 +2729,8 @@ const styles = StyleSheet.create({
   sheetObjectiveHint: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 10,
-    color: CLAIM,
+    // Bone, not Claim — the red CLAIM CTA below is this sheet's one red element.
+    color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 8,
@@ -2722,6 +2800,31 @@ const styles = StyleSheet.create({
     color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+  },
+  // Fetch-failure pill — same instrument shape as the loading pill, but
+  // pressable: the whole pill is the Retry target (≥48dp with padding).
+  mapErrorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  mapErrorText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: BONE,
+  },
+  mapErrorRetry: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: BONE,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    textDecorationLine: 'underline',
   },
 
   resourceBanner: {
@@ -2814,13 +2917,57 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(242,238,230,0.16)',
   },
   locateIcon: {
+    fontFamily: 'GeistMono_400Regular',
     color: '#F2EEE6',
     fontSize: 14,
   },
   locateText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
-    color: '#8B8F98',
+    // Bone, not slate — these controls are read in direct sunlight.
+    color: BONE,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  legendButton: {
+    position: 'absolute',
+    left: 16,
+    bottom: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: INK2,
+    borderRadius: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+  },
+  legendPanel: {
+    position: 'absolute',
+    left: 16,
+    bottom: 108,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderWidth: 1,
+  },
+  legendLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
@@ -2974,16 +3121,16 @@ const styles = StyleSheet.create({
   },
   sheetYourWalk: {
     marginTop: 10,
-    backgroundColor: 'rgba(214,69,37,0.14)',
-    borderLeftWidth: 2,
-    borderLeftColor: '#D64525',
+    backgroundColor: INK,
+    borderWidth: 0.5,
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
   sheetYourWalkLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 8,
-    color: '#D64525',
+    color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 3,
@@ -3001,6 +3148,14 @@ const styles = StyleSheet.create({
     color: '#8B8F98',
     letterSpacing: 0.3,
     lineHeight: 14,
+  },
+  // One-line plain-language gloss under a data row — Inter, quiet but readable.
+  sheetGloss: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: '#8B8F98',
+    lineHeight: 16,
+    marginTop: 2,
   },
   sheetToggle: {
     marginTop: 12,
@@ -3026,6 +3181,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetCloseText: {
+    fontFamily: 'GeistMono_400Regular',
     color: '#F2EEE6',
     fontSize: 20,
     marginTop: -2,
@@ -3035,6 +3191,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#D64525',
     borderRadius: 0,
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3048,8 +3205,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sheetActionContest: {
-    backgroundColor: '#EA580C',
+  // Secondary sheet action — contest and abandon. Ink instrument with a strong
+  // hairline; the single Claim-Red action per sheet stays with the constructive
+  // primary (Claim / Develop) per the One Claim Rule.
+  sheetActionSecondary: {
+    marginTop: 16,
+    backgroundColor: INK2,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 14,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sheetActionText: {
     fontFamily: 'GeistMono_500Medium',
@@ -3097,9 +3265,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   sheetConfirmValue: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
+    // Measurements and balances — mono per the Controlling Rule.
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 14,
     color: '#F2EEE6',
+    letterSpacing: 0.3,
   },
   sheetConfirmHelpText: {
     fontFamily: 'Inter_400Regular',
@@ -3108,12 +3278,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 6,
   },
+  // Errors are sentences a player reads — Inter in Bone, never Claim Red
+  // (the Locked Meaning Rule keeps red for "yours").
   sheetConfirmError: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
-    color: '#D64525',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: BONE,
+    lineHeight: 18,
     textAlign: 'center',
     paddingVertical: 10,
   },
@@ -3138,6 +3309,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(242,238,230,0.16)',
     paddingVertical: 13,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
