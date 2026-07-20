@@ -12,6 +12,7 @@ colors:
   claim-red: "#D64525"
   alliance-green: "#3F8F4E"
   enemy-slate-blue: "#4A6B8A"
+  caution-amber: "#D49A2B"
   claim-soft: "#D6452524"
   alliance-soft: "#3F8F4E24"
   enemy-soft: "#4A6B8A24"
@@ -123,6 +124,7 @@ A dark low-chroma field where the three territory colours are the only voices â€
 ### Secondary
 - **Alliance Green** (#3F8F4E): ours. Alliance-held territories, shields, defensive states. Soft fill `#3F8F4E24`.
 - **Enemy Slate-Blue** (#4A6B8A): theirs. Other players' territories only â€” never used for buttons or UI states. Soft fill `#4A6B8A24`.
+- **Caution Amber** (#D49A2B): the one sanctioned non-territory signal (adopted 2026-07-20). Warning, paused, and expiring states only â€” the idle-pause banner, a countdown entering its final minutes. Never on CTAs, never on the map, at most one caution element per screen. It exists so screens stop borrowing territory colours for "warning".
 
 ### Neutral
 - **Ink** (#0E1014): primary background. Never pure black.
@@ -135,9 +137,9 @@ A dark low-chroma field where the three territory colours are the only voices â€
 - **Hairline** (#F2EEE6 at 8%) / **Hairline Strong** (at 16%): the only borders â€” 0.5px and 1px.
 
 ### Named Rules
-**The One Claim Rule.** Claim Red appears on at most one element per screen outside the map. A second red element is a bug, not an emphasis.
+**The One Claim Rule.** Claim Red appears on at most one element per screen outside the map. A second red element is a bug, not an emphasis. Territory colours used semantically (a sheet's ownership border, a claimed territory's silhouette) are identity, not accent, and sit outside this count.
 
-**The Locked Meaning Rule.** The three territory colours mean yours / ours / theirs and nothing else. They are never repurposed for generic success, error, or info states. There is no sixth colour.
+**The Locked Meaning Rule.** The three territory colours mean yours / ours / theirs and nothing else. They are never repurposed for generic success, error, or info states. Caution Amber is the only sanctioned signal outside the territory set; there is no seventh colour.
 
 ## 3. Typography
 

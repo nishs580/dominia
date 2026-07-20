@@ -14,15 +14,14 @@ import { territorySvgPath } from '../lib/territoryShape';
 import CountUpText from '../components/CountUpText';
 import MilestoneTakeover from '../components/MilestoneTakeover';
 import TerritorySilhouette from '../components/TerritorySilhouette';
+import { colors } from '../lib/theme';
 
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
-const ALLIANCE = '#3F8F4E';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = colors.ink;
+const INK2 = colors.ink2;
+const BONE = colors.bone;
+const SLATE2 = colors.slate2;
+const CLAIM = colors.claim;
+const HAIRLINE_STRONG = colors.hairlineStrong;
 
 // Set to true to show buttons that open ContestResultScreen with canned
 // payloads, for iterating on that screen without walking a real contest.
@@ -55,6 +54,7 @@ export default function ClaimSuccessScreen() {
     playerId,
     goldPaid = 0,
     freeClaim = false,
+    walkedM = null,
   } = route?.params ?? {};
 
   const fade = useRef(new Animated.Value(0)).current;
@@ -65,10 +65,16 @@ export default function ClaimSuccessScreen() {
   const [milestones, setMilestones] = useState([]);
   const hasSilhouette = useMemo(() => territorySvgPath(territoryGeojson) != null, [territoryGeojson]);
 
-  // Territory claim success: single firm haptic (brand: three moments only).
+  // The screen opens in a neutral "securing" beat; the ceremony (haptic,
+  // claim-red silhouette, "is yours") waits for the server to actually award
+  // the territory, so a win can never be felt and then revoked.
+  const phase = completeError ? 'error' : envelope ? 'confirmed' : 'securing';
+
+  // Territory claim success: single firm haptic (brand: three moments only) —
+  // fired only once the claim is confirmed server-side.
   useEffect(() => {
-    claimHaptic();
-  }, []);
+    if (phase === 'confirmed') claimHaptic();
+  }, [phase]);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
@@ -130,6 +136,10 @@ export default function ClaimSuccessScreen() {
 
   useEffect(() => {
     // 280ms — sanctioned UI-transition duration, cubic-bezier(0.2,0,0,1).
+    // Re-runs on each phase change (securing → confirmed / error) so the
+    // ceremony gets its own entrance rather than inheriting the securing one.
+    fade.setValue(0);
+    pop.setValue(0.96);
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
@@ -144,7 +154,7 @@ export default function ClaimSuccessScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fade, pop]);
+  }, [phase, fade, pop]);
 
   const animatedStyle = useMemo(
     () => ({
@@ -207,7 +217,17 @@ export default function ClaimSuccessScreen() {
     >
       <View style={{ flex: 1 }} />
 
-      {completeError ? (
+      {phase === 'securing' ? (
+        <Animated.View style={[styles.center, animatedStyle]}>
+          {hasSilhouette ? (
+            <View style={styles.silhouetteWrap}>
+              <TerritorySilhouette geojson={territoryGeojson} size={120} color={SLATE2} variant="fill" />
+            </View>
+          ) : null}
+          <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
+          <Text style={styles.securingLabel}>{t('claimSuccess.securing')}</Text>
+        </Animated.View>
+      ) : completeError ? (
         <Animated.View style={[styles.center, animatedStyle]}>
           <Text style={styles.errorMessage}>{completeErrorMessage}</Text>
           {completeErrorRetry ? (
@@ -269,14 +289,23 @@ export default function ClaimSuccessScreen() {
           </Text>
 
           <View style={styles.cardsRow}>
+            {walkedM != null ? (
+              // The number that honours the effort: the distance actually walked.
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('claimSuccess.walkedLabel')}</Text>
+                <Text style={styles.cardValue}>{formatMeters(walkedM)}</Text>
+              </View>
+            ) : null}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>{t('claimSuccess.perimeterLabel')}</Text>
               <Text style={styles.cardValue}>{formatMeters(perimeterDistance)}</Text>
             </View>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>{t('claimSuccess.statusLabel')}</Text>
-              <Text style={[styles.cardValue, { color: ALLIANCE }]}>{t('claimSuccess.owned')}</Text>
-            </View>
+            {walkedM == null ? (
+              <View style={styles.card}>
+                <Text style={styles.cardLabel}>{t('claimSuccess.statusLabel')}</Text>
+                <Text style={styles.cardValue}>{t('claimSuccess.owned')}</Text>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
       )}
@@ -418,7 +447,7 @@ export default function ClaimSuccessScreen() {
       </View>
       )}
 
-      {isFirstClaim && !completeError ? (
+      {phase === 'securing' ? null : isFirstClaim && !completeError ? (
         // Expansion nudge (spec step 9): claims 2 and 3 stay optional.
         <View style={styles.nudgeCard}>
           <Text style={styles.nudgeTitle}>{t('firstClaim.nudgeTitle')}</Text>
@@ -472,10 +501,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // Neutral fallback mark when no silhouette geometry exists — the red budget
+  // belongs to the semantic silhouette or, failing that, the CTA alone.
   iconSquare: {
     width: 64,
     height: 64,
-    backgroundColor: '#D64525',
+    backgroundColor: BONE,
     marginBottom: 24,
   },
 
@@ -524,15 +555,27 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
 
+  // Bone — the claim-red silhouette above is the ceremony's semantic red;
+  // the CTA below is the screen's one red accent.
   territoryCaption: {
     fontFamily: 'GeistMono_400Regular',
-    color: CLAIM,
+    color: BONE,
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 12,
+  },
+
+  securingLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    color: SLATE2,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 6,
   },
 
   message: {
@@ -559,6 +602,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     paddingVertical: 14,
     paddingHorizontal: 24,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -607,13 +651,14 @@ const styles = StyleSheet.create({
     backgroundColor: CLAIM,
     borderRadius: 0,
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   firstClaimKicker: {
     fontFamily: 'GeistMono_500Medium',
-    color: CLAIM,
+    color: BONE,
     fontSize: 10,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -646,6 +691,7 @@ const styles = StyleSheet.create({
     backgroundColor: CLAIM,
     borderRadius: 0,
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -657,6 +703,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
     borderRadius: 0,
     paddingVertical: 14,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },

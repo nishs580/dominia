@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
@@ -15,6 +15,7 @@ import {
   readRecords,
 } from '../lib/health';
 import { supabase } from '../lib/supabase';
+import { colors } from '../lib/theme';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import * as contestWalk from '../lib/contestWalk';
@@ -51,9 +52,9 @@ let taskGetToken = null;
 let baselineSteps = null;
 let lastSteps = 0;
 let lastStepTimestamp = Date.now();
-let claimStartMs = Date.now();
 let vehicleExcludedSteps = 0;
 let halfwayFired = false;
+let finalStretchFired = false;
 let calibrationWindowStart = null;   // { steps, timestamp, lat, lon }
 let calibrationSamples = [];
 let currentStrideM = 0.75;
@@ -77,17 +78,14 @@ const STALE_GPS_THRESHOLD_MS = 5000;     // skip GPS points older than this
 const ZERO_MOVEMENT_WARN_MS = 30 * 1000; // 30s zero movement → show "PAUSED" banner
 const PAUSE_RESET_MS = 15 * 60 * 1000;   // 15 min zero movement → reset progress to zero
 
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const INK3 = '#252932';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
-const ALLIANCE = '#3F8F4E';
-const AMBER = '#D49A2B';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = colors.ink;
+const INK2 = colors.ink2;
+const INK3 = colors.ink3;
+const BONE = colors.bone;
+const SLATE2 = colors.slate2;
+const CLAIM = colors.claim;
+const AMBER = colors.caution;
+const HAIRLINE_STRONG = colors.hairlineStrong;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -106,6 +104,17 @@ function formatPauseCountdown(ms) {
   const ss = (totalSec % 60).toString().padStart(2, '0');
   return `${mm}:${ss}`;
 }
+
+// Claim-intent time remaining as H:MM:SS (or MM:SS under an hour).
+function formatTimeLeft(remainingMs) {
+  const totalSec = Math.max(0, Math.floor(remainingMs / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const mm = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+  const ss = (totalSec % 60).toString().padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+const TIME_LEFT_ESCALATE_MS = 2 * 60 * 1000; // last two minutes read as caution
 
 function flushContestAggregatorWindow() {
   if (contestAggregator.steps > 0) {
@@ -238,8 +247,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       baselineSteps = currentSteps;
       vehicleExcludedSteps = 0;
       halfwayFired = false;
+      finalStretchFired = false;
       lastStepTimestamp = now;
-      claimStartMs = now;
       if (claimState.mode === 'contest') {
         contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
       }
@@ -249,8 +258,18 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       nextBanner = 'paused';
     } else if (inVehicle) {
       nextBanner = 'vehicle';
-    } else if (gpsWeak && !lastGpsFix) {
+    } else if (gpsWeak) {
+      // Weak fix means the vehicle filter is unreliable — say so.
       nextBanner = 'gpsWeak';
+    } else if (claimState.perimeterM > 0 && walkedM / claimState.perimeterM >= 0.9 && !finalStretchFired) {
+      // Final-stretch beat — the last encouragement before the ring closes.
+      finalStretchFired = true;
+      nextBanner = 'finalStretch';
+      if (halfwayResetTimer) clearTimeout(halfwayResetTimer);
+      halfwayResetTimer = setTimeout(() => {
+        bannerStateModule = null;
+        setTick({ bannerState: null });
+      }, 4000);
     } else if (claimState.perimeterM > 0 && walkedM / claimState.perimeterM >= 0.5 && !halfwayFired) {
       halfwayFired = true;
       nextBanner = 'halfway';
@@ -259,7 +278,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         bannerStateModule = null;
         setTick({ bannerState: null });
       }, 4000);
-    } else if (bannerStateModule !== 'halfway') {
+    } else if (bannerStateModule !== 'halfway' && bannerStateModule !== 'finalStretch') {
       nextBanner = null;
     }
     bannerStateModule = nextBanner;
@@ -386,6 +405,7 @@ export default function ActiveClaimScreen() {
     mode = 'claim',
     goldPaid,
     freeClaim,
+    intentExpiresAt = null,
     contestId,
     requiredWalkM: requiredWalkMParam,
     attackerAllianceId,
@@ -402,6 +422,26 @@ export default function ActiveClaimScreen() {
   const progress = useRef(new Animated.Value(0)).current;
   const navigatingRef = useRef(false);
   const [, forceRender] = useReducer((x) => x + 1, 0);
+
+  // Claim-window countdown (claim mode only). One second tick — the GPS watch
+  // already runs at 1s, so this adds no meaningful battery cost.
+  const expiryMs = useMemo(() => {
+    if (mode !== 'claim' || !intentExpiresAt) return null;
+    const ms = new Date(intentExpiresAt).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }, [mode, intentExpiresAt]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (expiryMs == null) return undefined;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expiryMs]);
+  const timeLeftMs = expiryMs == null ? null : Math.max(0, expiryMs - nowMs);
+  const timeLeftCritical = timeLeftMs != null && timeLeftMs <= TIME_LEFT_ESCALATE_MS;
+
+  // Two-step cancel: the first tap swaps the button for a confirmation that
+  // names the stakes; nothing destructive happens on a single stray tap.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const opponentNameRef = useRef(
     role === 'defender' ? (attackerUsername ?? 'opponent') : 'opponent',
@@ -440,14 +480,19 @@ export default function ActiveClaimScreen() {
     }
   });
 
+  // Runs every render (distance lives outside React state), but only issues a
+  // new animation when the target actually moved.
+  const lastAnimatedPctRef = useRef(-1);
   useEffect(() => {
     const nextPct = progressThresholdM > 0
       ? clamp(claimState.distanceM / progressThresholdM, 0, 1)
       : 0;
+    if (nextPct === lastAnimatedPctRef.current) return;
+    lastAnimatedPctRef.current = nextPct;
     Animated.timing(progress, {
       toValue: nextPct,
-      duration: 900,
-      easing: Easing.out(Easing.cubic),
+      duration: 280,
+      easing: Easing.bezier(0.2, 0, 0, 1),
       useNativeDriver: true,
     }).start();
   });
@@ -469,9 +514,9 @@ export default function ActiveClaimScreen() {
     baselineSteps = null;
     lastSteps = 0;
     lastStepTimestamp = Date.now();
-    claimStartMs = Date.now();
     vehicleExcludedSteps = 0;
     halfwayFired = false;
+    finalStretchFired = false;
     calibrationWindowStart = null;
     calibrationSamples = [];
     bannerStateModule = null;
@@ -514,7 +559,6 @@ export default function ActiveClaimScreen() {
           baselineSteps = steps;
           lastSteps = steps;
           lastStepTimestamp = Date.now();
-          claimStartMs = Date.now();
         }
       } catch (err) {
         console.warn('[claim] HC init failed:', err?.message);
@@ -654,10 +698,13 @@ export default function ActiveClaimScreen() {
       playerId,
       goldPaid,
       freeClaim,
+      // The payoff celebrates the distance actually walked, not just the requirement.
+      walkedM: Math.round(Math.max(0, Number(walkedM) || 0)),
+      walkedSteps: Math.max(0, Number(finalSteps) || 0),
     });
   }
 
-  function handleCancel() {
+  function exitClaim() {
     if (mode === 'contest') {
       flushPartialContestWindow();
       contestWalk.stop();
@@ -687,6 +734,13 @@ export default function ActiveClaimScreen() {
     ? Math.round(clamp((claimState.distanceM / progressThresholdM) * 100, 0, 100))
     : 0;
   const isCalibrated = claimState.strideSessions >= 3;
+  const hcDenied = claimState.hcPermission === 'denied';
+
+  const cancelConfirmBody = mode === 'contest'
+    ? t('activeClaim.cancelConfirmContest')
+    : (freeClaim || !goldPaid
+        ? t('activeClaim.cancelConfirmFree')
+        : t('activeClaim.cancelConfirmPaid', { gold: goldPaid }));
 
   return (
     <ScrollView
@@ -704,6 +758,27 @@ export default function ActiveClaimScreen() {
         </View>
       </View>
 
+      {hcDenied ? (
+        <View style={styles.hcBlocked}>
+          <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
+          <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Linking.openSettings()}
+            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={exitClaim}
+            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
+          </Pressable>
+        </View>
+      ) : (
+      <>
       <View style={styles.ringWrap}>
         <View style={styles.ringStack}>
           <Svg width={ring.size} height={ring.size}>
@@ -734,6 +809,19 @@ export default function ActiveClaimScreen() {
       </View>
 
       <View style={styles.statsPanel}>
+        {timeLeftMs != null && (
+          <StatRow
+            label={t('activeClaim.statTimeLeft')}
+            value={formatTimeLeft(timeLeftMs)}
+            // One caution element per screen: the readout yields amber to any
+            // caution banner currently showing.
+            valueStyle={
+              timeLeftCritical && !['paused', 'vehicle', 'reset'].includes(claimState.bannerState)
+                ? { color: AMBER }
+                : null
+            }
+          />
+        )}
         <StatRow label={t('activeClaim.statSteps')} value={String(claimState.liveSteps)} />
         <StatRow label={t('activeClaim.statDistance')} value={`${formatMetres(claimState.distanceM)} m`} />
         <StatRow label={isCalibrated ? t('activeClaim.statStrideCal') : t('activeClaim.statStrideDefault')} value={`${claimState.strideM.toFixed(2)} m`} />
@@ -741,17 +829,14 @@ export default function ActiveClaimScreen() {
       </View>
 
       <View style={styles.bannerZone}>
-        {claimState.hcPermission === 'denied' && (
-          <Banner color={CLAIM} label={t('activeClaim.bannerHcDenied')} />
-        )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'vehicle' && (
-          <Banner color={CLAIM} label={t('activeClaim.bannerVehicle')} />
+          <Banner color={AMBER} label={t('activeClaim.bannerVehicle')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'paused' && (
           <Banner color={AMBER} label={t('activeClaim.bannerPaused', { countdown: formatPauseCountdown(claimState.pauseElapsedMs) })} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'reset' && (
-          <Banner color={CLAIM} label={t('activeClaim.bannerReset')} />
+          <Banner color={AMBER} label={t('activeClaim.bannerReset')} />
         )}
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'gpsWeak' && (
           <Banner color={SLATE2} label={t('activeClaim.bannerGpsWeak')} />
@@ -759,33 +844,60 @@ export default function ActiveClaimScreen() {
         {claimState.hcPermission === 'granted' && claimState.bannerState === 'halfway' && (
           <Banner color={BONE} label={t('activeClaim.bannerHalfway')} />
         )}
+        {claimState.hcPermission === 'granted' && claimState.bannerState === 'finalStretch' && (
+          <Banner color={BONE} label={t('activeClaim.bannerFinalStretch')} />
+        )}
       </View>
+      </>
+      )}
 
       <View style={{ flex: 1 }} />
 
-      {DEV_MODE_MANUAL && (
+      {DEV_MODE_MANUAL && !hcDenied && (
         <Pressable onPress={handleManualComplete} style={styles.devBtn}>
           <Text style={styles.devBtnText}>{t('activeClaim.devComplete')}</Text>
         </Pressable>
       )}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('activeClaim.cancelClaim')}
-        onPress={handleCancel}
-        style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
-      >
-        <Text style={styles.cancelText}>{t('activeClaim.cancelClaim')}</Text>
-      </Pressable>
+      {hcDenied ? null : confirmingCancel ? (
+        <View style={styles.cancelConfirmBlock}>
+          <Text style={styles.cancelConfirmText}>{cancelConfirmBody}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setConfirmingCancel(false)}
+            style={({ pressed }) => [styles.keepWalkingBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.keepWalkingText}>{t('activeClaim.keepWalking')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={exitClaim}
+            style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.cancelText}>
+              {mode === 'contest' ? t('activeClaim.endWalk') : t('activeClaim.endClaim')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('activeClaim.cancelClaim')}
+          onPress={() => setConfirmingCancel(true)}
+          style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.cancelText}>{t('activeClaim.cancelClaim')}</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
 
-function StatRow({ label, value, last }) {
+function StatRow({ label, value, valueStyle = null, last }) {
   return (
     <View style={[styles.statRow, last && { borderBottomWidth: 0 }]}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text style={[styles.statValue, valueStyle]}>{value}</Text>
     </View>
   );
 }
@@ -803,8 +915,9 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
   territoryName: { fontFamily: 'Archivo_900Black', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
-  badge: { marginTop: 4, backgroundColor: CLAIM_SOFT, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeText: { fontFamily: 'GeistMono_500Medium', color: CLAIM, fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase' },
+  // Neutral instrument — the progress ring is this screen's one red element.
+  badge: { marginTop: 4, backgroundColor: INK2, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
+  badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase' },
   ringWrap: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
@@ -824,6 +937,18 @@ const styles = StyleSheet.create({
   devBtn: { marginBottom: 8, backgroundColor: CLAIM, borderRadius: 0, paddingVertical: 12, alignItems: 'center' },
   devBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
-  cancelBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   cancelText: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+
+  cancelConfirmBlock: { gap: 10 },
+  cancelConfirmText: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
+  keepWalkingBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  keepWalkingText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+
+  // Health-Connect blocking state — the walk cannot count; say so and route out.
+  hcBlocked: { marginTop: 32, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
+  hcBlockedTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlockedBody: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
+  hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 });

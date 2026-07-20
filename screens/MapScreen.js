@@ -502,6 +502,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           playerId: myPlayer?.id,
           goldPaid: result.data.gold_paid,
           freeClaim: result.data.free_claim,
+          intentExpiresAt: result.data.expires_at ?? null,
         });
       } else {
         setStartError({ code: result.code, context: result.context, status: result.status });
