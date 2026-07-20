@@ -808,24 +808,35 @@ export default function ActiveClaimScreen() {
         ) : null}
       </View>
 
-      <View style={styles.statsPanel}>
-        {timeLeftMs != null && (
-          <StatRow
-            label={t('activeClaim.statTimeLeft')}
-            value={formatTimeLeft(timeLeftMs)}
-            // One caution element per screen: the readout yields amber to any
-            // caution banner currently showing.
-            valueStyle={
+      {timeLeftMs != null && (
+        <View style={styles.timeLeftBlock}>
+          <Text style={styles.timeLeftLabel}>{t('activeClaim.statTimeLeft')}</Text>
+          <Text
+            style={[
+              styles.timeLeftValue,
+              // One caution element per screen: the readout yields amber to any
+              // caution banner currently showing.
               timeLeftCritical && !['paused', 'vehicle', 'reset'].includes(claimState.bannerState)
                 ? { color: AMBER }
-                : null
-            }
-          />
+                : null,
+            ]}
+            maxFontSizeMultiplier={1.2}
+          >
+            {formatTimeLeft(timeLeftMs)}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.statsPanel}>
+        {/* Distance lives in the ring centre; stride/pace are calibration
+            diagnostics a walker never acts on — dev builds only. */}
+        <StatRow label={t('activeClaim.statSteps')} value={String(claimState.liveSteps)} last={!__DEV__} />
+        {__DEV__ && (
+          <StatRow label={isCalibrated ? t('activeClaim.statStrideCal') : t('activeClaim.statStrideDefault')} value={`${claimState.strideM.toFixed(2)} m`} />
         )}
-        <StatRow label={t('activeClaim.statSteps')} value={String(claimState.liveSteps)} />
-        <StatRow label={t('activeClaim.statDistance')} value={`${formatMetres(claimState.distanceM)} m`} />
-        <StatRow label={isCalibrated ? t('activeClaim.statStrideCal') : t('activeClaim.statStrideDefault')} value={`${claimState.strideM.toFixed(2)} m`} />
-        <StatRow label={t('activeClaim.statPace')} value={`${claimState.livePace} spm`} last />
+        {__DEV__ && (
+          <StatRow label={t('activeClaim.statPace')} value={`${claimState.livePace} spm`} last />
+        )}
       </View>
 
       <View style={styles.bannerZone}>
@@ -922,7 +933,13 @@ const styles = StyleSheet.create({
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   pctText: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 48, letterSpacing: -1 },
-  metresText: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
+  // Bone, not slate — this is the real number, read mid-walk in direct sun.
+  metresText: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
+
+  // The deadline is a first-class instrument, not a table row.
+  timeLeftBlock: { marginTop: 18, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
+  timeLeftLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase' },
+  timeLeftValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 18, letterSpacing: 1 },
 
   statsPanel: { marginTop: 24, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },

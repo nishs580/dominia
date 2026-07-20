@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
@@ -75,6 +75,40 @@ export default function ClaimSuccessScreen() {
   useEffect(() => {
     if (phase === 'confirmed') claimHaptic();
   }, [phase]);
+
+  // The securing wait must read as working, not stalled: the brand's ambient
+  // 2000ms pulse on the securing block, cut to static under reduce-motion.
+  const securingPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (phase !== 'securing') return undefined;
+    let loop = null;
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled || reduced) return;
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(securingPulse, {
+            toValue: 0.4,
+            duration: 2000,
+            easing: Easing.bezier(0.2, 0, 0, 1),
+            useNativeDriver: true,
+          }),
+          Animated.timing(securingPulse, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.bezier(0.2, 0, 0, 1),
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      loop.start();
+    });
+    return () => {
+      cancelled = true;
+      if (loop) loop.stop();
+      securingPulse.setValue(1);
+    };
+  }, [phase, securingPulse]);
 
   useEffect(() => {
     if (!territoryId || !playerId) return;
@@ -219,13 +253,15 @@ export default function ClaimSuccessScreen() {
 
       {phase === 'securing' ? (
         <Animated.View style={[styles.center, animatedStyle]}>
-          {hasSilhouette ? (
-            <View style={styles.silhouetteWrap}>
-              <TerritorySilhouette geojson={territoryGeojson} size={120} color={SLATE2} variant="fill" />
-            </View>
-          ) : null}
-          <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
-          <Text style={styles.securingLabel}>{t('claimSuccess.securing')}</Text>
+          <Animated.View style={{ opacity: securingPulse, alignItems: 'center' }}>
+            {hasSilhouette ? (
+              <View style={styles.silhouetteWrap}>
+                <TerritorySilhouette geojson={territoryGeojson} size={120} color={SLATE2} variant="fill" />
+              </View>
+            ) : null}
+            <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
+            <Text style={styles.securingLabel}>{t('claimSuccess.securing')}</Text>
+          </Animated.View>
         </Animated.View>
       ) : completeError ? (
         <Animated.View style={[styles.center, animatedStyle]}>
