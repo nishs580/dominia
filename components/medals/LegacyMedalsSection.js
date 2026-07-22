@@ -11,12 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { fetchLegacyMedals } from '../../lib/legacyMedalsApi';
 import {
   CATEGORY_ORDER,
-  CATEGORY_LABEL,
-  MEDAL_NAME,
-  MEDAL_CONDITION,
   MEDAL_UNIT,
   TIER_ORDER,
-  TIER_LABEL,
   medalsForCategory,
   categoryEarnedCount,
   earnedCount,
@@ -29,7 +25,7 @@ const INK = '#0E1014';
 const INK2 = '#1A1D24';
 const BONE = '#F2EEE6';
 const BONE_DIM = 'rgba(242,238,230,0.45)';
-const HAIRLINE = 'rgba(242,238,230,0.12)';
+const HAIRLINE = 'rgba(242,238,230,0.16)'; // hairline-strong token (tile/cell borders)
 
 function fmtNum(n) {
   if (n == null) return '';
@@ -283,7 +279,7 @@ const styles = StyleSheet.create({
   tile: {
     width: '48.5%',
     backgroundColor: INK2,
-    borderRadius: 8,
+    borderRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
     padding: 12,
@@ -317,7 +313,7 @@ const styles = StyleSheet.create({
   cell: {
     width: '48.5%',
     backgroundColor: INK2,
-    borderRadius: 8,
+    borderRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
     paddingVertical: 16,
@@ -335,7 +331,8 @@ const styles = StyleSheet.create({
   cellNameDim: { color: BONE_DIM },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    // Ink scrim, never pure black (Flat Doctrine / no pure #000).
+    backgroundColor: 'rgba(14,16,20,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -344,9 +341,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     backgroundColor: INK,
-    borderRadius: 14,
+    borderRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(242,238,230,0.2)',
+    borderColor: 'rgba(242,238,230,0.16)',
     padding: 24,
     alignItems: 'center',
   },

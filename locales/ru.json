@@ -539,7 +539,7 @@
     }
   },
   "profile": {
-    "commanderLabel": "КОМАНДИР · #0001",
+    "commanderLabel": "КОМАНДИР",
     "unaffiliated": "БЕЗ АЛЬЯНСА",
     "edit": "ИЗМ.",
     "add": "ДОБ.",
@@ -579,7 +579,10 @@
     "bestStreak": "ЛУЧШАЯ СЕРИЯ",
     "territoriesLabel": "ТЕРРИТОРИИ",
     "siegeXp": "ОСАДНЫЙ ОПЫТ",
-    "daysValue": "{{n}} дн.",
+    "daysValue_one": "{{count}} день",
+    "daysValue_few": "{{count}} дня",
+    "daysValue_many": "{{count}} дней",
+    "daysValue_other": "{{count}} дня",
     "xpProgress": "ПРОГРЕСС ОПЫТА",
     "xpNumbers": "{{into}} / {{needed}} ОП",
     "nextPrefix": "ДАЛЕЕ · ",
@@ -595,7 +598,6 @@
     "allianceChatPush": "Пуш чата альянса",
     "on": "ВКЛ",
     "off": "ВЫКЛ",
-    "notificationSettings": "Настройки уведомлений",
     "signOut": "Выйти",
     "signOutConfirm": "Вы уверены, что хотите выйти?",
     "cancel": "Отмена",

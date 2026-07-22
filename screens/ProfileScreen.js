@@ -4,6 +4,7 @@ import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import Toast from 'react-native-toast-message';
 import { clearFcmToken } from '../lib/fcm';
 import { patchAllianceChatPushEnabled } from '../lib/chatApi';
 import { patchMe, deleteAccount } from '../lib/meApi';
@@ -29,15 +30,15 @@ function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
   return calcTerritoryCapForLevel(lv);
 }
-import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
+import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 
 const CLAIM = '#D64525';
+const ALLIANCE = '#3F8F4E';
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
-const INK3 = '#252932';
 const BONE = '#F2EEE6';
 const SLATE = '#5C6068';
 const SLATE2 = '#8B8F98';
@@ -78,15 +79,6 @@ function OwnedTerritoryRow({ name, tier, onPress }) {
     >
       {content}
     </Pressable>
-  );
-}
-
-function SettingsRow({ label }) {
-  return (
-    <View style={styles.settingsRow}>
-      <Text style={styles.settingsLabel}>{label}</Text>
-      <Text style={styles.settingsChevron}>›</Text>
-    </View>
   );
 }
 
@@ -160,7 +152,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
     const res = await deleteAccount({ clerkGetToken });
     if (!res.ok) {
       setDeleting(false);
-      Alert.alert(t('profile.deleteFailedTitle'), t('profile.deleteFailedBody'));
+      Toast.show({ type: 'error', text1: t('profile.deleteFailedTitle'), text2: t('profile.deleteFailedBody'), position: 'top' });
       return;
     }
     try {
@@ -181,7 +173,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
         accessibilityRole="button"
         accessibilityLabel={t('profile.deleteAccount')}
       >
-        <Text style={styles.settingsSignOut}>{t('profile.deleteAccount')}</Text>
+        <Text style={styles.settingsDelete}>{t('profile.deleteAccount')}</Text>
         <Text style={styles.settingsChevron}>›</Text>
       </Pressable>
 
@@ -266,7 +258,7 @@ function ChangePasswordSection() {
       setVisible(false);
       setCurrentPassword('');
       setNewPassword('');
-      Alert.alert(t('profile.passwordChangedTitle'), t('profile.passwordChangedBody'));
+      Toast.show({ type: 'success', text1: t('profile.passwordChangedTitle'), text2: t('profile.passwordChangedBody'), position: 'top' });
     } catch (err) {
       setSaving(false);
       setError(err.errors?.[0]?.message ?? t('profile.passwordChangeFailed'));
@@ -289,7 +281,7 @@ function ChangePasswordSection() {
       <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
         <View style={styles.deleteModalBackdrop}>
           <View style={styles.deleteModalCard}>
-            <Text style={styles.deleteModalTitle}>{t('profile.changePassword')}</Text>
+            <Text style={styles.modalTitle}>{t('profile.changePassword')}</Text>
             <Text style={styles.deleteModalPrompt}>{t('profile.currentPassword')}</Text>
             <TextInput
               style={styles.deleteModalInput}
@@ -389,8 +381,6 @@ export default function ProfileScreen() {
     let cancelled = false;
 
     async function loadProfile() {
-      console.log('[Profile] effect fired, userId:', userId, 'at', Date.now());
-      const __profileT0 = Date.now();
       if (!userId) {
         setPlayerRow(null);
         setOwnedTerritories([]);
@@ -411,8 +401,6 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (cancelled) return;
-      console.log('[Profile] player query done in', Date.now() - __profileT0, 'ms');
-      const __profileT1 = Date.now();
 
       if (playerError) {
         setProfileError(playerError.message ?? t('profile.errCouldNotLoad'));
@@ -448,8 +436,6 @@ export default function ProfileScreen() {
       ]);
 
       if (cancelled) return;
-      console.log('[Profile] alliance+territories done in', Date.now() - __profileT1, 'ms');
-      console.log('[Profile] total time:', Date.now() - __profileT0, 'ms');
       setAllianceName(allianceResult.data?.name ?? null);
       if (territoriesResult.error) {
         setProfileError(territoriesResult.error.message ?? t('profile.errCouldNotLoadTerritories'));
@@ -560,16 +546,13 @@ export default function ProfileScreen() {
   const onChangeAvatar = async () => {
     if (uploadingAvatar) return;
     if (!user) {
-      Alert.alert(t('profile.alertHangOnTitle'), t('profile.alertHangOnBody'));
+      Toast.show({ type: 'info', text1: t('profile.alertHangOnTitle'), text2: t('profile.alertHangOnBody'), position: 'top' });
       return;
     }
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert(
-          t('profile.alertPhotoTitle'),
-          t('profile.alertPhotoBody'),
-        );
+        Toast.show({ type: 'info', text1: t('profile.alertPhotoTitle'), text2: t('profile.alertPhotoBody'), position: 'top' });
         return;
       }
 
@@ -584,7 +567,7 @@ export default function ProfileScreen() {
 
       const asset = result.assets?.[0];
       if (!asset?.base64) {
-        Alert.alert(t('profile.alertUploadFailedTitle'), t('profile.alertReadImageBody'));
+        Toast.show({ type: 'error', text1: t('profile.alertUploadFailedTitle'), text2: t('profile.alertReadImageBody'), position: 'top' });
         return;
       }
 
@@ -604,16 +587,13 @@ export default function ProfileScreen() {
       });
       if (!res.ok) {
         console.warn('[Profile] avatar patchMe failed:', res.status, res.error);
-        Alert.alert(
-          t('profile.alertAlmostTitle'),
-          t('profile.alertAlmostBody'),
-        );
+        Toast.show({ type: 'info', text1: t('profile.alertAlmostTitle'), text2: t('profile.alertAlmostBody'), position: 'top' });
       }
 
       setPlayerRow((prev) => (prev ? { ...prev, avatar_url: newUrl } : prev));
     } catch (err) {
       console.warn('[Profile] avatar update failed:', err?.message ?? err);
-      Alert.alert(t('profile.alertUploadFailedTitle'), t('profile.alertUploadGenericBody'));
+      Toast.show({ type: 'error', text1: t('profile.alertUploadFailedTitle'), text2: t('profile.alertUploadGenericBody'), position: 'top' });
     } finally {
       setUploadingAvatar(false);
     }
@@ -763,11 +743,11 @@ export default function ProfileScreen() {
           <View style={styles.statGrid}>
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>{t('profile.streak')}</Text>
-              <Text style={styles.statValue}>{t('profile.daysValue', { n: currentStreak })}</Text>
+              <Text style={styles.statValue}>{t('profile.daysValue', { count: currentStreak })}</Text>
             </View>
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
-              <Text style={styles.statValue}>{t('profile.daysValue', { n: longestStreak })}</Text>
+              <Text style={styles.statValue}>{t('profile.daysValue', { count: longestStreak })}</Text>
             </View>
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>{t('profile.territoriesLabel')}</Text>
@@ -863,29 +843,38 @@ export default function ProfileScreen() {
 
       {!loading ? (
         <>
-          <View ref={walkthroughResourcesRef} collapsable={false} style={styles.walletSection}>
-            <SectionDivider label={t('profile.resources')} />
-            <Pressable
-              style={styles.walletButton}
-              onPress={() => navigation.navigate('Wallet', {
-                playerId: playerRow?.id,
-                username: playerRow?.username ?? '',
-              })}
-            >
-              <Text style={styles.walletButtonText}>{t('profile.myResources')}</Text>
-            </Pressable>
-            <Text style={styles.walletTapHint}>{t('profile.tapToEnter')}</Text>
-          </View>
+          {/* Wallet needs a real playerId — only render it with a loaded row,
+              never in the load-error state (which would navigate with undefined). */}
+          {playerRow ? (
+            <View ref={walkthroughResourcesRef} collapsable={false} style={styles.walletSection}>
+              <SectionDivider label={t('profile.resources')} />
+              <Pressable
+                style={styles.walletButton}
+                onPress={() => navigation.navigate('Wallet', {
+                  playerId: playerRow.id,
+                  username: playerRow.username ?? '',
+                })}
+              >
+                <Text style={styles.walletButtonText}>{t('profile.myResources')}</Text>
+              </Pressable>
+              <Text style={styles.walletTapHint}>{t('profile.tapToEnter')}</Text>
+            </View>
+          ) : null}
 
           <View style={[styles.card, { marginTop: 32 }]}>
             <SectionDivider label={t('profile.settings')} />
             <View style={styles.settingsList}>
-              <AllianceChatPushToggleRow
-                playerRow={playerRow}
-                clerkGetToken={getToken}
-              />
-              <View style={styles.listDivider} />
-              <SettingsRow label={t('profile.notificationSettings')} />
+              {/* Player-dependent rows only render with a loaded row; sign out
+                  and change password stay available so an errored user can escape. */}
+              {playerRow ? (
+                <>
+                  <AllianceChatPushToggleRow
+                    playerRow={playerRow}
+                    clerkGetToken={getToken}
+                  />
+                  <View style={styles.listDivider} />
+                </>
+              ) : null}
               <ChangePasswordSection />
               <View style={styles.listDivider} />
               <Pressable
@@ -917,13 +906,17 @@ export default function ProfileScreen() {
                 <Text style={styles.settingsSignOut}>{t('profile.signOut')}</Text>
                 <Text style={styles.settingsChevron}>›</Text>
               </Pressable>
-              <View style={styles.listDivider} />
-              <DeleteAccountSection
-                username={playerRow?.username}
-                clerkGetToken={getToken}
-                signOut={signOut}
-                navigation={navigation}
-              />
+              {playerRow ? (
+                <>
+                  <View style={styles.listDivider} />
+                  <DeleteAccountSection
+                    username={playerRow.username}
+                    clerkGetToken={getToken}
+                    signOut={signOut}
+                    navigation={navigation}
+                  />
+                </>
+              ) : null}
             </View>
           </View>
         </>
@@ -1071,7 +1064,8 @@ const styles = StyleSheet.create({
   rankTitle: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: CLAIM,
+    // Bone, not red — the rank title is a label, not the screen's one accent.
+    color: BONE,
   },
   rankSeparator: {
     fontFamily: 'GeistMono_400Regular',
@@ -1086,7 +1080,8 @@ const styles = StyleSheet.create({
   rankAllianceClaim: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: CLAIM,
+    // Alliance Green — the alliance is "ours" (Locked Meaning Rule), never red.
+    color: ALLIANCE,
   },
   hairlineStrong: {
     marginTop: 14,
@@ -1130,7 +1125,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: CLAIM,
+    backgroundColor: BONE,
   },
   unlockText: {
     marginTop: 8,
@@ -1216,34 +1211,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: SLATE2,
   },
-  legacyList: {
-    marginTop: 12,
-  },
-  legacyEntry: {},
-  legacyEntrySpacing: {
-    marginBottom: 20,
-  },
-  legacyTitle: {
-    fontFamily: 'Archivo_900Black',
-    fontSize: 24,
-    color: BONE,
-    textTransform: 'uppercase',
-    letterSpacing: -0.01,
-  },
-  legacyDescriptor: {
-    marginTop: 4,
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-  },
   territoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
     paddingVertical: 4,
+    minHeight: 48,
   },
   territoryName: {
     flex: 1,
@@ -1266,10 +1240,6 @@ const styles = StyleSheet.create({
     color: SLATE2,
     marginLeft: 2,
   },
-  powerBlock: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
   powerValue: {
     fontFamily: fonts.displayMedium,
     fontSize: fontSize.xl4,
@@ -1280,20 +1250,23 @@ const styles = StyleSheet.create({
   walletSection: {
     marginTop: 32,
   },
+  // Neutral instrument, not a red CTA — Profile spends its red only on Delete.
   walletButton: {
     marginTop: 12,
+    backgroundColor: INK2,
     borderWidth: 1,
-    borderColor: '#D64525',
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 16,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   walletButtonText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: '#D64525',
+    color: BONE,
   },
   walletTapHint: {
     marginTop: 8,
@@ -1312,6 +1285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 6,
+    minHeight: 48,
   },
   settingsLabel: {
     fontFamily: 'Inter_400Regular',
@@ -1323,7 +1297,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: SLATE2,
   },
+  // Sign out is a routine action — neutral bone, not the destructive red.
   settingsSignOut: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: BONE,
+  },
+  // Delete account is the screen's one destructive endpoint — the single red.
+  settingsDelete: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: CLAIM,
@@ -1346,6 +1327,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Archivo_900Black',
     fontSize: 20,
     color: CLAIM,
+    textTransform: 'uppercase',
+    letterSpacing: -0.01,
+  },
+  // Neutral modal title — change-password is a routine action, not destructive.
+  modalTitle: {
+    fontFamily: 'Archivo_900Black',
+    fontSize: 20,
+    color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.01,
   },
@@ -1378,7 +1367,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: CLAIM,
+    // Errors read in Bone (Inter sentence), never Claim red (Locked Meaning).
+    color: BONE,
   },
   deleteModalActions: {
     marginTop: 20,
@@ -1390,6 +1380,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
     paddingVertical: 12,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1406,6 +1397,7 @@ const styles = StyleSheet.create({
     borderColor: CLAIM,
     backgroundColor: 'rgba(214,69,37,0.12)',
     paddingVertical: 12,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1459,12 +1451,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Archivo_700Bold',
     fontSize: 20,
     color: BONE,
-    letterSpacing: -0.4,
-  },
-  powerRowValueInactive: {
-    fontFamily: 'Archivo_700Bold',
-    fontSize: 20,
-    color: SLATE,
     letterSpacing: -0.4,
   },
 });

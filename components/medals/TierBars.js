@@ -32,10 +32,10 @@ export default function TierBars({ medal, height = 6 }) {
                 width: BAR_WIDTHS[i],
                 height,
                 marginRight: 3,
-                borderRadius: 1,
+                borderRadius: 0,
                 backgroundColor: on ? TIER_COLOR[tier] : 'transparent',
                 borderWidth: on ? 0 : StyleSheet.hairlineWidth,
-                borderColor: 'rgba(242,238,230,0.18)',
+                borderColor: 'rgba(242,238,230,0.16)',
               }}
             />
           );
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     backgroundColor: BONE,
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 2,
+    borderRadius: 0,
   },
   boneText: {
     fontFamily: 'GeistMono_500Medium',

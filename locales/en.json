@@ -525,7 +525,7 @@
     }
   },
   "profile": {
-    "commanderLabel": "COMMANDER · #0001",
+    "commanderLabel": "COMMANDER",
     "unaffiliated": "UNAFFILIATED",
     "edit": "EDIT",
     "add": "ADD",
@@ -557,7 +557,8 @@
     "bestStreak": "BEST STREAK",
     "territoriesLabel": "TERRITORIES",
     "siegeXp": "SIEGE XP",
-    "daysValue": "{{n}} days",
+    "daysValue_one": "{{count}} day",
+    "daysValue_other": "{{count}} days",
     "xpProgress": "XP PROGRESS",
     "xpNumbers": "{{into}} / {{needed}} XP",
     "nextPrefix": "NEXT · ",
@@ -573,7 +574,6 @@
     "allianceChatPush": "Alliance chat push",
     "on": "ON",
     "off": "OFF",
-    "notificationSettings": "Notification settings",
     "signOut": "Sign out",
     "signOutConfirm": "Are you sure you want to sign out?",
     "cancel": "Cancel",
