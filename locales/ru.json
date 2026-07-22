@@ -648,6 +648,8 @@
     "dayStreakLabel": "СЕРИЯ ДНЕЙ",
     "streakEndsTonight": "Серия прервётся сегодня — выполните задание дня",
     "streakSafeToday": "Серия сохранена — возвращайтесь завтра",
+    "axisArmed": "Активно",
+    "axisLocked": "Закрыто",
     "needResourceBanner": "Вы пришли за ресурсом «{{resource}}». Сегодня его дают: {{axes}} — выберите и идите.",
     "resourceName": {
       "iron": "Железо",

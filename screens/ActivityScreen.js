@@ -1112,8 +1112,12 @@ export default function ActivityScreen() {
                   >
                     {t(AXIS_CATALOG[axis].nameKey).toUpperCase()}
                     {isBoosted ? ' ×1.5' : ''}
-                    {isLockedOut ? ' ✕' : isArmed ? ' ●' : ''}
                   </Text>
+                  {isArmed || isLockedOut ? (
+                    <Text style={[styles.axisChipMeta, isArmed && styles.axisChipMetaArmed]}>
+                      {isLockedOut ? t('activity.axisLocked') : t('activity.axisArmed')}
+                    </Text>
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -1492,6 +1496,19 @@ const styles = StyleSheet.create({
   },
   axisChipTextLockedOut: {
     color: colors.slate2,
+  },
+  // Status word replacing the old ●/✕ glyphs: ARMED = the axis that counts
+  // today, LOCKED = out of play because the day is committed elsewhere.
+  axisChipMeta: {
+    marginTop: 3,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  axisChipMetaArmed: {
+    color: colors.bone,
   },
   commitBtn: {
     marginBottom: spacing.sm,

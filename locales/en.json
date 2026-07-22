@@ -626,6 +626,8 @@
     "dayStreakLabel": "DAY STREAK",
     "streakEndsTonight": "Streak ends tonight — complete today's challenge",
     "streakSafeToday": "Streak safe — come back tomorrow",
+    "axisArmed": "Armed",
+    "axisLocked": "Locked",
     "needResourceBanner": "You came to earn {{resource}}. Today {{axes}} pay it — pick one and walk.",
     "resourceName": {
       "iron": "Iron",
