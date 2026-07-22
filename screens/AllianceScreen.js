@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
-import { colors, fonts, fontSize, spacing, radius, borders, text } from '../lib/theme';
+import { avatarThumb } from '../lib/avatar';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 const CLAIM = '#D64525';
@@ -127,29 +127,45 @@ function HeaderKicker({ children }) {
   return <Text style={styles.headerKicker}>{children}</Text>;
 }
 
-function RosterRow({ initials, name, role, steps, showBorder, onPress, onLongPress }) {
+function RosterRow({
+  avatarUrl, initials, name, role, isFounder, levelLabel,
+  manageLabel, onManage, showBorder, onPress,
+}) {
   const inner = (
     <>
       <View style={styles.rosterLeft}>
         <View style={styles.rosterAvatar}>
-          <Text style={styles.rosterInitials}>{initials}</Text>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarThumb(avatarUrl, 32) }} style={styles.rosterAvatarImg} />
+          ) : (
+            <Text style={styles.rosterInitials}>{initials}</Text>
+          )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.rosterName}>{name}</Text>
-          <Text style={styles.rosterRole}>{role}</Text>
+          <Text style={styles.rosterName} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.rosterRole, isFounder && styles.rosterRoleFounder]}>{role}</Text>
         </View>
       </View>
-      <Text style={styles.rosterSteps}>{steps}</Text>
+      {levelLabel ? <Text style={styles.rosterLevel}>{levelLabel}</Text> : null}
+      {onManage ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={manageLabel}
+          onPress={onManage}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [styles.rosterManageBtn, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.rosterManageText}>{manageLabel}</Text>
+        </Pressable>
+      ) : null}
     </>
   );
 
-  if (onPress || onLongPress) {
+  if (onPress) {
     return (
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
-        onLongPress={onLongPress}
-        delayLongPress={350}
         style={({ pressed }) => [
           styles.rosterRow,
           showBorder && styles.rosterRowBorder,
@@ -277,7 +293,8 @@ function NonMemberContent({
           <Pressable
             accessibilityRole="button"
             onPress={() => navigation.navigate('CreateAlliance')}
-            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => [styles.footerCreateBtn, pressed && { opacity: 0.6 }]}
           >
             <Text style={styles.createLink}>
               {t('alliance.foundFirst')}<Text style={styles.createLinkStrong}>{t('alliance.createAllianceLink')}</Text>
@@ -338,7 +355,8 @@ function NonMemberContent({
         <Pressable
           accessibilityRole="button"
           onPress={() => navigation.navigate('CreateAlliance')}
-          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [styles.footerCreateBtn, pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.createLink}>
             {t('alliance.orCreate')}<Text style={styles.createLinkStrong}>{t('alliance.createYourOwn')}</Text>
@@ -364,6 +382,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const [leaveError, setLeaveError] = useState('');
   const [manageTarget, setManageTarget] = useState(null); // { player_id, username, role }
   const [manageActionInFlight, setManageActionInFlight] = useState(null); // the action object currently submitting
+  const [kickConfirm, setKickConfirm] = useState(null); // the kick action awaiting confirmation
   const [manageError, setManageError] = useState('');
   const [showTransferConfirm, setShowTransferConfirm] = useState(false);
   const [transferConfirmInput, setTransferConfirmInput] = useState('');
@@ -478,6 +497,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     setManageError('');
     setManageActionInFlight(null);
     setShowTransferConfirm(false);
+    setKickConfirm(null);
     setTransferConfirmInput('');
     setTransferError('');
     setManageTarget({ player_id: member.player_id, username: member.username, role: member.role });
@@ -487,6 +507,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     if (manageActionInFlight || transferSaving) return;
     setManageError('');
     setShowTransferConfirm(false);
+    setKickConfirm(null);
     setTransferConfirmInput('');
     setTransferError('');
     setManageTarget(null);
@@ -570,6 +591,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
       if (result?.ok) {
         setManageTarget(null);
+        setKickConfirm(null);
         setManageError('');
         await onRefreshAfterLeave(); // existing refetch prop — reuse, do not rename
         return;
@@ -648,6 +670,48 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     );
   }
 
+  if (manageTarget && kickConfirm) {
+    const targetName = manageTarget.username ?? '—';
+    const inFlight = manageActionInFlight !== null;
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.confirmWrap}>
+          <Text style={styles.confirmKicker}>{t('alliance.manageKicker')}</Text>
+          <Text style={styles.confirmTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{t('alliance.kickConfirmTitle', { name: targetName.toUpperCase() })}</Text>
+          <Text style={styles.confirmBody}>{t('alliance.kickConfirmBody', { name: targetName })}</Text>
+          {manageError ? <Text style={styles.joinError}>{manageError}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            disabled={inFlight}
+            onPress={() => submitManageAction(kickConfirm)}
+            style={({ pressed }) => [styles.ctaDestructive, inFlight && styles.ctaDisabled, pressed && !inFlight && { opacity: 0.9 }]}
+          >
+            {inFlight ? (
+              <>
+                <ActivityIndicator color={BONE} />
+                <Text style={[styles.ctaAction, { marginTop: 8 }]}>{t('alliance.loadingKick')}</Text>
+              </>
+            ) : (
+              <Text style={styles.ctaAction}>{t('alliance.kickConfirmCta')}</Text>
+            )}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={inFlight}
+            onPress={() => setKickConfirm(null)}
+            style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.cancelLinkText}>{t('alliance.cancel')}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
   if (manageTarget) {
     const availableActions = getAvailableActions({
       actorRole: myRole,
@@ -679,9 +743,16 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
                 key={`${action.type}-${action.toRole ?? 'x'}`}
                 accessibilityRole="button"
                 disabled={isAnyInFlight}
-                onPress={isTransfer ? openTransferConfirm : () => submitManageAction(action)}
+                onPress={
+                  isTransfer
+                    ? openTransferConfirm
+                    : action.type === 'kick'
+                      ? () => setKickConfirm(action)
+                      : () => submitManageAction(action)
+                }
                 style={({ pressed }) => [
-                  isTransfer ? styles.ctaDestructive : styles.cta,
+                  // Red only for destructive actions; promote/demote are neutral.
+                  isTransfer || action.type === 'kick' ? styles.ctaDestructive : styles.ctaSecondary,
                   idx > 0 && { marginTop: 10 },
                   isAnyInFlight && styles.ctaDisabled,
                   pressed && !isAnyInFlight && { opacity: 0.9 },
@@ -751,7 +822,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             disabled={leaveSaving}
             onPress={leaveConfirmCase === 'blocked' ? closeLeaveConfirm : handleLeaveSubmit}
             style={({ pressed }) => [
-              styles.cta,
+              // "Got it" (blocked) is a neutral dismiss; leave/disband are red.
+              leaveConfirmCase === 'blocked' ? styles.ctaSecondary : styles.cta,
               leaveSaving && styles.ctaDisabled,
               pressed && !leaveSaving && { opacity: 0.9 },
             ]}
@@ -853,9 +925,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.roster')}</Text>
-          <Text style={styles.sectionLabelAccent}>{t('alliance.activeAccent', { n: roster.length })}</Text>
+          <Text style={styles.sectionLabelAccent}>{t('alliance.memberCount', { n: roster.length })}</Text>
           <View style={styles.sectionHairline} />
-          <Text style={styles.sectionLabelRight}>{t('alliance.resetsMon')}</Text>
         </View>
         {roster.map((m, i) => {
           // Tap any row → that member's profile. Long-press a member you can
@@ -872,10 +943,14 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           return (
             <RosterRow
               key={m.player_id}
+              avatarUrl={m.avatar_url ?? null}
               initials={m.username ? m.username.slice(0, 2).toUpperCase() : '??'}
               name={m.username ?? '—'}
               role={formatAllianceRole(t, m.role)}
-              steps="—"
+              isFounder={m.role === 'founder'}
+              levelLabel={Number.isFinite(m.level) ? t('alliance.levelShort', { n: m.level }) : ''}
+              manageLabel={t('alliance.manage')}
+              onManage={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
               showBorder={i < roster.length - 1}
               onPress={() =>
                 navigation.navigate('PublicProfile', {
@@ -883,7 +958,6 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
                   username: m.username,
                 })
               }
-              onLongPress={actions.length > 0 ? () => handleRosterRowTap(m) : undefined}
             />
           );
         })}
@@ -943,7 +1017,6 @@ export default function AllianceScreen() {
   const [joinSaving, setJoinSaving] = useState(false);
 
   const loadAllianceList = useCallback(async (playerHomeCity) => {
-    console.log('[loadAllianceList] fetched at', Date.now());
 
     if (!playerHomeCity) {
       setAllianceList([]);
@@ -1040,10 +1113,10 @@ export default function AllianceScreen() {
         }
 
         if (!myResult.ok) {
+          // Keep last-good member data: a refresh blip shows an inline banner
+          // rather than ejecting the member to the browse list. On the initial
+          // load there is nothing to retain, so the full-screen error still shows.
           setFetchError(t('alliance.couldNotLoad'));
-          setMyAlliance(null);
-          setRoster([]);
-          setTerritoryCount(null);
           return;
         }
 
@@ -1061,10 +1134,9 @@ export default function AllianceScreen() {
         });
 
         if (!detailResult.ok) {
+          // Retain last-good roster/alliance; the inline error banner renders
+          // over the existing content instead of throwing the member to browse.
           setFetchError(t('alliance.couldNotLoad'));
-          setMyAlliance(null);
-          setRoster([]);
-          setTerritoryCount(null);
           return;
         }
 
@@ -1268,8 +1340,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderWidth: 1,
     borderColor: CLAIM,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   retryBtnText: {
     fontFamily: 'GeistMono_500Medium',
@@ -1304,9 +1378,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  // The [TAG] chip is an identifier, not ownership — neutral hairline + Bone.
   shortNameBox: {
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: HAIRLINE_STRONG,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 0,
@@ -1314,7 +1389,7 @@ const styles = StyleSheet.create({
   shortNameText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
-    color: CLAIM,
+    color: BONE,
     letterSpacing: 1.4,
   },
   headerCity: {
@@ -1373,26 +1448,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 8,
     marginBottom: 4,
-  },
-  sectionLabelText: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    letterSpacing: 1.6,
-    color: SLATE2,
-    textTransform: 'uppercase',
-  },
-  sectionLabelAccent: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
-    letterSpacing: 1.6,
-    color: BONE,
-    textTransform: 'uppercase',
-  },
-  sectionHairline: {
-    flex: 1,
-    height: 1,
-    backgroundColor: HAIRLINE_STRONG,
-    marginLeft: 8,
   },
   directiveText: {
     fontFamily: 'GeistMono_400Regular',
@@ -1474,6 +1529,10 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
     marginTop: 4,
   },
+  footerCreateBtn: {
+    minHeight: 48,
+    justifyContent: 'center',
+  },
   createLink: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
@@ -1552,6 +1611,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: CLAIM,
   },
+  // Constructive/neutral action (promote, demote, acknowledge) — no red.
+  // Red is reserved for destructive actions (kick, transfer, leave, disband).
+  ctaSecondary: {
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    minHeight: 48,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
   transferConfirmInput: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 14,
@@ -1564,15 +1635,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textTransform: 'uppercase',
   },
-  ctaStep: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    letterSpacing: 1.6,
-    color: BONE,
-    opacity: 0.75,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
   ctaAction: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 16,
@@ -1584,6 +1646,8 @@ const styles = StyleSheet.create({
   cancelLink: {
     marginTop: 18,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   cancelLinkText: {
     fontFamily: 'GeistMono_400Regular',
@@ -1592,20 +1656,21 @@ const styles = StyleSheet.create({
     color: SLATE,
     textTransform: 'uppercase',
   },
+  // Errors read as sentences in Bone (Inter), never Claim red (Locked Meaning).
   joinError: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
-    letterSpacing: 1.4,
-    color: CLAIM,
-    textTransform: 'uppercase',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: BONE,
     marginTop: 16,
-    lineHeight: 14,
+    lineHeight: 18,
   },
   leaveLink: {
     marginTop: 24,
     marginBottom: 32,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 8,
+    minHeight: 48,
   },
   leaveLinkText: {
     fontFamily: 'GeistMono_400Regular',
@@ -1639,90 +1704,6 @@ const styles = StyleSheet.create({
     backgroundColor: HAIRLINE_STRONG,
     marginLeft: 8,
   },
-  sectionLabelRight: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    letterSpacing: 1.4,
-    marginLeft: 8,
-  },
-  missionCard: {
-    marginTop: 16,
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    borderRadius: 0,
-    padding: 16,
-    borderLeftWidth: 2,
-    borderLeftColor: ALLIANCE_GREEN,
-  },
-  missionTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  missionStatusLabel: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
-    color: ALLIANCE_GREEN,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  missionTimer: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    letterSpacing: 1.4,
-  },
-  missionTitle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 16,
-    color: BONE,
-    lineHeight: 22,
-  },
-  missionDesc: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
-    color: SLATE2,
-    marginTop: 6,
-    lineHeight: 16,
-  },
-  missionProgressRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginTop: 12,
-  },
-  missionProgressValue: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 13,
-    color: BONE,
-  },
-  missionProgressTotal: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    color: SLATE2,
-  },
-  progressTrack: {
-    marginTop: 8,
-    height: 2,
-    backgroundColor: HAIRLINE_STRONG,
-    borderRadius: 0,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: ALLIANCE_GREEN,
-    borderRadius: 0,
-  },
-  missionReward: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-    letterSpacing: 1.4,
-    marginTop: 12,
-    textTransform: 'uppercase',
-  },
   rosterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1740,33 +1721,62 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rosterAvatar: {
-    width: 0,
-    height: 0,
-    opacity: 0,
+    width: 32,
+    height: 32,
+    backgroundColor: INK3,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rosterAvatarImg: {
+    width: 32,
+    height: 32,
   },
   rosterInitials: {
-    width: 0,
-    height: 0,
-    opacity: 0,
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: BONE,
+    letterSpacing: 0.5,
   },
   rosterName: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontSize: 14,
     color: BONE,
-    textTransform: 'uppercase',
   },
+  // Role is a label, not ownership — Slate 2. Founder carries alliance identity.
   rosterRole: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
-    color: CLAIM,
+    color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    width: 52,
+    marginTop: 2,
   },
-  rosterSteps: {
+  rosterRoleFounder: {
+    color: ALLIANCE_GREEN,
+  },
+  rosterLevel: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
     color: BONE,
+    letterSpacing: 0.5,
+  },
+  rosterManageBtn: {
+    marginLeft: 12,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  rosterManageText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 9,
+    color: BONE,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
   commandPostBtn: {
     marginTop: 32,
@@ -1785,20 +1795,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  // Neutral secondary nav button — red is not spent on the alliance hub.
   warRoomBtn: {
     marginTop: 32,
     borderWidth: 1,
-    borderColor: '#D64525',
+    borderColor: HAIRLINE_STRONG,
     borderRadius: 0,
     paddingVertical: 16,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: INK2,
   },
   warRoomBtnText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
-    color: '#D64525',
+    color: BONE,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -1807,7 +1819,7 @@ const styles = StyleSheet.create({
     height: 320,
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
-    backgroundColor: '#08090C',
+    backgroundColor: INK,
     borderRadius: 0,
   },
   wireHeaderStrip: {
@@ -1862,7 +1874,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#08090C',
+    backgroundColor: INK,
   },
   wireErrorText: {
     fontFamily: 'GeistMono_400Regular',
@@ -1875,6 +1887,8 @@ const styles = StyleSheet.create({
   wireRetryButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   wireRetryText: {
     fontFamily: 'GeistMono_500Medium',
