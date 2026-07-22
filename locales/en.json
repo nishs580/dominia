@@ -302,36 +302,34 @@
     "metresWalked": "METRES WALKED",
     "perimeter": "{{km}} KM PERIMETER",
     "backToMap": "BACK TO MAP",
+    "opponentFallback": "Opponent",
     "siegeXpLabel": "SIEGE XP EARNED",
+    "lossEffortLabel": "METRES WALKED · RECORDED",
     "resourcesDefend": "+{{stone}} STONE · +{{gold}} GOLD · +{{morale}} MORALE",
     "resourcesAttack": "+{{iron}} IRON · +{{gold}} GOLD · +{{morale}} MORALE",
     "attackWon": {
       "eyebrow": "▪ TERRITORY TAKEN",
       "headline": "Yours.",
       "opponentRole": "DEFENDER",
-      "cta": "CLAIM & DEFEND",
-      "consequence": "{{opponent}} HELD THIS GROUND.\nYOU ARE NOW IN THE HALL OF HOLDERS."
+      "consequence": "{{opponent}} held this ground before you. You are now in the Hall of Holders."
     },
     "attackLost": {
       "eyebrow": "▪ ATTACK FAILED",
       "headline": "Held.",
       "opponentRole": "DEFENDER",
-      "cta": "RECONTEST WHEN READY",
-      "consequence": "{{diff}} METRES SHORT.\nSTREAK INTACT. RECONTEST WHEN READY."
+      "consequence": "{{diff}} metres short. Your streak is intact — recontest when you are ready."
     },
     "defendWon": {
       "eyebrow": "▪ TERRITORY HELD",
       "headline": "Yours, still.",
       "opponentRole": "ATTACKER",
-      "cta": "FORTIFY FOR 24H",
-      "consequence": "+60 XP · +12 SHIELD.\nYOUR HOLD CONTINUES."
+      "consequence": "The attacker is turned back. Your hold continues."
     },
     "defendLost": {
       "eyebrow": "▪ TERRITORY LOST",
       "headline": "Taken.",
       "opponentRole": "ATTACKER",
-      "cta": "RECONQUER",
-      "consequence": "RECONQUEST WINDOW OPEN: 72H.\nYOUR DEFENCE IS RECORDED."
+      "consequence": "The reconquest window is open for 72 hours. Your defence is recorded."
     }
   },
   "defenderAccept": {

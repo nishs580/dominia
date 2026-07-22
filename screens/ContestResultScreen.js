@@ -11,6 +11,7 @@ import { fetchTerritoryShape } from '../lib/territoryShapeApi';
 import CountUpText from '../components/CountUpText';
 import MilestoneTakeover from '../components/MilestoneTakeover';
 import TerritorySilhouette from '../components/TerritorySilhouette';
+import { colors } from '../lib/theme';
 
 // Display strings live in locales/<lng>.json under contestResult.<i18nKey>.*;
 // only the role/outcome logic and the i18n key live here.
@@ -21,17 +22,23 @@ const STATE_CONFIG = {
   defend_lost: { role: 'defender', outcome: 'lost', i18nKey: 'defendLost' },
 };
 
-const INK = '#0E1014';
-const INK_2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE_2 = '#8B8F98';
-const CLAIM = '#D64525';
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
-const ALLIANCE = '#3F8F4E';
-const ALLIANCE_SOFT = 'rgba(63,143,78,0.14)';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = colors.ink;
+const INK2 = colors.ink2;
+const BONE = colors.bone;
+const SLATE = colors.slate;
+const SLATE_2 = colors.slate2;
+const CLAIM = colors.claim;
+const ALLIANCE = colors.alliance;
+const ENEMY = colors.enemy;
+const HAIRLINE_STRONG = colors.hairlineStrong;
+
+// The mark colour states who holds the ground AFTER the contest — never which
+// seat the player sat in. Lost it → theirs (enemy blue); took it → yours
+// (claim red); held it → ours (alliance green). Locked Meaning Rule.
+function ownershipColour(cfg) {
+  if (cfg.outcome === 'lost') return ENEMY;
+  return cfg.role === 'attacker' ? CLAIM : ALLIANCE;
+}
 
 function clampNumber(n, fallback = 0) {
   const v = Number(n);
@@ -45,7 +52,7 @@ function formatMetres(m) {
 function consequenceLine(t, cfg, myM, oppM, opponentName) {
   const diff = Math.abs(myM - oppM);
   return t(`contestResult.${cfg.i18nKey}.consequence`, {
-    opponent: opponentName.toUpperCase(),
+    opponent: opponentName,
     diff,
   });
 }
@@ -65,7 +72,7 @@ export default function ContestResultScreen() {
     territoryGeojson = null,
     myDistance = 0,
     opponentDistance = 0,
-    opponentName = 'opponent',
+    opponentName: opponentNameParam = null,
     resourcesAwarded = { iron: 0, stone: 0, gold: 0, morale: 0 },
     xpGained = 0,
     balances = {},
@@ -75,15 +82,25 @@ export default function ContestResultScreen() {
 
   const stateKey = mobileStateFromOutcome(outcome, role);
   const cfg = STATE_CONFIG[stateKey] ?? STATE_CONFIG.attack_won;
-  const markColor = cfg.role === 'attacker' ? CLAIM : ALLIANCE;
-  const markSoftColor = cfg.role === 'attacker' ? CLAIM_SOFT : ALLIANCE_SOFT;
+  const markColor = ownershipColour(cfg);
+
+  // 'opponent' is the upstream sentinel when the server omits a username;
+  // fall back to a localised noun so a Russian player never sees English.
+  const opponentName =
+    opponentNameParam && opponentNameParam !== 'opponent'
+      ? opponentNameParam
+      : t('contestResult.opponentFallback');
 
   const myM = clampNumber(myDistance, 0);
   const oppM = clampNumber(opponentDistance, 0);
 
+  // The authoritative outcome is the contest result, not the raw distances:
+  // a data mismatch (equal or inverted distances) must never contradict the
+  // won/lost state the server resolved.
   const winner = useMemo(() => {
-    if (myM === oppM) return cfg.outcome === 'won' ? 'me' : 'opponent';
-    return myM > oppM ? 'me' : 'opponent';
+    if (cfg.outcome === 'won') return 'me';
+    if (cfg.outcome === 'lost') return 'opponent';
+    return myM >= oppM ? 'me' : 'opponent';
   }, [myM, oppM, cfg.outcome]);
 
   const myIsWinner = winner === 'me';
@@ -172,9 +189,9 @@ export default function ContestResultScreen() {
       contentContainerStyle={[styles.screen, { paddingBottom: insets.bottom + 16 }]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.statusSpacer, { height: insets.top + 20 }]} />
+      <View style={{ height: insets.top + 20 }} />
 
-      <Text style={[styles.eyebrow, { color: markColor }]}>{t(`contestResult.${cfg.i18nKey}.eyebrow`)}</Text>
+      <Text style={styles.eyebrow}>{t(`contestResult.${cfg.i18nKey}.eyebrow`)}</Text>
 
       <View style={styles.markWrap}>
         {hasSilhouette ? (
@@ -230,10 +247,10 @@ export default function ContestResultScreen() {
         </View>
       </View>
 
-      <View style={[styles.consequence, { backgroundColor: markSoftColor, borderLeftColor: markColor }]}>
+      <View style={styles.consequence}>
         <Text style={styles.consequenceText}>{consequenceLine(t, cfg, myM, oppM, opponentName)}</Text>
       </View>
-      {(stateKey === 'attack_won' || stateKey === 'defend_won') && clampNumber(xpGained, 0) > 0 ? (
+      {cfg.outcome === 'won' && clampNumber(xpGained, 0) > 0 ? (
         <View style={styles.earnedBlock}>
           <CountUpText
             value={xpGained}
@@ -249,25 +266,32 @@ export default function ContestResultScreen() {
               : t('contestResult.resourcesAttack', { iron: resourcesAwarded.iron, gold: resourcesAwarded.gold, morale: resourcesAwarded.morale })}
           </Text>
         </View>
+      ) : cfg.outcome === 'lost' && myM > 0 ? (
+        // The loss has no reward to count up, but the effort is real — honour
+        // the distance the player actually walked rather than leaving it static.
+        <View style={styles.earnedBlock}>
+          <CountUpText
+            value={myM}
+            countOnMount
+            style={styles.earnedXpValue}
+            maxFontSizeMultiplier={1.2}
+          />
+          <Text style={styles.earnedXpLabel}>{t('contestResult.lossEffortLabel')}</Text>
+        </View>
       ) : null}
 
+      {/* One honest exit. The reconquer/fortify follow-up flows don't exist yet;
+          when they do, add a primary CTA here that actually starts them rather
+          than relabelling the return-to-map. The exit is neutral so it never
+          spends the ownership colour or clashes with enemy blue on a loss. */}
       <View style={styles.ctaStack}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t(`contestResult.${cfg.i18nKey}.cta`)}
-          onPress={goToMap}
-          style={({ pressed }) => [styles.ctaPrimary, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.ctaPrimaryText}>{t(`contestResult.${cfg.i18nKey}.cta`)}</Text>
-        </Pressable>
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('contestResult.backToMap')}
           onPress={goToMap}
-          style={({ pressed }) => [styles.ctaSecondary, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
         >
-          <Text style={styles.ctaSecondaryText}>{t('contestResult.backToMap')}</Text>
+          <Text style={styles.ctaText}>{t('contestResult.backToMap')}</Text>
         </Pressable>
       </View>
 
@@ -286,12 +310,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
-  statusSpacer: {
-    height: 60,
-  },
   eyebrow: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
+    // Bone label — the ownership colour lives on the mark and the deciding stat,
+    // not on the chrome. The mark below already states the outcome in colour.
+    color: BONE,
     letterSpacing: 1.8,
     textAlign: 'center',
     marginBottom: 20,
@@ -342,7 +366,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 10,
     color: SLATE_2,
     letterSpacing: 1.4,
     marginBottom: 8,
@@ -361,23 +385,27 @@ const styles = StyleSheet.create({
   },
   statUnit: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 10,
     color: SLATE_2,
     letterSpacing: 0.6,
     marginTop: 6,
   },
+  // Neutral card — full hairline, no coloured side-stripe. The words carry the
+  // weight; the colour budget belongs to the ownership mark.
   consequence: {
-    borderLeftWidth: 2,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 20,
   },
   consequenceText: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     color: BONE,
-    lineHeight: 17,
-    letterSpacing: 0.4,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   earnedBlock: {
     alignItems: 'center',
@@ -394,7 +422,7 @@ const styles = StyleSheet.create({
   },
   earnedXpLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 10,
     color: SLATE_2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -412,31 +440,21 @@ const styles = StyleSheet.create({
   },
   ctaStack: {
     marginTop: 'auto',
-    gap: 8,
   },
-  ctaPrimary: {
-    backgroundColor: CLAIM,
+  cta: {
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
     paddingVertical: 16,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaPrimaryText: {
+  ctaText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
     color: BONE,
     letterSpacing: 1.8,
-  },
-  ctaSecondary: {
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaSecondaryText: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    color: BONE,
-    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
 });
