@@ -623,7 +623,19 @@
   },
   "activity": {
     "title": "ACTIVITY",
-    "dayStreak": "{{n}} DAY STREAK",
+    "dayStreakLabel": "DAY STREAK",
+    "streakEndsTonight": "Streak ends tonight — complete today's challenge",
+    "streakSafeToday": "Streak safe — come back tomorrow",
+    "needResourceBanner": "You came to earn {{resource}}. Today {{axes}} pay it — pick one and walk.",
+    "resourceName": {
+      "iron": "Iron",
+      "stone": "Stone",
+      "gold": "Gold"
+    },
+    "menuLoadError": "Couldn't load today's challenges.",
+    "hcRequiredLabel": "HEALTH CONNECT",
+    "hcRequiredBody": "Dominia reads your steps through Health Connect. Install or enable it to start earning from your walks.",
+    "hcRequiredCta": "Open Health Connect",
     "weekDays": [
       "Mon",
       "Tue",

@@ -926,7 +926,10 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 onPress={() => {
                   setSheetState('info');
                   onClose();
-                  navigation.navigate('Activity');
+                  // Carry the resource the player came to earn so Activity can
+                  // name it and pre-select a paying axis (challenges pay iron/
+                  // stone; gold has no paying axis, so that banner stays hidden).
+                  navigation.navigate('Activity', { needResource: contestMode ? 'iron' : 'gold' });
                 }}
               >
                 <Text style={styles.sheetActionText}>{t('map.goToActivity')}</Text>

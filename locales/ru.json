@@ -645,7 +645,19 @@
   },
   "activity": {
     "title": "АКТИВНОСТЬ",
-    "dayStreak": "СЕРИЯ {{n}} ДН.",
+    "dayStreakLabel": "СЕРИЯ ДНЕЙ",
+    "streakEndsTonight": "Серия прервётся сегодня — выполните задание дня",
+    "streakSafeToday": "Серия сохранена — возвращайтесь завтра",
+    "needResourceBanner": "Вы пришли за ресурсом «{{resource}}». Сегодня его дают: {{axes}} — выберите и идите.",
+    "resourceName": {
+      "iron": "Железо",
+      "stone": "Камень",
+      "gold": "Золото"
+    },
+    "menuLoadError": "Не удалось загрузить сегодняшние задания.",
+    "hcRequiredLabel": "HEALTH CONNECT",
+    "hcRequiredBody": "Dominia читает ваши шаги через Health Connect. Установите или включите его, чтобы зарабатывать за прогулки.",
+    "hcRequiredCta": "Открыть Health Connect",
     "weekDays": [
       "Пн",
       "Вт",

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import {
@@ -33,6 +33,7 @@ import { showCard } from '../lib/notifications/cardController';
 import { calcLevel, getLevelTitle, calcResourceEarn } from '../lib/formulas';
 import { streakMilestoneItem } from '../lib/milestones';
 import MilestoneTakeover from '../components/MilestoneTakeover';
+import CountUpText from '../components/CountUpText';
 import {
   ACTIVITY_READ_PERMS,
   hasForegroundStepsRead,
@@ -128,15 +129,6 @@ function buildSmoothPath(points) {
   return d;
 }
 
-function ProgressBar({ progress }) {
-  const pct = clamp(progress, 0, 1) * 100;
-  return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${pct}%` }]} />
-    </View>
-  );
-}
-
 function WeeklyBarChart({ data }) {
   const { t } = useTranslation();
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -214,14 +206,14 @@ function WeeklyBarChart({ data }) {
             style={styles.chartTrendOverlay}
             pointerEvents="none"
           >
-            <Path d={pathD} stroke={colors.claim} strokeWidth={2} fill="none" />
+            <Path d={pathD} stroke={colors.bone} strokeWidth={2} fill="none" />
             {trendPoints.map((p, idx) => (
               <Circle
                 key={`pt-${idx}`}
                 cx={p.x}
                 cy={p.y}
                 r={2.5}
-                fill={colors.claim}
+                fill={colors.bone}
               />
             ))}
           </Svg>
@@ -235,6 +227,14 @@ export default function ActivityScreen() {
   const { t, i18n } = useTranslation();
   const weekDayLabels = useMemo(() => t('activity.weekDays', { returnObjects: true }), [t]);
   const { userId, getToken } = useAuth();
+  const route = useRoute();
+  // The map's "earn X" dead-ends route here with the resource the player came
+  // for; the menu then names it and pre-selects a paying axis.
+  const needResource = route?.params?.needResource ?? null;
+  const payingAxes = useMemo(
+    () => (needResource ? AXES.filter((a) => AXIS_CATALOG[a].primaryResource === needResource) : []),
+    [needResource],
+  );
 
   // First-tap tips. A tip fires when the player's finger first lands on the
   // section (a missing section — e.g. perm card already granted — has a null
@@ -269,6 +269,7 @@ export default function ActivityScreen() {
   const [hasKcalPerm, setHasKcalPerm] = useState(false);
   const [hasDistPerm, setHasDistPerm] = useState(false);
   const [challengesLoaded, setChallengesLoaded] = useState(false);
+  const [menuError, setMenuError] = useState(false);
   const [permRequesting, setPermRequesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState(0);
   // Live measured distance (HC Distance aggregate) — the same metric the backend
@@ -379,13 +380,17 @@ export default function ActivityScreen() {
       clerkGetToken: () => getTokenRef.current(),
     });
     if (!result.ok) {
-      console.log('[activity] challenges/today failed', result.status, result.error);
+      console.error('[activity] challenges/today failed', result.status, result.error);
+      // Only surface the failure if we have nothing to show yet; a transient
+      // refetch failure shouldn't blank out an already-loaded menu.
+      if (!challengesLoaded) setMenuError(true);
       return;
     }
+    setMenuError(false);
     setTodayMenu(result.data);
     setCompletedKeys(new Set((result.data.completed ?? []).map((c) => c.challenge_key)));
     setChallengesLoaded(true);
-  }, []);
+  }, [challengesLoaded]);
 
   useEffect(() => {
     if (!userId) return;
@@ -458,6 +463,18 @@ export default function ActivityScreen() {
     if (viewAxis === null && armedAxis !== null) setViewAxis(armedAxis);
   }, [viewAxis, armedAxis]);
 
+  // Arriving from a map "earn X" dead-end: open the card on a paying axis that
+  // isn't locked out, so the resource the player came for is one tap away.
+  const didHonourNeedRef = useRef(false);
+  useEffect(() => {
+    if (didHonourNeedRef.current || payingAxes.length === 0) return;
+    const target = payingAxes.find((a) => a !== lockedAxis) ?? null;
+    if (target && lockedAxis === null) {
+      didHonourNeedRef.current = true;
+      setViewAxis(target);
+    }
+  }, [payingAxes, lockedAxis]);
+
   // Live per-axis progress: on-device steps (and stride distance) are ahead
   // of the server between flushes; server aggregates cover the rest.
   const axisCurrent = useCallback(
@@ -503,13 +520,28 @@ export default function ActivityScreen() {
     });
   }, [activeAxis, t]);
 
+  // The "n / 3 DONE" count must reflect the axis that actually counts today
+  // (the armed/committed one), not whichever axis the player is browsing —
+  // otherwise a committed-March player viewing Range reads a false 0 / 3.
   const completedCount = useMemo(() => {
+    const countedAxis = armedAxis ?? activeAxis;
+    const cat = AXIS_CATALOG[countedAxis];
+    if (!cat) return 0;
     let n = 0;
-    for (const c of challenges) if (completedKeys.has(c.key)) n += 1;
+    for (const tier of TIERS) {
+      if (completedKeys.has(cat.tiers[tier].earnKey)) n += 1;
+    }
     return n;
-  }, [challenges, completedKeys]);
+  }, [armedAxis, activeAxis, completedKeys]);
 
   const missionProgress = completedCount / 3;
+
+  // Streak beats: completing any tier of the armed axis secures today's streak;
+  // an incomplete challenge day after 17:00 puts an existing streak at risk.
+  const AT_RISK_HOUR = 17;
+  const streakSecuredToday = completedCount > 0;
+  const streakAtRisk =
+    isChallengeDay && !streakSecuredToday && currentStreak > 0 && today.getHours() >= AT_RISK_HOUR;
 
   async function handleCommitAxis(axis) {
     setCommittedAxis(axis);
@@ -555,7 +587,7 @@ export default function ActivityScreen() {
 
       if (!result.ok) {
         // Revert optimistic UI.
-        console.log('[onCompleteChallenge] backend failed', result.status, result.error);
+        console.error('[onCompleteChallenge] backend failed', result.status, result.error);
         // A 403 here is the under-threshold gate: the backend's accepted
         // aggregate is below this tier's target even after we flushed. This is
         // usually transient HC/flush lag, so arm a cooldown + attempt counter
@@ -920,9 +952,23 @@ export default function ActivityScreen() {
         <Text style={styles.commanderName} maxFontSizeMultiplier={1.2}>{t('activity.title')}</Text>
         <Text style={styles.rankLine}>
           <Text style={styles.rankTitle}>{username || '—'} · {t('levelTitle.' + playerLevel.title).toUpperCase()}</Text>
-          <Text style={styles.rankSeparator}> · </Text>
-          <Text style={styles.rankStreak}>{t('activity.dayStreak', { n: currentStreak })}</Text>
         </Text>
+        {/* The streak is the reason to return — a first-class instrument, not
+            a slate footnote. It counts up the moment today's streak is secured;
+            an at-risk day gets a single caution-amber warning line. */}
+        <View style={styles.streakRow}>
+          {streakSecuredToday ? (
+            <CountUpText value={currentStreak} countOnMount style={styles.streakValue} maxFontSizeMultiplier={1.2} />
+          ) : (
+            <Text style={styles.streakValue} maxFontSizeMultiplier={1.2}>{currentStreak}</Text>
+          )}
+          <Text style={styles.streakLabel}>{t('activity.dayStreakLabel')}</Text>
+        </View>
+        {streakAtRisk ? (
+          <Text style={styles.streakAtRiskLine}>{t('activity.streakEndsTonight')}</Text>
+        ) : streakSecuredToday ? (
+          <Text style={styles.streakSafeLine}>{t('activity.streakSafeToday')}</Text>
+        ) : null}
         <View style={styles.hairlineStrong} />
       </View>
 
@@ -931,6 +977,44 @@ export default function ActivityScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {needResource && payingAxes.length > 0 && isChallengeDay ? (
+          <View style={styles.needBanner}>
+            <Text style={styles.needBannerText}>
+              {t('activity.needResourceBanner', {
+                resource: t(`activity.resourceName.${needResource}`),
+                axes: payingAxes.map((a) => t(AXIS_CATALOG[a].nameKey)).join(' · '),
+              })}
+            </Text>
+          </View>
+        ) : null}
+
+        {menuError ? (
+          <View style={styles.menuErrorBanner}>
+            <Text style={styles.menuErrorText}>{t('activity.menuLoadError')}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => { setMenuError(false); loadTodayMenu(); }}
+              style={({ pressed }) => [styles.menuRetryBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.menuRetryText}>{t('common.retry')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {!hcReady ? (
+          <View style={styles.permBanner}>
+            <Text style={styles.permBannerLabel}>{t('activity.hcRequiredLabel')}</Text>
+            <Text style={styles.permBannerText}>{t('activity.hcRequiredBody')}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openHealthConnectSettings()}
+              style={({ pressed }) => [styles.permBannerBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.permBannerBtnText}>{t('activity.hcRequiredCta')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {hcReady && !(hasStepsPerm && hasKcalPerm && hasDistPerm) ? (
           <View ref={walkthroughPermRef} collapsable={false} style={styles.permBanner}>
             <Text style={styles.permBannerLabel}>{t('activity.permLabel')}</Text>
@@ -959,6 +1043,7 @@ export default function ActivityScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => openHealthConnectSettings()}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={({ pressed }) => [pressed && { opacity: 0.6 }]}
               >
                 <Text style={styles.permBannerLink}>{t('activity.openHcSettings')}</Text>
@@ -1200,17 +1285,41 @@ const styles = StyleSheet.create({
   rankTitle: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: colors.claim,
+    color: colors.bone,
   },
-  rankSeparator: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    color: colors.slate2,
+  streakRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
   },
-  rankStreak: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+  streakValue: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 34,
+    color: colors.bone,
+    letterSpacing: -1,
+    lineHeight: 36,
+  },
+  streakLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
     color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  streakAtRiskLine: {
+    marginTop: 6,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.caution,
+    lineHeight: 18,
+  },
+  streakSafeLine: {
+    marginTop: 6,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.slate2,
+    lineHeight: 18,
   },
   hairlineStrong: {
     marginTop: 14,
@@ -1245,47 +1354,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.hairlineStrong,
   },
-  badge: {
-    backgroundColor: '#E8F6F1',
-    borderColor: '#C7EADF',
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  badgeText: {
-    color: colors.alliance,
-    fontWeight: '900',
-    fontSize: 12,
-  },
-  progressTrack: {
-    marginTop: 12,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#E9EEF0',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: colors.alliance,
-  },
-  progressFooter: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  progressLeft: {
-    color: colors.slate2,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  progressRight: {
-    color: colors.bone,
-    fontSize: 12,
-    fontWeight: '800',
-  },
   permBanner: {
     marginTop: spacing.lg,
     padding: spacing.md,
@@ -1297,7 +1365,7 @@ const styles = StyleSheet.create({
   permBannerLabel: {
     fontFamily: fonts.mono,
     fontSize: 9,
-    color: colors.claim,
+    color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -1307,11 +1375,18 @@ const styles = StyleSheet.create({
     color: colors.bone,
     lineHeight: 18,
   },
+  // Strong secondary, not red — the screen's one red is the challenge commit
+  // CTA. This grant button lives in its own bordered banner and reads as
+  // actionable without spending Claim Red.
   permBannerBtn: {
     marginTop: spacing.xs,
-    backgroundColor: colors.claim,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    minHeight: 48,
+    justifyContent: 'center',
     alignSelf: 'flex-start',
   },
   permBannerBtnText: {
@@ -1330,13 +1405,57 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textDecorationLine: 'underline',
   },
+  needBanner: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink2,
+  },
+  needBannerText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.bone,
+    lineHeight: 18,
+  },
+  menuErrorBanner: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink2,
+    gap: spacing.sm,
+  },
+  menuErrorText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.bone,
+    lineHeight: 18,
+  },
+  menuRetryBtn: {
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  menuRetryText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 10,
+    color: colors.bone,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
   challengeBlock: {
     marginTop: spacing.lg,
   },
   themeBadge: {
     fontFamily: fonts.mono,
     fontSize: 10,
-    color: colors.claim,
+    color: colors.bone,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
@@ -1351,7 +1470,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
     paddingVertical: 7,
+    minHeight: 48,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.ink2,
   },
   axisChipViewing: {
@@ -1375,8 +1496,10 @@ const styles = StyleSheet.create({
   commitBtn: {
     marginBottom: spacing.sm,
     backgroundColor: colors.claim,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    minHeight: 48,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   commitBtnText: {
     fontFamily: fonts.monoMedium,
@@ -1430,13 +1553,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   challengeProgressTrack: {
-    height: 2,
+    height: 3,
     backgroundColor: colors.hairlineStrong,
     marginBottom: spacing.sm,
   },
   challengeProgressFill: {
     height: '100%',
-    backgroundColor: colors.claim,
+    backgroundColor: colors.bone,
   },
   challengeCard: {
     backgroundColor: colors.ink2,
@@ -1486,8 +1609,9 @@ const styles = StyleSheet.create({
   completeBtn: {
     backgroundColor: colors.claim,
     borderRadius: 0,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1501,7 +1625,9 @@ const styles = StyleSheet.create({
   challengeDone: {
     fontFamily: fonts.monoMedium,
     fontSize: 9,
-    color: colors.alliance,
+    // Bone, not alliance green — a completed challenge is a success state, not
+    // an ownership state. The word carries the meaning (Locked Meaning Rule).
+    color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -1538,12 +1664,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: colors.hairlineStrong,
-  },
-  achievementsCard: {
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
   },
   achievementsHeaderRow: {
     flexDirection: 'row',
