@@ -10,7 +10,7 @@ import {
   requestPermission,
   openHealthConnectSettings,
   aggregateRecord,
-  aggregateGroupByPeriod,
+  aggregateGroupByDuration,
 } from '../lib/health';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -105,6 +105,22 @@ function localDayKey(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+// The weekly chart always spans the last 7 local days ENDING today, so the
+// final bar is today's weekday — not a fixed Mon–Sun calendar week. Build the
+// empty skeleton with the same rolling labels readWeeklySteps uses, so a chart
+// with no data yet (HC not ready, permission not granted, first render) still
+// ends on the correct day instead of always showing Sunday last.
+function rollingWeekSkeleton(weekDayLabels) {
+  const rows = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const day = startOfLocalDay();
+    day.setDate(day.getDate() - i);
+    const labelIdx = (day.getDay() + 6) % 7;
+    rows.push({ day: weekDayLabels[labelIdx], steps: 0 });
+  }
+  return rows;
 }
 
 function clamp(n, min, max) {
@@ -291,9 +307,7 @@ export default function ActivityScreen() {
     today: { distance_m: 0, active_minutes: 0 },
     best: { distance_m: 0, active_minutes: 0 },
   });
-  const [weeklySteps, setWeeklySteps] = useState(() =>
-    weekDayLabels.map((d) => ({ day: d, steps: 0 })),
-  );
+  const [weeklySteps, setWeeklySteps] = useState(() => rollingWeekSkeleton(weekDayLabels));
   const pollRef = useRef(null);
   const inFlightTiersRef = useRef(new Set());
   // Clerk's getToken identity churns with session state (notably while a
@@ -753,14 +767,25 @@ export default function ActivityScreen() {
 
       // Per-day aggregate (deduped), not a sum of raw records — see
       // readTodaySteps: raw records overlap across sources and double-count.
-      const groups = await aggregateGroupByPeriod({
+      //
+      // Use aggregateGroupByDuration (fixed 24h slices), NOT
+      // aggregateGroupByPeriod: this version of react-native-health-connect
+      // builds every time-range filter with Instant.parse (an absolute-time
+      // filter), but Health Connect's Period aggregation requires a LOCAL time
+      // filter and throws when given an absolute one — so aggregateGroupByPeriod
+      // always rejected, the read was silently caught, and the weekly chart
+      // never left its empty skeleton (blank past days, today's live count
+      // landing on the last bar). Duration slices accept the absolute filter.
+      // Day slices start at local midnight; with no DST (IST) they map exactly
+      // to local days, and the tiny DST edge is acceptable for a bar chart.
+      const groups = await aggregateGroupByDuration({
         recordType: 'Steps',
         timeRangeFilter: {
           operator: 'between',
           startTime: start.toISOString(),
           endTime: end.toISOString(),
         },
-        timeRangeSlicer: { period: 'DAYS', length: 1 },
+        timeRangeSlicer: { duration: 'DAYS', length: 1 },
       });
 
       const buckets = {};
@@ -771,17 +796,13 @@ export default function ActivityScreen() {
         buckets[key] = (buckets[key] || 0) + (Number(g?.result?.COUNT_TOTAL) || 0);
       }
 
-      const rows = [];
+      // Same rolling skeleton the empty state uses (last bar = today); fill in
+      // the measured per-day totals so labels and data can never diverge.
+      const rows = rollingWeekSkeleton(weekDayLabels);
       for (let i = 6; i >= 0; i -= 1) {
         const day = startOfLocalDay();
-        day.setDate(day.getDate() - i);
-        const key = localDayKey(day);
-        const jsDayIdx = day.getDay();
-        const labelIdx = (jsDayIdx + 6) % 7;
-        rows.push({
-          day: weekDayLabels[labelIdx],
-          steps: buckets[key] ?? 0,
-        });
+        day.setDate(day.getDate() - (6 - i));
+        rows[i].steps = buckets[localDayKey(day)] ?? 0;
       }
       setWeeklySteps(rows);
     } catch (e) {
@@ -937,7 +958,7 @@ export default function ActivityScreen() {
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
-      return weekDayLabels.map((d) => ({ day: d, steps: 0 }));
+      return rollingWeekSkeleton(weekDayLabels);
     }
     // Today is the last entry; overlay live count so today's bar updates with the 10s poll
     return weeklySteps.map((row, idx) =>
