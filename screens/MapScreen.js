@@ -44,6 +44,7 @@ import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimA
 import { SPINE_EVENTS, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
+import { loadHomePin, peekHomePin, saveHomePin } from '../lib/homePinCache';
 import { getMe } from '../lib/meApi';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
@@ -81,6 +82,12 @@ MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 // in Saint Petersburg; everyone else starts in Bengaluru.
 const FALLBACK_CENTRE_BENGALURU = [77.5946, 12.9716];
 const FALLBACK_CENTRE_SAINT_PETERSBURG = [30.3158, 59.9343];
+// home_city is still anon-readable (unlike home_pin_*), so it beats the locale
+// guess whenever the player row has loaded but the pin hasn't.
+const CITY_CENTRES = {
+  Bengaluru: FALLBACK_CENTRE_BENGALURU,
+  'Saint Petersburg': FALLBACK_CENTRE_SAINT_PETERSBURG,
+};
 const INITIAL_ZOOM = 14;
 
 // Beat 1 camera hook (first-claim spine): city-wide open, a beat of stillness,
@@ -1134,7 +1141,9 @@ export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { t, i18n } = useTranslation();
-  const fallbackCentre = i18n.language?.startsWith('ru')
+  // Last resort only — a guess from the UI language, used when we know nothing
+  // about this player yet. fallbackCentre (below) prefers real signals.
+  const localeCentre = i18n.language?.startsWith('ru')
     ? FALLBACK_CENTRE_SAINT_PETERSBURG
     : FALLBACK_CENTRE_BENGALURU;
   const cameraRef = useRef(null);
@@ -1185,6 +1194,44 @@ export default function MapScreen() {
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
+  // Home pin cached on this device. The authoritative copy only reaches us
+  // through GET /me — territories come from Supabase, so a slow or unreachable
+  // backend used to leave the map fully rendered but centred on the locale
+  // fallback city instead of home. peek() covers a warm remount with no await
+  // at all; the effect covers a cold start.
+  const [cachedHomePin, setCachedHomePin] = useState(() => peekHomePin(userId));
+  const cachedHomePinRef = useRef(cachedHomePin);
+  useEffect(() => { cachedHomePinRef.current = cachedHomePin; }, [cachedHomePin]);
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    loadHomePin(userId).then((coord) => {
+      if (!cancelled && coord) setCachedHomePin(coord);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  // The player's home pin as [lng, lat]: the authoritative value from /me when
+  // we have it, otherwise the one cached on this device. Every consumer below
+  // (camera, own base marker, LOCATE, first-claim target) reads this, so none
+  // of them silently lose home when the backend is unreachable.
+  const homePin = useMemo(() => {
+    const lat = Number(myPlayer?.home_pin_lat);
+    const lng = Number(myPlayer?.home_pin_lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return cachedHomePin;
+    // Keep the cached array's identity when /me confirms what we already had —
+    // the value is a dependency of the bases fetch and the centering effect.
+    if (cachedHomePin && cachedHomePin[0] === lng && cachedHomePin[1] === lat) return cachedHomePin;
+    return [lng, lat];
+  }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, cachedHomePin]);
+
+  // Where the map should open, best signal first: the pin, then the player's
+  // home city, then the language guess.
+  const fallbackCentre = useMemo(
+    () => homePin ?? CITY_CENTRES[myPlayer?.home_city] ?? localeCentre,
+    [homePin, myPlayer?.home_city, localeCentre],
+  );
 
   // ── First-tap tips + persistent first-claim objective ─────────────────────
   const { width: winW, height: winH } = useWindowDimensions();
@@ -1255,8 +1302,8 @@ export default function MapScreen() {
   const fallbackObjective = useMemo(() => {
     if (!serverHadNoTarget || heldCount !== 0) return null;
     const sel = selectFirstClaimTarget({
-      homeLat: Number(myPlayer?.home_pin_lat),
-      homeLng: Number(myPlayer?.home_pin_lng),
+      homeLat: homePin?.[1],
+      homeLng: homePin?.[0],
       features: territories.features,
     });
     if (!sel) return null;
@@ -1271,7 +1318,7 @@ export default function MapScreen() {
       distance_m: sel.distance_m,
       geojson: sel.feature.geometry,
     };
-  }, [serverHadNoTarget, heldCount, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, territories.features]);
+  }, [serverHadNoTarget, heldCount, homePin, territories.features]);
 
   const target = objective ?? fallbackObjective;
 
@@ -1515,16 +1562,28 @@ export default function MapScreen() {
       .maybeSingle();
 
     // …but home_pin_lat/lng are no longer anon-readable. Fetch them for our own
-    // row via the authenticated backend and merge them in.
-    let homePin = {};
+    // row via the authenticated backend and merge them in. The backend is the
+    // only source, so cache every answer on the device: a later launch that
+    // can't reach it still opens the map at home instead of a fallback city
+    // half a world away.
+    let homePinFields = {};
     const meRes = await getMe({ clerkGetToken: () => getTokenRef.current() });
-    if (meRes.ok && meRes.data?.player) {
-      homePin = {
-        home_pin_lat: meRes.data.player.home_pin_lat,
-        home_pin_lng: meRes.data.player.home_pin_lng,
-      };
+    const mePin = meRes.ok && meRes.data?.player ? meRes.data.player : null;
+    const meLat = Number(mePin?.home_pin_lat);
+    const meLng = Number(mePin?.home_pin_lng);
+    if (Number.isFinite(meLat) && Number.isFinite(meLng)) {
+      homePinFields = { home_pin_lat: meLat, home_pin_lng: meLng };
+      saveHomePin(userId, meLng, meLat);
+      setCachedHomePin((prev) =>
+        prev && prev[0] === meLng && prev[1] === meLat ? prev : [meLng, meLat],
+      );
+    } else if (!meRes.ok) {
+      // /me unreachable — keep the cached pin rather than reporting no home.
+      console.log('[map] /me failed, using cached home pin', meRes.status, meRes.error);
+      const cached = cachedHomePinRef.current ?? (await loadHomePin(userId));
+      if (cached) homePinFields = { home_pin_lat: cached[1], home_pin_lng: cached[0] };
     }
-    const merged = playerRow ? { ...playerRow, ...homePin } : playerRow;
+    const merged = playerRow ? { ...playerRow, ...homePinFields } : playerRow;
     setMyPlayer(merged);
 
     if (playerRow?.alliance_id) {
@@ -1750,9 +1809,9 @@ export default function MapScreen() {
       return;
     }
 
-    const homeLat = Number(myPlayer?.home_pin_lat);
-    const homeLng = Number(myPlayer?.home_pin_lng);
-    const hasOwnPin = Number.isFinite(homeLat) && Number.isFinite(homeLng);
+    const homeLng = homePin?.[0];
+    const homeLat = homePin?.[1];
+    const hasOwnPin = homePin != null;
 
     let sawSelf = false;
     const features = (data ?? []).map((b) => {
@@ -1791,7 +1850,7 @@ export default function MapScreen() {
     }
 
     setBases({ type: 'FeatureCollection', features });
-  }, [userId, myPlayer?.alliance_id, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, myPlayer?.xp, myPlayer?.id]);
+  }, [userId, myPlayer?.alliance_id, homePin, myPlayer?.xp, myPlayer?.id]);
 
   // Keep fetchRef pointing at the latest fetch so settle() can re-invoke it
   // for the deferred (trailing-edge) viewport.
@@ -1896,10 +1955,12 @@ export default function MapScreen() {
   );
 
   // Center the map on the player's home pin the first time it becomes available.
-  // The Camera's centerCoordinate prop is static (the locale fallback centre) and only used
-  // at mount — before myPlayer has loaded — so we imperatively fly to the home pin
-  // once it arrives. Guarded by didInitialCenterRef so later player refetches (e.g.
-  // resource-banner updates) don't yank the camera back while the user is panning.
+  // The Camera's centerCoordinate prop tracks the best centre we can name at
+  // mount (cached pin → home city → locale), which is only a guess until the
+  // pin resolves — so we imperatively snap to the pin once we have it. Guarded
+  // by didInitialCenterRef so later player refetches (e.g. resource-banner
+  // updates) don't yank the camera back while the user is panning; a home pin
+  // moved on another device therefore lands on the next launch, not mid-session.
   //
   // First-ever mount (spine flight pending) opens city-wide instead: Beat 1
   // holds there, then flies down once. Every other open snaps straight to the
@@ -1908,27 +1969,25 @@ export default function MapScreen() {
   useEffect(() => {
     if (didInitialCenterRef.current) return;
     if (spine == null) return; // camera waits for the persisted spine state
-    const lat = Number(myPlayer?.home_pin_lat);
-    const lng = Number(myPlayer?.home_pin_lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!homePin) return;
     if (!cameraRef.current) return;
     didInitialCenterRef.current = true;
     if (resumeBeat(spine) === 'flight') {
-      flightHomeRef.current = [lng, lat];
+      flightHomeRef.current = homePin;
       cameraRef.current.setCamera({
-        centerCoordinate: [lng, lat],
+        centerCoordinate: homePin,
         zoomLevel: FLIGHT_CITY_ZOOM,
         animationDuration: 0,
       });
       setFlightPhase('hold');
     } else {
       cameraRef.current.setCamera({
-        centerCoordinate: [lng, lat],
+        centerCoordinate: homePin,
         zoomLevel: INITIAL_ZOOM,
         animationDuration: 0,
       });
     }
-  }, [myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, spine]);
+  }, [homePin, spine]);
 
   // Beat 1, hold: ~1.5s of stillness at city scale before the flight.
   useEffect(() => {
@@ -2338,11 +2397,7 @@ export default function MapScreen() {
     ({ pullBack }) => {
       dispatchSpine(SPINE_EVENTS.SHEET_DISMISSED);
       if (pullBack && cameraRef.current) {
-        const home = flightHomeRef.current;
-        const lat = Number(myPlayer?.home_pin_lat);
-        const lng = Number(myPlayer?.home_pin_lng);
-        const centerCoordinate =
-          Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : home;
+        const centerCoordinate = homePin ?? flightHomeRef.current;
         if (centerCoordinate) {
           cameraRef.current.setCamera({
             centerCoordinate,
@@ -2354,7 +2409,7 @@ export default function MapScreen() {
       }
       showTopBanner(t('firstClaim.couchClose'));
     },
-    [dispatchSpine, myPlayer?.home_pin_lat, myPlayer?.home_pin_lng, showTopBanner, t],
+    [dispatchSpine, homePin, showTopBanner, t],
   );
 
   // Sheet close routed through the spine: while Beat 3 is live and the
@@ -2371,11 +2426,7 @@ export default function MapScreen() {
 
   const recenter = () => {
     if (!cameraRef.current) return;
-    const homeLat = Number(myPlayer?.home_pin_lat);
-    const homeLng = Number(myPlayer?.home_pin_lng);
-    const homeCoord =
-      Number.isFinite(homeLat) && Number.isFinite(homeLng) ? [homeLng, homeLat] : null;
-    const centerCoordinate = lastUserCoord ?? homeCoord ?? fallbackCentre;
+    const centerCoordinate = lastUserCoord ?? homePin ?? fallbackCentre;
     cameraRef.current.setCamera({
       centerCoordinate,
       zoomLevel: INITIAL_ZOOM,
@@ -2480,7 +2531,17 @@ export default function MapScreen() {
           existing
           config={{ lightPreset: 'night' }}
         />
-        <MapboxGL.Camera ref={cameraRef} zoomLevel={INITIAL_ZOOM} centerCoordinate={fallbackCentre} />
+        {/* animationMode/animationDuration apply to declarative updates only —
+            when fallbackCentre resolves from a guess to the real pin the camera
+            snaps rather than easing across half a continent. Imperative
+            setCamera calls carry their own timing. */}
+        <MapboxGL.Camera
+          ref={cameraRef}
+          zoomLevel={INITIAL_ZOOM}
+          centerCoordinate={fallbackCentre}
+          animationMode="none"
+          animationDuration={0}
+        />
 
         <MapboxGL.UserLocation
           visible

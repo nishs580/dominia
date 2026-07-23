@@ -8,6 +8,7 @@ import { MapView, Camera, MarkerView, setAccessToken, StyleURL } from '@rnmapbox
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { setHomePin as saveHomePin } from '../lib/homePinApi';
+import { saveHomePin as saveHomePinToDevice } from '../lib/homePinCache';
 import { patchMe } from '../lib/meApi';
 import { supabase } from '../lib/supabase';
 import { colors, duration } from '../lib/theme';
@@ -599,6 +600,10 @@ export default function OnboardingScreen({ route }) {
           setSaveError(result.error || t('onboarding.saveFailedBody'));
           return;
         }
+        // Cache it on the device: MapScreen can only read the pin back through
+        // GET /me, so this is what makes the first map open land on home
+        // without waiting on (or depending on) that round-trip.
+        saveHomePinToDevice(clerkUserId, homePin[0], homePin[1]);
         if (result.data?.home_city) setHomeCity(result.data.home_city);
         setStep(4);
       } catch (err) {
