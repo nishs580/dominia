@@ -7,22 +7,16 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
-      }
+      "environment": "development"
     },
     "preview": {
-  "developmentClient": false,
-  "distribution": "internal",
-  "env": {
-    "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
-  }
-},
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "preview"
+    },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
-      }
+      "environment": "production"
     }
   },
   "submit": {
