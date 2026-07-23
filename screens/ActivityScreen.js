@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import {
   initialize,
+  getSdkStatus,
   getGrantedPermissions,
   requestPermission,
   openHealthConnectSettings,
   aggregateRecord,
   aggregateGroupByDuration,
+  SdkAvailabilityStatus,
 } from '../lib/health';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -280,6 +282,9 @@ export default function ActivityScreen() {
   const [isCompleting, setIsCompleting] = useState(() => new Set());
   const [playerLevel, setPlayerLevel] = useState(() => levelFromXp(0));
   const [hcReady, setHcReady] = useState(false);
+  // null until the first getSdkStatus() resolves; one of SdkAvailabilityStatus
+  // after. Drives which recovery the not-ready banner offers.
+  const [hcStatus, setHcStatus] = useState(null);
   const [hasStepsPerm, setHasStepsPerm] = useState(false);
   // Optional axis permissions — steps-only players still get March.
   const [hasKcalPerm, setHasKcalPerm] = useState(false);
@@ -427,26 +432,57 @@ export default function ActivityScreen() {
     return () => { cancelled = true; };
   }, [todayStr]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function bootHC() {
-      try {
-        const ok = await initialize();
-        if (cancelled) return;
-        if (!ok) return;
-        setHcReady(true);
-        const granted = await getGrantedPermissions();
-        if (cancelled) return;
-        setHasStepsPerm(hasForegroundStepsRead(granted));
-        setHasKcalPerm(hasForegroundActiveCaloriesRead(granted));
-        setHasDistPerm(hasForegroundDistanceRead(granted));
-      } catch (e) {
-        console.warn('[HC] init failed:', e?.message ?? e);
+  // Health Connect boot. This CANNOT be a mount-only effect: ActivityScreen is
+  // a tab screen that never unmounts, so a single early failure (provider not
+  // bound yet on a cold start, Health Connect missing or mid-update, player
+  // sent to HC settings and coming back) would leave hcReady false for the
+  // whole app session — and the grant button lives behind hcReady, so the app
+  // would never ask for step permission again until a force-quit.
+  // Re-runs on every focus; also refreshes grants, which is how a player who
+  // toggles permissions in HC settings sees them without restarting.
+  const bootingRef = useRef(false);
+  const bootHC = useCallback(async () => {
+    if (bootingRef.current) return;
+    bootingRef.current = true;
+    try {
+      const status = await getSdkStatus();
+      setHcStatus(status);
+      if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
+        setHcReady(false);
+        return;
       }
+      const ok = await initialize();
+      setHcReady(!!ok);
+      if (!ok) return;
+      const granted = await getGrantedPermissions();
+      setHasStepsPerm(hasForegroundStepsRead(granted));
+      setHasKcalPerm(hasForegroundActiveCaloriesRead(granted));
+      setHasDistPerm(hasForegroundDistanceRead(granted));
+    } catch (e) {
+      console.warn('[HC] init failed:', e?.message ?? e);
+      setHcReady(false);
+    } finally {
+      bootingRef.current = false;
     }
-    bootHC();
-    return () => { cancelled = true; };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      bootHC();
+    }, [bootHC]),
+  );
+
+  // Health Connect settings and the Play listing are separate activities, so
+  // coming back from them never re-fires navigation focus — this screen is
+  // still "focused" the whole time. Without an AppState hook a player who
+  // grants Steps in HC settings returns to a banner that still says the
+  // permission is missing.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') bootHC();
+    });
+    return () => sub.remove();
+  }, [bootHC]);
 
   // ---- 4-axis daily menu derivations ---------------------------------------
   // Theme: server value once /me/challenges/today loads; device-weekday
@@ -855,6 +891,23 @@ export default function ActivityScreen() {
     }, [hcReady, hasStepsPerm, readTodaySteps, readTodayDistance, readWeeklySteps, loadBests, loadTodayMenu]),
   );
 
+  // Health Connect is a separate Play app below Android 14 and part of the OS
+  // from 14 on. Either way an unavailable / out-of-date provider is fixed in
+  // the Play listing, not in the app's own settings.
+  const hcNeedsProvider =
+    hcStatus === SdkAvailabilityStatus.SDK_UNAVAILABLE ||
+    hcStatus === SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED;
+
+  const openHealthConnectStore = useCallback(async () => {
+    const id = 'com.google.android.apps.healthdata';
+    try {
+      await Linking.openURL(`market://details?id=${id}`);
+    } catch (_) {
+      // No Play Store app (emulator, sideloaded ROM) — the web listing works.
+      Linking.openURL(`https://play.google.com/store/apps/details?id=${id}`).catch(() => {});
+    }
+  }, []);
+
   async function handleRequestStepsPerm() {
     if (!hcReady || permRequesting) return;
     setPermRequesting(true);
@@ -1025,13 +1078,25 @@ export default function ActivityScreen() {
         {!hcReady ? (
           <View style={styles.permBanner}>
             <Text style={styles.permBannerLabel}>{t('activity.hcRequiredLabel')}</Text>
-            <Text style={styles.permBannerText}>{t('activity.hcRequiredBody')}</Text>
+            <Text style={styles.permBannerText}>
+              {hcNeedsProvider ? t('activity.hcInstallBody') : t('activity.hcRequiredBody')}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={hcNeedsProvider ? openHealthConnectStore : bootHC}
+              style={({ pressed }) => [styles.permBannerBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.permBannerBtnText}>
+                {hcNeedsProvider ? t('activity.hcInstallCta') : t('common.retry')}
+              </Text>
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               onPress={() => openHealthConnectSettings()}
-              style={({ pressed }) => [styles.permBannerBtn, pressed && { opacity: 0.75 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              style={({ pressed }) => [pressed && { opacity: 0.6 }]}
             >
-              <Text style={styles.permBannerBtnText}>{t('activity.hcRequiredCta')}</Text>
+              <Text style={styles.permBannerLink}>{t('activity.hcRequiredCta')}</Text>
             </Pressable>
           </View>
         ) : null}

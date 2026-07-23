@@ -35,6 +35,13 @@ import { InfluenceGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 
+// Hidden diagnostics (long-press the profile header → Health Connect debug).
+// __DEV__ alone hid it from every EAS build, including internal test ones —
+// exactly where an on-device health-permission problem has to be diagnosed.
+// Metro inlines EXPO_PUBLIC_* at build time; it is set on the development and
+// preview EAS environments only, never production.
+const DEBUG_MENU = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_MENU === '1';
+
 const CLAIM = '#D64525';
 const ALLIANCE = '#3F8F4E';
 const INK = '#0E1014';
@@ -605,7 +612,7 @@ export default function ProfileScreen() {
         <Pressable
           ref={walkthroughIdentityRef}
           style={styles.headerBlock}
-          onLongPress={__DEV__ ? () => navigation.navigate('HealthConnectDebug') : undefined}
+          onLongPress={DEBUG_MENU ? () => navigation.navigate('HealthConnectDebug') : undefined}
           delayLongPress={1000}
         >
           <View style={styles.headerTopRow}>

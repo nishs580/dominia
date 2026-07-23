@@ -636,8 +636,10 @@
     },
     "menuLoadError": "Couldn't load today's challenges.",
     "hcRequiredLabel": "HEALTH CONNECT",
-    "hcRequiredBody": "Dominia reads your steps through Health Connect. Install or enable it to start earning from your walks.",
+    "hcRequiredBody": "Dominia couldn't reach Health Connect. Retry, or open Health Connect and allow Dominia there.",
     "hcRequiredCta": "Open Health Connect",
+    "hcInstallBody": "Health Connect is missing or out of date on this phone. Dominia reads your steps through it.",
+    "hcInstallCta": "Get Health Connect",
     "weekDays": [
       "Mon",
       "Tue",

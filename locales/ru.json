@@ -660,8 +660,10 @@
     },
     "menuLoadError": "Не удалось загрузить сегодняшние задания.",
     "hcRequiredLabel": "HEALTH CONNECT",
-    "hcRequiredBody": "Dominia читает ваши шаги через Health Connect. Установите или включите его, чтобы зарабатывать за прогулки.",
+    "hcRequiredBody": "Dominia не смогла подключиться к Health Connect. Повторите попытку или откройте Health Connect и разрешите доступ там.",
     "hcRequiredCta": "Открыть Health Connect",
+    "hcInstallBody": "Health Connect не установлен или устарел на этом телефоне. Dominia читает шаги через него.",
+    "hcInstallCta": "Установить Health Connect",
     "weekDays": [
       "Пн",
       "Вт",
