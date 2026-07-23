@@ -30,8 +30,9 @@ import {
 import {
   loadPlayerStride,
   stepsToMetres,
-  computeSpeedKmh,
-  isVehicleSpeed,
+  speedSampleKmh,
+  nextVehicleState,
+  CLAIM_CONSTANTS,
   isQualifyingCalibrationWindow,
   pushCalibrationSample,
   haversineMetres,
@@ -61,6 +62,8 @@ let currentStrideM = 0.75;
 let currentStrideSessions = 0;
 let lastGpsFix = null;
 let currentSpeedKmh = 0;
+let vehicleFilter = { hits: 0, inVehicle: false };
+let lastSpeedSampleAt = 0;
 let gpsWeak = false;
 let bannerStateModule = null;
 let halfwayResetTimer = null;
@@ -202,9 +205,19 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
   if (!claimState.active) return;
 
-  if (lastGpsFix && lastGpsFix.timestamp !== taskFix.timestamp &&
+  // Only a fresh fix can produce a speed sample. speedSampleKmh returns null
+  // when nothing trustworthy is available (weak fix, fixes too close together,
+  // no OS estimate) — that is "unknown", and clears the vehicle flag rather
+  // than holding the last reading, which used to persist forever once GPS went
+  // quiet and silently froze the walk.
+  if (lastGpsFix !== taskFix &&
       (Date.now() - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS) {
-    currentSpeedKmh = computeSpeedKmh(lastGpsFix, taskFix);
+    const sample = speedSampleKmh(lastGpsFix, taskFix);
+    if (sample != null) {
+      currentSpeedKmh = sample;
+      lastSpeedSampleAt = Date.now();
+      vehicleFilter = nextVehicleState(vehicleFilter, sample);
+    }
   }
   lastGpsFix = taskFix;
   gpsWeak = (taskFix.accuracy ?? 9999) > 20;
@@ -227,8 +240,18 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     }
 
     const stepDeltaTick = Math.max(0, currentSteps - lastSteps);
+
+    // Decay: with no usable sample recently, speed is unknown, not "still
+    // whatever it last was". Without this a single jitter spike could keep
+    // steps excluded indefinitely.
+    if (lastSpeedSampleAt &&
+        (now - lastSpeedSampleAt) > CLAIM_CONSTANTS.SPEED_STALE_MS) {
+      currentSpeedKmh = 0;
+      vehicleFilter = nextVehicleState(vehicleFilter, null);
+    }
+
     const speedKmh = currentSpeedKmh;
-    const inVehicle = isVehicleSpeed(speedKmh);
+    const inVehicle = vehicleFilter.inVehicle;
 
     if (inVehicle) vehicleExcludedSteps += stepDeltaTick;
     if (stepDeltaTick > 0) lastStepTimestamp = now;
@@ -522,6 +545,8 @@ export default function ActiveClaimScreen() {
     bannerStateModule = null;
     lastGpsFix = null;
     currentSpeedKmh = 0;
+    vehicleFilter = { hits: 0, inVehicle: false };
+    lastSpeedSampleAt = 0;
     gpsWeak = false;
     if (halfwayResetTimer) {
       clearTimeout(halfwayResetTimer);
