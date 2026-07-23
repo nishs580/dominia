@@ -831,6 +831,12 @@ export default function ActiveClaimScreen() {
         {showFirstWalkHint ? (
           <Text style={styles.firstWalkHint}>{t('firstClaim.activeHint')}</Text>
         ) : null}
+        {/* 'unknown' is neither granted nor denied: the tick refuses to count
+            steps in it, but hcDenied is false so the full ring renders. That
+            combination is a walk that silently never progresses. Say so. */}
+        {claimState.hcPermission === 'unknown' ? (
+          <Text style={styles.firstWalkHint}>{t('activeClaim.hcChecking')}</Text>
+        ) : null}
       </View>
 
       {timeLeftMs != null && (

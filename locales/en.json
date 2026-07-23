@@ -248,6 +248,7 @@
     "statStrideDefault": "STRIDE (DEFAULT)",
     "statPace": "PACE",
     "statTimeLeft": "TIME LEFT",
+    "hcChecking": "Connecting to Health Connect — steps aren't counting yet.",
     "hcBlockedTitle": "Step tracking unavailable",
     "hcBlockedBody": "Dominia cannot read your steps, so this walk cannot count. Grant Health Connect access in settings, then start the claim again from the map.",
     "hcOpenSettings": "Open settings",

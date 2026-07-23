@@ -254,6 +254,7 @@
     "statStrideDefault": "ШАГ (ПО УМОЛЧ.)",
     "statPace": "ТЕМП",
     "statTimeLeft": "ОСТАЛОСЬ ВРЕМЕНИ",
+    "hcChecking": "Подключаемся к Health Connect — шаги пока не считаются.",
     "hcBlockedTitle": "Счётчик шагов недоступен",
     "hcBlockedBody": "Dominia не может читать ваши шаги, поэтому эта прогулка не засчитается. Дайте доступ в Health Connect в настройках, затем начните захват заново с карты.",
     "hcOpenSettings": "Открыть настройки",
