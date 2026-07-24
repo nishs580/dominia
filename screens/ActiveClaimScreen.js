@@ -27,6 +27,7 @@ import {
   setTick,
   rehydrateFromStorage,
 } from '../lib/claimState';
+import { activateClaim } from '../lib/claimApi';
 import {
   loadPlayerStride,
   stepsToMetres,
@@ -429,6 +430,8 @@ export default function ActiveClaimScreen() {
     goldPaid,
     freeClaim,
     intentExpiresAt = null,
+    armExpiresAt = null,
+    walkWindowMinutes = null,
     contestId,
     requiredWalkM: requiredWalkMParam,
     attackerAllianceId,
@@ -446,21 +449,92 @@ export default function ActiveClaimScreen() {
   const navigatingRef = useRef(false);
   const [, forceRender] = useReducer((x) => x + 1, 0);
 
+  // Arm gate (claim mode only): the fee is paid but the walk clock has not
+  // started. The player has a short window to tap START WALK; letting it run
+  // out refunds the gold. 'walking' is the only phase that tracks movement.
+  const [armPhase, setArmPhase] = useState(() =>
+    mode === 'claim' && armExpiresAt ? 'arming' : 'walking',
+  );
+  const [activating, setActivating] = useState(false);
+  const [armError, setArmError] = useState(null);
+  const [lapsedRefund, setLapsedRefund] = useState(null);
+  const [windowExpiresAt, setWindowExpiresAt] = useState(intentExpiresAt);
+
+  const armExpiryMs = useMemo(() => {
+    if (!armExpiresAt) return null;
+    const ms = new Date(armExpiresAt).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }, [armExpiresAt]);
+
   // Claim-window countdown (claim mode only). One second tick — the GPS watch
   // already runs at 1s, so this adds no meaningful battery cost.
   const expiryMs = useMemo(() => {
-    if (mode !== 'claim' || !intentExpiresAt) return null;
-    const ms = new Date(intentExpiresAt).getTime();
+    if (mode !== 'claim' || !windowExpiresAt) return null;
+    const ms = new Date(windowExpiresAt).getTime();
     return Number.isFinite(ms) ? ms : null;
-  }, [mode, intentExpiresAt]);
+  }, [mode, windowExpiresAt]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    if (expiryMs == null) return undefined;
+    if (expiryMs == null && armExpiryMs == null) return undefined;
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [expiryMs]);
-  const timeLeftMs = expiryMs == null ? null : Math.max(0, expiryMs - nowMs);
+  }, [expiryMs, armExpiryMs]);
+  const timeLeftMs =
+    armPhase !== 'walking' || expiryMs == null
+      ? null
+      : Math.max(0, expiryMs - nowMs);
   const timeLeftCritical = timeLeftMs != null && timeLeftMs <= TIME_LEFT_ESCALATE_MS;
+
+  const armSecondsLeft =
+    armExpiryMs == null ? null : Math.max(0, Math.ceil((armExpiryMs - nowMs) / 1000));
+
+  const handleStartWalk = async () => {
+    if (activating) return;
+    setActivating(true);
+    setArmError(null);
+    try {
+      const result = await activateClaim({
+        clerkGetToken: () => getTokenRef.current(),
+        territoryId,
+      });
+      if (result.ok) {
+        setWindowExpiresAt(result.data.window_expires_at ?? null);
+        setArmPhase('walking');
+        return;
+      }
+      if (result.code === 'intent_lapsed') {
+        setLapsedRefund(result.context?.gold_refunded ?? goldPaid ?? 0);
+        setArmPhase('lapsed');
+        return;
+      }
+      setArmError(result.code);
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  // The arm window running out is a client-visible fact, but the refund is the
+  // server's call — ask it rather than assuming, so the number shown is real.
+  useEffect(() => {
+    if (armPhase !== 'arming' || armSecondsLeft == null || armSecondsLeft > 0) return;
+    let cancelled = false;
+    (async () => {
+      const result = await activateClaim({
+        clerkGetToken: () => getTokenRef.current(),
+        territoryId,
+      });
+      if (cancelled) return;
+      if (result.ok) {
+        // Activated in the same instant the timer hit zero — the walk is on.
+        setWindowExpiresAt(result.data.window_expires_at ?? null);
+        setArmPhase('walking');
+        return;
+      }
+      setLapsedRefund(result.context?.gold_refunded ?? goldPaid ?? 0);
+      setArmPhase('lapsed');
+    })();
+    return () => { cancelled = true; };
+  }, [armPhase, armSecondsLeft, territoryId, goldPaid]);
 
   // Two-step cancel: the first tap swaps the button for a confirmation that
   // names the stakes; nothing destructive happens on a single stray tap.
@@ -530,8 +604,11 @@ export default function ActiveClaimScreen() {
     };
   }, [mode]);
 
-  // ─── Mount: load stride, init HC, fetch contest metadata ────────────────
+  // ─── Walk start: load stride, init HC, fetch contest metadata ───────────
+  // Gated on the arm phase so nothing is tracked — and no local progress is
+  // banked — until the player has actually committed by tapping START WALK.
   useEffect(() => {
+    if (armPhase !== 'walking') return undefined;
     let cancelled = false;
 
     baselineSteps = null;
@@ -605,7 +682,7 @@ export default function ActiveClaimScreen() {
     return () => {
       cancelled = true;
     };
-  }, [playerId, mode, territoryId, perimeterM, territoryName, role]);
+  }, [armPhase, playerId, mode, territoryId, perimeterM, territoryName, role]);
 
   useEffect(() => {
     if (mode !== 'contest' || !contestId || !playerId || requiredWalkM <= 0) return;
@@ -673,6 +750,7 @@ export default function ActiveClaimScreen() {
 
   // ─── GPS watch via foreground service ──────────────────────────────────
   useEffect(() => {
+    if (armPhase !== 'walking') return undefined;
     let cancelled = false;
     let started = false;
 
@@ -712,7 +790,7 @@ export default function ActiveClaimScreen() {
       }
       latestTaskFix = null;
     };
-  }, []);
+  }, [armPhase]);
 
   function completeClaim(walkedM, finalSteps) {
     navigation.navigate('ClaimSuccessScreen', {
@@ -766,6 +844,98 @@ export default function ActiveClaimScreen() {
     : (freeClaim || !goldPaid
         ? t('activeClaim.cancelConfirmFree')
         : t('activeClaim.cancelConfirmPaid', { gold: goldPaid }));
+
+  if (armPhase === 'lapsed') {
+    return (
+      <View
+        style={[
+          styles.screen,
+          { flex: 1, backgroundColor: INK, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
+        ]}
+      >
+        <View style={styles.armBlock}>
+          <Text style={styles.armLabel}>{t('activeClaim.arm.lapsedLabel')}</Text>
+          <Text style={styles.armTitle}>{t('activeClaim.arm.lapsedTitle')}</Text>
+          <Text style={styles.armBody}>
+            {lapsedRefund > 0
+              ? t('activeClaim.arm.lapsedBodyPaid', { gold: lapsedRefund })
+              : t('activeClaim.arm.lapsedBodyFree')}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={exitClaim}
+            style={({ pressed }) => [styles.armPrimary, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.armPrimaryText}>{t('activeClaim.arm.backToMap')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (armPhase === 'arming') {
+    return (
+      <View
+        style={[
+          styles.screen,
+          { flex: 1, backgroundColor: INK, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
+        ]}
+      >
+        <View style={styles.topRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.claimingLabel, { marginTop: 32 }]}>{t('activeClaim.claiming')}</Text>
+            <Text style={styles.territoryName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>
+              {territoryName}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.armBlock}>
+          <Text style={styles.armCountdown} maxFontSizeMultiplier={1.2}>
+            {armSecondsLeft ?? 0}
+          </Text>
+          <Text style={styles.armLabel}>{t('activeClaim.arm.countdownLabel')}</Text>
+          <Text style={styles.armTitle}>
+            {t('activeClaim.arm.title', { metres: formatMetres(perimeterM) })}
+          </Text>
+          <Text style={styles.armBody}>
+            {walkWindowMinutes
+              ? t('activeClaim.arm.body', { minutes: walkWindowMinutes })
+              : t('activeClaim.arm.bodyNoWindow')}
+          </Text>
+          {goldPaid > 0 ? (
+            <Text style={styles.armStake}>{t('activeClaim.arm.stake', { gold: goldPaid })}</Text>
+          ) : null}
+
+          {armError ? (
+            <Text style={styles.armError}>{t('activeClaim.arm.error')}</Text>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={activating}
+            onPress={handleStartWalk}
+            style={({ pressed }) => [
+              styles.armPrimary,
+              (pressed || activating) && { opacity: 0.9 },
+            ]}
+          >
+            <Text style={styles.armPrimaryText}>
+              {activating ? t('activeClaim.arm.starting') : t('activeClaim.arm.startWalk')}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={exitClaim}
+            style={({ pressed }) => [styles.armSecondary, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.armSecondaryText}>{t('activeClaim.arm.notYet')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -999,4 +1169,18 @@ const styles = StyleSheet.create({
   hcBlockedBody: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
   hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+
+  // Arm gate — fee paid, walk clock not started. The countdown is the one loud
+  // element; everything else stays quiet so START WALK is the obvious target.
+  armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
+  armCountdown: { fontFamily: 'Archivo_700Bold', color: CLAIM, fontSize: 72, letterSpacing: -2, textAlign: 'center' },
+  armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  armTitle: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8 },
+  armBody: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
+  armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  armError: { fontFamily: 'Inter_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
+  armPrimary: { backgroundColor: CLAIM, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  armPrimaryText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  armSecondary: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  armSecondaryText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 });

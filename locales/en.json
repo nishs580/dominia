@@ -274,7 +274,23 @@
     "toastContestExpired": "Contest expired.",
     "toastContestResolved": "Contest already resolved.",
     "toastNotParticipant": "You're not part of this contest.",
-    "toastGenericError": "Something went wrong."
+    "toastGenericError": "Something went wrong.",
+    "arm": {
+      "countdownLabel": "SECONDS TO START",
+      "title": "Walk {{metres}} m to take it.",
+      "body": "Start when you are ready to move. You get {{minutes}} minutes to cover it — walk anywhere.",
+      "bodyNoWindow": "Start when you are ready to move. Walk anywhere.",
+      "stake": "{{gold}} GOLD IS COMMITTED ONCE YOU START",
+      "startWalk": "START WALK",
+      "starting": "STARTING",
+      "notYet": "NOT YET",
+      "error": "Could not start the walk. Tap to try again.",
+      "lapsedLabel": "CLAIM RELEASED",
+      "lapsedTitle": "You did not start in time.",
+      "lapsedBodyPaid": "{{gold}} gold returned. The territory is open again — you can claim it after a short cooldown.",
+      "lapsedBodyFree": "The territory is open again — you can claim it after a short cooldown.",
+      "backToMap": "BACK TO MAP"
+    }
   },
   "claimSuccess": {
     "securing": "Securing the claim…",
@@ -291,11 +307,15 @@
     "errIntentExpiredFree": "Your claim expired.",
     "errIntentExpiredPaid": "Your claim expired. {{gold}} gold has been forfeited.",
     "errAlreadyClaimedFree": "Another player claimed this territory while you walked.",
-    "errAlreadyClaimedPaid": "Another player claimed this territory while you walked. {{gold}} gold forfeited.",
     "errIntentNotFound": "Couldn't find your claim. Tap to retry.",
     "errNetwork": "Lost connection — your claim may have completed. Tap to retry.",
     "errSignIn": "Please sign in again.",
-    "errGeneric": "Something went wrong. Tap to retry."
+    "errGeneric": "Something went wrong. Tap to retry.",
+    "errIntentLapsedPaid": "You did not start the walk in time. {{gold}} gold returned.",
+    "errIntentLapsedFree": "You did not start the walk in time. Nothing was charged.",
+    "errWalkNotVerified": "{{walked}} m counted so far, {{required}} m needed. Keep walking, then tap to retry.",
+    "errClaimNotStarted": "This walk has not started. Go back and tap START WALK.",
+    "errAlreadyClaimedRefunded": "Another player claimed this territory while you walked. {{gold}} gold returned."
   },
   "contestResult": {
     "youLabel": "YOU",
@@ -1216,7 +1236,8 @@
       "activeInProgress": "You're walking for another territory. Finish or wait {{countdown}} for expiry.",
       "network": "Lost connection. Tap to retry.",
       "signIn": "Please sign in again.",
-      "generic": "Couldn't start claim. Tap to retry."
+      "generic": "Couldn't start claim. Tap to retry.",
+      "cooldown": "You let this claim lapse. Yours again in {{countdown}}."
     },
     "contestErr": {
       "noOwner": "Territory is no longer owned. Try claiming it instead.",
