@@ -462,6 +462,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             return t('map.startErr.beingClaimed', { countdown: liveCountdown(t, context.expires_at) });
           case 'active_claim_in_progress':
             return t('map.startErr.activeInProgress', { countdown: liveCountdown(t, context.expires_at) });
+          case 'claim_cooldown':
+            return t('map.startErr.cooldown', { countdown: liveCountdown(t, context.cooldown_until) });
           case 'network_error':
             return t('map.startErr.network');
           case 'no_token':
@@ -474,7 +476,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     : null;
 
   const startErrorAllowsRetry = startError
-    && !['level_too_low', 'insufficient_gold', 'territory_already_claimed', 'active_claim_in_progress', 'no_token', 'unauthorized'].includes(startError.code);
+    && !['level_too_low', 'insufficient_gold', 'territory_already_claimed', 'active_claim_in_progress', 'claim_cooldown', 'no_token', 'unauthorized'].includes(startError.code);
 
   // Beat 3 of the first-claim spine: the objective's sheet in its focused
   // state — perimeter distance as the single highlighted number, one
@@ -510,6 +512,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           goldPaid: result.data.gold_paid,
           freeClaim: result.data.free_claim,
           intentExpiresAt: result.data.expires_at ?? null,
+          armExpiresAt: result.data.arm_expires_at ?? null,
+          walkWindowMinutes: result.data.walk_window_minutes ?? null,
         });
       } else {
         setStartError({ code: result.code, context: result.context, status: result.status });

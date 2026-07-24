@@ -33,7 +33,15 @@ function formatMeters(m) {
 }
 
 function completeErrorShowsRetry(code) {
-  return !['intent_expired', 'territory_already_claimed', 'no_token', 'unauthorized'].includes(code);
+  // walk_not_verified is retryable on purpose: the walk window is still open
+  // and the missing distance is usually activity that has not synced yet.
+  return ![
+    'intent_expired',
+    'intent_lapsed',
+    'territory_already_claimed',
+    'no_token',
+    'unauthorized',
+  ].includes(code);
 }
 
 export default function ClaimSuccessScreen() {
@@ -215,16 +223,29 @@ export default function ClaimSuccessScreen() {
 
   const completeErrorMessage = completeError
     ? (() => {
-        const { code } = completeError;
+        const { code, context } = completeError;
         switch (code) {
           case 'intent_expired':
             return freeClaim
               ? t('claimSuccess.errIntentExpiredFree')
               : t('claimSuccess.errIntentExpiredPaid', { gold: goldPaid });
+          case 'intent_lapsed':
+            return context?.gold_refunded > 0
+              ? t('claimSuccess.errIntentLapsedPaid', { gold: context.gold_refunded })
+              : t('claimSuccess.errIntentLapsedFree');
+          case 'walk_not_verified':
+            return t('claimSuccess.errWalkNotVerified', {
+              walked: Math.round((context?.walked_m ?? 0) / 10) * 10,
+              required: context?.required_m ?? 0,
+            });
+          case 'claim_not_started':
+            return t('claimSuccess.errClaimNotStarted');
           case 'territory_already_claimed':
+            // Losing the race refunds the fee — say so rather than leaving the
+            // player to wonder where the gold went.
             return freeClaim
               ? t('claimSuccess.errAlreadyClaimedFree')
-              : t('claimSuccess.errAlreadyClaimedPaid', { gold: goldPaid });
+              : t('claimSuccess.errAlreadyClaimedRefunded', { gold: goldPaid });
           case 'intent_not_found':
             return t('claimSuccess.errIntentNotFound');
           case 'network_error':
