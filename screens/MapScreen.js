@@ -46,6 +46,11 @@ import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
 import { loadHomePin, peekHomePin, saveHomePin } from '../lib/homePinCache';
 import { getMe } from '../lib/meApi';
+import {
+  connectChatRealtime,
+  disconnectChatRealtime,
+  subscribeToEvent,
+} from '../lib/chatRealtime';
 
 // Marching-dash sequence for the siege border (Mapbox animated-dash pattern:
 // stepping through these dasharrays reads as the border crawling).
@@ -1875,6 +1880,81 @@ export default function MapScreen() {
   useEffect(() => {
     fetchPlayer();
   }, [fetchPlayer]);
+
+  // Live map: repaint a territory the moment somebody claims it, instead of
+  // waiting for the next viewport fetch. The payload carries everything the
+  // fill and label need; richer decoration (emblems, streak bands) catches up
+  // on the next fetch.
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    let unsub = null;
+    let connected = false;
+
+    (async () => {
+      const result = await connectChatRealtime({
+        clerkGetToken: () => getTokenRef.current(),
+      });
+      if (cancelled || !result.ok) {
+        if (result?.ok) disconnectChatRealtime();
+        if (!result?.ok) console.warn('[map] realtime connect failed', result?.code);
+        return;
+      }
+      connected = true;
+      if (!result.mapChannel) return;
+
+      unsub = subscribeToEvent(
+        result.realtime,
+        result.mapChannel,
+        'territory_claimed',
+        (payload) => {
+          const id = payload?.territory_id;
+          if (!id) return;
+          const cache = featureCacheRef.current;
+          const existing = cache.get(id);
+          // Only patch what is already on screen — an event for a territory
+          // outside the viewport will arrive complete on its next fetch.
+          if (!existing) return;
+
+          const isOwnAlliance = Boolean(
+            myPlayer?.alliance_id && payload.alliance_id === myPlayer.alliance_id,
+          );
+          const allianceTag = payload.alliance_short_name ?? null;
+          const labelParts = [];
+          if (existing.properties.developmentLevel >= 1) {
+            labelParts.push(`D${existing.properties.developmentLevel}`);
+          }
+          if (allianceTag) labelParts.push(`[${allianceTag}]`);
+
+          cache.set(id, {
+            ...existing,
+            properties: {
+              ...existing.properties,
+              owner: payload.owner_username ?? existing.properties.owner,
+              alliance: allianceTag,
+              labelSub: labelParts.join(' · '),
+              color:
+                payload.owner_clerk_id === userId
+                  ? '#D64525'
+                  : isOwnAlliance
+                    ? '#3F8F4E'
+                    : '#4A6B8A',
+            },
+          });
+          setTerritories({
+            type: 'FeatureCollection',
+            features: Array.from(cache.values()),
+          });
+        },
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+      if (connected) disconnectChatRealtime();
+    };
+  }, [userId, myPlayer?.alliance_id]);
 
   useEffect(() => {
     const currentAllianceId = myPlayer?.alliance_id ?? null;
