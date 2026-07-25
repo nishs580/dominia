@@ -5,6 +5,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { completeClaim } from '../lib/claimApi';
+import * as claimWalkSamples from '../lib/claimWalkSamples';
+import * as activityProducer from '../lib/activity';
 import { fetchFirstClaimObjective } from '../lib/firstClaimApi';
 import { markFired } from '../lib/walkthroughFlags';
 import { maybeExplainResources } from '../lib/resourceIntro';
@@ -42,6 +44,24 @@ function completeErrorShowsRetry(code) {
     'no_token',
     'unauthorized',
   ].includes(code);
+}
+
+// Auto-retry spacing for walk_not_verified. The tail matters: the sample
+// producer only posts CLOSED minutes, so the walk's final partial minute lands
+// within 60s of arrival here — the later retries pick it up (plus any Health
+// Connect catch-up) without the player touching anything.
+const VERIFY_RETRY_DELAYS_MS = [4000, 8000, 15000, 30000, 60000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Every sample the server has not seen yet, pushed before asking it to verify
+// the walk. Both flushes are non-throwing by contract, but a claim must never
+// die on a sync hiccup — belt and braces.
+async function flushAllSamples() {
+  try { await claimWalkSamples.flushNow(); } catch (_) { /* ignore */ }
+  try { await activityProducer.flushNow(); } catch (_) { /* ignore */ }
 }
 
 export default function ClaimSuccessScreen() {
@@ -122,12 +142,26 @@ export default function ClaimSuccessScreen() {
     if (!territoryId || !playerId) return;
     let cancelled = false;
     (async () => {
-      const result = await completeClaim({
-        clerkGetToken: () => getTokenRef.current(),
-        territoryId,
-      });
-      if (cancelled) return;
+      let result;
+      for (let attempt = 0; ; attempt++) {
+        await flushAllSamples();
+        result = await completeClaim({
+          clerkGetToken: () => getTokenRef.current(),
+          territoryId,
+        });
+        if (cancelled) return;
+        // Stay in the "securing" beat and retry on our own while the missing
+        // distance is plausibly just samples in flight; every other failure
+        // (or an exhausted budget) falls through to the error state.
+        if (result.ok || result.code !== 'walk_not_verified'
+            || attempt >= VERIFY_RETRY_DELAYS_MS.length) {
+          break;
+        }
+        await sleep(VERIFY_RETRY_DELAYS_MS[attempt]);
+        if (cancelled) return;
+      }
       if (result.ok) {
+        claimWalkSamples.stop();
         setEnvelope(result.data);
         if (result.data?.already_completed === false) {
           if (result.data?.leveled_up === true && result.data?.level_after) {
@@ -162,11 +196,13 @@ export default function ClaimSuccessScreen() {
     setEnvelope(null);
     setIsRetrying(true);
     try {
+      await flushAllSamples();
       const result = await completeClaim({
         clerkGetToken: () => getTokenRef.current(),
         territoryId,
       });
       if (result.ok) {
+        claimWalkSamples.stop();
         setEnvelope(result.data);
       } else {
         setCompleteError({ code: result.code, context: result.context, status: result.status });
@@ -211,6 +247,8 @@ export default function ClaimSuccessScreen() {
   // Back to the board: a fresh completed claim with geometry plays the map
   // capture celebration (camera flight + claim-red flood) on arrival.
   const goToMap = () => {
+    // Whatever way the player leaves, the walk is over — release the producer.
+    claimWalkSamples.stop();
     if (!completeError && envelope?.already_completed === false && territoryGeojson) {
       navigation.navigate('MainTabs', {
         screen: 'Map',

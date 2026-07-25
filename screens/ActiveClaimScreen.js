@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { Pedometer } from 'expo-sensors';
 import {
   getSdkStatus,
   SdkAvailabilityStatus,
@@ -14,6 +15,7 @@ import {
   requestPermission,
   readRecords,
 } from '../lib/health';
+import * as claimWalkSamples from '../lib/claimWalkSamples';
 import { supabase } from '../lib/supabase';
 import { colors } from '../lib/theme';
 import { logDebug } from '../lib/debug';
@@ -43,44 +45,55 @@ import {
 // ─── Foreground-service location task (module scope) ────────────────────
 const LOCATION_TASK_NAME = 'dominia-active-claim-location';
 
-let latestTaskFix = null;
-
 // Bridge the component's Clerk token getter into module scope so the
 // background location task can authenticate its calibration-sample push and
 // debug logs. The component keeps this in sync with useAuth().getToken.
 let taskGetToken = null;
 
-// Calibration / step state (module scope — survives screen blur)
-let baselineSteps = null;
-let lastSteps = 0;
+// ─── Walk engine (module scope — survives screen blur) ─────────────────
+// Steps come from two sources with very different freshness:
+//   1. The hardware pedometer (expo-sensors) — event-driven, ~1s latency.
+//      This is what moves the ring.
+//   2. Health Connect — authoritative daily record, but recording apps flush
+//      it minutes late. Used as a reconciliation floor and as the fallback
+//      when the pedometer is unavailable.
+// The session total is max(pedometer, HC-delta): both measure the same walk,
+// so taking the max can never double-count.
+let pedoSessionSteps = 0;      // cumulative steps from the pedometer watch
+let pedoActive = false;
+let baselineSteps = null;      // HC absolute reading at walk start
+let hcSessionSteps = 0;        // HC-delta since walk start
+let countedSessionSteps = 0;   // steps already routed through ingest
 let lastStepTimestamp = Date.now();
 let vehicleExcludedSteps = 0;
 let halfwayFired = false;
 let finalStretchFired = false;
 let calibrationWindowStart = null;   // { steps, timestamp, lat, lon }
-let calibrationSamples = [];
 let currentStrideM = 0.75;
 let currentStrideSessions = 0;
 let lastGpsFix = null;
 let currentSpeedKmh = 0;
 let vehicleFilter = { hits: 0, inVehicle: false };
 let lastSpeedSampleAt = 0;
-let gpsWeak = false;
+let gpsWeakSince = null;             // ms timestamp weak GPS began, or null
 let bannerStateModule = null;
-let halfwayResetTimer = null;
+let milestoneBannerTimer = null;
+let lastHousekeepingAt = 0;
+let lastHcPollAt = 0;
+let paceAnchor = { steps: 0, at: Date.now() };
 
 // Contest walk aggregator (module scope — 30s windows)
 let contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
 
 // Set to true to drop a COMPLETE NOW button at the bottom for UI iteration without walking.
 const DEV_MODE_MANUAL = false;
-const DIAG_CALIBRATION = true;
 
-const POLL_INTERVAL_MS = 10000;          // HC step poll cadence — matches ActivityScreen
+const HOUSEKEEPING_MS = 5000;            // ambient banners, speed decay, calibration
+const HC_POLL_INTERVAL_MS = 10000;       // HC reconciliation cadence — matches ActivityScreen
 const CONTEST_WINDOW_MS = 30_000;
 const STALE_GPS_THRESHOLD_MS = 5000;     // skip GPS points older than this
 const ZERO_MOVEMENT_WARN_MS = 30 * 1000; // 30s zero movement → show "PAUSED" banner
-const PAUSE_RESET_MS = 15 * 60 * 1000;   // 15 min zero movement → reset progress to zero
+const GPS_WEAK_PERSIST_MS = 20 * 1000;   // weak GPS must persist this long before the banner shows
 
 const INK = colors.ink;
 const INK2 = colors.ink2;
@@ -99,14 +112,6 @@ function clamp(n, min, max) {
 
 function formatMetres(m) {
   return `${Math.max(0, Math.round(m))}`;
-}
-
-function formatPauseCountdown(ms) {
-  const remainingMs = Math.max(0, PAUSE_RESET_MS - ms);
-  const totalSec = Math.ceil(remainingMs / 1000);
-  const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
-  const ss = (totalSec % 60).toString().padStart(2, '0');
-  return `${mm}:${ss}`;
 }
 
 // Claim-intent time remaining as H:MM:SS (or MM:SS under an hour).
@@ -189,6 +194,10 @@ async function readTodaySteps() {
   return records.reduce((sum, r) => sum + (r?.count ?? 0), 0);
 }
 
+// GPS task: fix bookkeeping only. Steps are event-driven from the pedometer
+// (ingestSessionSteps), and ambient housekeeping runs on its own interval —
+// a walk indoors or through an urban canyon must never stall because GPS
+// went quiet, which is exactly what the old GPS-driven tick did.
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) {
     console.warn('[claim] task error:', error?.message);
@@ -202,17 +211,14 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (latitude == null || longitude == null) return;
 
   const taskFix = { latitude, longitude, accuracy: accuracy ?? 9999, timestamp: ts, speed };
-  latestTaskFix = taskFix;
 
   if (!claimState.active) return;
 
   // Only a fresh fix can produce a speed sample. speedSampleKmh returns null
   // when nothing trustworthy is available (weak fix, fixes too close together,
   // no OS estimate) — that is "unknown", and clears the vehicle flag rather
-  // than holding the last reading, which used to persist forever once GPS went
-  // quiet and silently froze the walk.
-  if (lastGpsFix !== taskFix &&
-      (Date.now() - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS) {
+  // than holding the last reading.
+  if ((Date.now() - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS) {
     const sample = speedSampleKmh(lastGpsFix, taskFix);
     if (sample != null) {
       currentSpeedKmh = sample;
@@ -223,179 +229,205 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   lastGpsFix = taskFix;
   // Same bar the speed sampler uses to trust a fix, so "GPS weak · vehicle
   // filter on hold" and the filter actually being on hold are the same
-  // condition — not two magic numbers that can disagree.
-  gpsWeak = (taskFix.accuracy ?? 9999) > CLAIM_CONSTANTS.SPEED_MAX_ACCURACY_M;
+  // condition. Tracked as a since-timestamp: the banner only shows once the
+  // weakness has persisted (GPS_WEAK_PERSIST_MS) — a two-second dip between
+  // buildings is not something to alarm a walker about.
+  const weakNow = (taskFix.accuracy ?? 9999) > CLAIM_CONSTANTS.SPEED_MAX_ACCURACY_M;
+  if (weakNow && gpsWeakSince == null) gpsWeakSince = Date.now();
+  if (!weakNow) gpsWeakSince = null;
 
-  const now = Date.now();
-  if (claimState.lastTickAt && (now - claimState.lastTickAt) < POLL_INTERVAL_MS) return;
-
-  try {
-    if (claimState.hcPermission !== 'granted') {
-      setTick({});
-      return;
-    }
-
-    const currentSteps = await readTodaySteps();
-    if (baselineSteps == null) {
-      baselineSteps = currentSteps;
-      lastSteps = currentSteps;
-      setTick({});
-      return;
-    }
-
-    const stepDeltaTick = Math.max(0, currentSteps - lastSteps);
-
-    // Decay: with no usable sample recently, speed is unknown, not "still
-    // whatever it last was". Without this a single jitter spike could keep
-    // steps excluded indefinitely.
-    if (lastSpeedSampleAt &&
-        (now - lastSpeedSampleAt) > CLAIM_CONSTANTS.SPEED_STALE_MS) {
-      currentSpeedKmh = 0;
-      vehicleFilter = nextVehicleState(vehicleFilter, null);
-    }
-
-    const speedKmh = currentSpeedKmh;
-    const inVehicle = vehicleFilter.inVehicle;
-
-    if (inVehicle) vehicleExcludedSteps += stepDeltaTick;
-    if (stepDeltaTick > 0) lastStepTimestamp = now;
-
-    const totalSteps = currentSteps - baselineSteps;
-    const usableSteps = Math.max(0, totalSteps - vehicleExcludedSteps);
-    const walkedM = stepsToMetres(usableSteps, currentStrideM);
-
-    const zeroMovementMs = now - lastStepTimestamp;
-    const pauseElapsedMs = zeroMovementMs;
-
-    let nextBanner = bannerStateModule;
-    let didReset = false;
-
-    if (zeroMovementMs >= PAUSE_RESET_MS) {
-      baselineSteps = currentSteps;
-      vehicleExcludedSteps = 0;
-      halfwayFired = false;
-      finalStretchFired = false;
-      lastStepTimestamp = now;
-      if (claimState.mode === 'contest') {
-        contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
-      }
-      didReset = true;
-      nextBanner = 'reset';
-    } else if (zeroMovementMs >= ZERO_MOVEMENT_WARN_MS) {
-      nextBanner = 'paused';
-    } else if (inVehicle) {
-      nextBanner = 'vehicle';
-    } else if (gpsWeak) {
-      // Weak fix means the vehicle filter is unreliable — say so.
-      nextBanner = 'gpsWeak';
-    } else if (claimState.perimeterM > 0 && walkedM / claimState.perimeterM >= 0.9 && !finalStretchFired) {
-      // Final-stretch beat — the last encouragement before the ring closes.
-      finalStretchFired = true;
-      nextBanner = 'finalStretch';
-      if (halfwayResetTimer) clearTimeout(halfwayResetTimer);
-      halfwayResetTimer = setTimeout(() => {
-        bannerStateModule = null;
-        setTick({ bannerState: null });
-      }, 4000);
-    } else if (claimState.perimeterM > 0 && walkedM / claimState.perimeterM >= 0.5 && !halfwayFired) {
-      halfwayFired = true;
-      nextBanner = 'halfway';
-      if (halfwayResetTimer) clearTimeout(halfwayResetTimer);
-      halfwayResetTimer = setTimeout(() => {
-        bannerStateModule = null;
-        setTick({ bannerState: null });
-      }, 4000);
-    } else if (bannerStateModule !== 'halfway' && bannerStateModule !== 'finalStretch') {
-      nextBanner = null;
-    }
-    bannerStateModule = nextBanner;
-
-    const newDistance = didReset ? 0 : walkedM;
-    const newSteps = didReset ? 0 : usableSteps;
-    const newPace = paceSpm(stepDeltaTick, POLL_INTERVAL_MS);
-
-    let calTickDiag = null;
-    const fix = lastGpsFix;
-    if (fix && !inVehicle && (fix.accuracy ?? 9999) <= 20) {
-      if (!calibrationWindowStart) {
-        calibrationWindowStart = { steps: currentSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
-      } else {
-        const windowMs = now - calibrationWindowStart.timestamp;
-        const stepsInWindow = currentSteps - calibrationWindowStart.steps;
-        const gpsDist = haversineMetres(calibrationWindowStart.lat, calibrationWindowStart.lon, fix.latitude, fix.longitude);
-        const accuracyM = fix.accuracy ?? 9999;
-        const { qualifies, rejectReason } = isQualifyingCalibrationWindow({ accuracyM, speedKmh, windowMs });
-        const candidateStride = stepsInWindow > 0 ? gpsDist / stepsInWindow : null;
-        calTickDiag = { accuracyM, speedKmh, windowMs, stepsInWindow, gpsDistM: gpsDist, candidateStride, qualifies, rejectReason };
-        if (windowMs >= 30000) {
-          if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
-            const result = await pushCalibrationSample(() => (taskGetToken ? taskGetToken() : null), gpsDist, stepsInWindow);
-            if (result) {
-              calibrationSamples = result.samples;
-              currentStrideM = result.strideM;
-              currentStrideSessions = result.sessions;
-            }
-          }
-          calibrationWindowStart = { steps: currentSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
-        }
-      }
-    } else {
-      calibrationWindowStart = null;
-    }
-
-    if (DIAG_CALIBRATION && claimState.playerId) {
-      const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
-      logDebug(() => (taskGetToken ? taskGetToken() : null), 'claim_calibration_tick', {
-        accuracyM: round3(calTickDiag?.accuracyM ?? (fix ? fix.accuracy ?? 9999 : null)),
-        speedKmh: round3(speedKmh),
-        windowMs: round3(calTickDiag?.windowMs ?? null),
-        stepsInWindow: calTickDiag?.stepsInWindow ?? null,
-        gpsDistM: round3(calTickDiag?.gpsDistM ?? null),
-        candidateStride: round3(calTickDiag?.candidateStride ?? null),
-        qualifies: calTickDiag?.qualifies ?? null,
-        rejectReason: calTickDiag?.rejectReason ?? null,
-      }).catch(() => {});
-    }
-
-    lastSteps = currentSteps;
-
-    let tickDistanceM = newDistance;
-    let isComplete = false;
-
-    if (claimState.mode === 'contest') {
-      const deltaSteps = inVehicle ? 0 : stepDeltaTick;
-      const deltaDistance = stepsToMetres(deltaSteps, currentStrideM);
-      contestAggregator.steps += deltaSteps;
-      contestAggregator.distanceM += deltaDistance;
-      drainContestWindows();
-      tickDistanceM = contestWalk.getCumulativeDistance() + contestAggregator.distanceM;
-    } else {
-      isComplete = !claimState.completed
-        && newDistance >= claimState.perimeterM
-        && claimState.perimeterM > 0;
-    }
-
-    setTick({
-      distanceM: tickDistanceM,
-      liveSteps: newSteps,
-      livePace: newPace,
-      strideM: currentStrideM,
-      strideSessions: currentStrideSessions,
-      lastAccuracyM: calTickDiag?.accuracyM ?? null,
-      lastSpeedKmh: speedKmh,
-      lastWindowMs: calTickDiag?.windowMs ?? null,
-      lastStepsInWindow: calTickDiag?.stepsInWindow ?? null,
-      lastQualifies: calTickDiag?.qualifies ?? null,
-      lastRejectReason: calTickDiag?.rejectReason ?? null,
-      bannerState: nextBanner,
-      pauseElapsedMs,
-      gpsFixReady: !!lastGpsFix,
-      completed: isComplete,
-    });
-  } catch (err) {
-    console.warn('[claim] task tick error:', err?.message);
-  }
+  // Belt-and-braces: with the app foreground-serviced but JS timers throttled,
+  // location callbacks still drive housekeeping at its own cadence.
+  housekeepingTick();
 });
+
+// ─── Step ingest (event-driven) ─────────────────────────────────────────
+// Single path every step source funnels through. Applies the vehicle filter,
+// feeds the claim/contest sample producers, fires milestone banners, and
+// publishes progress to the UI — within ~a second of the foot hitting the
+// ground when the pedometer is alive.
+function ingestSessionSteps() {
+  if (!claimState.active) return;
+
+  const total = Math.max(pedoSessionSteps, hcSessionSteps);
+  const delta = total - countedSessionSteps;
+  if (delta <= 0) return;
+  countedSessionSteps = total;
+  lastStepTimestamp = Date.now();
+
+  const inVehicle = vehicleFilter.inVehicle;
+  if (inVehicle) {
+    vehicleExcludedSteps += delta;
+  } else if (claimState.mode === 'contest') {
+    contestAggregator.steps += delta;
+    contestAggregator.distanceM += stepsToMetres(delta, currentStrideM);
+    drainContestWindows();
+  } else {
+    claimWalkSamples.addSteps(delta);
+  }
+
+  publishProgress();
+}
+
+function publishProgress() {
+  const usableSteps = Math.max(0, countedSessionSteps - vehicleExcludedSteps);
+  const walkedM = stepsToMetres(usableSteps, currentStrideM);
+
+  let distanceM = walkedM;
+  let isComplete = false;
+  if (claimState.mode === 'contest') {
+    distanceM = contestWalk.getCumulativeDistance() + contestAggregator.distanceM;
+  } else {
+    isComplete = !claimState.completed
+      && walkedM >= claimState.perimeterM
+      && claimState.perimeterM > 0;
+  }
+
+  // Milestone beats — transient, self-clearing, never displaced by ambient
+  // housekeeping (it refuses to overwrite them). Keyed off the displayed
+  // distance so contest walks get the same beats against their target.
+  if (claimState.perimeterM > 0) {
+    const ratio = distanceM / claimState.perimeterM;
+    let milestone = null;
+    if (ratio >= 0.9 && !finalStretchFired) {
+      finalStretchFired = true;
+      milestone = 'finalStretch';
+    } else if (ratio >= 0.5 && !halfwayFired) {
+      halfwayFired = true;
+      milestone = 'halfway';
+    }
+    if (milestone) {
+      bannerStateModule = milestone;
+      if (milestoneBannerTimer) clearTimeout(milestoneBannerTimer);
+      milestoneBannerTimer = setTimeout(() => {
+        bannerStateModule = null;
+        setTick({ bannerState: null });
+      }, 4000);
+    }
+  }
+
+  setTick({
+    distanceM,
+    liveSteps: usableSteps,
+    strideM: currentStrideM,
+    strideSessions: currentStrideSessions,
+    bannerState: bannerStateModule,
+    completed: isComplete,
+  });
+}
+
+// ─── Housekeeping (interval-driven, ~5s) ────────────────────────────────
+// Everything that is about time passing rather than steps landing: speed
+// decay, ambient banners, HC reconciliation, stride calibration, pace.
+function housekeepingTick() {
+  if (!claimState.active) return;
+  const now = Date.now();
+  if (now - lastHousekeepingAt < HOUSEKEEPING_MS) return;
+  lastHousekeepingAt = now;
+
+  // Decay: with no usable sample recently, speed is unknown, not "still
+  // whatever it last was". Without this a single jitter spike could keep
+  // steps excluded indefinitely.
+  if (lastSpeedSampleAt &&
+      (now - lastSpeedSampleAt) > CLAIM_CONSTANTS.SPEED_STALE_MS) {
+    currentSpeedKmh = 0;
+    vehicleFilter = nextVehicleState(vehicleFilter, null);
+  }
+
+  // Pace over the last housekeeping window (dev-only display).
+  const paceElapsed = now - paceAnchor.at;
+  if (paceElapsed >= HC_POLL_INTERVAL_MS) {
+    const paceDelta = countedSessionSteps - paceAnchor.steps;
+    setTick({ livePace: paceSpm(paceDelta, paceElapsed) });
+    paceAnchor = { steps: countedSessionSteps, at: now };
+  }
+
+  // HC reconciliation: a floor under the pedometer (and the whole source when
+  // the pedometer is unavailable). Deliberately allowed to lag — it is never
+  // what makes the ring move, so its flush cadence stops mattering to UX.
+  if (claimState.hcPermission === 'granted' && (now - lastHcPollAt) >= HC_POLL_INTERVAL_MS) {
+    lastHcPollAt = now;
+    readTodaySteps()
+      .then((currentSteps) => {
+        if (!claimState.active) return;
+        if (baselineSteps == null) {
+          baselineSteps = currentSteps;
+          return;
+        }
+        hcSessionSteps = Math.max(0, currentSteps - baselineSteps);
+        ingestSessionSteps();
+      })
+      .catch((err) => console.warn('[claim] HC poll error:', err?.message));
+  }
+
+  // Ambient banner — never overwrites a live milestone beat (those clear
+  // themselves after 4s).
+  if (bannerStateModule !== 'halfway' && bannerStateModule !== 'finalStretch') {
+    const zeroMovementMs = now - lastStepTimestamp;
+    let nextBanner = null;
+    if (zeroMovementMs >= ZERO_MOVEMENT_WARN_MS) {
+      nextBanner = 'paused';
+    } else if (vehicleFilter.inVehicle) {
+      nextBanner = 'vehicle';
+    } else if (gpsWeakSince != null && (now - gpsWeakSince) >= GPS_WEAK_PERSIST_MS) {
+      nextBanner = 'gpsWeak';
+    }
+    if (nextBanner !== bannerStateModule) {
+      bannerStateModule = nextBanner;
+      setTick({ bannerState: nextBanner });
+    }
+  }
+
+  runCalibrationWindow(now);
+}
+
+// Stride calibration: GPS-distance-over-steps windows, pushed to the server
+// which owns the bounds and the rolling mean. Uses the session step counter —
+// only differences matter, so the counter's origin is irrelevant.
+function runCalibrationWindow(now) {
+  const fix = lastGpsFix;
+  if (!fix || vehicleFilter.inVehicle || (fix.accuracy ?? 9999) > 20) {
+    calibrationWindowStart = null;
+    return;
+  }
+  if (!calibrationWindowStart) {
+    calibrationWindowStart = { steps: countedSessionSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
+    return;
+  }
+  const windowMs = now - calibrationWindowStart.timestamp;
+  if (windowMs < 30000) return;
+
+  const stepsInWindow = countedSessionSteps - calibrationWindowStart.steps;
+  const gpsDist = haversineMetres(calibrationWindowStart.lat, calibrationWindowStart.lon, fix.latitude, fix.longitude);
+  const accuracyM = fix.accuracy ?? 9999;
+  const { qualifies, rejectReason } = isQualifyingCalibrationWindow({ accuracyM, speedKmh: currentSpeedKmh, windowMs });
+
+  if (__DEV__) {
+    const round3 = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
+    logDebug(() => (taskGetToken ? taskGetToken() : null), 'claim_calibration_tick', {
+      accuracyM: round3(accuracyM),
+      speedKmh: round3(currentSpeedKmh),
+      windowMs: round3(windowMs),
+      stepsInWindow,
+      gpsDistM: round3(gpsDist),
+      qualifies,
+      rejectReason,
+    }).catch(() => {});
+  }
+
+  if (qualifies && stepsInWindow > 0 && gpsDist > 0) {
+    pushCalibrationSample(() => (taskGetToken ? taskGetToken() : null), gpsDist, stepsInWindow)
+      .then((result) => {
+        if (result) {
+          currentStrideM = result.strideM;
+          currentStrideSessions = result.sessions;
+          setTick({ strideM: result.strideM, strideSessions: result.sessions });
+        }
+      })
+      .catch(() => {});
+  }
+  calibrationWindowStart = { steps: countedSessionSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
+}
 
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
@@ -518,10 +550,16 @@ export default function ActiveClaimScreen() {
 
   // The arm window running out is a client-visible fact, but the refund is the
   // server's call — ask it rather than assuming, so the number shown is real.
+  // The 2.5s grace matters: activate COMMITS the walk if the server still sees
+  // the intent armed, so calling at the client's zero with a fast client clock
+  // could start a walk the player deliberately let lapse. Waiting past zero
+  // makes the server's answer almost certainly "lapsed, refunded".
   useEffect(() => {
     if (armPhase !== 'arming' || armSecondsLeft == null || armSecondsLeft > 0) return;
     let cancelled = false;
     (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      if (cancelled) return;
       const result = await activateClaim({
         clerkGetToken: () => getTokenRef.current(),
         territoryId,
@@ -603,34 +641,46 @@ export default function ActiveClaimScreen() {
         flushPartialContestWindow();
         contestWalk.stop();
       }
-      if (!navigatingRef.current) endClaim();
+      if (!navigatingRef.current) {
+        // Cancel path. A completed claim keeps its sample producer alive —
+        // ClaimSuccessScreen flushes it before asking the server to verify.
+        claimWalkSamples.stop();
+        endClaim();
+      }
     };
   }, [mode]);
 
-  // ─── Walk start: load stride, init HC, fetch contest metadata ───────────
+  // ─── Walk start: load stride, start step sources, fetch contest metadata ─
   // Gated on the arm phase so nothing is tracked — and no local progress is
   // banked — until the player has actually committed by tapping START WALK.
   useEffect(() => {
     if (armPhase !== 'walking') return undefined;
     let cancelled = false;
+    let pedoSub = null;
+    let housekeepingInterval = null;
 
+    pedoSessionSteps = 0;
+    pedoActive = false;
     baselineSteps = null;
-    lastSteps = 0;
+    hcSessionSteps = 0;
+    countedSessionSteps = 0;
     lastStepTimestamp = Date.now();
     vehicleExcludedSteps = 0;
     halfwayFired = false;
     finalStretchFired = false;
     calibrationWindowStart = null;
-    calibrationSamples = [];
     bannerStateModule = null;
     lastGpsFix = null;
     currentSpeedKmh = 0;
     vehicleFilter = { hits: 0, inVehicle: false };
     lastSpeedSampleAt = 0;
-    gpsWeak = false;
-    if (halfwayResetTimer) {
-      clearTimeout(halfwayResetTimer);
-      halfwayResetTimer = null;
+    gpsWeakSince = null;
+    lastHousekeepingAt = 0;
+    lastHcPollAt = 0;
+    paceAnchor = { steps: 0, at: Date.now() };
+    if (milestoneBannerTimer) {
+      clearTimeout(milestoneBannerTimer);
+      milestoneBannerTimer = null;
     }
     if (mode === 'contest') {
       contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
@@ -638,12 +688,46 @@ export default function ActiveClaimScreen() {
 
     startClaim({ territoryId, playerId, perimeterM, mode, territoryName });
 
+    if (mode === 'claim' && playerId) {
+      claimWalkSamples.start({
+        playerId,
+        clerkGetToken: () => getTokenRef.current(),
+        getStrideM: () => currentStrideM,
+      });
+    }
+
+    housekeepingInterval = setInterval(() => housekeepingTick(), HOUSEKEEPING_MS);
+
+    // Live steps: the hardware pedometer. Event-driven — the ring moves with
+    // the walker, not with whenever Google Fit deigns to flush Health Connect.
     (async () => {
-      const { strideM: loadedStride, sessions, samples } = await loadPlayerStride(() => getTokenRef.current());
+      try {
+        const available = await Pedometer.isAvailableAsync();
+        if (!available || cancelled) return;
+        const perm = await Pedometer.requestPermissionsAsync();
+        if (!perm?.granted || cancelled) return;
+        const sub = Pedometer.watchStepCount(({ steps }) => {
+          if (!Number.isFinite(steps)) return;
+          pedoSessionSteps = Math.max(pedoSessionSteps, Math.floor(steps));
+          ingestSessionSteps();
+        });
+        if (cancelled) {
+          sub.remove();
+          return;
+        }
+        pedoSub = sub;
+        pedoActive = true;
+        setTick({ stepSource: 'pedometer' });
+      } catch (err) {
+        console.warn('[claim] pedometer unavailable:', err?.message);
+      }
+    })();
+
+    (async () => {
+      const { strideM: loadedStride, sessions } = await loadPlayerStride(() => getTokenRef.current());
       if (cancelled) return;
       currentStrideM = loadedStride;
       currentStrideSessions = sessions;
-      calibrationSamples = samples;
       setTick({ strideM: loadedStride, strideSessions: sessions });
 
       try {
@@ -662,7 +746,6 @@ export default function ActiveClaimScreen() {
           const steps = await readTodaySteps();
           if (cancelled) return;
           baselineSteps = steps;
-          lastSteps = steps;
           lastStepTimestamp = Date.now();
         }
       } catch (err) {
@@ -684,6 +767,9 @@ export default function ActiveClaimScreen() {
 
     return () => {
       cancelled = true;
+      if (pedoSub) pedoSub.remove();
+      pedoActive = false;
+      if (housekeepingInterval) clearInterval(housekeepingInterval);
     };
   }, [armPhase, playerId, mode, territoryId, perimeterM, territoryName, role]);
 
@@ -767,10 +853,12 @@ export default function ActiveClaimScreen() {
           console.warn('[claim] background location not granted — service may be killed on screen off');
         }
 
-        latestTaskFix = null;
+        // 3s cadence: the OS speed estimate rides along on every fix and the
+        // positional-differencing fallback needs >=3s gaps anyway (SPEED_MIN_DT_MS)
+        // — 1s fixes bought nothing but battery drain.
         await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
           accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 1000,
+          timeInterval: 3000,
           distanceInterval: 0,
           showsBackgroundLocationIndicator: false,
           foregroundService: {
@@ -791,7 +879,6 @@ export default function ActiveClaimScreen() {
       if (started) {
         Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => {});
       }
-      latestTaskFix = null;
     };
   }, [armPhase]);
 
@@ -840,7 +927,10 @@ export default function ActiveClaimScreen() {
     ? Math.round(clamp((claimState.distanceM / progressThresholdM) * 100, 0, 100))
     : 0;
   const isCalibrated = claimState.strideSessions >= 3;
-  const hcDenied = claimState.hcPermission === 'denied';
+  // The walk can count with EITHER source. Health Connect being denied only
+  // blocks the walk when the pedometer is dead too.
+  const pedometerLive = claimState.stepSource === 'pedometer';
+  const hcDenied = claimState.hcPermission === 'denied' && !pedometerLive;
 
   const cancelConfirmBody = mode === 'contest'
     ? t('activeClaim.cancelConfirmContest')
@@ -1004,10 +1094,11 @@ export default function ActiveClaimScreen() {
         {showFirstWalkHint ? (
           <Text style={styles.firstWalkHint}>{t('firstClaim.activeHint')}</Text>
         ) : null}
-        {/* 'unknown' is neither granted nor denied: the tick refuses to count
-            steps in it, but hcDenied is false so the full ring renders. That
-            combination is a walk that silently never progresses. Say so. */}
-        {claimState.hcPermission === 'unknown' ? (
+        {/* 'unknown' is neither granted nor denied: no HC steps can count in
+            it, and without a live pedometer the ring would silently never
+            progress. Say so — but only when the pedometer isn't carrying
+            the walk already. */}
+        {claimState.hcPermission === 'unknown' && !pedometerLive ? (
           <Text style={styles.firstWalkHint}>{t('activeClaim.hcChecking')}</Text>
         ) : null}
       </View>
@@ -1020,7 +1111,7 @@ export default function ActiveClaimScreen() {
               styles.timeLeftValue,
               // One caution element per screen: the readout yields amber to any
               // caution banner currently showing.
-              timeLeftCritical && !['paused', 'vehicle', 'reset'].includes(claimState.bannerState)
+              timeLeftCritical && !['paused', 'vehicle'].includes(claimState.bannerState)
                 ? { color: AMBER }
                 : null,
             ]}
@@ -1044,22 +1135,19 @@ export default function ActiveClaimScreen() {
       </View>
 
       <View style={styles.bannerZone}>
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'vehicle' && (
+        {claimState.bannerState === 'vehicle' && (
           <Banner color={AMBER} label={t('activeClaim.bannerVehicle')} />
         )}
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'paused' && (
-          <Banner color={AMBER} label={t('activeClaim.bannerPaused', { countdown: formatPauseCountdown(claimState.pauseElapsedMs) })} />
+        {claimState.bannerState === 'paused' && (
+          <Banner color={AMBER} label={t('activeClaim.bannerPaused')} />
         )}
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'reset' && (
-          <Banner color={AMBER} label={t('activeClaim.bannerReset')} />
-        )}
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'gpsWeak' && (
+        {claimState.bannerState === 'gpsWeak' && (
           <Banner color={SLATE2} label={t('activeClaim.bannerGpsWeak')} />
         )}
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'halfway' && (
+        {claimState.bannerState === 'halfway' && (
           <Banner color={BONE} label={t('activeClaim.bannerHalfway')} />
         )}
-        {claimState.hcPermission === 'granted' && claimState.bannerState === 'finalStretch' && (
+        {claimState.bannerState === 'finalStretch' && (
           <Banner color={BONE} label={t('activeClaim.bannerFinalStretch')} />
         )}
       </View>
