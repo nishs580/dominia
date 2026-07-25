@@ -221,7 +221,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     }
   }
   lastGpsFix = taskFix;
-  gpsWeak = (taskFix.accuracy ?? 9999) > 20;
+  // Same bar the speed sampler uses to trust a fix, so "GPS weak · vehicle
+  // filter on hold" and the filter actually being on hold are the same
+  // condition — not two magic numbers that can disagree.
+  gpsWeak = (taskFix.accuracy ?? 9999) > CLAIM_CONSTANTS.SPEED_MAX_ACCURACY_M;
 
   const now = Date.now();
   if (claimState.lastTickAt && (now - claimState.lastTickAt) < POLL_INTERVAL_MS) return;
