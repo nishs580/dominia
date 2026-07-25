@@ -314,7 +314,8 @@
     "errIntentLapsedFree": "You did not start the walk in time. Nothing was charged.",
     "errWalkNotVerified": "{{walked}} m counted so far, {{required}} m needed. Keep walking, then tap to retry.",
     "errClaimNotStarted": "This walk has not started. Go back and tap START WALK.",
-    "errAlreadyClaimedRefunded": "Another player claimed this territory while you walked. {{gold}} gold returned."
+    "errAlreadyClaimedRefunded": "Another player claimed this territory while you walked. {{gold}} gold returned.",
+    "securingProgress": "{{walked}} m verified of {{required}} m"
   },
   "contestResult": {
     "youLabel": "YOU",

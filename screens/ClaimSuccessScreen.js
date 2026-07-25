@@ -46,11 +46,23 @@ function completeErrorShowsRetry(code) {
   ].includes(code);
 }
 
-// Auto-retry spacing for walk_not_verified. The tail matters: the sample
-// producer only posts CLOSED minutes, so the walk's final partial minute lands
-// within 60s of arrival here — the later retries pick it up (plus any Health
-// Connect catch-up) without the player touching anything.
-const VERIFY_RETRY_DELAYS_MS = [4000, 8000, 15000, 30000, 60000];
+// Auto-retry spacing for walk_not_verified. The sample producer only posts
+// CLOSED, minute-aligned windows, so the distance the server is missing is
+// almost always the walk's final minute — which becomes postable the moment
+// the wall-clock minute ticks over. Retry #2 is therefore aimed just past the
+// next minute boundary rather than at a blind interval; the tail retries
+// cover Health Connect catch-up on top.
+const VERIFY_MAX_RETRIES = 5;
+
+function verifyRetryDelayMs(attempt, nowMs = Date.now()) {
+  if (attempt === 0) return 2000; // catches a flush that landed mid-attempt
+  if (attempt === 1) {
+    const msToMinuteBoundary = 60_000 - (nowMs % 60_000);
+    return msToMinuteBoundary + 2500;
+  }
+  const tail = [15_000, 30_000, 60_000];
+  return tail[Math.min(attempt - 2, tail.length - 1)];
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -90,6 +102,9 @@ export default function ClaimSuccessScreen() {
   const [envelope, setEnvelope] = useState(null);
   const [completeError, setCompleteError] = useState(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  // Server-confirmed distance so far, from a walk_not_verified response —
+  // shown during the securing beat so the wait reads as progress, not a hang.
+  const [verifyProgress, setVerifyProgress] = useState(null);
   const [milestones, setMilestones] = useState([]);
   const hasSilhouette = useMemo(() => territorySvgPath(territoryGeojson) != null, [territoryGeojson]);
 
@@ -154,10 +169,14 @@ export default function ClaimSuccessScreen() {
         // distance is plausibly just samples in flight; every other failure
         // (or an exhausted budget) falls through to the error state.
         if (result.ok || result.code !== 'walk_not_verified'
-            || attempt >= VERIFY_RETRY_DELAYS_MS.length) {
+            || attempt >= VERIFY_MAX_RETRIES) {
           break;
         }
-        await sleep(VERIFY_RETRY_DELAYS_MS[attempt]);
+        setVerifyProgress({
+          walkedM: result.context?.walked_m ?? null,
+          requiredM: result.context?.required_m ?? null,
+        });
+        await sleep(verifyRetryDelayMs(attempt));
         if (cancelled) return;
       }
       if (result.ok) {
@@ -320,6 +339,14 @@ export default function ClaimSuccessScreen() {
             ) : null}
             <Text style={styles.territory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{territoryName}</Text>
             <Text style={styles.securingLabel}>{t('claimSuccess.securing')}</Text>
+            {verifyProgress?.walkedM != null && verifyProgress?.requiredM != null ? (
+              <Text style={styles.securingProgress}>
+                {t('claimSuccess.securingProgress', {
+                  walked: Math.min(verifyProgress.walkedM, verifyProgress.requiredM),
+                  required: verifyProgress.requiredM,
+                })}
+              </Text>
+            ) : null}
           </Animated.View>
         </Animated.View>
       ) : completeError ? (
@@ -671,6 +698,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
     marginTop: 6,
+  },
+  securingProgress: {
+    fontFamily: 'GeistMono_400Regular',
+    color: BONE,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    marginTop: 10,
   },
 
   message: {

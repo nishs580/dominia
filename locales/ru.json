@@ -320,7 +320,8 @@
     "errIntentLapsedFree": "Вы не начали ходьбу вовремя. Списания не было.",
     "errWalkNotVerified": "Засчитано {{walked}} м из {{required}} м. Продолжайте идти, затем нажмите, чтобы повторить.",
     "errClaimNotStarted": "Эта ходьба не начата. Вернитесь и нажмите НАЧАТЬ ХОДЬБУ.",
-    "errAlreadyClaimedRefunded": "Другой игрок заявил эту территорию, пока вы шли. {{gold}} золота возвращено."
+    "errAlreadyClaimedRefunded": "Другой игрок заявил эту территорию, пока вы шли. {{gold}} золота возвращено.",
+    "securingProgress": "Подтверждено {{walked}} м из {{required}} м"
   },
   "contestResult": {
     "youLabel": "ВЫ",
