@@ -35,6 +35,7 @@ import {
   stepsToMetres,
   speedSampleKmh,
   nextVehicleState,
+  cadenceSpmFrom,
   CLAIM_CONSTANTS,
   isQualifyingCalibrationWindow,
   pushCalibrationSample,
@@ -73,8 +74,11 @@ let currentStrideM = 0.75;
 let currentStrideSessions = 0;
 let lastGpsFix = null;
 let currentSpeedKmh = 0;
-let vehicleFilter = { hits: 0, inVehicle: false };
+let vehicleFilter = { overCapSince: null, inVehicle: false };
 let lastSpeedSampleAt = 0;
+// Trailing [{ at, steps }] of cumulative session steps — the input to the
+// cadence veto that outranks GPS in the vehicle filter.
+let cadenceHistory = [];
 let gpsWeakSince = null;             // ms timestamp weak GPS began, or null
 let bannerStateModule = null;
 let milestoneBannerTimer = null;
@@ -94,6 +98,7 @@ const CONTEST_WINDOW_MS = 30_000;
 const STALE_GPS_THRESHOLD_MS = 5000;     // skip GPS points older than this
 const ZERO_MOVEMENT_WARN_MS = 30 * 1000; // 30s zero movement → show "PAUSED" banner
 const GPS_WEAK_PERSIST_MS = 20 * 1000;   // weak GPS must persist this long before the banner shows
+const CADENCE_WINDOW_MS = 30 * 1000;     // trailing window the cadence veto reads
 
 const INK = colors.ink;
 const INK2 = colors.ink2;
@@ -216,16 +221,23 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
   // Only a fresh fix can produce a speed sample. speedSampleKmh returns null
   // when nothing trustworthy is available (weak fix, fixes too close together,
-  // no OS estimate) — that is "unknown", and clears the vehicle flag rather
-  // than holding the last reading.
-  if ((Date.now() - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS) {
-    const sample = speedSampleKmh(lastGpsFix, taskFix);
-    if (sample != null) {
-      currentSpeedKmh = sample;
-      lastSpeedSampleAt = Date.now();
-      vehicleFilter = nextVehicleState(vehicleFilter, sample);
-    }
+  // no OS estimate, an implausible reading) — that is "unknown".
+  const now = Date.now();
+  const sample = (now - taskFix.timestamp) <= STALE_GPS_THRESHOLD_MS
+    ? speedSampleKmh(lastGpsFix, taskFix)
+    : null;
+  if (sample != null) {
+    currentSpeedKmh = sample;
+    lastSpeedSampleAt = now;
   }
+  // Fed unconditionally, including nulls: an unknown reading has to BREAK a
+  // building run of over-cap evidence. Skipping nulls (as this used to) let
+  // spikes minutes apart accumulate across weak-GPS gaps into a verdict —
+  // precisely the urban-canyon conditions that manufacture spikes.
+  vehicleFilter = nextVehicleState(vehicleFilter, sample, {
+    nowMs: now,
+    cadenceSpm: cadenceSpmFrom(cadenceHistory, countedSessionSteps, now),
+  });
   lastGpsFix = taskFix;
   // Same bar the speed sampler uses to trust a fix, so "GPS weak · vehicle
   // filter on hold" and the filter actually being on hold are the same
@@ -325,13 +337,30 @@ function housekeepingTick() {
   if (now - lastHousekeepingAt < HOUSEKEEPING_MS) return;
   lastHousekeepingAt = now;
 
+  // Cadence sample first — the vehicle filter's veto reads this history, so
+  // it must be current before any verdict is recomputed below.
+  cadenceHistory.push({ at: now, steps: countedSessionSteps });
+  const cadenceCutoff = now - CADENCE_WINDOW_MS;
+  while (cadenceHistory.length > 1 && cadenceHistory[1].at <= cadenceCutoff) {
+    cadenceHistory.shift();
+  }
+  const cadenceSpm = cadenceSpmFrom(cadenceHistory, countedSessionSteps, now);
+
   // Decay: with no usable sample recently, speed is unknown, not "still
   // whatever it last was". Without this a single jitter spike could keep
   // steps excluded indefinitely.
   if (lastSpeedSampleAt &&
       (now - lastSpeedSampleAt) > CLAIM_CONSTANTS.SPEED_STALE_MS) {
     currentSpeedKmh = 0;
-    vehicleFilter = nextVehicleState(vehicleFilter, null);
+    vehicleFilter = nextVehicleState(vehicleFilter, null, { nowMs: now });
+  } else if (vehicleFilter.inVehicle || vehicleFilter.overCapSince != null) {
+    // Re-evaluate a live or building verdict against fresh cadence even when
+    // no new fix has landed: the moment the player is demonstrably walking,
+    // the flag must drop without waiting on GPS.
+    vehicleFilter = nextVehicleState(vehicleFilter, currentSpeedKmh, {
+      nowMs: now,
+      cadenceSpm,
+    });
   }
 
   // Pace over the last housekeeping window (dev-only display).
@@ -672,8 +701,9 @@ export default function ActiveClaimScreen() {
     bannerStateModule = null;
     lastGpsFix = null;
     currentSpeedKmh = 0;
-    vehicleFilter = { hits: 0, inVehicle: false };
+    vehicleFilter = { overCapSince: null, inVehicle: false };
     lastSpeedSampleAt = 0;
+    cadenceHistory = [];
     gpsWeakSince = null;
     lastHousekeepingAt = 0;
     lastHcPollAt = 0;
