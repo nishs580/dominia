@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { Pedometer } from 'expo-sensors';
+import { Accelerometer, Pedometer } from 'expo-sensors';
+import { createGaitAnalyzer, GAIT_CONSTANTS } from '../lib/gaitSignature';
 import {
   getSdkStatus,
   SdkAvailabilityStatus,
@@ -66,7 +67,14 @@ let baselineSteps = null;      // HC absolute reading at walk start
 let hcSessionSteps = 0;        // HC-delta since walk start
 let countedSessionSteps = 0;   // steps already routed through ingest
 let lastStepTimestamp = Date.now();
-let vehicleExcludedSteps = 0;
+let excludedSteps = 0;
+
+// Gait signature — does the raw motion look like a body walking, or like a
+// phone being shaken to drive the step counter? The step counter itself can
+// be fooled; the accelerometer stream is much harder to fake.
+let gaitAnalyzer = null;
+let gaitImplausibleSince = null;
+let gaitGated = false;
 let halfwayFired = false;
 let finalStretchFired = false;
 let calibrationWindowStart = null;   // { steps, timestamp, lat, lon }
@@ -99,6 +107,10 @@ const STALE_GPS_THRESHOLD_MS = 5000;     // skip GPS points older than this
 const ZERO_MOVEMENT_WARN_MS = 30 * 1000; // 30s zero movement → show "PAUSED" banner
 const GPS_WEAK_PERSIST_MS = 20 * 1000;   // weak GPS must persist this long before the banner shows
 const CADENCE_WINDOW_MS = 30 * 1000;     // trailing window the cadence veto reads
+// Sustained implausible motion before steps stop counting. Long enough that a
+// bag jostle, a phone fumbled out of a pocket, or one bad window never costs a
+// real walker anything.
+const GAIT_SUSTAIN_MS = 15 * 1000;
 
 const INK = colors.ink;
 const INK2 = colors.ink2;
@@ -267,22 +279,37 @@ function ingestSessionSteps() {
   countedSessionSteps = total;
   lastStepTimestamp = Date.now();
 
-  const inVehicle = vehicleFilter.inVehicle;
-  if (inVehicle) {
-    vehicleExcludedSteps += delta;
-  } else if (claimState.mode === 'contest') {
-    contestAggregator.steps += delta;
-    contestAggregator.distanceM += stepsToMetres(delta, currentStrideM);
-    drainContestWindows();
+  const gate = currentStepGate();
+  if (gate) excludedSteps += delta;
+
+  if (claimState.mode === 'contest') {
+    if (!gate) {
+      contestAggregator.steps += delta;
+      contestAggregator.distanceM += stepsToMetres(delta, currentStrideM);
+      drainContestWindows();
+    }
   } else {
+    // Gated steps are still handed to the producer, deliberately. The minute
+    // gets posted carrying the accelerometer evidence against it, the server
+    // rejects it, and — the part that matters — posting claims that minute's
+    // source_id. Health Connect recorded the same fake steps and would
+    // otherwise post them later as a clean, unjudgeable sample; as a duplicate
+    // it is now dropped instead.
     claimWalkSamples.addSteps(delta);
   }
 
   publishProgress();
 }
 
+/** Why steps are not counting right now, or null when they are. */
+function currentStepGate() {
+  if (vehicleFilter.inVehicle) return 'vehicle';
+  if (gaitGated) return 'shake';
+  return null;
+}
+
 function publishProgress() {
-  const usableSteps = Math.max(0, countedSessionSteps - vehicleExcludedSteps);
+  const usableSteps = Math.max(0, countedSessionSteps - excludedSteps);
   const walkedM = stepsToMetres(usableSteps, currentStrideM);
 
   let distanceM = walkedM;
@@ -389,6 +416,8 @@ function housekeepingTick() {
       .catch((err) => console.warn('[claim] HC poll error:', err?.message));
   }
 
+  evaluateGait(now, cadenceSpm);
+
   // Ambient banner — never overwrites a live milestone beat (those clear
   // themselves after 4s).
   if (bannerStateModule !== 'halfway' && bannerStateModule !== 'finalStretch') {
@@ -398,6 +427,8 @@ function housekeepingTick() {
       nextBanner = 'paused';
     } else if (vehicleFilter.inVehicle) {
       nextBanner = 'vehicle';
+    } else if (gaitGated) {
+      nextBanner = 'shake';
     } else if (gpsWeakSince != null && (now - gpsWeakSince) >= GPS_WEAK_PERSIST_MS) {
       nextBanner = 'gpsWeak';
     }
@@ -408,6 +439,43 @@ function housekeepingTick() {
   }
 
   runCalibrationWindow(now);
+}
+
+/**
+ * Score the accelerometer window and decide whether steps still count.
+ *
+ * The verdict is recorded against the minute either way — the server gets the
+ * evidence for every minute, not just the damning ones, so a missing summary
+ * means "no accelerometer", not "nothing to see".
+ *
+ * Gating requires GAIT_SUSTAIN_MS of continuous implausibility, and a single
+ * non-implausible window drops it immediately. Asymmetric on purpose: this is
+ * the third filter in this screen that can silently stop a walk counting, and
+ * the previous two both shipped false positives onto real players.
+ */
+function evaluateGait(nowMs, cadenceSpm) {
+  if (!gaitAnalyzer) return;
+
+  const stepFreqHz = Number.isFinite(cadenceSpm) && cadenceSpm > 0
+    ? cadenceSpm / 60
+    : null;
+  const result = gaitAnalyzer.evaluate(stepFreqHz);
+
+  if (claimState.mode !== 'contest') {
+    claimWalkSamples.noteGaitWindow(result, nowMs);
+  }
+
+  if (result.verdict === 'implausible') {
+    if (gaitImplausibleSince == null) gaitImplausibleSince = nowMs;
+    if (!gaitGated && nowMs - gaitImplausibleSince >= GAIT_SUSTAIN_MS) {
+      gaitGated = true;
+      console.warn(`[claim] gait gate raised: ${result.reason}`);
+    }
+    return;
+  }
+
+  gaitImplausibleSince = null;
+  gaitGated = false;
 }
 
 // Stride calibration: GPS-distance-over-steps windows, pushed to the server
@@ -686,6 +754,7 @@ export default function ActiveClaimScreen() {
     if (armPhase !== 'walking') return undefined;
     let cancelled = false;
     let pedoSub = null;
+    let accelSub = null;
     let housekeepingInterval = null;
 
     pedoSessionSteps = 0;
@@ -694,7 +763,10 @@ export default function ActiveClaimScreen() {
     hcSessionSteps = 0;
     countedSessionSteps = 0;
     lastStepTimestamp = Date.now();
-    vehicleExcludedSteps = 0;
+    excludedSteps = 0;
+    gaitAnalyzer = createGaitAnalyzer();
+    gaitImplausibleSince = null;
+    gaitGated = false;
     halfwayFired = false;
     finalStretchFired = false;
     calibrationWindowStart = null;
@@ -753,6 +825,28 @@ export default function ActiveClaimScreen() {
       }
     })();
 
+    // Raw motion, for the gait-signature check. Bounded by the walk window, so
+    // the sampling cost is paid only while a claim is actually running.
+    (async () => {
+      try {
+        const available = await Accelerometer.isAvailableAsync();
+        if (!available || cancelled) return;
+        Accelerometer.setUpdateInterval(1000 / GAIT_CONSTANTS.SAMPLE_HZ);
+        const sub = Accelerometer.addListener((sample) => {
+          if (gaitAnalyzer) gaitAnalyzer.push(sample);
+        });
+        if (cancelled) {
+          sub.remove();
+          return;
+        }
+        accelSub = sub;
+      } catch (err) {
+        // No accelerometer means no gait evidence — the walk proceeds
+        // ungated rather than being blocked on a missing sensor.
+        console.warn('[claim] accelerometer unavailable:', err?.message);
+      }
+    })();
+
     (async () => {
       const { strideM: loadedStride, sessions } = await loadPlayerStride(() => getTokenRef.current());
       if (cancelled) return;
@@ -799,6 +893,8 @@ export default function ActiveClaimScreen() {
       cancelled = true;
       if (pedoSub) pedoSub.remove();
       pedoActive = false;
+      if (accelSub) accelSub.remove();
+      gaitAnalyzer = null;
       if (housekeepingInterval) clearInterval(housekeepingInterval);
     };
   }, [armPhase, playerId, mode, territoryId, perimeterM, territoryName, role]);
@@ -1167,6 +1263,9 @@ export default function ActiveClaimScreen() {
       <View style={styles.bannerZone}>
         {claimState.bannerState === 'vehicle' && (
           <Banner color={AMBER} label={t('activeClaim.bannerVehicle')} />
+        )}
+        {claimState.bannerState === 'shake' && (
+          <Banner color={AMBER} label={t('activeClaim.bannerShake')} />
         )}
         {claimState.bannerState === 'paused' && (
           <Banner color={AMBER} label={t('activeClaim.bannerPaused')} />
