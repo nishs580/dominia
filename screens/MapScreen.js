@@ -2306,14 +2306,22 @@ export default function MapScreen() {
       // the difference between a lattice you can see and one you cannot. The
       // board has to imply a game — neighbouring ground you could take — or a
       // single held parcel just looks like a shape on a map.
-      // Solid, not dashed. Territories are road-bounded, so a parcel edge runs
-      // along a road — and a dashed line there is indistinguishable from a
-      // footway. Solid at a weight the demoted road web no longer reaches is
-      // what makes the lattice read as surveyed ground rather than cartography.
-      // Held ground stays unmistakable: it carries a casing, a hatch and a
-      // near-solid plate that open ground never has.
+      // Solid, not dashed, and deliberately heavier than any road casing.
+      //
+      // Two critics independently reported that only one polygon existed on the
+      // whole screen. They were right and the earlier read here was wrong: at
+      // 1.7px slate, a parcel edge was the same visual species as the road it
+      // runs along — same hue, same weight — so boundaries vanished into the
+      // street network and the board never tiled.
+      //
+      // The brand permits only greys for unowned ground (the three saturated
+      // colours have locked ownership meanings), so hue cannot carry the
+      // difference. Weight does: at 2.6px this is thicker than any road on the
+      // board, and the road web has been taken down to open the value gap.
+      // Held ground stays unmistakable — casing, hatch and a near-solid plate
+      // that open ground never has.
       lineColor: SLATE2,
-      lineWidth: 1.7,
+      lineWidth: 2.6,
       // Full strength by the default opening zoom (14) — in a city where
       // nothing is held yet the parcel grid is the board. Gone by the
       // city-wide pull-back (10.5), where only ownership should read.
@@ -3346,19 +3354,27 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
+  // KEY and LOCATE ME are one control stack, not two unrelated boxes. They
+  // previously sized to their own text, so they shared a left edge and nothing
+  // else — different widths, different optical weight. A shared width and a
+  // shared surface treatment (matching the side rail's translucent ink) makes
+  // the map's chrome speak one language instead of three. minHeight lifts them
+  // towards a proper touch target; both also carry hitSlop.
   locateButton: {
     position: 'absolute',
     left: 16,
     bottom: 20,
+    width: 136,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1A1D24',
+    backgroundColor: 'rgba(14,16,20,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(242,238,230,0.08)',
   },
   locateIcon: {
     fontFamily: 'GeistMono_400Regular',
@@ -3376,15 +3392,17 @@ const styles = StyleSheet.create({
   legendButton: {
     position: 'absolute',
     left: 16,
-    bottom: 66,
+    bottom: 72,
+    width: 136,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: INK2,
+    backgroundColor: 'rgba(14,16,20,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderWidth: 0.5,
+    borderColor: 'rgba(242,238,230,0.08)',
   },
   legendPanel: {
     position: 'absolute',

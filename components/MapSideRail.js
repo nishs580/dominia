@@ -16,7 +16,7 @@ import { getActivityLog } from '../lib/activityLogApi';
 import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
 import { colors } from '../lib/theme';
 
-const ICON_SIZE = 15;
+const ICON_SIZE = 14;
 
 function withCount(base, count) {
   if (count == null || count === 0) return base;
@@ -86,14 +86,23 @@ export default function MapSideRail({ hidden = false }) {
 }
 
 const styles = StyleSheet.create({
+  // This rail was a 124x144 opaque Ink-2 plate with a full border, sitting over
+  // roughly a third of the lower board and directly above a tab bar that
+  // already handles navigation. On a screen whose entire subject is the board,
+  // secondary destinations should not be the second-heaviest object on it.
+  //
+  // It is now a translucent ink panel rather than a plate — flat, no blur, no
+  // gradient, just the ink ramp at reduced alpha so the board stays partly
+  // legible beneath it. Narrower and shorter, with the 48dp touch target kept
+  // intact: the row height is unchanged, the padding around it is not.
   container: {
     position: 'absolute',
     right: 12,
     bottom: 20,
-    width: 124,
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    width: 104,
+    backgroundColor: 'rgba(14,16,20,0.86)',
+    borderWidth: 0.5,
+    borderColor: colors.hairline,
     borderRadius: 0,
     overflow: 'hidden',
     zIndex: 10,
@@ -102,8 +111,8 @@ const styles = StyleSheet.create({
     height: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 9,
+    paddingHorizontal: 10,
+    gap: 8,
   },
   itemDivider: {
     borderTopWidth: 1,
@@ -115,8 +124,8 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'GeistMono_500Medium',
     fontWeight: '500',
-    fontSize: 11,
-    letterSpacing: 1.76,
+    fontSize: 10,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.bone,
   },
