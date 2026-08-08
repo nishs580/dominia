@@ -1192,6 +1192,15 @@ export default function MapScreen() {
   // the map opens on the locale fallback centre (the Camera's static prop) instead
   // of where the player placed their home pin during onboarding.
   const didInitialCenterRef = useRef(false);
+  // True once the map opened straight onto the home pin (i.e. not via the
+  // one-time spine flight, which frames the objective itself).
+  const plainOpenRef = useRef(false);
+  // Set the moment the player touches the map. Any automatic reframe must
+  // stand down after this — yanking the camera out from under a pan is worse
+  // than leaving the objective off-screen.
+  const userMovedCameraRef = useRef(false);
+  // One-shot: the outstanding objective has been framed, don't do it again.
+  const objectiveFramedRef = useRef(false);
   // Focus-from-profile: fly to a territory the player tapped in their profile.
   // lastFocusNonceRef dedupes repeated navigations; pendingFocusIdRef opens the
   // detail sheet once the target loads into the feature cache.
@@ -1998,6 +2007,7 @@ export default function MapScreen() {
 
   const onCameraChanged = useCallback((state) => {
     if (state?.gestures?.isGestureActive === true) {
+      userMovedCameraRef.current = true;
       return;
     }
     if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
@@ -2082,6 +2092,7 @@ export default function MapScreen() {
       });
       setFlightPhase('hold');
     } else {
+      plainOpenRef.current = true;
       cameraRef.current.setCamera({
         centerCoordinate: homePin,
         zoomLevel: INITIAL_ZOOM,
@@ -2089,6 +2100,35 @@ export default function MapScreen() {
       });
     }
   }, [homePin, spine]);
+
+  // Frame an outstanding first-claim objective, not just the home pin.
+  //
+  // The spine flight (Beat 1) already frames home + objective together, but it
+  // runs exactly once. Every launch after that took the plain path above and
+  // snapped to the home pin at INITIAL_ZOOM — and measured on device, the
+  // objective usually falls outside that viewport. The result was a banner
+  // saying "walk 562m to claim проспект Тореза" while the only parcel drawn was
+  // a different one the player cannot claim: a dead end in the first thirty
+  // seconds, and the reason earlier design rounds wrongly concluded the
+  // objective had no marker at all. It always had one — the marching-dash
+  // outline was simply off-screen.
+  //
+  // This runs at most once per mount, only on the plain path, and stands down
+  // the instant the player touches the map.
+  useEffect(() => {
+    if (objectiveFramedRef.current) return;
+    if (!plainOpenRef.current) return;
+    if (userMovedCameraRef.current) return;
+    if (!target || !homePin || !cameraRef.current) return;
+    objectiveFramedRef.current = true;
+    const { ne, sw } = flightBounds(homePin[0], homePin[1], target);
+    cameraRef.current.setCamera({
+      bounds: { ne, sw },
+      padding: { paddingTop: 140, paddingBottom: 120, paddingLeft: 60, paddingRight: 60 },
+      animationMode: 'easeTo',
+      animationDuration: 600,
+    });
+  }, [target, homePin]);
 
   // Beat 1, hold: ~1.5s of stillness at city scale before the flight.
   useEffect(() => {
