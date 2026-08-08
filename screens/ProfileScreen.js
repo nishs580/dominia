@@ -877,7 +877,16 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      {/* persistentScrollbar is the scroll cue: the tab bar's hairline top edge
+          cuts the page cleanly enough to read as its end, so a section that
+          happens to be bisected there looks finished rather than continued.
+          The bottom pad clears the gesture inset so the last row is reachable. */}
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        persistentScrollbar
+        contentContainerStyle={[styles.content, { paddingBottom: spacing.xl4 + insets.bottom }]}
+      >
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
@@ -916,7 +925,19 @@ export default function ProfileScreen() {
                   </Text>
                 ) : null}
               </View>
-              <Text style={styles.unlockText}>{unlockText}</Text>
+              {/* The gate, then the reward. Without the prefix this line reads
+                  as a state already reached; "AT 600 XP ·" binds it to the
+                  fraction directly above and keeps it conditional. The rank
+                  noun is deliberately not repeated — it is already the caption
+                  on the same row. */}
+              <Text style={styles.unlockText}>
+                {next ? (
+                  <Text style={styles.unlockGate}>
+                    {t('profile.unlockAt', { needed: xpNeeded.toLocaleString() })}
+                  </Text>
+                ) : null}
+                {unlockText}
+              </Text>
             </View>
 
             <View style={styles.powerLedger}>
@@ -977,13 +998,30 @@ export default function ProfileScreen() {
             {heldCount === 0 ? (
               <View style={styles.emptyBlock}>
                 <Text style={styles.emptyLead}>{t('profile.noTerritories')}</Text>
-                <Text style={styles.emptyBody}>{t('profile.territoriesEmptyBody')}</Text>
+                {/* With tracking off the claim is the second step, and the copy
+                    says so — the control that satisfies the prerequisite is the
+                    TURN ON button in the Activity Power row above. Ordering it
+                    in words rather than in a second red button keeps the One
+                    Claim Rule intact. */}
+                <Text style={styles.emptyBody}>
+                  {trackingOff
+                    ? t('profile.territoriesEmptyBodyTracking')
+                    : t('profile.territoriesEmptyBody')}
+                </Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => navigation.navigate('Map')}
                   style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}
                 >
-                  <Text style={styles.primaryCtaText}>{t('profile.claimFirst')}</Text>
+                  <Text
+                    style={styles.primaryCtaText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('profile.claimFirst')}
+                  </Text>
                 </Pressable>
               </View>
             ) : (
@@ -1399,10 +1437,14 @@ const styles = StyleSheet.create({
   ladderSegDone: {
     backgroundColor: BONE,
   },
+  // "You are here, and it is empty." An outline can never read as a filled
+  // segment, and Slate 2 keeps it legible against the 8% slots either side
+  // without ever being the brightest thing on the bar — Bone is reserved for
+  // ranks actually completed.
   ladderSegCurrent: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: SLATE2,
   },
   ladderFill: {
     height: '100%',
@@ -1435,6 +1477,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     lineHeight: 18,
+    color: SLATE2,
+  },
+  // The gate is a measurement, so it is mono while the reward stays Inter.
+  unlockGate: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
     color: SLATE2,
   },
 
@@ -1556,9 +1605,13 @@ const styles = StyleSheet.create({
   primaryCtaPressed: {
     opacity: 0.82,
   },
+  // Bone-on-Claim-Red is fixed by DESIGN.md §5 and lands at 3.8:1, so the
+  // legibility headroom has to come from size and weight rather than colour:
+  // 15px mono 500 is the theme's CTA step and the largest that still holds
+  // "CLAIM YOUR FIRST TERRITORY" on one line at 1.6 tracking.
   primaryCtaText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 13,
+    fontSize: 15,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     color: BONE,

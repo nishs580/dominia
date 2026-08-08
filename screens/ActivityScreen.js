@@ -206,12 +206,14 @@ function WeeklyBarChart({ data, goal }) {
                 </View>
                 <View style={styles.chartBarSlot}>
                   {d.future ? null : (
+                    // Today is marked at the axis, never by a brighter fill:
+                    // painting the current bar full bone made a 400-step
+                    // morning louder than a cleared 15,000-step Tuesday.
                     <View
                       style={[
                         styles.chartBar,
                         { height: steps > 0 ? Math.max(h, 2) : 0 },
                         cleared && styles.chartBarCleared,
-                        d.isToday && styles.chartBarToday,
                       ]}
                     />
                   )}
@@ -227,10 +229,14 @@ function WeeklyBarChart({ data, goal }) {
           {goal.toLocaleString()}
         </Text>
         <View style={styles.chartBaseline} pointerEvents="none" />
+        {/* Two labelled references — the floor and the daily minimum — so the
+            rules the bars are measured against are both readable figures. */}
+        <Text style={styles.chartZeroLabel} maxFontSizeMultiplier={1.15}>0</Text>
       </View>
       <View style={styles.chartDayRow}>
         {data.map((d) => (
           <View key={`lbl-${d.key}`} style={styles.chartCol}>
+            <View style={[styles.chartDayMark, d.isToday && styles.chartDayMarkToday]} />
             <Text
               style={[
                 styles.chartDay,
@@ -252,9 +258,9 @@ function WeeklyBarChart({ data, goal }) {
 // State view of the same week, pinned in the header: did each day clear the
 // daily minimum. Seven cells so a streak of zero still has a shape — six
 // settled cells behind and one live cell filling under your feet today.
-function WeekTrack({ data, goal }) {
+function WeekTrack({ data, goal, a11yLabel }) {
   return (
-    <View style={styles.weekTrack}>
+    <View style={styles.weekTrack} accessible accessibilityLabel={a11yLabel}>
       {data.map((d) => {
         const steps = Number(d.steps) || 0;
         const cleared = steps >= goal;
@@ -441,7 +447,10 @@ export default function ActivityScreen() {
   // the server aggregate to catch up).
   const [retryTick, setRetryTick] = useState(0);
 
-  const today = useMemo(() => new Date(), []);
+  // Re-derived from the minute tick. A tab screen never unmounts, so a date
+  // frozen at mount left the header naming yesterday and the 17:00 at-risk
+  // check permanently reading the hour the app happened to launch.
+  const today = useMemo(() => new Date(nowTick), [nowTick]);
   // Device-local day key — used only for the per-day axis-choice storage.
   const todayStr = useMemo(() => localDayKey(new Date()), []);
 
@@ -1144,23 +1153,40 @@ export default function ActivityScreen() {
     [weekly],
   );
 
-  // Attack Day closes at the next local Monday 00:00. Derived from the clock,
-  // not invented: it is the same boundary themeAxisForDate uses.
-  const attackDayClosesIn = useMemo(() => {
+  // The weekend as a measured window rather than a numeral. Attack Day opens
+  // Saturday 00:00 and closes the following Monday 00:00 — the same boundary
+  // themeAxisForDate uses — so the panel can show how much of it has already
+  // gone as well as what is left. Nothing here is invented: it is the clock.
+  const attackWindow = useMemo(() => {
     const monday = startOfLocalWeek(new Date(nowTick));
-    monday.setDate(monday.getDate() + 7);
-    const ms = monday.getTime() - nowTick;
-    if (ms <= 0) return null;
-    const hours = Math.floor(ms / 3_600_000);
-    const minutes = Math.floor((ms % 3_600_000) / 60_000);
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+    const opens = new Date(monday);
+    opens.setDate(opens.getDate() + 5); // Saturday 00:00
+    const boundary = new Date(monday);
+    boundary.setDate(boundary.getDate() + 6); // Sunday 00:00
+    const closes = new Date(monday);
+    closes.setDate(closes.getDate() + 7); // Monday 00:00
+    const span = closes.getTime() - opens.getTime();
+    if (!(span > 0)) return null;
+    const msLeft = Math.max(0, closes.getTime() - nowTick);
+    const hours = Math.floor(msLeft / 3_600_000);
+    const minutes = Math.floor((msLeft % 3_600_000) / 60_000);
+    return {
+      elapsed: clamp((nowTick - opens.getTime()) / span, 0, 1),
+      boundary: clamp((boundary.getTime() - opens.getTime()) / span, 0, 1),
+      left: `${hours}h ${String(minutes).padStart(2, '0')}m`,
+      // Caution Amber is the sanctioned expiring signal. A weekend can never
+      // also be showing the at-risk streak line (that needs a drill day), so
+      // this is the screen's single caution element.
+      closing: msLeft <= 2 * 3_600_000,
+    };
   }, [nowTick]);
 
+  // Runs every day, not only at the weekend: the date header, the window rail
+  // and the 17:00 at-risk check all read from this tick.
   useEffect(() => {
-    if (isChallengeDay) return undefined;
     const id = setInterval(() => setNowTick(Date.now()), 60_000);
     return () => clearInterval(id);
-  }, [isChallengeDay]);
+  }, []);
 
   // The screen's headline. Falls back to the tab's own name only in the gap
   // before the theme resolves, so it is never blank.
@@ -1170,16 +1196,15 @@ export default function ActivityScreen() {
       ? t(`activity.theme_${themeToken}`)
       : t('activity.title');
 
-  // One line of banked effort under the week track, assembled only from
-  // figures that exist — a wall of zeros proves nothing to a new commander.
-  const lifetimeLine = useMemo(() => {
-    const parts = [];
-    if (territoryCount > 0) parts.push(t('activity.lifetimeHeld', { n: territoryCount }));
-    if (bests.best.distance_m > 0) {
-      parts.push(t('activity.lifetimeBestDay', { v: fmtKm(bests.best.distance_m) }));
-    }
-    return parts.length > 0 ? parts.join('  ·  ') : null;
-  }, [territoryCount, bests.best.distance_m, t]);
+  // One line of banked effort under the week track, so a zero streak still
+  // proves the walking counted. XP is the only lifetime ledger on the screen:
+  // territories held belong to the Attack Day panel and the best day belongs
+  // to RECORDS, and printing either figure twice one scroll apart was the
+  // double-encoding the rest of this screen just spent a round removing.
+  const lifetimeLine = useMemo(
+    () => (playerXp > 0 ? t('activity.lifetimeXp', { n: playerXp.toLocaleString() }) : null),
+    [playerXp, t],
+  );
 
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
@@ -1213,7 +1238,14 @@ export default function ActivityScreen() {
             </Text>
           </View>
 
-          <WeekTrack data={weekly} goal={dailyGoal} />
+          <WeekTrack
+            data={weekly}
+            goal={dailyGoal}
+            a11yLabel={t('activity.weekTrackCaption', {
+              n: daysCleared,
+              goal: dailyGoal.toLocaleString(),
+            })}
+          />
 
           <Text style={styles.weekCaption} maxFontSizeMultiplier={1.3}>
             {t('activity.weekTrackCaption', { n: daysCleared, goal: dailyGoal.toLocaleString() })}
@@ -1229,6 +1261,11 @@ export default function ActivityScreen() {
           <Text style={styles.streakAtRiskLine}>{t('activity.streakEndsTonight')}</Text>
         ) : streakSecuredToday ? (
           <Text style={styles.streakSafeLine}>{t('activity.streakSafeToday')}</Text>
+        ) : !isChallengeDay && currentStreak > 0 ? (
+          // The weekend variant. A commander with a live streak and no drill to
+          // secure needs to know the count survives; a commander on zero does
+          // not need a second sentence saying what the panel below already says.
+          <Text style={styles.streakSafeLine}>{t('activity.streakWeekendHold')}</Text>
         ) : isChallengeDay && currentStreak === 0 ? (
           // Gated on the drill day. Unconditional, this sentence sat one glance
           // above "Challenges return Monday" every weekend.
@@ -1343,33 +1380,71 @@ export default function ActivityScreen() {
               {t('activity.attackDayBody')}
             </Text>
 
-            <View style={styles.attackStatGrid}>
-              <View style={styles.attackStat}>
-                <Text style={styles.attackStatLabel} maxFontSizeMultiplier={1.3}>
-                  {t('activity.attackClosesLabel')}
-                </Text>
-                <Text style={styles.attackStatValue} maxFontSizeMultiplier={1.3}>
-                  {attackDayClosesIn ?? '—'}
-                </Text>
+            {/* The instrument the weekend was missing. A depletion rail across
+                the 48-hour window, notched at the Saturday/Sunday boundary and
+                scaled by three day ticks, so "how much of Attack Day is left"
+                is a shape before it is a figure. */}
+            {attackWindow ? (
+              <View
+                style={styles.attackWindow}
+                accessible
+                accessibilityLabel={t('activity.attackWindowA11y', { v: attackWindow.left })}
+              >
+                <View style={styles.attackWindowHead}>
+                  <Text style={styles.attackWindowLabel} maxFontSizeMultiplier={1.3}>
+                    {t('activity.attackWindowLabel')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.attackWindowLeft,
+                      attackWindow.closing && styles.attackWindowLeftClosing,
+                    ]}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('activity.attackWindowLeft', { v: attackWindow.left })}
+                  </Text>
+                </View>
+                <View style={styles.attackWindowTrack}>
+                  <View
+                    style={[styles.attackWindowFill, { width: `${attackWindow.elapsed * 100}%` }]}
+                  />
+                  <View
+                    style={[styles.attackWindowNotch, { left: `${attackWindow.boundary * 100}%` }]}
+                  />
+                </View>
+                <View style={styles.attackWindowScale}>
+                  <Text style={styles.attackWindowTick} maxFontSizeMultiplier={1.2}>
+                    {String(weekDayLabels[5] ?? '').toUpperCase()}
+                  </Text>
+                  <Text
+                    style={[styles.attackWindowTick, styles.attackWindowTickMid]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {String(weekDayLabels[6] ?? '').toUpperCase()}
+                  </Text>
+                  <Text
+                    style={[styles.attackWindowTick, styles.attackWindowTickEnd]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {String(weekDayLabels[0] ?? '').toUpperCase()}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.attackStatDivider} />
-              <View style={styles.attackStat}>
-                <Text style={styles.attackStatLabel} maxFontSizeMultiplier={1.3}>
-                  {t('activity.attackHeldLabel')}
-                </Text>
-                <Text style={styles.attackStatValue} maxFontSizeMultiplier={1.3}>
-                  {territoryCount.toLocaleString()}
-                </Text>
-              </View>
-              <View style={styles.attackStatDivider} />
-              <View style={styles.attackStat}>
-                <Text style={styles.attackStatLabel} maxFontSizeMultiplier={1.3}>
-                  {t('activity.attackWalkedLabel')}
-                </Text>
-                <Text style={styles.attackStatValue} maxFontSizeMultiplier={1.3}>
-                  {hasStepsPerm ? fmtKm(axisCurrent('distance')) : '—'}
-                </Text>
-              </View>
+            ) : null}
+
+            {/* What is actually at stake for the next two days. Today's walk
+                and the best day are read in RECORDS below; this panel carries
+                the one figure the weekend puts at risk. */}
+            <View style={styles.attackHoldRow}>
+              <Text style={styles.attackHoldLabel} maxFontSizeMultiplier={1.3}>
+                {t('activity.attackHeldLabel')}
+              </Text>
+              <Text
+                style={[styles.attackHoldValue, territoryCount === 0 && styles.attackHoldValueZero]}
+                maxFontSizeMultiplier={1.3}
+              >
+                {territoryCount.toLocaleString()}
+              </Text>
             </View>
 
             {/* The weekend has no commit CTA, so this is the screen's single
@@ -2063,36 +2138,104 @@ const styles = StyleSheet.create({
     color: colors.slate2,
     lineHeight: 18,
   },
-  attackStatGrid: {
+  // ── The Attack Day window rail ──
+  attackWindow: {
     marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'stretch',
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
     paddingTop: spacing.md,
   },
-  attackStat: {
-    flex: 1,
-    gap: 5,
+  attackWindowHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: 7,
   },
-  attackStatDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: colors.hairline,
-    marginHorizontal: spacing.md,
-  },
-  attackStatLabel: {
+  attackWindowLabel: {
+    flexShrink: 1,
     fontFamily: fonts.mono,
     fontSize: 8,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
-  attackStatValue: {
+  attackWindowLeft: {
+    flexShrink: 0,
     fontFamily: fonts.monoMedium,
     fontSize: 16,
     color: colors.bone,
     letterSpacing: 0.2,
+  },
+  // Expiring, not owned — Caution Amber, and only in the final two hours.
+  attackWindowLeftClosing: {
+    color: colors.caution,
+  },
+  attackWindowTrack: {
+    height: 6,
+    width: '100%',
+    backgroundColor: colors.hairlineStrong,
+    overflow: 'hidden',
+  },
+  // Spent window, not progress: the fill is what has already gone.
+  attackWindowFill: {
+    height: '100%',
+    backgroundColor: colors.slate,
+  },
+  attackWindowNotch: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: colors.ink,
+  },
+  attackWindowScale: {
+    flexDirection: 'row',
+    marginTop: 5,
+  },
+  attackWindowTick: {
+    flex: 1,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  attackWindowTickMid: {
+    textAlign: 'center',
+  },
+  attackWindowTickEnd: {
+    textAlign: 'right',
+  },
+  attackHoldRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    paddingTop: spacing.md,
+  },
+  attackHoldLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  attackHoldValue: {
+    flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 16,
+    color: colors.bone,
+    letterSpacing: 0.2,
+  },
+  // Nothing held yet: the figure recedes and the CTA below carries the row.
+  attackHoldValueZero: {
+    fontFamily: fonts.mono,
+    color: colors.slate,
   },
   attackCta: {
     marginTop: spacing.md,
@@ -2290,9 +2433,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     lineHeight: 14,
   },
+  // Secondary, not Claim Red. This button only appears for the Iron Guard
+  // off-axis claim (or dev testing), and on a drill day the screen's one red
+  // is already the TRAIN commit — two reds would break the One Claim Rule.
   completeBtn: {
     marginTop: spacing.xs,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -2485,9 +2633,6 @@ const styles = StyleSheet.create({
   chartBarCleared: {
     backgroundColor: colors.bone2,
   },
-  chartBarToday: {
-    backgroundColor: colors.bone,
-  },
   chartGoalRule: {
     position: 'absolute',
     left: 0,
@@ -2517,13 +2662,33 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.hairlineStrong,
   },
+  chartZeroLabel: {
+    position: 'absolute',
+    right: 0,
+    bottom: -5,
+    width: 36,
+    textAlign: 'right',
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 0.6,
+  },
   chartDayRow: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 6,
     paddingRight: 40,
   },
+  // An axis pointer under today's column: today is identified at the baseline,
+  // so the bar heights stay a pure reading of magnitude.
+  chartDayMark: {
+    height: 2,
+    backgroundColor: 'transparent',
+  },
+  chartDayMarkToday: {
+    backgroundColor: colors.bone,
+  },
   chartDay: {
+    marginTop: 5,
     fontFamily: fonts.mono,
     fontSize: 9,
     color: colors.slate2,
