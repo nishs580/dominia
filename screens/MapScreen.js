@@ -37,6 +37,17 @@ import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, emblemXml } from '../lib/allianceEmblems';
 import { BASE_TIERS, baseTierForLevel, baseXml } from '../lib/homeBases';
 import { battleChipFor } from '../lib/battleChips';
+import {
+  BOARD_BASEMAP_CONFIG,
+  BOARD_SCRIM_STYLE,
+  HATCH_PATTERNS,
+  HATCH_PATTERN_EXPRESSION,
+  HATCH_TILE,
+  PUCK_HEADING_IMAGE,
+  PUCK_HEADING_SIZE,
+  puckHeadingXml,
+  territoryNodeFeatures,
+} from '../lib/mapBoard';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
@@ -2169,17 +2180,89 @@ export default function MapScreen() {
     }
   }, [territories]);
 
+  // ─── BOARD LAYERS ────────────────────────────────────────────────────────
+  // Ownership has to be readable three ways at once: by colour (yours / ours /
+  // theirs), by ground texture (hatch lean), and by edge treatment (solid and
+  // cased when held, dashed hairline when open, marching red when contested).
+  // Any one of the three alone is enough to tell held ground from open ground.
+
+  const claimedFilter = useMemo(() => ['!=', ['get', 'color'], 'transparent'], []);
+  const openFilter = useMemo(() => ['==', ['get', 'color'], 'transparent'], []);
+
+  // Held ground is a PLATE of the owner's colour, not a tint over the map.
+  // Round 1 kept the fill translucent enough that the parcel read as the
+  // basemap seen through weather — measured, it was the same brightness as
+  // before the change. The ground beneath is now scrimmed down to near-ink, so
+  // these can be near-solid without turning the board to mud, and ownership is
+  // the loudest thing about a held parcel. Enemy Slate-Blue is the darkest and
+  // lowest-chroma of the three, so it is pushed hardest.
   const fillStyle = useMemo(
     () => ({
       fillColor: ['get', 'color'],
       fillOpacity: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], 0.42,
-        ['==', ['get', 'color'], '#3F8F4E'], 0.55,
-        ['==', ['get', 'color'], '#4A6B8A'], 0.50,
+        ['==', ['get', 'color'], '#D64525'], 0.60,
+        ['==', ['get', 'color'], '#3F8F4E'], 0.60,
+        ['==', ['get', 'color'], '#4A6B8A'], 0.68,
         0,
       ],
       fillEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Bone tick engraved into the plate. Adds luminance rather than removing it
+  // (round 1's owner-coloured tick did the opposite), and the lean carries the
+  // side without relying on hue at all.
+  const hatchStyle = useMemo(
+    () => ({
+      fillPattern: HATCH_PATTERN_EXPRESSION,
+      // Eased off at city scale, where a parcel is only a few tiles wide and a
+      // full-strength tick would read as noise.
+      fillOpacity: [
+        'interpolate', ['linear'], ['zoom'],
+        11, 0.10,
+        13.5, 0.20,
+      ],
+      fillEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // A siege is carried entirely on the border, never on the fill. Washing
+  // Claim Red across a near-solid plate turns Alliance Green to olive — a
+  // sixth colour, and the owner's identity destroyed at exactly the moment it
+  // matters most. The plate always states who holds the ground; the border
+  // states that someone is taking it.
+  //
+  // Dark band under the marching dashes so the siege reads on any plate,
+  // including a Claim Red one where red-on-red would otherwise disappear.
+  const contestedCasingStyle = useMemo(
+    () => ({
+      lineColor: INK,
+      lineWidth: 8,
+      lineOpacity: 0.85,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Ink seam under every held edge. It exists only to hold two adjacent
+  // parcels apart so a run of same-owner ground does not merge into one blob —
+  // it must never out-weigh the owner colour on top of it, which is exactly
+  // what went wrong in round 1 (a 2px colour line riding a 4.4px black one
+  // read as a black outline).
+  const casingStyle = useMemo(
+    () => ({
+      lineColor: INK,
+      lineWidth: [
+        'match', ['get', 'streakBand'],
+        'hardened', 7.2,
+        'fortified', 7.2,
+        5.6,
+      ],
+      lineOpacity: 0.55,
+      lineEmissiveStrength: 1.0,
     }),
     [],
   );
@@ -2195,17 +2278,120 @@ export default function MapScreen() {
       ],
       // Border weight encodes the owner's streak band (deterrence at a glance):
       // base <7d, hardened 7–20d, fortified 21+d (which also gets the inner line).
+      // Full opacity and heavy enough that the owner's colour, not the seam
+      // beneath it, is what you see at the parcel's edge.
       lineWidth: [
         'match', ['get', 'streakBand'],
-        'hardened', 2.2,
-        'fortified', 2.2,
-        1.2,
+        'hardened', 4.2,
+        'fortified', 4.2,
+        3.2,
       ],
-      lineOpacity: 0.9,
+      lineOpacity: 1,
       lineEmissiveStrength: 1.0,
     }),
     [],
   );
+
+  // Open ground: surveyed, not held. A dashed slate hairline that fades out
+  // above city scale so a board of unclaimed parcels never becomes a mesh.
+  const unclaimedLineStyle = useMemo(
+    () => ({
+      // Slate 2 rather than Slate: against a scrimmed near-ink ground this is
+      // the difference between a lattice you can see and one you cannot. The
+      // board has to imply a game — neighbouring ground you could take — or a
+      // single held parcel just looks like a shape on a map.
+      lineColor: SLATE2,
+      lineWidth: 1.4,
+      lineDasharray: [4, 3],
+      // Full strength by the default opening zoom (14) — in a city where
+      // nothing is held yet the parcel grid is the board. Gone by the
+      // city-wide pull-back (10.5), where only ownership should read.
+      lineOpacity: [
+        'interpolate', ['linear'], ['zoom'],
+        11.5, 0,
+        12.5, 0.5,
+        14, 0.85,
+      ],
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Corner marks on held parcels — the board's control points. Bone, not the
+  // owner colour: on a near-solid owner-coloured plate an owner-coloured node
+  // is invisible, and the plate already says who holds it.
+  const nodeStyle = useMemo(
+    () => ({
+      circleRadius: [
+        'interpolate', ['linear'], ['zoom'],
+        14, 1.6,
+        16, 2.6,
+        18, 3.4,
+      ],
+      circleColor: BONE,
+      circleOpacity: 0.95,
+      circleStrokeColor: INK,
+      circleStrokeWidth: 1,
+      circleStrokeOpacity: 0.8,
+      circlePitchAlignment: 'map',
+      circleEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // ─── PLAYER PUCK ─────────────────────────────────────────────────────────
+  // The commander is the brightest mark on the board. Bone on an ink seat, so
+  // it can never be mistaken for ground someone owns.
+  const puckSeatStyle = useMemo(
+    () => ({
+      circleRadius: 15,
+      circleColor: INK,
+      circleOpacity: 0.88,
+      circleStrokeColor: BONE,
+      circleStrokeWidth: 1,
+      circleStrokeOpacity: 0.4,
+      circlePitchAlignment: 'map',
+      circleEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  const puckCoreStyle = useMemo(
+    () => ({
+      circleRadius: 7,
+      circleColor: BONE,
+      circleOpacity: 1,
+      circleStrokeColor: INK,
+      circleStrokeWidth: 2.5,
+      circleStrokeOpacity: 1,
+      circlePitchAlignment: 'map',
+      circleEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
+  // Course over ground, not compass: it only appears once the player is
+  // actually moving, which is the only time a heading means anything here.
+  const [userHeading, setUserHeading] = useState(null);
+  const puckHeadingStyle = useMemo(
+    () => ({
+      iconImage: PUCK_HEADING_IMAGE,
+      iconRotate: userHeading ?? 0,
+      iconRotationAlignment: 'map',
+      iconPitchAlignment: 'map',
+      iconAllowOverlap: true,
+      iconIgnorePlacement: true,
+      // 1.0 keeps the wedge at its drawn size: tip 31px out, base 17px out,
+      // so it clears the 15px seat ring instead of sitting inside it.
+      iconSize: 1,
+      iconOpacity: 0.95,
+    }),
+    [userHeading],
+  );
+
+  // Derived once per viewport fetch; the layer itself is zoom-gated so this
+  // never renders at city scale even though it is always computed.
+  const territoryNodes = useMemo(() => territoryNodeFeatures(territories), [territories]);
 
   // Inner second wall for fortified (21+ day streak) owners.
   const streakInnerStyle = useMemo(
@@ -2268,10 +2454,28 @@ export default function MapScreen() {
         ],
         { 'font-scale': 0.85, 'text-color': '#8B8F98' },
       ],
-      textSize: 11,
-      textColor: '#F2EEE6',
-      textHaloColor: 'rgba(14,16,20,0.85)',
-      textHaloWidth: 1.5,
+      // Territory names are the only words on the board. Graded by ownership:
+      // a held parcel's name is bone, open ground's is slate. Round 1 set them
+      // all in bone, which made an unclaimed hospital the highest-contrast
+      // text on screen while the owned parcel whispered.
+      textSize: [
+        'interpolate', ['linear'], ['zoom'],
+        12, 9.5,
+        15, 11,
+        18, 12.5,
+      ],
+      textColor: [
+        'case',
+        ['==', ['get', 'color'], 'transparent'], '#8B8F98',
+        '#F2EEE6',
+      ],
+      textHaloColor: 'rgba(14,16,20,0.92)',
+      textHaloWidth: 1.8,
+      textMaxWidth: 8,
+      textLineHeight: 1.15,
+      textLetterSpacing: 0.02,
+      // Held ground wins label collisions against open ground.
+      symbolSortKey: ['case', ['==', ['get', 'color'], 'transparent'], 2, 1],
       textAllowOverlap: false,
       textAnchor: 'center',
       textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
@@ -2384,7 +2588,7 @@ export default function MapScreen() {
   const contestedLineStyle = useMemo(
     () => ({
       lineColor: '#D64525',
-      lineWidth: 3,
+      lineWidth: 4.6,
       lineOpacity: 1,
       lineDasharray: SIEGE_DASH_SEQUENCE[siegeDashStep],
       lineEmissiveStrength: 1.0,
@@ -2439,7 +2643,9 @@ export default function MapScreen() {
       fillOpacity: [
         'case',
         ['==', ['get', 'color'], 'transparent'], 0.12,
-        0.68,
+        // Held ground is flooded but not sealed — the hatch still reads
+        // through, so a selected parcel stays part of the same board.
+        0.55,
       ],
       fillEmissiveStrength: 1.0,
     }),
@@ -2610,10 +2816,14 @@ export default function MapScreen() {
         styleURL="mapbox://styles/mapbox/standard"
         onCameraChanged={onCameraChanged}
       >
+        {/* The basemap is the desk, not the subject. BOARD_BASEMAP_CONFIG
+            strips Mapbox's POI pictograms, place/road names and every hue out
+            of the ground so the territory layers are the only voices on the
+            board. See lib/mapBoard.js. */}
         <MapboxGL.StyleImport
           id="basemap"
           existing
-          config={{ lightPreset: 'night' }}
+          config={BOARD_BASEMAP_CONFIG}
         />
         {/* animationMode/animationDuration apply to declarative updates only —
             when fallbackCentre resolves from a guess to the real pin the camera
@@ -2627,17 +2837,26 @@ export default function MapScreen() {
           animationDuration={0}
         />
 
-        <MapboxGL.UserLocation
-          visible
-          onUpdate={(loc) => {
-            const c = loc?.coords;
-            if (c?.longitude != null && c?.latitude != null) {
-              setLastUserCoord([c.longitude, c.latitude]);
-            }
-          }}
-        />
+        {/* Ink wash over the finished basemap. Declared before every other
+            layer, so it sits under all of them and above the basemap — the
+            single knob that sets how quiet the ground is. See lib/mapBoard.js. */}
+        <MapboxGL.BackgroundLayer id="board-scrim" style={BOARD_SCRIM_STYLE} />
 
         <MapboxGL.Images>
+          {/* Ground tick tiles — the lean is the colour-blind-safe half of
+              the ownership signal (ours leans one way, theirs the other). */}
+          {HATCH_PATTERNS.map(({ name, xml }) => (
+            <MapboxGL.Image key={name} name={name}>
+              <View style={{ width: HATCH_TILE, height: HATCH_TILE }} collapsable={false}>
+                <SvgXml xml={xml} width={HATCH_TILE} height={HATCH_TILE} />
+              </View>
+            </MapboxGL.Image>
+          ))}
+          <MapboxGL.Image key={PUCK_HEADING_IMAGE} name={PUCK_HEADING_IMAGE}>
+            <View style={{ width: PUCK_HEADING_SIZE, height: PUCK_HEADING_SIZE }} collapsable={false}>
+              <SvgXml xml={puckHeadingXml} width={PUCK_HEADING_SIZE} height={PUCK_HEADING_SIZE} />
+            </View>
+          </MapboxGL.Image>
           {BASE_TIERS.flatMap((tier) => [
             <MapboxGL.Image key={`base-${tier}-own`} name={`base-${tier}-own`}>
               <View style={{ width: 40, height: 40 }} collapsable={false}>
@@ -2682,17 +2901,34 @@ export default function MapScreen() {
           }}
         >
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
+          <MapboxGL.FillLayer id="territories-hatch" filter={claimedFilter} style={hatchStyle} />
           <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
-          <MapboxGL.LineLayer id="territories-line" style={lineStyle} />
+          <MapboxGL.LineLayer id="territories-casing" filter={claimedFilter} style={casingStyle} />
+          <MapboxGL.LineLayer id="territories-line" filter={claimedFilter} style={lineStyle} />
+          <MapboxGL.LineLayer id="territories-open" filter={openFilter} style={unclaimedLineStyle} />
           <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
           <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
+          <MapboxGL.LineLayer id="territories-contested-casing" filter={contestedFilter} style={contestedCasingStyle} />
           <MapboxGL.LineLayer id="territories-contested" filter={contestedFilter} style={contestedLineStyle} />
           <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
           <MapboxGL.LineLayer id="territories-selected-glow" filter={highlightFilter} style={selectedGlowStyle} />
           <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
-          <MapboxGL.SymbolLayer id="territories-labels" slot="top" style={labelStyle} />
-          <MapboxGL.SymbolLayer id="territories-emblems" slot="top" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
-          <MapboxGL.SymbolLayer id="territories-battle-chips" slot="top" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
+          {/* No `slot` on these. A slotted layer is placed inside the basemap
+              import, which puts it BELOW our own unslotted fills — measured on
+              the round-1 capture, the held parcel's name came back as bone
+              seen through a 0.44 slate-blue fill (#a9b4be), while unclaimed
+              names next to it were full bone. That inverted the hierarchy the
+              critic called out. Unslotted, plain declaration order applies and
+              names sit on top of their plate, where they belong. The slot was
+              only ever there to clear Mapbox's own labels, which are now off. */}
+          <MapboxGL.SymbolLayer id="territories-labels" style={labelStyle} />
+          <MapboxGL.SymbolLayer id="territories-emblems" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
+          <MapboxGL.SymbolLayer id="territories-battle-chips" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
+        </MapboxGL.ShapeSource>
+
+        {/* Survey nodes on the corners of held parcels. */}
+        <MapboxGL.ShapeSource id="territory-nodes" shape={territoryNodes}>
+          <MapboxGL.CircleLayer id="territory-nodes-circles" minZoomLevel={14} style={nodeStyle} />
         </MapboxGL.ShapeSource>
 
         <MapboxGL.ShapeSource
@@ -2708,8 +2944,8 @@ export default function MapScreen() {
             });
           }}
         >
-          <MapboxGL.SymbolLayer id="bases-icons" slot="top" minZoomLevel={12} style={baseIconStyle} />
-          <MapboxGL.SymbolLayer id="bases-pennants" slot="top" minZoomLevel={13} filter={pennantFilter} style={pennantStyle} />
+          <MapboxGL.SymbolLayer id="bases-icons" minZoomLevel={12} style={baseIconStyle} />
+          <MapboxGL.SymbolLayer id="bases-pennants" minZoomLevel={13} filter={pennantFilter} style={pennantStyle} />
         </MapboxGL.ShapeSource>
 
         {objectiveActive ? (
