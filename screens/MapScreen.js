@@ -826,10 +826,16 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             </Pressable>
           )}
 
+          {/* CONTEST is the primary action of this sheet and now looks like it.
+              It previously shared sheetActionSecondary with ABANDON, so taking
+              ground off another player was styled identically to giving your own
+              away — the whole purpose of the screen rendered as an afterthought.
+              DESIGN.md reserves Claim Red for the Inspect Sheet primary CTA on
+              Map, so this is where the screen's one red belongs. */}
           {isOwned && !isYours && !isAllianceTerritory && (
             <Pressable
               accessibilityRole="button"
-              style={({ pressed }) => [styles.sheetActionSecondary, pressed && { opacity: 0.92 }]}
+              style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
               onPress={() => {
                 setContestMode(true);
                 setSheetState('confirm');
@@ -3106,10 +3112,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // The objective banner is information that points somewhere, not the action
+  // itself — so it no longer wears the action colour. A full Claim Red
+  // perimeter plus red kicker text made it the loudest thing on the map and,
+  // once CONTEST became the sheet's red primary, put two reds on one screen.
+  // What is left is a single 2px Claim Red edge: enough to mark an objective,
+  // not enough to compete with the button that actually takes ground.
   objectiveBanner: {
     backgroundColor: INK2,
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: HAIRLINE_STRONG,
+    borderLeftWidth: 2,
+    borderLeftColor: CLAIM,
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginHorizontal: 0,
@@ -3117,7 +3131,7 @@ const styles = StyleSheet.create({
   objectiveBannerKicker: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 9,
-    color: CLAIM,
+    color: SLATE2,
     letterSpacing: 1.4,
     marginBottom: 2,
   },
@@ -3594,11 +3608,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: 'rgba(242,238,230,0.08)',
   },
+  // Slate 2, not Slate. At 9px/#5C6068 this control was ~2.7:1 on the sheet and
+  // read as a caption rather than the only way to reach development, legacy and
+  // walk detail. It stays text-only per the brand's no-icon rule for toggles.
   sheetToggleText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: '#5C6068',
-    letterSpacing: 1.4,
+    fontSize: 10,
+    color: '#8B8F98',
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sheetClose: {
