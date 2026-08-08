@@ -2300,22 +2300,46 @@ export default function MapScreen() {
       // the difference between a lattice you can see and one you cannot. The
       // board has to imply a game — neighbouring ground you could take — or a
       // single held parcel just looks like a shape on a map.
+      // Solid, not dashed. Territories are road-bounded, so a parcel edge runs
+      // along a road — and a dashed line there is indistinguishable from a
+      // footway. Solid at a weight the demoted road web no longer reaches is
+      // what makes the lattice read as surveyed ground rather than cartography.
+      // Held ground stays unmistakable: it carries a casing, a hatch and a
+      // near-solid plate that open ground never has.
       lineColor: SLATE2,
-      lineWidth: 1.4,
-      lineDasharray: [4, 3],
+      lineWidth: 1.7,
       // Full strength by the default opening zoom (14) — in a city where
       // nothing is held yet the parcel grid is the board. Gone by the
       // city-wide pull-back (10.5), where only ownership should read.
       lineOpacity: [
         'interpolate', ['linear'], ['zoom'],
         11.5, 0,
-        12.5, 0.5,
-        14, 0.85,
+        12.5, 0.55,
+        14, 0.92,
       ],
       lineEmissiveStrength: 1.0,
     }),
     [],
   );
+
+  // NOTE ON A FIX THAT WAS TRIED AND REJECTED — do not re-add it.
+  //
+  // A critic named the board's worst problem correctly: the screen names
+  // neighbouring parcels in text and draws boundaries for none of them, so it
+  // says contestable ground is there and then refuses to show it. Its proposed
+  // fix was a ~6% fill on open ground, against theme.js's "unclaimed = no fill,
+  // slate hairline only".
+  //
+  // That fix is wrong for this data, and the reason is worth recording. Open
+  // parcels TILE the viewport edge to edge — every scrap of ground belongs to
+  // some territory. So a fill on open ground does not reveal structure, it
+  // lifts the entire board uniformly. Measured on device by ramping the layer
+  // to 55%: the whole screen flooded grey with no parcel structure emerging at
+  // all, which is also why 6% and 11% were indistinguishable from nothing.
+  //
+  // The brand rule was right. What actually creates the tessellation is the
+  // EDGE between parcels, handled by unclaimedLineStyle above — so that is
+  // where the weight went instead.
 
   // Corner marks on held parcels — the board's control points. Bone, not the
   // owner colour: on a near-solid owner-coloured plate an owner-coloured node
@@ -2815,6 +2839,14 @@ export default function MapScreen() {
         style={styles.map}
         styleURL="mapbox://styles/mapbox/standard"
         onCameraChanged={onCameraChanged}
+        // Mapbox's scale bar rendered as pure white on near-black: measured,
+        // the highest-contrast object on the whole screen, above every game
+        // object. A game board does not need a cartographic scale — distances
+        // that matter are stated in the claim copy, in metres.
+        // Note: the logo and (i) attribution stay. Mapbox's terms require them
+        // to remain visible; they are repositioned with the control stack
+        // rather than removed.
+        scaleBarEnabled={false}
       >
         {/* The basemap is the desk, not the subject. BOARD_BASEMAP_CONFIG
             strips Mapbox's POI pictograms, place/road names and every hue out

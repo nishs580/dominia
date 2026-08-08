@@ -93,17 +93,19 @@ function RankLadder({ level, progress }) {
     const done = i < level;
     const current = i === level;
     segs.push(
-      <View
-        key={i}
-        style={[
-          styles.ladderSeg,
-          done && styles.ladderSegDone,
-          current && styles.ladderSegCurrent,
-        ]}
-      >
-        {current && progress > 0 ? (
-          <View style={[styles.ladderFill, { width: `${clamp(progress, 0, 1) * 100}%` }]} />
-        ) : null}
+      <View key={i} style={styles.ladderSlot}>
+        <View
+          style={[
+            styles.ladderSeg,
+            done && styles.ladderSegDone,
+            current && styles.ladderSegCurrent,
+          ]}
+        >
+          {current && progress > 0 ? (
+            <View style={[styles.ladderFill, { width: `${clamp(progress, 0, 1) * 100}%` }]} />
+          ) : null}
+        </View>
+        {current ? <View style={styles.ladderSegCurrentMark} /> : null}
       </View>,
     );
   }
@@ -1426,25 +1428,44 @@ const styles = StyleSheet.create({
   },
   ladder: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 3,
     marginTop: 16,
   },
-  ladderSeg: {
+  // Fixed height so the current segment's foot does not make one slot taller
+  // than the other nine.
+  ladderSlot: {
     flex: 1,
+    height: 10,
+  },
+  ladderSeg: {
+    width: '100%',
     height: 6,
     backgroundColor: HAIRLINE,
   },
   ladderSegDone: {
     backgroundColor: BONE,
   },
-  // "You are here, and it is empty." An outline can never read as a filled
-  // segment, and Slate 2 keeps it legible against the 8% slots either side
-  // without ever being the brightest thing on the bar — Bone is reserved for
-  // ranks actually completed.
+  // "You are here, and it is empty."
+  //
+  // An outlined box was the wrong instrument: a full-perimeter stroke is the
+  // brightest shape in the row, so the segment holding zero XP read as the one
+  // already completed — the exact opposite of the truth. Two critics called it.
+  //
+  // At zero the current segment is now indistinguishable from the empty slots
+  // either side, which is honest: zero progress should look like zero. Position
+  // is carried by the marker below rather than by making the box loud, and
+  // ladderFill grows from the left edge as real XP arrives.
   ladderSegCurrent: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: SLATE2,
+    backgroundColor: HAIRLINE,
+  },
+  // A 2px foot under the current segment: it says "you are here" without
+  // claiming the segment is filled. Slate 2, never Bone — Bone belongs to
+  // ranks actually completed.
+  ladderSegCurrentMark: {
+    height: 2,
+    backgroundColor: SLATE2,
+    marginTop: 2,
   },
   ladderFill: {
     height: '100%',

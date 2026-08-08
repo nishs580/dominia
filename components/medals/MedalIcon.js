@@ -3,17 +3,24 @@ import { View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { MEDAL_BADGE_SVG } from '../../lib/medalBadges';
 
-// A locked medal is struck from dead metal: the plate drops to Slate 2 and the
-// engraving drops to Ink 2, so the badge keeps its silhouette and its detail but
-// loses every tier colour. Dimming the coloured art with opacity was not enough
-// — at 0/16 a wall of tinted badges still read as a set already won, and it
-// contradicted both the counter and "No Honor Medals earned yet."
+// A locked medal is an empty setting, not a coin struck from dead metal.
+//
+// Two attempts got this wrong in opposite directions. Dimming the coloured art
+// with opacity left a wall of tinted badges still reading as a set already won.
+// Recolouring the plate to Slate 2 then overcorrected: sixteen mid-grey plates
+// at full opacity became the brightest mass on the screen, so the things the
+// player does NOT have outshouted the one action they should take.
+//
+// The rule that settles it: light fill belongs to earned medals only. A locked
+// badge therefore goes DARKER than the card it sits on and carries its detail
+// in the engraving — silhouette and structure preserved, no tier colour, and
+// it recedes into the grid instead of competing with it.
 //
 // Every generated badge is one bone plate (#f2eee6) plus accent marks in a
 // single category colour (see lib/medalBadges.js), so the mapping is exact.
 const PLATE_HEX = '#f2eee6';
-const LOCKED_PLATE = '#8B8F98'; // Slate 2
-const LOCKED_MARK = '#1A1D24'; // Ink 2
+const LOCKED_PLATE = '#252932'; // Ink 3 — sits just above the card, reads as an empty slot
+const LOCKED_MARK = '#5C6068'; // Slate — the engraving, legible against the dark plate
 
 // Badge XML is static per key, so each locked variant is built once.
 const lockedCache = new Map();
