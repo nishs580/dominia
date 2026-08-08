@@ -2322,24 +2322,34 @@ export default function MapScreen() {
     [],
   );
 
-  // NOTE ON A FIX THAT WAS TRIED AND REJECTED — do not re-add it.
+  // Open ground gets a face AND an edge. Neither works alone.
   //
-  // A critic named the board's worst problem correctly: the screen names
-  // neighbouring parcels in text and draws boundaries for none of them, so it
-  // says contestable ground is there and then refuses to show it. Its proposed
-  // fix was a ~6% fill on open ground, against theme.js's "unclaimed = no fill,
-  // slate hairline only".
+  // Two failed experiments got us here, both worth recording so they are not
+  // repeated. A fill with the old thin dashed edges flooded the viewport into
+  // one structureless grey mass — verified by ramping the layer to 55%, where
+  // the whole screen went grey and no parcel emerged. Strong edges with no fill
+  // then read as more road network: territories are road-bounded, so a parcel
+  // edge literally runs along a street, and a line there is a street until
+  // something tells you it encloses an area.
   //
-  // That fix is wrong for this data, and the reason is worth recording. Open
-  // parcels TILE the viewport edge to edge — every scrap of ground belongs to
-  // some territory. So a fill on open ground does not reveal structure, it
-  // lifts the entire board uniformly. Measured on device by ramping the layer
-  // to 55%: the whole screen flooded grey with no parcel structure emerging at
-  // all, which is also why 6% and 11% were indistinguishable from nothing.
-  //
-  // The brand rule was right. What actually creates the tessellation is the
-  // EDGE between parcels, handled by unclaimedLineStyle above — so that is
-  // where the weight went instead.
+  // The face is what says "area", the edge is what says "this area ends here".
+  // Together they tessellate. theme.js says "unclaimed = no fill, slate hairline
+  // only"; this is a deliberate, documented departure under the DESIGN.md
+  // Map-Layer Exception, held far below owned ground (36–44%) so it can never
+  // be mistaken for ownership.
+  const openFillStyle = useMemo(
+    () => ({
+      fillColor: SLATE2,
+      fillOpacity: [
+        'interpolate', ['linear'], ['zoom'],
+        11.5, 0,
+        12.5, 0.05,
+        14, 0.10,
+      ],
+      fillEmissiveStrength: 1.0,
+    }),
+    [],
+  );
 
   // Corner marks on held parcels — the board's control points. Bone, not the
   // owner colour: on a near-solid owner-coloured plate an owner-coloured node
@@ -2932,6 +2942,9 @@ export default function MapScreen() {
             setSelected({ feature: f, allFeatures: territories.features });
           }}
         >
+          {/* Open ground first, underneath everything: it is the board surface,
+              not an object sitting on it. */}
+          <MapboxGL.FillLayer id="territories-open-fill" filter={openFilter} style={openFillStyle} />
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
           <MapboxGL.FillLayer id="territories-hatch" filter={claimedFilter} style={hatchStyle} />
           <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
