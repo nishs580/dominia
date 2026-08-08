@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Pressable } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 import { clearFcmToken } from '../lib/fcm';
@@ -24,14 +25,27 @@ import {
   calcTerritoryCapForLevel,
   calcMedalPower,
   calcActivityPower,
+  getStreakTier,
+  STREAK_TIER_THRESHOLDS,
 } from '../lib/formulas';
+import { earnedCount } from '../lib/legacyMedals';
+import {
+  initialize as healthInitialize,
+  getSdkStatus,
+  getGrantedPermissions,
+  requestPermission,
+  openHealthConnectSettings,
+  SdkAvailabilityStatus,
+} from '../lib/health';
+import { ACTIVITY_READ_PERMS, hasForegroundStepsRead } from '../lib/healthConnect';
+import * as activityProducer from '../lib/activity';
 
 function territoryCapForLevel(level) {
   const lv = Math.min(10, Math.max(1, level | 0));
   return calcTerritoryCapForLevel(lv);
 }
-import { colors, fonts, fontSize, spacing } from '../lib/theme';
-import { InfluenceGlyph } from '../components/ResourceGlyphs';
+import { colors, fonts, spacing } from '../lib/theme';
+import { IronGlyph, StoneGlyph, GoldGlyph, MoraleGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 
@@ -44,8 +58,11 @@ const DEBUG_MENU = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_MENU === '1';
 
 const CLAIM = '#D64525';
 const ALLIANCE = '#3F8F4E';
+// The one sanctioned non-territory signal. Used exactly once on this screen.
+const CAUTION = '#D49A2B';
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
+const INK3 = '#252932';
 const BONE = '#F2EEE6';
 const SLATE = '#5C6068';
 const SLATE2 = '#8B8F98';
@@ -56,12 +73,91 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function SectionDivider({ label }) {
+// One spine for every section on the screen: mono label, hairline, optional
+// readout on the right. Sections stop looking like unrelated islands.
+function SectionRule({ label, right }) {
   return (
-    <View style={styles.sectionDivider}>
-      <View style={styles.sectionDividerLine} />
-      <Text style={styles.sectionDividerLabel}>{label}</Text>
-      <View style={styles.sectionDividerLine} />
+    <View style={styles.sectionRule}>
+      <Text style={styles.sectionRuleLabel}>{label}</Text>
+      <View style={styles.sectionRuleLine} />
+      {right ? <Text style={styles.sectionRuleRight}>{right}</Text> : null}
+    </View>
+  );
+}
+
+// The ten-rank ladder. A fresh commander is not "nothing" — they are standing
+// on the first of ten segments, and the whole scale is visible at once.
+function RankLadder({ level, progress }) {
+  const segs = [];
+  for (let i = 1; i <= 10; i += 1) {
+    const done = i < level;
+    const current = i === level;
+    segs.push(
+      <View key={i} style={styles.ladderSlot}>
+        <View
+          style={[
+            styles.ladderSeg,
+            done && styles.ladderSegDone,
+            current && styles.ladderSegCurrent,
+          ]}
+        >
+          {current && progress > 0 ? (
+            <View style={[styles.ladderFill, { width: `${clamp(progress, 0, 1) * 100}%` }]} />
+          ) : null}
+        </View>
+        {current ? <View style={styles.ladderSegCurrentMark} /> : null}
+      </View>,
+    );
+  }
+  return <View style={styles.ladder}>{segs}</View>;
+}
+
+// A Power contributor. Every reading — zero or not — states where it comes
+// from, and every row is a door: tapping it goes to the place that moves it.
+// Zero-state reasons are sentences (Inter); live readings are data (mono).
+//
+// `action` replaces the chevron with a control that satisfies the row's
+// prerequisite in place. When one is present the row itself stops navigating —
+// a Pressable inside a Pressable swallows the outer tap on Android, and the
+// control is the affordance anyway.
+function PowerRow({ label, value, reason, onPress, a11y, action }) {
+  const zero = value <= 0;
+  const body = (
+    <>
+      <View style={styles.powerRowLeft}>
+        <Text style={styles.powerRowLabel}>{label}</Text>
+        <Text style={zero ? styles.powerRowReason : styles.powerRowData} numberOfLines={2}>
+          {reason}
+        </Text>
+      </View>
+      <Text style={styles.powerRowValue}>{value.toLocaleString()}</Text>
+      {action ?? <Text style={styles.rowChevron}>›</Text>}
+    </>
+  );
+  if (action) {
+    return <View style={styles.powerRow}>{body}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      onPress={onPress}
+      style={({ pressed }) => [styles.powerRow, pressed && styles.rowPressed]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+// One instrument in the record table. `sub` carries the scale and the unit, so
+// the numeral column stays pure figures and every reading still says what it
+// is measured against.
+function RecordCell({ label, value, sub, rightEdge }) {
+  return (
+    <View style={[styles.recordCell, rightEdge && styles.recordCellEdge]}>
+      <Text style={styles.recordLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.recordValue}>{value}</Text>
+      <Text style={styles.recordSub} numberOfLines={1}>{sub}</Text>
     </View>
   );
 }
@@ -181,7 +277,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
         accessibilityLabel={t('profile.deleteAccount')}
       >
         <Text style={styles.settingsDelete}>{t('profile.deleteAccount')}</Text>
-        <Text style={styles.settingsChevron}>›</Text>
+        <Text style={styles.settingsDeleteFlag}>{t('profile.irreversible')}</Text>
       </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
@@ -344,8 +440,8 @@ function ChangePasswordSection() {
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const today = useMemo(() => new Date(), []);
   const { signOut, userId, getToken } = useAuth();
   // Medal-push deep-link: land on the earned medal's detail card.
   const focusMedalKey = route?.params?.medalKey ?? null;
@@ -358,6 +454,13 @@ export default function ProfileScreen() {
   const walkthroughXpRef = useRef(null);
   const walkthroughTerritoriesRef = useRef(null);
   const walkthroughResourcesRef = useRef(null);
+
+  // Legacy Power routes to the Honor Medals section further down the page.
+  const scrollRef = useRef(null);
+  const medalsYRef = useRef(0);
+  const scrollToMedals = () => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, medalsYRef.current - 12), animated: true });
+  };
 
   const profileTips = useMemo(
     () => [
@@ -382,7 +485,12 @@ export default function ProfileScreen() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [activityPower, setActivityPower] = useState(0);
+  const [activityStats, setActivityStats] = useState(null);
   const [medals, setMedals] = useState(null);
+  // null = not resolved yet. Only a settled `false` shows the TURN ON control,
+  // so a player who already granted it never sees the button flash in.
+  const [stepsPerm, setStepsPerm] = useState(null);
+  const [permBusy, setPermBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -400,6 +508,7 @@ export default function ProfileScreen() {
       setLoading(true);
       setProfileError(null);
       setActivityPower(0);
+      setActivityStats(null);
 
       const { data: player, error: playerError } = await supabase
         .from('players')
@@ -460,13 +569,14 @@ export default function ProfileScreen() {
         console.warn('[ProfileScreen] activity stats fetch failed:', error);
       } else if (data && data.length > 0) {
         const stats = data[0];
-        const power = calcActivityPower({
+        const normalised = {
           xp30d: Number(stats.xp_30d) || 0,
           km30d: Number(stats.km_30d) || 0,
           challenges30d: Number(stats.challenges_30d) || 0,
           contests30d: Number(stats.contests_30d) || 0,
-        });
-        setActivityPower(power);
+        };
+        setActivityStats(normalised);
+        setActivityPower(calcActivityPower(normalised));
       }
 
       setLoading(false);
@@ -477,6 +587,61 @@ export default function ProfileScreen() {
       cancelled = true;
     };
   }, [userId]);
+
+  // ── Step tracking ───────────────────────────────────────────────────────
+  // The Activity Power row states a prerequisite, so it has to carry the
+  // control that satisfies it. Re-checked on focus because the grant can also
+  // be given on the Activity tab or in Health Connect itself.
+  const refreshStepsPermission = useCallback(async () => {
+    try {
+      await healthInitialize();
+      const status = await getSdkStatus();
+      if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
+        setStepsPerm(false);
+        return;
+      }
+      const granted = await getGrantedPermissions();
+      setStepsPerm(hasForegroundStepsRead(granted));
+    } catch (err) {
+      // Health Connect missing or not ready. Treat as "not tracking" so the
+      // row still offers a way forward instead of silently going quiet.
+      setStepsPerm(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        if (cancelled) return;
+        await refreshStepsPermission();
+      })();
+      return () => { cancelled = true; };
+    }, [refreshStepsPermission]),
+  );
+
+  const onTurnOnTracking = async () => {
+    if (permBusy) return;
+    setPermBusy(true);
+    try {
+      await healthInitialize();
+      const before = await getGrantedPermissions();
+      await requestPermission(ACTIVITY_READ_PERMS);
+      const granted = await getGrantedPermissions();
+      const ok = hasForegroundStepsRead(granted);
+      setStepsPerm(ok);
+      if (ok) activityProducer.onPermissionGranted();
+      // Android shows the Health Connect sheet once per app; a later request
+      // that changes nothing means the sheet was suppressed, so send the
+      // player to the settings screen where the grant can be toggled directly.
+      if (!ok && granted.length === before.length) openHealthConnectSettings();
+    } catch (err) {
+      console.warn('[Profile] step permission request failed:', err?.message ?? err);
+      try { openHealthConnectSettings(); } catch (_) { /* nothing else to offer */ }
+    } finally {
+      setPermBusy(false);
+    }
+  };
 
   // Honor Medal state — drives Legacy Power and is passed to the medals section.
   useEffect(() => {
@@ -502,7 +667,6 @@ export default function ProfileScreen() {
   const xpIntoLevel = level >= 10 ? xpInt - (LEVEL_XP_FLOORS[9] ?? 0) : xpInt - xpFloor;
   const xpNeeded = level >= 10 ? 0 : (LEVEL_XP_FLOORS[level] ?? 0) - xpFloor;
   const xpProgress = progress;
-  const xpPct = Math.round(Math.min(progress, 1) * 100);
   const territoryCap = territoryCapForLevel(level);
   const fullValueCap = calcFullValueCap({
     level,
@@ -549,6 +713,59 @@ export default function ProfileScreen() {
   const avatarUrl = playerRow?.avatar_url ?? null;
   const avatarInitials =
     playerName && playerName !== '—' ? playerName.slice(0, 2).toUpperCase() : '??';
+
+  // ── Readouts ────────────────────────────────────────────────────────────
+  // Every zero on this screen has to say what scale it sits on and what moves
+  // it. These derive the scale from data already fetched — nothing invented.
+
+  const heldCount = ownedTerritories.length;
+  const medalsEarned = medals ? earnedCount(medals) : 0;
+
+  const dailyInfluence = useMemo(() => {
+    const total = ownedTerritories.reduce((sum, terr) => {
+      const tier = terr.tier
+        ? terr.tier.charAt(0).toUpperCase() + terr.tier.slice(1)
+        : 'Small';
+      try {
+        return sum + calcDailyInfluence({
+          tier,
+          developmentLevel: terr.development_level ?? 0,
+          legacyRank: terr.legacy_rank ?? 1,
+        });
+      } catch {
+        return sum;
+      }
+    }, 0);
+    return total;
+  }, [ownedTerritories]);
+
+  // Next streak tier threshold above the current streak — the scale a zero
+  // streak is measured against (3 days is the first one).
+  const nextStreakTier = useMemo(() => {
+    const ascending = [...STREAK_TIER_THRESHOLDS].sort((a, b) => a.days - b.days);
+    return ascending.find((tier) => tier.days > currentStreak) ?? null;
+  }, [currentStreak]);
+  const streakMultiplier = getStreakTier(currentStreak).multiplier;
+
+  // Tracking off is the only state that needs a control; once it is on, a zero
+  // is just an empty 30 days and the row goes back to being a plain door.
+  const trackingOff = stepsPerm === false;
+  const activityReason = activityPower > 0
+    ? t('profile.activityLive', {
+        km: (activityStats?.km30d ?? 0).toFixed(1),
+        challenges: activityStats?.challenges30d ?? 0,
+      })
+    : trackingOff
+      ? t('profile.activityOff')
+      : t('profile.activityIdle');
+
+  const territoryReason = heldCount > 0
+    ? t('profile.territoryLive', { count: heldCount, cap: fullValueCap })
+    : t('profile.territoryZero');
+
+  const legacyReason = legacyPower > 0
+    ? t('profile.legacyLive', { earned: medalsEarned })
+    : t('profile.legacyZero');
 
   const onChangeAvatar = async () => {
     if (uploadingAvatar) return;
@@ -611,7 +828,7 @@ export default function ProfileScreen() {
       {!loading && playerRow ? (
         <Pressable
           ref={walkthroughIdentityRef}
-          style={styles.headerBlock}
+          style={[styles.headerBlock, { paddingTop: Math.max(insets.top, StatusBar.currentHeight ?? 0) + 10 }]}
           onLongPress={DEBUG_MENU ? () => navigation.navigate('HealthConnectDebug') : undefined}
           delayLongPress={1000}
         >
@@ -623,12 +840,14 @@ export default function ProfileScreen() {
               accessibilityLabel={t('profile.changeAvatarA11y')}
             >
               {avatarUrl ? (
-                <Image source={{ uri: avatarThumb(avatarUrl, 72) }} style={styles.avatarImage} />
+                <Image source={{ uri: avatarThumb(avatarUrl, 64) }} style={styles.avatarImage} />
               ) : (
                 <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
                   <Text style={styles.avatarInitials}>{avatarInitials}</Text>
                 </View>
               )}
+              {/* Slate hairline, never Claim Red — setting a picture is the
+                  smallest affordance on the screen and must not spend the red. */}
               <View style={styles.avatarEditBadge}>
                 {uploadingAvatar ? (
                   <ActivityIndicator size="small" color={BONE} />
@@ -637,11 +856,16 @@ export default function ProfileScreen() {
                 )}
               </View>
             </Pressable>
+            {/* No COMMANDER kicker: it outranked the real rank noun directly
+                below it, and "Commander" is itself level 5 on the ladder — a
+                decorative label that collides with a rank the player can earn.
+                The rank and its scale now sit together on one line. */}
             <View style={styles.headerTextCol}>
-              <Text style={styles.commanderLabel}>{t('profile.commanderLabel')}</Text>
               <Text style={styles.commanderName} maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{playerName}</Text>
-              <Text style={styles.rankLine}>
+              <Text style={styles.rankLine} numberOfLines={1}>
                 <Text style={styles.rankTitle}>{t('levelTitle.' + rankBadge)}</Text>
+                <Text style={styles.rankSeparator}> · </Text>
+                <Text style={styles.rankScale}>{t('profile.rankOf', { level })}</Text>
                 <Text style={styles.rankSeparator}> · </Text>
                 {allianceName ? (
                   <Text style={styles.rankAllianceClaim}>{allianceName}</Text>
@@ -655,7 +879,16 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+      {/* persistentScrollbar is the scroll cue: the tab bar's hairline top edge
+          cuts the page cleanly enough to read as its end, so a section that
+          happens to be bisected there looks finished rather than continued.
+          The bottom pad clears the gesture inset so the last row is reachable. */}
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        persistentScrollbar
+        contentContainerStyle={[styles.content, { paddingBottom: spacing.xl4 + insets.bottom }]}
+      >
         {loading ? (
           <View style={styles.loadingBlock}>
             <ActivityIndicator size="large" color={SLATE2} />
@@ -671,157 +904,198 @@ export default function ProfileScreen() {
 
         {!loading && playerRow ? (
           <>
+          {/* ── STANDING ────────────────────────────────────────────────
+              The hero number, the ten-rank ladder it sits on, and the three
+              contributors — each stating its source and routing to the place
+              that moves it. A zero here is a position, not an absence. */}
           <View ref={walkthroughPowerRef} collapsable={false} style={styles.powerSection}>
-            <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>{t('profile.power')}</Text>
-              <View style={styles.influenceHairline} />
+            <SectionRule label={t('profile.power')} />
+            <View style={styles.powerHeroRow}>
+              <Text style={styles.powerValue} maxFontSizeMultiplier={1.2}>{totalPower.toLocaleString()}</Text>
+              <Text style={styles.powerHeroUnit}>{t('profile.totalPower')}</Text>
             </View>
-            <View style={styles.powerHeroBlock}>
-              <Text style={styles.powerValue}>{totalPower.toLocaleString()}</Text>
-              <Text style={styles.influenceSublabel}>{t('profile.totalPower')}</Text>
-            </View>
-            <View style={styles.powerHeroDivider} />
-            <View style={styles.powerRow}>
-              <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>{t('profile.activityPower')}</Text>
-                <Text style={styles.powerRowReason}>{t('profile.activityPowerReason')}</Text>
-              </View>
-              <Text style={styles.powerRowValueLive}>{activityPower.toLocaleString()}</Text>
-            </View>
-            <View style={styles.powerRowDivider} />
-            <View style={styles.powerRow}>
-              <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>{t('profile.territoryPower')}</Text>
-                <Text style={styles.powerRowReason}>
-                  {t('profile.territoryReason', { terr: t('profile.territories', { count: ownedTerritories.length }), cap: fullValueCap })}
-                </Text>
-              </View>
-              <Text style={styles.powerRowValueLive}>{territoryPower.toLocaleString()}</Text>
-            </View>
-            <View style={styles.powerRowDivider} />
-            <View style={styles.powerRow}>
-              <View style={styles.powerRowLeft}>
-                <Text style={styles.powerRowLabel}>{t('profile.legacyPower')}</Text>
-                <Text style={styles.powerRowReason}>
-                  {t('profile.legacyReason', { wins: t('profile.contestWins', { count: lifetimeContestWins }), streak: t('profile.streakDays', { count: longestStreak }) })}
-                </Text>
-              </View>
-              <Text style={styles.powerRowValueLive}>{legacyPower.toLocaleString()}</Text>
-            </View>
-          </View>
 
-          <View style={styles.influenceBlock}>
-            <View style={styles.influenceHeader}>
-              <Text style={styles.influenceLabel}>{t('profile.influence')}</Text>
-              <View style={styles.influenceHairline} />
-            </View>
-            <View style={styles.influenceRow}>
-              <InfluenceGlyph size={32} color={colors.bone} />
-              <View style={styles.influenceTextStack}>
-                <Text style={styles.influenceValue}>
-                  {(() => {
-                    const total = ownedTerritories.reduce((sum, t) => {
-                      const tier = t.tier
-                        ? t.tier.charAt(0).toUpperCase() + t.tier.slice(1)
-                        : 'Small';
-                      try {
-                        return sum + calcDailyInfluence({
-                          tier,
-                          developmentLevel: t.development_level ?? 0,
-                          legacyRank: t.legacy_rank ?? 1,
-                        });
-                      } catch {
-                        return sum;
-                      }
-                    }, 0);
-                    return total % 1 === 0
-                      ? total.toLocaleString()
-                      : total.toFixed(1);
-                  })()}
+            <View ref={walkthroughXpRef} collapsable={false}>
+              <RankLadder level={level} progress={xpProgress} />
+              <View style={styles.ladderCaption}>
+                <Text style={styles.ladderXp}>
+                  {next ? t('profile.xpFraction', { into: xpIntoLevel, needed: xpNeeded }) : t('profile.maxLevel')}
                 </Text>
-                <Text style={styles.influenceSublabel}>{t('profile.influencePerDay')}</Text>
-                <Text style={styles.influenceContext}>
-                  {t('profile.influenceContext', { count: ownedTerritories.length })}
-                </Text>
+                {next ? (
+                  <Text style={styles.ladderNext} numberOfLines={1}>
+                    {t('profile.nextPrefix')}{t('levelTitle.' + next.title)}
+                  </Text>
+                ) : null}
               </View>
-            </View>
-          </View>
-
-          <View style={styles.statGrid}>
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>{t('profile.streak')}</Text>
-              <Text style={styles.statValue}>{t('profile.daysValue', { count: currentStreak })}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
-              <Text style={styles.statValue}>{t('profile.daysValue', { count: longestStreak })}</Text>
-            </View>
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>{t('profile.territoriesLabel')}</Text>
-              <Text style={styles.statValue}>
-                {ownedTerritories.length} / {territoryCap}
+              {/* The gate, then the reward. Without the prefix this line reads
+                  as a state already reached; "AT 600 XP ·" binds it to the
+                  fraction directly above and keeps it conditional. The rank
+                  noun is deliberately not repeated — it is already the caption
+                  on the same row. */}
+              <Text style={styles.unlockText}>
+                {next ? (
+                  <Text style={styles.unlockGate}>
+                    {t('profile.unlockAt', { needed: xpNeeded.toLocaleString() })}
+                  </Text>
+                ) : null}
+                {unlockText}
               </Text>
             </View>
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>{t('profile.siegeXp')}</Text>
-              <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
-            </View>
-          </View>
 
-          <View ref={walkthroughXpRef} collapsable={false} style={styles.card}>
-            <SectionDivider label={t('profile.xpProgress')} />
-            <Text style={styles.xpNumbers}>
-              {t('profile.xpNumbers', { into: xpIntoLevel, needed: xpNeeded })}
-            </Text>
-            <Text style={styles.nextLine}>
-              <Text style={styles.nextPrefix}>{t('profile.nextPrefix')}</Text>
-              <Text style={styles.nextTitle}>{next ? t('levelTitle.' + next.title) : t('profile.maxLevel')}</Text>
-            </Text>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${clamp(xpProgress, 0, 1) * 100}%` },
-                ]}
+            <View style={styles.powerLedger}>
+              <PowerRow
+                label={t('profile.activityPower')}
+                value={activityPower}
+                reason={activityReason}
+                onPress={() => navigation.navigate('Activity')}
+                a11y={t('profile.activityPower')}
+                action={trackingOff ? (
+                  // Secondary instrument, never Claim Red: red means yours /
+                  // claim / the primary CTA, and granting an OS permission is
+                  // none of those. The screen's one red stays on the claim.
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('profile.turnOnTracking')}
+                    onPress={onTurnOnTracking}
+                    disabled={permBusy}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    style={({ pressed }) => [styles.rowAction, pressed && styles.rowActionPressed]}
+                  >
+                    {permBusy ? (
+                      <ActivityIndicator size="small" color={BONE} />
+                    ) : (
+                      <Text style={styles.rowActionText}>{t('profile.turnOn')}</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+              />
+              <View style={styles.powerRowDivider} />
+              <PowerRow
+                label={t('profile.territoryPower')}
+                value={territoryPower}
+                reason={territoryReason}
+                onPress={() => navigation.navigate('Map')}
+                a11y={t('profile.territoryPower')}
+              />
+              <View style={styles.powerRowDivider} />
+              <PowerRow
+                label={t('profile.legacyPower')}
+                value={legacyPower}
+                reason={legacyReason}
+                onPress={scrollToMedals}
+                a11y={t('profile.legacyPower')}
               />
             </View>
-            <Text style={styles.unlockText}>{unlockText}</Text>
           </View>
 
-          <View ref={walkthroughTerritoriesRef} collapsable={false}>
-            <View style={{ marginTop: 24 }}>
-              <SectionDivider label={t('profile.yourTerritories')} />
-            </View>
-            <View style={styles.list}>
-              {ownedTerritories.length === 0 ? (
-                <Text style={styles.emptyText}>{t('profile.noTerritories')}</Text>
-              ) : null}
-              {ownedTerritories.map((terr, index) => {
-                const lat = Number(terr.latitude);
-                const lng = Number(terr.longitude);
-                const canLocate = Number.isFinite(lat) && Number.isFinite(lng);
-                return (
-                  <React.Fragment key={terr.id ?? `${terr.territory_name}-${index}`}>
-                    {index > 0 ? <View style={styles.listDivider} /> : null}
-                    <OwnedTerritoryRow
-                      name={terr.territory_name ?? t('common.territoryFallback')}
-                      tier={terr.tier}
-                      onPress={canLocate ? () => navigation.navigate('Map', {
-                        focusTerritory: { id: terr.id, name: terr.territory_name, latitude: lat, longitude: lng },
-                        focusNonce: Date.now(),
-                      }) : undefined}
-                    />
-                  </React.Fragment>
-                );
-              })}
+          {/* ── TERRITORIES ─────────────────────────────────────────────
+              With nothing held this is the screen's one instruction, and it
+              carries the screen's one Claim Red. Copy never implies going to
+              the territory — the walk counts from anywhere. */}
+          <View ref={walkthroughTerritoriesRef} collapsable={false} style={styles.section}>
+            <SectionRule
+              label={t('profile.yourTerritories')}
+              right={`${heldCount} / ${territoryCap}`}
+            />
+            {heldCount === 0 ? (
+              <View style={styles.emptyBlock}>
+                <Text style={styles.emptyLead}>{t('profile.noTerritories')}</Text>
+                {/* With tracking off the claim is the second step, and the copy
+                    says so — the control that satisfies the prerequisite is the
+                    TURN ON button in the Activity Power row above. Ordering it
+                    in words rather than in a second red button keeps the One
+                    Claim Rule intact. */}
+                <Text style={styles.emptyBody}>
+                  {trackingOff
+                    ? t('profile.territoriesEmptyBodyTracking')
+                    : t('profile.territoriesEmptyBody')}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('Map')}
+                  style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}
+                >
+                  <Text
+                    style={styles.primaryCtaText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('profile.claimFirst')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.list}>
+                {ownedTerritories.map((terr, index) => {
+                  const lat = Number(terr.latitude);
+                  const lng = Number(terr.longitude);
+                  const canLocate = Number.isFinite(lat) && Number.isFinite(lng);
+                  return (
+                    <React.Fragment key={terr.id ?? `${terr.territory_name}-${index}`}>
+                      {index > 0 ? <View style={styles.listDivider} /> : null}
+                      <OwnedTerritoryRow
+                        name={terr.territory_name ?? t('common.territoryFallback')}
+                        tier={terr.tier}
+                        onPress={canLocate ? () => navigation.navigate('Map', {
+                          focusTerritory: { id: terr.id, name: terr.territory_name, latitude: lat, longitude: lng },
+                          focusNonce: Date.now(),
+                        }) : undefined}
+                      />
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* ── RECORD ──────────────────────────────────────────────────
+              Six instruments, each printing the scale it is measured on. */}
+          <View style={styles.section}>
+            <SectionRule label={t('profile.record')} />
+            <View style={styles.recordTable}>
+              <RecordCell
+                label={t('profile.streak')}
+                value={String(currentStreak)}
+                sub={nextStreakTier
+                  ? t('profile.subNextTier', { days: nextStreakTier.days })
+                  : t('profile.subStreakMult', { mult: streakMultiplier.toFixed(2) })}
+              />
+              <RecordCell
+                label={t('profile.bestStreak')}
+                value={String(longestStreak)}
+                sub={t('profile.subPersonalBest')}
+                rightEdge
+              />
+              <RecordCell
+                label={t('profile.influence')}
+                value={dailyInfluence % 1 === 0 ? dailyInfluence.toLocaleString() : dailyInfluence.toFixed(1)}
+                sub={t('profile.perDayFromHeld', { count: heldCount })}
+              />
+              <RecordCell
+                label={t('profile.siegeXp')}
+                value={xpInt.toLocaleString()}
+                sub={t('profile.lifetimeSub')}
+                rightEdge
+              />
+              <RecordCell
+                label={t('profile.contestsWonLabel')}
+                value={lifetimeContestWins.toLocaleString()}
+                sub={t('profile.lifetimeSub')}
+              />
+              <RecordCell
+                label={t('profile.defencesHeldLabel')}
+                value={lifetimeDefenceWins.toLocaleString()}
+                sub={t('profile.lifetimeSub')}
+                rightEdge
+              />
             </View>
           </View>
 
           {citadelRecords.length > 0 ? (
-            <View>
-              <View style={{ marginTop: 24 }}>
-                <SectionDivider label={t('profile.citadels')} />
-              </View>
+            <View style={styles.section}>
+              <SectionRule label={t('profile.citadels')} right={String(citadelRecords.length)} />
               <View style={styles.list}>
                 {citadelRecords.map((record, index) => (
                   <React.Fragment key={record.id}>
@@ -836,40 +1110,62 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          <View>
-            <View style={{ marginTop: 24 }}>
-              <LegacyMedalsSection
-                clerkGetToken={getToken}
-                focusMedalKey={focusMedalKey}
-                onFocusConsumed={() => navigation.setParams({ medalKey: undefined })}
-              />
-            </View>
+          <View
+            style={styles.section}
+            onLayout={(e) => { medalsYRef.current = e.nativeEvent.layout.y; }}
+          >
+            <LegacyMedalsSection
+              clerkGetToken={getToken}
+              focusMedalKey={focusMedalKey}
+              onFocusConsumed={() => navigation.setParams({ medalKey: undefined })}
+            />
           </View>
         </>
       ) : null}
 
       {!loading ? (
         <>
-          {/* Wallet needs a real playerId — only render it with a loaded row,
-              never in the load-error state (which would navigate with undefined). */}
+          {/* The balances themselves, not a button that promises them. Needs a
+              real playerId, so it never renders in the load-error state. */}
           {playerRow ? (
-            <View ref={walkthroughResourcesRef} collapsable={false} style={styles.walletSection}>
-              <SectionDivider label={t('profile.resources')} />
+            <View ref={walkthroughResourcesRef} collapsable={false} style={styles.section}>
+              <SectionRule label={t('profile.resources')} right={t('profile.openWallet')} />
               <Pressable
-                style={styles.walletButton}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.myResources')}
+                style={({ pressed }) => [styles.walletStrip, pressed && styles.rowPressed]}
                 onPress={() => navigation.navigate('Wallet', {
                   playerId: playerRow.id,
                   username: playerRow.username ?? '',
                 })}
               >
-                <Text style={styles.walletButtonText}>{t('profile.myResources')}</Text>
+                {[
+                  { key: 'iron', Glyph: IronGlyph, value: Math.max(0, Number(playerRow.iron) || 0) },
+                  { key: 'stone', Glyph: StoneGlyph, value: Math.max(0, Number(playerRow.stone) || 0) },
+                  { key: 'gold', Glyph: GoldGlyph, value: Math.max(0, Number(playerRow.gold) || 0) },
+                  { key: 'morale', Glyph: MoraleGlyph, value: Math.max(0, Number(playerRow.morale) || 0) },
+                ].map(({ key, Glyph, value }, index) => (
+                  <View
+                    key={key}
+                    style={[
+                      styles.walletCell,
+                      index === 0 && styles.walletCellFirst,
+                      index < 3 && styles.walletCellEdge,
+                    ]}
+                  >
+                    <Glyph size={14} color={value > 0 ? BONE : SLATE2} />
+                    <Text style={styles.walletValue}>
+                      {value.toLocaleString()}
+                    </Text>
+                    <Text style={styles.walletCellLabel}>{t('profile.resource.' + key)}</Text>
+                  </View>
+                ))}
               </Pressable>
-              <Text style={styles.walletTapHint}>{t('profile.tapToEnter')}</Text>
             </View>
           ) : null}
 
-          <View style={[styles.card, { marginTop: 32 }]}>
-            <SectionDivider label={t('profile.settings')} />
+          <View style={styles.section}>
+            <SectionRule label={t('profile.settings')} />
             <View style={styles.settingsList}>
               {/* Player-dependent rows only render with a loaded row; sign out
                   and change password stay available so an errored user can escape. */}
@@ -942,62 +1238,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingBottom: spacing.xl4,
   },
-  influenceBlock: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  influenceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  influenceLabel: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.sm,
-    letterSpacing: 1.6,
-    color: colors.slate2,
-    textTransform: 'uppercase',
-  },
-  influenceHairline: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.hairlineStrong,
-    marginLeft: spacing.sm,
-  },
-  influenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  influenceTextStack: {
-    flex: 1,
-    flexDirection: 'column',
-    gap: spacing.xs,
-  },
-  influenceValue: {
-    fontFamily: fonts.displayMedium,
-    fontSize: fontSize.xl4,
-    letterSpacing: fontSize.xl4 * -0.02,
-    color: colors.bone,
-  },
-  influenceSublabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    color: colors.slate2,
-    textTransform: 'uppercase',
-  },
-  influenceContext: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.slate2,
-  },
+
+  // ── Identity ─────────────────────────────────────────────────────────────
   headerBlock: {
-    paddingTop: (StatusBar.currentHeight ?? 0) + 12,
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1008,13 +1255,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatarWrap: {
-    width: 72,
-    height: 72,
+    width: 64,
+    height: 64,
   },
   avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 4,
+    width: 64,
+    height: 64,
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
     backgroundColor: INK2,
@@ -1025,40 +1271,32 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: 'Archivo_900Black',
-    fontSize: 24,
+    fontSize: 22,
     color: SLATE2,
     letterSpacing: -0.01,
   },
   avatarEditBadge: {
     position: 'absolute',
-    left: -1,
-    right: -1,
-    bottom: -1,
+    left: 0,
+    right: 0,
+    bottom: 0,
     minHeight: 16,
     paddingVertical: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(14,16,20,0.82)',
+    backgroundColor: 'rgba(14,16,20,0.86)',
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: HAIRLINE_STRONG,
   },
   avatarEditBadgeText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 8,
     letterSpacing: 1.4,
-    color: CLAIM,
-  },
-  commanderLabel: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 1.6,
     color: SLATE2,
   },
   commanderName: {
-    marginTop: 0,
     fontFamily: 'Archivo_900Black',
-    fontSize: 36,
+    fontSize: 32,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
@@ -1066,35 +1304,50 @@ const styles = StyleSheet.create({
   rankLine: {
     marginTop: 6,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   rankTitle: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    letterSpacing: 1.2,
     // Bone, not red — the rank title is a label, not the screen's one accent.
     color: BONE,
   },
   rankSeparator: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontSize: 10,
+    color: SLATE2,
+  },
+  // The rank's position on the ladder, sitting with the rank noun rather than
+  // 250px lower in another block.
+  rankScale: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAlliance: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAllianceClaim: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 1.2,
     // Alliance Green — the alliance is "ours" (Locked Meaning Rule), never red.
     color: ALLIANCE,
   },
   hairlineStrong: {
-    marginTop: 14,
+    marginTop: 12,
     height: 1,
     backgroundColor: HAIRLINE_STRONG,
   },
+
+  // ── States ───────────────────────────────────────────────────────────────
   loadingBlock: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1107,7 +1360,7 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   errorBanner: {
-    marginTop: 8,
+    marginTop: 16,
     padding: 12,
     backgroundColor: INK2,
     borderWidth: 1,
@@ -1116,107 +1369,280 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    color: BONE,
+  },
+
+  // ── Section spine ────────────────────────────────────────────────────────
+  section: {
+    marginTop: 24,
+  },
+  sectionRule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionRuleLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
     color: SLATE2,
   },
-  card: {
-    marginTop: 12,
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    padding: 16,
-  },
-  progressTrack: {
-    marginTop: 12,
-    height: 2,
+  sectionRuleLine: {
+    flex: 1,
+    height: 1,
     backgroundColor: HAIRLINE_STRONG,
   },
-  progressFill: {
+  sectionRuleRight: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: SLATE2,
+  },
+
+  // ── Standing ─────────────────────────────────────────────────────────────
+  powerSection: {
+    paddingTop: 16,
+  },
+  powerHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  powerValue: {
+    fontFamily: fonts.displayMedium,
+    fontSize: 44,
+    lineHeight: 50,
+    letterSpacing: -0.9,
+    color: colors.bone,
+  },
+  powerHeroUnit: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    color: SLATE2,
+    marginBottom: 12,
+  },
+  ladder: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 3,
+    marginTop: 16,
+  },
+  // Fixed height so the current segment's foot does not make one slot taller
+  // than the other nine.
+  ladderSlot: {
+    flex: 1,
+    height: 10,
+  },
+  ladderSeg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: HAIRLINE,
+  },
+  ladderSegDone: {
+    backgroundColor: BONE,
+  },
+  // "You are here, and it is empty."
+  //
+  // An outlined box was the wrong instrument: a full-perimeter stroke is the
+  // brightest shape in the row, so the segment holding zero XP read as the one
+  // already completed — the exact opposite of the truth. Two critics called it.
+  //
+  // At zero the current segment is now indistinguishable from the empty slots
+  // either side, which is honest: zero progress should look like zero. Position
+  // is carried by the marker below rather than by making the box loud, and
+  // ladderFill grows from the left edge as real XP arrives.
+  ladderSegCurrent: {
+    backgroundColor: HAIRLINE,
+  },
+  // A 2px foot under the current segment: it says "you are here" without
+  // claiming the segment is filled. Slate 2, never Bone — Bone belongs to
+  // ranks actually completed.
+  ladderSegCurrentMark: {
+    height: 2,
+    backgroundColor: SLATE2,
+    marginTop: 2,
+  },
+  ladderFill: {
     height: '100%',
     backgroundColor: BONE,
+  },
+  ladderCaption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 10,
+  },
+  ladderXp: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: BONE,
+  },
+  ladderNext: {
+    flexShrink: 1,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: SLATE2,
   },
   unlockText: {
     marginTop: 8,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    lineHeight: 18,
     color: SLATE2,
   },
-  sectionDivider: {
+  // The gate is a measurement, so it is mono while the reward stays Inter.
+  unlockGate: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: SLATE2,
+  },
+
+  // ── Power ledger ─────────────────────────────────────────────────────────
+  powerLedger: {
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE_STRONG,
+  },
+  powerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    paddingVertical: 12,
+    minHeight: 54,
   },
-  sectionDividerLine: {
-    flex: 1,
+  powerRowDivider: {
     height: 1,
     backgroundColor: HAIRLINE,
   },
-  sectionDividerLabel: {
-    paddingHorizontal: 8,
+  powerRowLeft: {
+    flex: 1,
+  },
+  powerRowLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    letterSpacing: 0.16,
     color: SLATE2,
   },
-  xpNumbers: {
-    marginTop: 12,
+  // Zero state: a sentence someone reads, so Inter, and Bone because it is the
+  // most useful thing in the row.
+  powerRowReason: {
+    marginTop: 5,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: SLATE2,
-  },
-  nextLine: {
-    marginTop: 8,
-  },
-  nextPrefix: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
-    color: SLATE2,
-  },
-  nextTitle: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    lineHeight: 18,
     color: BONE,
   },
-  statGrid: {
-    marginTop: 16,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  // Live state: a readout, so Geist Mono and subdued — the number leads.
+  powerRowData: {
+    marginTop: 5,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: SLATE2,
   },
-  statCell: {
-    width: '48.5%',
+  powerRowValue: {
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 22,
+    color: BONE,
+    letterSpacing: -0.4,
+  },
+  // Readings are always Bone. Dimming unearned figures inverted the hierarchy:
+  // it made the block that *is* the player's standing the faintest thing on the
+  // screen, fainter than its own labels. The scale captions carry the "not yet"
+  // instead.
+  rowChevron: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 18,
+    lineHeight: 20,
+    color: SLATE2,
+  },
+  rowPressed: {
+    backgroundColor: INK2,
+  },
+  // Secondary instrument (DESIGN.md §5): Ink 2, hairline-strong, Bone mono.
+  // 44dp tall plus hitSlop clears the 48dp touch target without pushing the
+  // claim CTA below the fold.
+  rowAction: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    minWidth: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: INK2,
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
   },
-  statLabel: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+  rowActionPressed: {
+    backgroundColor: INK3,
+  },
+  rowActionText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    letterSpacing: 0.16,
+    color: BONE,
+  },
+
+  // ── Territories ──────────────────────────────────────────────────────────
+  emptyBlock: {
+    paddingTop: 2,
+  },
+  emptyLead: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: BONE,
+  },
+  emptyBody: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
     color: SLATE2,
   },
-  statValue: {
-    marginTop: 8,
-    fontFamily: 'Archivo_700Bold',
-    fontSize: 20,
+  // The screen's single Claim Red: the one action a commander with nothing
+  // should take. Nothing else on this screen may be red.
+  primaryCta: {
+    marginTop: 16,
+    backgroundColor: CLAIM,
+    minHeight: 48,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCtaPressed: {
+    opacity: 0.82,
+  },
+  // Bone-on-Claim-Red is fixed by DESIGN.md §5 and lands at 3.8:1, so the
+  // legibility headroom has to come from size and weight rather than colour:
+  // 15px mono 500 is the theme's CTA step and the largest that still holds
+  // "CLAIM YOUR FIRST TERRITORY" on one line at 1.6 tracking.
+  primaryCtaText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 15,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
     color: BONE,
-    letterSpacing: -0.02,
   },
   list: {
-    marginTop: 12,
+    marginTop: 2,
   },
   listDivider: {
     height: 1,
     backgroundColor: HAIRLINE,
-    marginVertical: 10,
-  },
-  emptyText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: SLATE2,
   },
   territoryRow: {
     flexDirection: 'row',
@@ -1234,63 +1660,112 @@ const styles = StyleSheet.create({
   },
   territoryTier: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: SLATE2,
   },
   territoryRowPressed: {
-    opacity: 0.55,
+    backgroundColor: INK2,
   },
   territoryChevron: {
     fontFamily: 'Inter_500Medium',
     fontSize: 18,
-    lineHeight: 18,
+    lineHeight: 20,
     color: SLATE2,
     marginLeft: 2,
   },
-  powerValue: {
-    fontFamily: fonts.displayMedium,
-    fontSize: fontSize.xl4,
-    letterSpacing: fontSize.xl4 * -0.02,
-    color: colors.bone,
-    marginBottom: spacing.xs,
+
+  // ── Record table ─────────────────────────────────────────────────────────
+  recordTable: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE_STRONG,
   },
-  walletSection: {
-    marginTop: 32,
+  recordCell: {
+    width: '50%',
+    paddingVertical: 12,
+    paddingRight: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    borderRightWidth: 1,
+    borderRightColor: HAIRLINE,
   },
-  // Neutral instrument, not a red CTA — Profile spends its red only on Delete.
-  walletButton: {
-    marginTop: 12,
-    backgroundColor: INK2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    paddingVertical: 16,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
+  recordCellEdge: {
+    borderRightWidth: 0,
+    paddingRight: 0,
+    paddingLeft: 12,
   },
-  walletButtonText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 12,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: BONE,
-  },
-  walletTapHint: {
-    marginTop: 8,
-    textAlign: 'center',
+  recordLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 9,
-    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: '#5C6068',
+    letterSpacing: 1.4,
+    color: SLATE2,
   },
+  recordValue: {
+    marginTop: 7,
+    fontFamily: 'Archivo_700Bold',
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: -0.5,
+    color: BONE,
+  },
+  // Units live here, not inline beside the figure, so the numeral column reads
+  // as one clean run of numbers down the table.
+  recordSub: {
+    marginTop: 6,
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    color: SLATE2,
+  },
+
+  // ── Resources ────────────────────────────────────────────────────────────
+  walletStrip: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE_STRONG,
+    minHeight: 48,
+  },
+  walletCell: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingLeft: 12,
+    gap: 6,
+  },
+  walletCellFirst: {
+    paddingLeft: 0,
+  },
+  walletCellEdge: {
+    borderRightWidth: 1,
+    borderRightColor: HAIRLINE,
+    paddingRight: 12,
+  },
+  walletValue: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 15,
+    color: BONE,
+  },
+  walletCellLabel: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: SLATE2,
+  },
+
+  // ── Settings ─────────────────────────────────────────────────────────────
   settingsList: {
-    marginTop: 12,
+    marginTop: 2,
   },
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
     paddingVertical: 6,
     minHeight: 48,
   },
@@ -1300,22 +1775,33 @@ const styles = StyleSheet.create({
     color: BONE,
   },
   settingsChevron: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'Inter_500Medium',
     fontSize: 18,
     color: SLATE2,
   },
-  // Sign out is a routine action — neutral bone, not the destructive red.
+  // Sign out is a routine action — neutral bone.
   settingsSignOut: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: BONE,
   },
-  // Delete account is the screen's one destructive endpoint — the single red.
+  // Delete is not red: red means "yours / claim / the primary action", and this
+  // screen spends it on the first claim. The permanence is signalled instead by
+  // the screen's one sanctioned Caution Amber flag.
   settingsDelete: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: CLAIM,
+    color: BONE,
   },
+  settingsDeleteFlag: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: CAUTION,
+  },
+
+  // ── Modals ───────────────────────────────────────────────────────────────
   deleteModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(14,16,20,0.9)',
@@ -1333,7 +1819,7 @@ const styles = StyleSheet.create({
   deleteModalTitle: {
     fontFamily: 'Archivo_900Black',
     fontSize: 20,
-    color: CLAIM,
+    color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.01,
   },
@@ -1398,6 +1884,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: BONE,
   },
+  // The modal is its own surface; the destructive confirm is its single red.
   deleteModalConfirm: {
     flex: 1,
     borderWidth: 1,
@@ -1415,50 +1902,4 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: CLAIM,
   },
-  powerSection: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  powerHeroBlock: {
-    marginBottom: 16,
-  },
-  powerHeroDivider: {
-    height: 1,
-    backgroundColor: HAIRLINE,
-    marginBottom: 4,
-  },
-  powerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  powerRowDivider: {
-    height: 1,
-    backgroundColor: HAIRLINE,
-  },
-  powerRowLeft: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  powerRowLabel: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: SLATE2,
-  },
-  powerRowReason: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: SLATE2,
-  },
-  powerRowValueLive: {
-    fontFamily: 'Archivo_700Bold',
-    fontSize: 20,
-    color: BONE,
-    letterSpacing: -0.4,
-  },
 });
-

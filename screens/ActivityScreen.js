@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import {
@@ -72,14 +71,40 @@ const CHALLENGE_403_MAX_ATTEMPTS = 8;
 // chosen axis instead of the theme default.
 const AXIS_CHOICE_STORAGE_KEY = 'dominia.challengeAxisChoice.v1';
 
-function fmtAxisProgress(axis, current, target) {
-  if (axis === 'distance') {
-    return `${((Number(current) || 0) / 1000).toFixed(1)} / ${(target / 1000).toFixed(1)} km`;
-  }
-  if (axis === 'tempo') {
-    return `T${Math.min(Number(current) || 0, target)} / T${target}`;
-  }
-  return `${Math.min(Number(current) || 0, target).toLocaleString()} / ${target.toLocaleString()}`;
+// ── Axis readout formatting ────────────────────────────────────────────────
+// A tier row is a gauge, not a sentence: the live value and the target are
+// formatted separately so they can be set at different weights, and the
+// remainder is its own readout. Real-world case is preserved on units ("km").
+
+/** True when the axis counts whole units and so may count up on screen. */
+function axisCounts(axis) {
+  return axis === 'steps' || axis === 'calories';
+}
+
+/** One side of a readout — no unit, so the pair reads "4.2 / 8.0 km". */
+function fmtAxisValue(axis, v) {
+  const n = Math.max(0, Number(v) || 0);
+  if (axis === 'distance') return (n / 1000).toFixed(1);
+  if (axis === 'tempo') return `T${Math.round(n)}`;
+  return Math.round(n).toLocaleString();
+}
+
+/** Unit word trailing a readout. Tempo tiers are thresholds, so they carry none. */
+function axisUnitLabel(axis, t) {
+  if (axis === 'distance') return t('activity.unitKm');
+  if (axis === 'calories') return t('activity.unitKcal');
+  if (axis === 'steps') return t('activity.unitSteps');
+  return '';
+}
+
+/** Distance still to cover, already carrying its unit. Null when there is none. */
+function fmtRemaining(axis, current, target) {
+  const left = (Number(target) || 0) - (Number(current) || 0);
+  if (!(left > 0)) return null;
+  if (axis === 'distance') return `${(left / 1000).toFixed(1)} km`;
+  // A tempo tier is a threshold, not a quantity — "1 to go" would be nonsense.
+  if (axis === 'tempo') return null;
+  return Math.ceil(left).toLocaleString();
 }
 
 // Locale-aware date header, e.g. "Monday, June 30". Uses Intl with the active
@@ -109,18 +134,34 @@ function localDayKey(date) {
   return `${y}-${m}-${d}`;
 }
 
-// The weekly chart always spans the last 7 local days ENDING today, so the
-// final bar is today's weekday — not a fixed Mon–Sun calendar week. Build the
-// empty skeleton with the same rolling labels readWeeklySteps uses, so a chart
-// with no data yet (HC not ready, permission not granted, first render) still
-// ends on the correct day instead of always showing Sunday last.
-function rollingWeekSkeleton(weekDayLabels) {
+/** Local Monday 00:00 of the week containing `d`. The game week is Mon–Fri
+ *  drills plus a Sat/Sun Attack Day, so the chart must start on Monday —
+ *  a rolling seven days ending today split the weekend across both ends. */
+function startOfLocalWeek(d = new Date()) {
+  const x = startOfLocalDay(d);
+  const mondayOffset = (x.getDay() + 6) % 7; // 0 = Monday
+  x.setDate(x.getDate() - mondayOffset);
+  return x;
+}
+
+/** Mon→Sun skeleton for the current calendar week, with days after today
+ *  flagged so they render as unwalked rather than as a zero. */
+function calendarWeekSkeleton(weekDayLabels) {
+  const monday = startOfLocalWeek();
+  const todayKey = localDayKey(new Date());
   const rows = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const day = startOfLocalDay();
-    day.setDate(day.getDate() - i);
-    const labelIdx = (day.getDay() + 6) % 7;
-    rows.push({ day: weekDayLabels[labelIdx], steps: 0 });
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Date(monday);
+    day.setDate(day.getDate() + i);
+    const key = localDayKey(day);
+    rows.push({
+      day: weekDayLabels[i],
+      key,
+      steps: 0,
+      isToday: key === todayKey,
+      future: day.getTime() > startOfLocalDay().getTime(),
+      weekend: i >= 5,
+    });
   }
   return rows;
 }
@@ -129,114 +170,182 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function buildSmoothPath(points) {
-  if (points.length < 2) return '';
-  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const p0 = points[i - 1] ?? points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] ?? p2;
-    const tension = 0.2;
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-    d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
-  }
-  return d;
-}
-
-function WeeklyBarChart({ data }) {
-  const { t } = useTranslation();
-  const [selectedIdx, setSelectedIdx] = useState(null);
-  const [chartWidth, setChartWidth] = useState(0);
-  const max = Math.max(...data.map((d) => d.steps), 1);
-  const highlightIndex = data.length - 1;
-  const BAR_TRACK_HEIGHT = 88;
-  const MAX_BAR_HEIGHT = 80;
-
-  // Compute centre-x of each bar based on measured chart width
-  const trendPoints =
-    chartWidth > 0
-      ? data.map((d, idx) => {
-          const colWidth = chartWidth / data.length;
-          const x = colWidth * idx + colWidth / 2;
-          const barH = clamp(d.steps / max, 0, 1) * MAX_BAR_HEIGHT;
-          const y = BAR_TRACK_HEIGHT - barH;
-          return { x, y };
-        })
-      : [];
-  const pathD = buildSmoothPath(trendPoints);
+// Magnitude view of the week. Bars only: the old build drew the same series
+// twice, as bars and as a Catmull-Rom spline whose control points overshot
+// below zero and were then clipped flat at the floor, so a rest day read as a
+// crash. One mark, an explicit baseline, a labelled goal rule, and a figure
+// over every bar — a steps chart from which a step count can be read.
+function WeeklyBarChart({ data, goal }) {
+  const BAR_MAX = 76;
+  const peak = data.reduce((m, d) => Math.max(m, Number(d.steps) || 0), 0);
+  // Headroom so a week that never reaches the goal still shows the rule below
+  // the ceiling, and a record week does not touch the value labels.
+  const scaleMax = Math.max(peak, goal) * 1.15;
+  const goalOffset = scaleMax > 0 ? (1 - goal / scaleMax) * BAR_MAX : 0;
 
   return (
     <View style={styles.chartWrap}>
-      <View style={styles.chartLabelSlot}>
-        {selectedIdx !== null ? (
-          <Text style={styles.chartLabelText}>
-            {t('activity.chartLabel', { day: data[selectedIdx].day, steps: data[selectedIdx].steps.toLocaleString() })}
-          </Text>
-        ) : (
-          <Text style={styles.chartLabelText}> </Text>
-        )}
-      </View>
-      <View
-        style={styles.chartCanvas}
-        onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
-      >
-        <View style={styles.chartRow}>
-          {data.map((d, idx) => {
-            const isToday = idx === highlightIndex;
-            const isSelected = idx === selectedIdx;
-            const h = clamp(d.steps / max, 0, 1) * MAX_BAR_HEIGHT;
+      <View style={styles.chartPlot}>
+        <View style={styles.chartCols}>
+          {data.map((d) => {
+            const steps = Number(d.steps) || 0;
+            const cleared = steps >= goal;
+            const h = scaleMax > 0 ? clamp(steps / scaleMax, 0, 1) * BAR_MAX : 0;
             return (
-              <Pressable
-                key={`${d.day}-${idx}`}
-                style={styles.chartCol}
-                onPress={() => setSelectedIdx(isSelected ? null : idx)}
-              >
-                <View style={styles.chartBarTrack}>
-                  <View
-                    style={[
-                      styles.chartBar,
-                      {
-                        height: h,
-                        backgroundColor: isToday
-                          ? colors.bone
-                          : isSelected
-                          ? 'rgba(242,238,230,0.45)'
-                          : 'rgba(242,238,230,0.16)',
-                      },
-                    ]}
-                  />
+              <View key={d.key} style={styles.chartCol}>
+                <View style={styles.chartValueSlot}>
+                  {!d.future && steps > 0 ? (
+                    <Text
+                      style={[styles.chartValue, d.isToday && styles.chartValueToday]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.15}
+                    >
+                      {steps.toLocaleString()}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text style={[styles.chartDay, (isToday || isSelected) && styles.chartDayToday]}>
-                  {d.day}
-                </Text>
-              </Pressable>
+                <View style={styles.chartBarSlot}>
+                  {d.future ? null : (
+                    // Today is marked at the axis, never by a brighter fill:
+                    // painting the current bar full bone made a 400-step
+                    // morning louder than a cleared 15,000-step Tuesday.
+                    <View
+                      style={[
+                        styles.chartBar,
+                        { height: steps > 0 ? Math.max(h, 2) : 0 },
+                        cleared && styles.chartBarCleared,
+                      ]}
+                    />
+                  )}
+                </View>
+              </View>
             );
           })}
         </View>
-        {chartWidth > 0 ? (
-          <Svg
-            width={chartWidth}
-            height={BAR_TRACK_HEIGHT}
-            style={styles.chartTrendOverlay}
-            pointerEvents="none"
-          >
-            <Path d={pathD} stroke={colors.bone} strokeWidth={2} fill="none" />
-            {trendPoints.map((p, idx) => (
-              <Circle
-                key={`pt-${idx}`}
-                cx={p.x}
-                cy={p.y}
-                r={2.5}
-                fill={colors.bone}
-              />
-            ))}
-          </Svg>
-        ) : null}
+        {/* The goal rule sits over the bars; the gutter to its right holds the
+            figure so the two never collide. */}
+        <View style={[styles.chartGoalRule, { top: goalOffset }]} pointerEvents="none" />
+        <Text style={[styles.chartGoalLabel, { top: goalOffset - 5 }]} maxFontSizeMultiplier={1.15}>
+          {goal.toLocaleString()}
+        </Text>
+        <View style={styles.chartBaseline} pointerEvents="none" />
+        {/* Two labelled references — the floor and the daily minimum — so the
+            rules the bars are measured against are both readable figures. */}
+        <Text style={styles.chartZeroLabel} maxFontSizeMultiplier={1.15}>0</Text>
       </View>
+      <View style={styles.chartDayRow}>
+        {data.map((d) => (
+          <View key={`lbl-${d.key}`} style={styles.chartCol}>
+            <View style={[styles.chartDayMark, d.isToday && styles.chartDayMarkToday]} />
+            <Text
+              style={[
+                styles.chartDay,
+                d.weekend && styles.chartDayWeekend,
+                d.future && styles.chartDayFuture,
+                d.isToday && styles.chartDayToday,
+              ]}
+              maxFontSizeMultiplier={1.2}
+            >
+              {d.day}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// State view of the same week, pinned in the header: did each day clear the
+// daily minimum. Seven cells so a streak of zero still has a shape — six
+// settled cells behind and one live cell filling under your feet today.
+function WeekTrack({ data, goal, a11yLabel }) {
+  return (
+    <View style={styles.weekTrack} accessible accessibilityLabel={a11yLabel}>
+      {data.map((d) => {
+        const steps = Number(d.steps) || 0;
+        const cleared = steps >= goal;
+        const fill = goal > 0 ? clamp(steps / goal, 0, 1) : 0;
+        return (
+          <View key={`cell-${d.key}`} style={styles.weekCellCol}>
+            <View
+              style={[
+                styles.weekCell,
+                d.future && styles.weekCellFuture,
+                cleared && styles.weekCellCleared,
+                d.isToday && styles.weekCellToday,
+              ]}
+            >
+              {/* Today fills from the floor as the day is walked. */}
+              {d.isToday && !cleared ? (
+                <View style={[styles.weekCellLive, { height: `${Math.max(fill * 100, 2)}%` }]} />
+              ) : null}
+            </View>
+            <Text
+              style={[styles.weekCellLabel, d.isToday && styles.weekCellLabelToday]}
+              maxFontSizeMultiplier={1.2}
+            >
+              {d.day.charAt(0)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Difficulty read from form, not from a word: one, two or three filled marks
+// stamped ahead of the tier label. The same weight is echoed by the gauge's
+// thickness below it, so a HARD row is visibly heavier instrumentation.
+function TierPips({ level, done }) {
+  return (
+    <View style={styles.tierPips}>
+      {[0, 1, 2].map((i) => (
+        <View
+          key={i}
+          style={[
+            styles.tierPip,
+            i <= level && (done ? styles.tierPipDone : styles.tierPipOn),
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// The instrument. A measured rail rather than a bare fraction: track at
+// hairline strength, fill in bone (never a territory colour — progress is not
+// ownership), and ink notches at the lower tiers' thresholds so each row shows
+// where it sits on the day's ladder. Flat, square, no gradient.
+function ChallengeGauge({ progress, thickness, ticks, done, muted }) {
+  const pct = clamp(Number(progress) || 0, 0, 1);
+  // A started-but-tiny gauge must still read as started.
+  const width = pct <= 0 ? 0 : Math.max(pct * 100, 1.5);
+  return (
+    <View style={[styles.gaugeTrack, { height: thickness }]}>
+      <View
+        style={[
+          styles.gaugeFill,
+          { width: `${width}%` },
+          muted && styles.gaugeFillMuted,
+          done && styles.gaugeFillDone,
+        ]}
+      />
+      {(ticks ?? []).map((f, i) => (
+        <View key={`tick-${i}`} style={[styles.gaugeTick, { left: `${f * 100}%` }]} />
+      ))}
+    </View>
+  );
+}
+
+// Today measured against the standing best. A hairline notch marks the best
+// itself, so a day that ties it lands exactly on the mark.
+function BestRail({ today, best }) {
+  const b = Number(best) || 0;
+  if (!(b > 0)) return null;
+  const pct = clamp((Number(today) || 0) / b, 0, 1);
+  return (
+    <View style={styles.bestRailTrack}>
+      <View style={[styles.bestRailFill, { width: `${pct <= 0 ? 0 : Math.max(pct * 100, 1.5)}%` }]} />
     </View>
   );
 }
@@ -246,6 +355,7 @@ export default function ActivityScreen() {
   const weekDayLabels = useMemo(() => t('activity.weekDays', { returnObjects: true }), [t]);
   const { userId, getToken } = useAuth();
   const route = useRoute();
+  const navigation = useNavigation();
   // The map's "earn X" dead-ends route here with the resource the player came
   // for; the menu then names it and pre-selects a paying axis.
   const needResource = route?.params?.needResource ?? null;
@@ -312,7 +422,10 @@ export default function ActivityScreen() {
     today: { distance_m: 0, active_minutes: 0 },
     best: { distance_m: 0, active_minutes: 0 },
   });
-  const [weeklySteps, setWeeklySteps] = useState(() => rollingWeekSkeleton(weekDayLabels));
+  const [weeklySteps, setWeeklySteps] = useState(() => calendarWeekSkeleton(weekDayLabels));
+  // Attack Day runs from Saturday 00:00 to the following Monday 00:00 local,
+  // when drills return. Re-read once a minute so the panel's countdown is live.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const pollRef = useRef(null);
   const inFlightTiersRef = useRef(new Set());
   // Clerk's getToken identity churns with session state (notably while a
@@ -334,7 +447,10 @@ export default function ActivityScreen() {
   // the server aggregate to catch up).
   const [retryTick, setRetryTick] = useState(0);
 
-  const today = useMemo(() => new Date(), []);
+  // Re-derived from the minute tick. A tab screen never unmounts, so a date
+  // frozen at mount left the header naming yesterday and the 17:00 at-risk
+  // check permanently reading the hour the app happened to launch.
+  const today = useMemo(() => new Date(nowTick), [nowTick]);
   // Device-local day key — used only for the per-day axis-choice storage.
   const todayStr = useMemo(() => localDayKey(new Date()), []);
 
@@ -550,22 +666,32 @@ export default function ActivityScreen() {
   const challenges = useMemo(() => {
     const cat = AXIS_CATALOG[activeAxis];
     const diffKey = { easy: 'diffEasy', medium: 'diffMedium', hard: 'diffHard' };
-    return TIERS.map((tier) => {
+    // Gauge weight by tier — the rail thickens as the target hardens.
+    const GAUGE_THICKNESS = [3, 5, 8];
+    return TIERS.map((tier, level) => {
       const def = cat.tiers[tier];
       let taskParams;
       if (activeAxis === 'steps') taskParams = { n: def.target.toLocaleString() };
       else if (activeAxis === 'distance') taskParams = { n: (def.target / 1000).toLocaleString() };
       else if (activeAxis === 'calories') taskParams = { n: def.target.toLocaleString() };
       else taskParams = {};
+      // The three tiers are one ladder on one measurement, so a harder row
+      // carries notches where the easier thresholds fall on its own scale.
+      const ticks = TIERS.slice(0, level)
+        .map((lower) => cat.tiers[lower].target / def.target)
+        .filter((f) => f > 0 && f < 1);
       return {
         key: def.earnKey, // challenge_key === earn_key (axis-scoped, collision-free)
         tier,
+        level,
         axis: activeAxis,
         difficulty: t(`activity.${diffKey[tier]}`),
         task: t(def.taskKey, taskParams),
         xp: XP_PER_TIER[tier],
         earnKey: def.earnKey,
         target: def.target,
+        thickness: GAUGE_THICKNESS[level],
+        ticks,
       };
     });
   }, [activeAxis, t]);
@@ -583,8 +709,6 @@ export default function ActivityScreen() {
     }
     return n;
   }, [armedAxis, activeAxis, completedKeys]);
-
-  const missionProgress = completedCount / 3;
 
   // Streak beats: completing any tier of the armed axis secures today's streak;
   // an incomplete challenge day after 17:00 puts an existing streak at risk.
@@ -798,8 +922,7 @@ export default function ActivityScreen() {
     if (!hcReady || !hasStepsPerm) return;
     try {
       const end = new Date();
-      const start = startOfLocalDay();
-      start.setDate(start.getDate() - 6);
+      const start = startOfLocalWeek();
 
       // Per-day aggregate (deduped), not a sum of raw records — see
       // readTodaySteps: raw records overlap across sources and double-count.
@@ -832,14 +955,12 @@ export default function ActivityScreen() {
         buckets[key] = (buckets[key] || 0) + (Number(g?.result?.COUNT_TOTAL) || 0);
       }
 
-      // Same rolling skeleton the empty state uses (last bar = today); fill in
-      // the measured per-day totals so labels and data can never diverge.
-      const rows = rollingWeekSkeleton(weekDayLabels);
-      for (let i = 6; i >= 0; i -= 1) {
-        const day = startOfLocalDay();
-        day.setDate(day.getDate() - (6 - i));
-        rows[i].steps = buckets[localDayKey(day)] ?? 0;
-      }
+      // Same Mon→Sun skeleton the empty state uses; fill in the measured
+      // per-day totals by date key so labels and data can never diverge.
+      const rows = calendarWeekSkeleton(weekDayLabels).map((row) => ({
+        ...row,
+        steps: buckets[row.key] ?? 0,
+      }));
       setWeeklySteps(rows);
     } catch (e) {
       console.warn('[HC] weekly read failed:', e?.message ?? e);
@@ -1011,37 +1132,144 @@ export default function ActivityScreen() {
 
   const weekly = useMemo(() => {
     if (!hasStepsPerm) {
-      return rollingWeekSkeleton(weekDayLabels);
+      return calendarWeekSkeleton(weekDayLabels);
     }
-    // Today is the last entry; overlay live count so today's bar updates with the 10s poll
-    return weeklySteps.map((row, idx) =>
-      idx === 6 ? { ...row, steps: Math.max(row.steps, liveSteps) } : row,
+    // Overlay the live count on today's cell so the track and the chart both
+    // move with the 10s poll rather than waiting on the next aggregate read.
+    return weeklySteps.map((row) =>
+      row.isToday ? { ...row, steps: Math.max(row.steps, liveSteps) } : row,
     );
   }, [weeklySteps, liveSteps, hasStepsPerm, weekDayLabels]);
+
+  // The daily minimum both week instruments measure against — the easy step
+  // tier, so the track agrees with what the challenge ladder actually asks.
+  const dailyGoal = AXIS_CATALOG.steps.tiers.easy.target;
+  const daysCleared = useMemo(
+    () => weekly.filter((d) => !d.future && d.steps >= dailyGoal).length,
+    [weekly, dailyGoal],
+  );
+  const weekTotal = useMemo(
+    () => weekly.reduce((sum, d) => sum + (Number(d.steps) || 0), 0),
+    [weekly],
+  );
+
+  // The weekend as a measured window rather than a numeral. Attack Day opens
+  // Saturday 00:00 and closes the following Monday 00:00 — the same boundary
+  // themeAxisForDate uses — so the panel can show how much of it has already
+  // gone as well as what is left. Nothing here is invented: it is the clock.
+  const attackWindow = useMemo(() => {
+    const monday = startOfLocalWeek(new Date(nowTick));
+    const opens = new Date(monday);
+    opens.setDate(opens.getDate() + 5); // Saturday 00:00
+    const boundary = new Date(monday);
+    boundary.setDate(boundary.getDate() + 6); // Sunday 00:00
+    const closes = new Date(monday);
+    closes.setDate(closes.getDate() + 7); // Monday 00:00
+    const span = closes.getTime() - opens.getTime();
+    if (!(span > 0)) return null;
+    const msLeft = Math.max(0, closes.getTime() - nowTick);
+    const hours = Math.floor(msLeft / 3_600_000);
+    const minutes = Math.floor((msLeft % 3_600_000) / 60_000);
+    return {
+      elapsed: clamp((nowTick - opens.getTime()) / span, 0, 1),
+      boundary: clamp((boundary.getTime() - opens.getTime()) / span, 0, 1),
+      left: `${hours}h ${String(minutes).padStart(2, '0')}m`,
+      // Caution Amber is the sanctioned expiring signal. A weekend can never
+      // also be showing the at-risk streak line (that needs a drill day), so
+      // this is the screen's single caution element.
+      closing: msLeft <= 2 * 3_600_000,
+    };
+  }, [nowTick]);
+
+  // Runs every day, not only at the weekend: the date header, the window rail
+  // and the 17:00 at-risk check all read from this tick.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // The screen's headline. Falls back to the tab's own name only in the gap
+  // before the theme resolves, so it is never blank.
+  const dayTitle = !isChallengeDay
+    ? t('activity.attackDay')
+    : themeToken
+      ? t(`activity.theme_${themeToken}`)
+      : t('activity.title');
+
+  // One line of banked effort under the week track, so a zero streak still
+  // proves the walking counted. XP is the only lifetime ledger on the screen:
+  // territories held belong to the Attack Day panel and the best day belongs
+  // to RECORDS, and printing either figure twice one scroll apart was the
+  // double-encoding the rest of this screen just spent a round removing.
+  const lifetimeLine = useMemo(
+    () => (playerXp > 0 ? t('activity.lifetimeXp', { n: playerXp.toLocaleString() }) : null),
+    [playerXp, t],
+  );
 
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       <View ref={walkthroughHeaderRef} collapsable={false} style={styles.headerBlock}>
         <Text style={styles.commanderLabel}>{formatToday(today, i18n.language)}</Text>
-        <Text style={styles.commanderName} maxFontSizeMultiplier={1.2}>{t('activity.title')}</Text>
+        {/* The headline names the day, not the tab. "ACTIVITY" was set three
+            times the size of the streak to repeat a word the tab bar already
+            prints 20px below; the theme is the thing the player does not
+            already know. */}
+        <Text style={styles.commanderName} maxFontSizeMultiplier={1.2}>{dayTitle}</Text>
         <Text style={styles.rankLine}>
           <Text style={styles.rankTitle}>{username || '—'} · {t('levelTitle.' + playerLevel.title).toUpperCase()}</Text>
         </Text>
-        {/* The streak is the reason to return — a first-class instrument, not
-            a slate footnote. It counts up the moment today's streak is secured;
-            an at-risk day gets a single caution-amber warning line. */}
-        <View style={styles.streakRow}>
-          {streakSecuredToday ? (
-            <CountUpText value={currentStreak} countOnMount style={styles.streakValue} maxFontSizeMultiplier={1.2} />
-          ) : (
-            <Text style={styles.streakValue} maxFontSizeMultiplier={1.2}>{currentStreak}</Text>
-          )}
-          <Text style={styles.streakLabel}>{t('activity.dayStreakLabel')}</Text>
+        {/* Progression, as an instrument rather than a caption. Seven cells
+            for the seven days of the game week — settled behind, live under
+            your feet today, unwalked ahead — with the authoritative streak
+            read alongside and one line of banked effort beneath. Ceremony is
+            rationed: a big Archivo numeral belongs to the milestone takeover,
+            not to a header that has to render a zero most mornings. */}
+        <View style={styles.weekBlock}>
+          <View style={styles.weekHeaderRow}>
+            <Text style={styles.weekSectionLabel}>{t('activity.thisWeek')}</Text>
+            <View style={styles.weekHeaderRule} />
+            <Text style={styles.streakReadout} maxFontSizeMultiplier={1.3}>
+              {streakSecuredToday ? (
+                <CountUpText value={currentStreak} countOnMount style={styles.streakReadoutValue} />
+              ) : (
+                <Text style={styles.streakReadoutValue}>{currentStreak}</Text>
+              )}
+              <Text style={styles.streakReadoutLabel}>{`  ${t('activity.dayStreakLabel')}`}</Text>
+            </Text>
+          </View>
+
+          <WeekTrack
+            data={weekly}
+            goal={dailyGoal}
+            a11yLabel={t('activity.weekTrackCaption', {
+              n: daysCleared,
+              goal: dailyGoal.toLocaleString(),
+            })}
+          />
+
+          <Text style={styles.weekCaption} maxFontSizeMultiplier={1.3}>
+            {t('activity.weekTrackCaption', { n: daysCleared, goal: dailyGoal.toLocaleString() })}
+          </Text>
+          {lifetimeLine ? (
+            <Text style={styles.lifetimeLine} maxFontSizeMultiplier={1.3}>{lifetimeLine}</Text>
+          ) : null}
         </View>
+
+        {/* The at-risk warning is the screen's one caution element, and it can
+            only fire on a drill day — a weekend has no challenge to lose. */}
         {streakAtRisk ? (
           <Text style={styles.streakAtRiskLine}>{t('activity.streakEndsTonight')}</Text>
         ) : streakSecuredToday ? (
           <Text style={styles.streakSafeLine}>{t('activity.streakSafeToday')}</Text>
+        ) : !isChallengeDay && currentStreak > 0 ? (
+          // The weekend variant. A commander with a live streak and no drill to
+          // secure needs to know the count survives; a commander on zero does
+          // not need a second sentence saying what the panel below already says.
+          <Text style={styles.streakSafeLine}>{t('activity.streakWeekendHold')}</Text>
+        ) : isChallengeDay && currentStreak === 0 ? (
+          // Gated on the drill day. Unconditional, this sentence sat one glance
+          // above "Challenges return Monday" every weekend.
+          <Text style={styles.streakZeroHint}>{t('activity.streakZeroHint')}</Text>
         ) : null}
         <View style={styles.hairlineStrong} />
       </View>
@@ -1139,15 +1367,95 @@ export default function ActivityScreen() {
         ) : null}
 
         {!isChallengeDay ? (
-          <View ref={walkthroughChallengesRef} collapsable={false} style={styles.challengeBlock}>
-            <View style={styles.challengeHeaderRow}>
-              <Text style={styles.challengeSectionLabel}>{t('activity.attackDay')}</Text>
-              <View style={styles.challengeHairline} />
+          // Two days in seven this panel is the whole screen, so it carries the
+          // weight: a live countdown to close, what is at stake, what today has
+          // measured, and the one action available. The section label is gone —
+          // the headline above already says ATTACK DAY.
+          <View ref={walkthroughChallengesRef} collapsable={false} style={styles.attackDayCard}>
+            <View style={styles.attackDayRule} />
+            <Text style={styles.attackDayTitle} maxFontSizeMultiplier={1.3}>
+              {t('activity.attackDayTitle')}
+            </Text>
+            <Text style={styles.attackDayBody} maxFontSizeMultiplier={1.5}>
+              {t('activity.attackDayBody')}
+            </Text>
+
+            {/* The instrument the weekend was missing. A depletion rail across
+                the 48-hour window, notched at the Saturday/Sunday boundary and
+                scaled by three day ticks, so "how much of Attack Day is left"
+                is a shape before it is a figure. */}
+            {attackWindow ? (
+              <View
+                style={styles.attackWindow}
+                accessible
+                accessibilityLabel={t('activity.attackWindowA11y', { v: attackWindow.left })}
+              >
+                <View style={styles.attackWindowHead}>
+                  <Text style={styles.attackWindowLabel} maxFontSizeMultiplier={1.3}>
+                    {t('activity.attackWindowLabel')}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.attackWindowLeft,
+                      attackWindow.closing && styles.attackWindowLeftClosing,
+                    ]}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('activity.attackWindowLeft', { v: attackWindow.left })}
+                  </Text>
+                </View>
+                <View style={styles.attackWindowTrack}>
+                  <View
+                    style={[styles.attackWindowFill, { width: `${attackWindow.elapsed * 100}%` }]}
+                  />
+                  <View
+                    style={[styles.attackWindowNotch, { left: `${attackWindow.boundary * 100}%` }]}
+                  />
+                </View>
+                <View style={styles.attackWindowScale}>
+                  <Text style={styles.attackWindowTick} maxFontSizeMultiplier={1.2}>
+                    {String(weekDayLabels[5] ?? '').toUpperCase()}
+                  </Text>
+                  <Text
+                    style={[styles.attackWindowTick, styles.attackWindowTickMid]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {String(weekDayLabels[6] ?? '').toUpperCase()}
+                  </Text>
+                  <Text
+                    style={[styles.attackWindowTick, styles.attackWindowTickEnd]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {String(weekDayLabels[0] ?? '').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* What is actually at stake for the next two days. Today's walk
+                and the best day are read in RECORDS below; this panel carries
+                the one figure the weekend puts at risk. */}
+            <View style={styles.attackHoldRow}>
+              <Text style={styles.attackHoldLabel} maxFontSizeMultiplier={1.3}>
+                {t('activity.attackHeldLabel')}
+              </Text>
+              <Text
+                style={[styles.attackHoldValue, territoryCount === 0 && styles.attackHoldValueZero]}
+                maxFontSizeMultiplier={1.3}
+              >
+                {territoryCount.toLocaleString()}
+              </Text>
             </View>
-            <View style={styles.attackDayCard}>
-              <Text style={styles.attackDayTitle}>{t('activity.attackDayTitle')}</Text>
-              <Text style={styles.attackDayBody}>{t('activity.attackDayBody')}</Text>
-            </View>
+
+            {/* The weekend has no commit CTA, so this is the screen's single
+                Claim Red — and the only thing there is to do today. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('Map')}
+              style={({ pressed }) => [styles.attackCta, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.attackCtaText}>{t('activity.attackDayCta')}</Text>
+            </Pressable>
           </View>
         ) : (
         <View ref={walkthroughChallengesRef} collapsable={false} style={styles.challengeBlock}>
@@ -1157,10 +1465,23 @@ export default function ActivityScreen() {
             <Text style={styles.challengeCount}>{t('activity.doneCount', { n: completedCount })}</Text>
           </View>
 
+          {/* Three tiers, three segments — a count, not a percentage. A
+              continuous bar implied a fraction of one task; this reads as the
+              discrete ladder it actually is. Sits directly under its own
+              readout so the number and the meter are one instrument. */}
+          <View style={styles.missionTicks} accessibilityLabel={t('activity.doneCount', { n: completedCount })}>
+            {TIERS.map((tier, i) => (
+              <View
+                key={tier}
+                style={[styles.missionTick, i < completedCount && styles.missionTickDone]}
+              />
+            ))}
+          </View>
+
+          {/* The theme name is the screen's headline now; only the multiplier
+              is left to say here. */}
           {themeToken !== null && (
             <Text style={styles.themeBadge}>
-              {t(`activity.theme_${themeToken}`)}
-              {'  ·  '}
               {t('activity.themeBoost', { mult: THEME_BOOST_MULT })}
             </Text>
           )}
@@ -1223,10 +1544,6 @@ export default function ActivityScreen() {
             </Pressable>
           )}
 
-          <View style={styles.challengeProgressTrack}>
-            <View style={[styles.challengeProgressFill, { width: `${clamp(missionProgress, 0, 1) * 100}%` }]} />
-          </View>
-
           <View style={styles.challengeCard}>
             {challenges.map((ch, idx) => {
               const isDone = completedKeys.has(ch.key);
@@ -1241,55 +1558,117 @@ export default function ActivityScreen() {
                 !offAxisSlot.used &&
                 current >= ch.target;
               const axisNeedsKcalPerm = ch.axis === 'calories' && !hasKcalPerm;
+              // No data source means no measurement — the gauge must not
+              // pretend to read zero when it is simply not reading.
+              const noSource = !hasStepsPerm || axisNeedsKcalPerm;
+              // A measured axis has a quantity worth setting large. Tempo is a
+              // threshold protocol, so its sentence stays the hero line.
+              const isMeasured = ch.axis !== 'tempo';
+              const shown = Math.min(Number(current) || 0, ch.target);
+              const progress = isDone ? 1 : ch.target > 0 ? shown / ch.target : 0;
+              const remaining = isDone || noSource ? null : fmtRemaining(ch.axis, current, ch.target);
+              const rewardText = (() => {
+                const r = calcResourceEarn(ch.earnKey);
+                const mult = boostedAxes.includes(ch.axis) ? THEME_BOOST_MULT : 1;
+                const parts = [t('activity.rewardXp', { n: ch.xp })];
+                if (r.stone > 0) parts.push(t('activity.rewardStone', { n: Math.round(r.stone * mult) }));
+                if (r.iron > 0) parts.push(t('activity.rewardIron', { n: Math.round(r.iron * mult) }));
+                if (r.gold > 0) parts.push(t('activity.rewardGold', { n: r.gold }));
+                if (r.morale > 0) parts.push(t('activity.rewardMorale', { n: r.morale }));
+                return parts.join(' · ');
+              })();
               return (
                 <React.Fragment key={ch.key}>
                   {idx > 0 && <View style={styles.challengeDivider} />}
-                  <View style={styles.challengeRow}>
-                    <View style={styles.challengeMain}>
-                      <Text style={styles.challengeDifficulty}>{ch.difficulty.toUpperCase()}</Text>
-                      <Text style={styles.challengeTask}>{ch.task}</Text>
-                      <Text style={styles.challengeReward}>
-                        {(() => {
-                          const r = calcResourceEarn(ch.earnKey);
-                          const boosted = boostedAxes.includes(ch.axis);
-                          const mult = boosted ? THEME_BOOST_MULT : 1;
-                          const parts = [];
-                          parts.push(t('activity.rewardXp', { n: ch.xp }));
-                          if (r.stone > 0) parts.push(t('activity.rewardStone', { n: Math.round(r.stone * mult) }));
-                          if (r.iron > 0) parts.push(t('activity.rewardIron', { n: Math.round(r.iron * mult) }));
-                          if (r.gold > 0) parts.push(t('activity.rewardGold', { n: r.gold }));
-                          if (r.morale > 0) parts.push(t('activity.rewardMorale', { n: r.morale }));
-                          return parts.join(' · ');
-                        })()}
-                      </Text>
-                    </View>
-                    <View style={styles.challengeAction}>
-                      {isDone ? (
-                        <Text style={styles.challengeDone}>{t('activity.done')}</Text>
-                      ) : (DEV_MODE_MANUAL || offAxisClaimable) ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('activity.completeA11y', { difficulty: ch.difficulty })}
-                          onPress={() => onCompleteChallenge(ch)}
-                          disabled={!playerId || isBusy}
-                          style={({ pressed }) => [
-                            styles.completeBtn,
-                            (!playerId || isBusy) && { opacity: 0.45 },
-                            pressed && { opacity: 0.75 },
-                          ]}
+                  <View style={[styles.challengeRow, isDone && styles.challengeRowDone]}>
+                    <View style={styles.rowHead}>
+                      <View style={styles.rowHeadLeft}>
+                        <TierPips level={ch.level} done={isDone} />
+                        <Text
+                          style={[styles.challengeDifficulty, isDone && styles.challengeDifficultyDone]}
+                          maxFontSizeMultiplier={1.4}
                         >
-                          <Text style={styles.completeBtnText}>{t('activity.complete')}</Text>
-                        </Pressable>
-                      ) : !hasStepsPerm ? (
-                        <Text style={styles.challengeLocked}>{t('activity.locked')}</Text>
-                      ) : axisNeedsKcalPerm ? (
-                        <Text style={styles.challengeLocked}>{t('activity.needsPermission')}</Text>
+                          {ch.difficulty.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      {isDone ? (
+                        <View style={styles.securedTag}>
+                          <View style={styles.securedMark} />
+                          <Text style={styles.securedText} maxFontSizeMultiplier={1.3}>
+                            {t('activity.done')}
+                          </Text>
+                        </View>
+                      ) : noSource ? (
+                        <Text style={styles.challengeLocked} maxFontSizeMultiplier={1.3}>
+                          {!hasStepsPerm ? t('activity.locked') : t('activity.needsPermission')}
+                        </Text>
+                      ) : isMeasured ? (
+                        remaining ? (
+                          <Text style={styles.challengeRemain} maxFontSizeMultiplier={1.3}>
+                            {t('activity.toGo', { n: remaining })}
+                          </Text>
+                        ) : null
                       ) : (
-                        <Text style={styles.challengeProgress}>
-                          {fmtAxisProgress(ch.axis, current, ch.target)}
+                        // Tempo: the tier itself is the readout; the protocol
+                        // below carries the meaning, so it stays small here.
+                        <Text style={styles.readoutTierLine} maxFontSizeMultiplier={1.3}>
+                          {`${fmtAxisValue(ch.axis, shown)} / ${fmtAxisValue(ch.axis, ch.target)}`}
                         </Text>
                       )}
                     </View>
+
+                    {/* The row's hero line is the measurement itself. Naming
+                        the target in a sentence as well ("Walk 10,000 steps")
+                        printed the same number twice, so the sentence is kept
+                        only where it says something the gauge cannot: a tempo
+                        protocol, or a row with no data source, where a readout
+                        of "0" would be a reading we have not actually taken. */}
+                    {isMeasured && !noSource ? (
+                      <Text style={styles.readoutLine} maxFontSizeMultiplier={1.3}>
+                        {axisCounts(ch.axis) ? (
+                          <CountUpText value={shown} style={styles.readoutCurrent} />
+                        ) : (
+                          <Text style={styles.readoutCurrent}>{fmtAxisValue(ch.axis, shown)}</Text>
+                        )}
+                        <Text style={styles.readoutTarget}>
+                          {` / ${fmtAxisValue(ch.axis, ch.target)} ${axisUnitLabel(ch.axis, t)}`}
+                        </Text>
+                      </Text>
+                    ) : (
+                      <Text style={styles.challengeTask} maxFontSizeMultiplier={1.5}>{ch.task}</Text>
+                    )}
+
+                    <ChallengeGauge
+                      progress={progress}
+                      thickness={ch.thickness}
+                      ticks={ch.ticks}
+                      done={isDone}
+                      muted={noSource}
+                    />
+
+                    <Text
+                      style={[styles.challengeReward, isDone && styles.challengeRewardDone]}
+                      maxFontSizeMultiplier={1.5}
+                    >
+                      {rewardText}
+                    </Text>
+
+                    {!isDone && (DEV_MODE_MANUAL || offAxisClaimable) ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('activity.completeA11y', { difficulty: ch.difficulty })}
+                        onPress={() => onCompleteChallenge(ch)}
+                        disabled={!playerId || isBusy}
+                        style={({ pressed }) => [
+                          styles.completeBtn,
+                          (!playerId || isBusy) && { opacity: 0.45 },
+                          pressed && { opacity: 0.75 },
+                        ]}
+                      >
+                        <Text style={styles.completeBtnText}>{t('activity.complete')}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </React.Fragment>
               );
@@ -1300,7 +1679,9 @@ export default function ActivityScreen() {
 
         <View ref={walkthroughAchievementsRef} collapsable={false} style={styles.achievementsBlock}>
           <View style={styles.achievementsSectionRow}>
-            <Text style={styles.achievementsSectionLabel}>{t('activity.dailyAchievements')}</Text>
+            {/* Renamed: the section holds two measurements read against a
+                personal record, and never held an achievement. */}
+            <Text style={styles.achievementsSectionLabel}>{t('activity.recordsLabel')}</Text>
             <View style={styles.achievementsHairline} />
           </View>
 
@@ -1312,27 +1693,49 @@ export default function ActivityScreen() {
 
           <View style={styles.achievementsHeaderDivider} />
 
+          {/* Today read against the personal best — the same rail language as
+              the challenge rows, so "how close am I" is one glance everywhere.
+              The rail only appears once a best exists to measure against. */}
+          {/* Weight follows meaning: a figure that is zero has nothing to say
+              and recedes, and a standing record is never the dimmest thing in
+              its own row. Previously the zeros were full bone and the only
+              real numbers on the screen were slate. */}
           <View style={styles.achievementsRow}>
-            <Text style={styles.achievementsLabel}>{t('activity.distance')}</Text>
-            <Text style={styles.achievementsToday}>{fmtKm(axisCurrent('distance'))}</Text>
-            <Text style={styles.achievementsBest}>{fmtKm(bests.best.distance_m)}</Text>
+            <Text style={styles.achievementsLabel} maxFontSizeMultiplier={1.4}>{t('activity.distance')}</Text>
+            <Text
+              style={[styles.achievementsToday, !(axisCurrent('distance') > 0) && styles.achievementsZero]}
+              maxFontSizeMultiplier={1.3}
+            >
+              {fmtKm(axisCurrent('distance'))}
+            </Text>
+            <Text style={styles.achievementsBest} maxFontSizeMultiplier={1.3}>{fmtKm(bests.best.distance_m)}</Text>
           </View>
+          <BestRail today={axisCurrent('distance')} best={bests.best.distance_m} />
 
           <View style={styles.achievementsDivider} />
 
           <View style={styles.achievementsRow}>
-            <Text style={styles.achievementsLabel}>{t('activity.activeMinutes')}</Text>
-            <Text style={styles.achievementsToday}>{fmtMin(bests.today.active_minutes)}</Text>
-            <Text style={styles.achievementsBest}>{fmtMin(bests.best.active_minutes)}</Text>
+            <Text style={styles.achievementsLabel} maxFontSizeMultiplier={1.4}>{t('activity.activeMinutes')}</Text>
+            <Text
+              style={[styles.achievementsToday, !(bests.today.active_minutes > 0) && styles.achievementsZero]}
+              maxFontSizeMultiplier={1.3}
+            >
+              {fmtMin(bests.today.active_minutes)}
+            </Text>
+            <Text style={styles.achievementsBest} maxFontSizeMultiplier={1.3}>{fmtMin(bests.best.active_minutes)}</Text>
           </View>
+          <BestRail today={bests.today.active_minutes} best={bests.best.active_minutes} />
         </View>
 
         <View style={styles.weeklyBlock}>
           <View style={styles.weeklySectionRow}>
             <Text style={styles.weeklySectionLabel}>{t('activity.weeklySteps')}</Text>
             <View style={styles.weeklyHairline} />
+            <Text style={styles.weeklyTotal} maxFontSizeMultiplier={1.3}>
+              {t('activity.weekTotal', { n: weekTotal.toLocaleString() })}
+            </Text>
           </View>
-          <WeeklyBarChart data={weekly} />
+          <WeeklyBarChart data={weekly} goal={dailyGoal} />
         </View>
       </ScrollView>
 
@@ -1362,7 +1765,9 @@ const styles = StyleSheet.create({
   commanderName: {
     marginTop: 0,
     fontFamily: 'Archivo_900Black',
-    fontSize: 36,
+    // Was 36. The headline no longer has to out-shout the progression block
+    // below it, and it names the day rather than the tab.
+    fontSize: 30,
     color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
@@ -1377,25 +1782,111 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.bone,
   },
-  streakRow: {
-    marginTop: 12,
+  // ── Week track: the header's progression instrument ──
+  weekBlock: {
+    marginTop: 16,
+  },
+  weekHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  streakValue: {
-    fontFamily: 'Archivo_700Bold',
-    fontSize: 34,
-    color: colors.bone,
-    letterSpacing: -1,
-    lineHeight: 36,
-  },
-  streakLabel: {
+  weekSectionLabel: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 9,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
+  },
+  weekHeaderRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.hairline,
+  },
+  streakReadout: {
+    flexShrink: 0,
+  },
+  streakReadoutValue: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 14,
+    color: colors.bone,
+    letterSpacing: 0.2,
+  },
+  streakReadoutLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  weekTrack: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  weekCellCol: {
+    flex: 1,
+    alignItems: 'stretch',
+  },
+  // A day that fell short is a settled, empty slot — present, but unfilled.
+  weekCell: {
+    height: 22,
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    justifyContent: 'flex-end',
+  },
+  weekCellFuture: {
+    backgroundColor: 'transparent',
+    borderColor: colors.hairline,
+  },
+  weekCellCleared: {
+    backgroundColor: colors.bone,
+    borderColor: colors.bone,
+  },
+  weekCellToday: {
+    borderWidth: 1,
+    borderColor: colors.bone,
+  },
+  weekCellLive: {
+    width: '100%',
+    backgroundColor: colors.bone2,
+  },
+  weekCellLabel: {
+    marginTop: 5,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate,
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  weekCellLabelToday: {
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
+  },
+  weekCaption: {
+    marginTop: 10,
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  lifetimeLine: {
+    marginTop: 4,
+    fontFamily: fonts.mono,
+    fontSize: 9,
+    color: colors.bone2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  streakZeroHint: {
+    marginTop: 8,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.slate2,
+    lineHeight: 18,
   },
   streakAtRiskLine: {
     marginTop: 6,
@@ -1443,6 +1934,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: colors.hairlineStrong,
+  },
+  weeklyTotal: {
+    flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.bone2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   permBanner: {
     marginTop: spacing.lg,
@@ -1611,24 +2110,146 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  // Was the weakest container on a page of borderless blocks, while being the
+  // only live content two days in seven. Now a plate under a solid bone rule:
+  // the strongest edge on the screen, and no 1px low-contrast outline.
   attackDayCard: {
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    marginTop: spacing.lg,
     backgroundColor: colors.ink2,
-    padding: spacing.md,
-    gap: spacing.xs,
+    padding: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  attackDayRule: {
+    height: 2,
+    backgroundColor: colors.bone,
+    marginBottom: spacing.xs,
   },
   attackDayTitle: {
     fontFamily: 'Archivo_900Black',
-    fontSize: 18,
+    fontSize: 20,
     color: colors.bone,
     textTransform: 'uppercase',
+    letterSpacing: -0.02,
   },
   attackDayBody: {
-    fontFamily: fonts.bodyMedium,
+    fontFamily: fonts.body,
     fontSize: 13,
     color: colors.slate2,
     lineHeight: 18,
+  },
+  // ── The Attack Day window rail ──
+  attackWindow: {
+    marginTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    paddingTop: spacing.md,
+  },
+  attackWindowHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: 7,
+  },
+  attackWindowLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  attackWindowLeft: {
+    flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 16,
+    color: colors.bone,
+    letterSpacing: 0.2,
+  },
+  // Expiring, not owned — Caution Amber, and only in the final two hours.
+  attackWindowLeftClosing: {
+    color: colors.caution,
+  },
+  attackWindowTrack: {
+    height: 6,
+    width: '100%',
+    backgroundColor: colors.hairlineStrong,
+    overflow: 'hidden',
+  },
+  // Spent window, not progress: the fill is what has already gone.
+  attackWindowFill: {
+    height: '100%',
+    backgroundColor: colors.slate,
+  },
+  attackWindowNotch: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: colors.ink,
+  },
+  attackWindowScale: {
+    flexDirection: 'row',
+    marginTop: 5,
+  },
+  attackWindowTick: {
+    flex: 1,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  attackWindowTickMid: {
+    textAlign: 'center',
+  },
+  attackWindowTickEnd: {
+    textAlign: 'right',
+  },
+  attackHoldRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    paddingTop: spacing.md,
+  },
+  attackHoldLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  attackHoldValue: {
+    flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 16,
+    color: colors.bone,
+    letterSpacing: 0.2,
+  },
+  // Nothing held yet: the figure recedes and the CTA below carries the row.
+  attackHoldValueZero: {
+    fontFamily: fonts.mono,
+    color: colors.slate,
+  },
+  attackCta: {
+    marginTop: spacing.md,
+    backgroundColor: colors.claim,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attackCtaText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 10,
+    color: colors.bone,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   challengeHeaderRow: {
     flexDirection: 'row',
@@ -1655,13 +2276,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
-  challengeProgressTrack: {
-    height: 3,
-    backgroundColor: colors.hairlineStrong,
+  // Mission counter — three discrete segments, one per tier.
+  missionTicks: {
+    flexDirection: 'row',
+    gap: 3,
     marginBottom: spacing.sm,
   },
-  challengeProgressFill: {
-    height: '100%',
+  missionTick: {
+    flex: 1,
+    height: 4,
+    backgroundColor: colors.hairlineStrong,
+  },
+  missionTickDone: {
     backgroundColor: colors.bone,
   },
   challengeCard: {
@@ -1671,20 +2297,54 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   challengeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+    // Reserved so a completed row's bone edge does not shift the text.
+    borderLeftWidth: 2,
+    borderLeftColor: 'transparent',
     gap: spacing.sm,
+  },
+  // Completion is the payoff of the screen: the row settles to the next ink
+  // step and takes a solid bone edge. No colour is spent — the ledger mark and
+  // the ink step carry it.
+  challengeRowDone: {
+    backgroundColor: colors.ink3,
+    borderLeftColor: colors.bone,
   },
   challengeDivider: {
     height: 1,
     backgroundColor: colors.hairline,
   },
-  challengeMain: {
-    flex: 1,
-    gap: spacing.xs,
+  rowHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  rowHeadLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 1,
+  },
+  tierPips: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  tierPip: {
+    width: 6,
+    height: 6,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: 'transparent',
+  },
+  tierPipOn: {
+    backgroundColor: colors.slate2,
+    borderColor: colors.slate2,
+  },
+  tierPipDone: {
+    backgroundColor: colors.bone,
+    borderColor: colors.bone,
   },
   challengeDifficulty: {
     fontFamily: fonts.mono,
@@ -1693,24 +2353,94 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  challengeDifficultyDone: {
+    color: colors.bone2,
+  },
   challengeTask: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.bone,
+    lineHeight: 20,
+  },
+  // Two-tone readout: the live figure is the measurement, the rest is scale.
+  // Set large because it is the row's subject, and in mono because it is a
+  // measurement — Archivo stays reserved for ceremony.
+  readoutLine: {
+    marginTop: 2,
+    fontFamily: fonts.monoMedium,
+    fontSize: 18,
+    color: colors.bone,
+  },
+  readoutCurrent: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 18,
+    color: colors.bone,
+    letterSpacing: 0.2,
+  },
+  readoutTarget: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: colors.slate2,
+    letterSpacing: 0.6,
+  },
+  readoutTierLine: {
+    flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    color: colors.bone,
+    letterSpacing: 0.6,
+  },
+  // ── The gauge ──
+  gaugeTrack: {
+    width: '100%',
+    backgroundColor: colors.hairlineStrong,
+    overflow: 'hidden',
+  },
+  gaugeFill: {
+    height: '100%',
+    backgroundColor: colors.bone2,
+  },
+  gaugeFillDone: {
+    backgroundColor: colors.bone,
+  },
+  gaugeFillMuted: {
+    backgroundColor: colors.slate,
+  },
+  // A notch cut through the rail where an easier tier's threshold falls.
+  gaugeTick: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: colors.ink,
   },
   challengeReward: {
     fontFamily: fonts.mono,
     fontSize: 9,
     color: colors.slate2,
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
+    lineHeight: 14,
   },
-  challengeAction: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+  // Banked, not pending.
+  challengeRewardDone: {
+    color: colors.bone2,
+  },
+  challengeRemain: {
     flexShrink: 0,
+    fontFamily: fonts.monoMedium,
+    fontSize: 9,
+    color: colors.bone2,
+    letterSpacing: 1.2,
+    lineHeight: 14,
   },
+  // Secondary, not Claim Red. This button only appears for the Iron Guard
+  // off-axis claim (or dev testing), and on a drill day the screen's one red
+  // is already the TRAIN commit — two reds would break the One Claim Rule.
   completeBtn: {
-    backgroundColor: colors.claim,
+    marginTop: spacing.xs,
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -1725,22 +2455,28 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
-  challengeDone: {
+  securedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  securedMark: {
+    width: 7,
+    height: 7,
+    backgroundColor: colors.bone,
+  },
+  securedText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 10,
     // Bone, not alliance green — a completed challenge is a success state, not
     // an ownership state. The word carries the meaning (Locked Meaning Rule).
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
-  challengeProgress: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 11,
-    color: colors.bone,
-    letterSpacing: 1.2,
-  },
   challengeLocked: {
+    flexShrink: 0,
     fontFamily: fonts.monoMedium,
     fontSize: 9,
     color: colors.slate2,
@@ -1777,13 +2513,15 @@ const styles = StyleSheet.create({
   achievementsColLeft: {
     flex: 1,
   },
+  // Headers were 72 wide over values 80 wide, so every column header sat 8px
+  // right of the figures it labelled. Both now share COL_W.
   achievementsColToday: {
     fontFamily: fonts.mono,
     fontSize: 9,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    width: 72,
+    width: 80,
     textAlign: 'right',
   },
   achievementsColBest: {
@@ -1792,7 +2530,7 @@ const styles = StyleSheet.create({
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    width: 72,
+    width: 80,
     textAlign: 'right',
   },
   achievementsHeaderDivider: {
@@ -1803,7 +2541,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 0,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   achievementsDivider: {
     height: 1,
@@ -1817,73 +2556,151 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
+  // Geist Mono, not Archivo: these are measurements, and The Controlling Rule
+  // puts every measurement in mono. Archivo is ceremony only.
   achievementsToday: {
-    fontFamily: fonts.displayMedium,
-    fontSize: 16,
+    fontFamily: fonts.monoMedium,
+    fontSize: 14,
     color: colors.bone,
-    letterSpacing: 16 * -0.02,
-    width: 72,
+    letterSpacing: 0.2,
+    width: 80,
     textAlign: 'right',
+  },
+  // A zero today has nothing to say; a standing record does.
+  achievementsZero: {
+    fontFamily: fonts.mono,
+    color: colors.slate,
   },
   achievementsBest: {
-    fontFamily: fonts.displayMedium,
-    fontSize: 16,
-    color: colors.slate2,
-    letterSpacing: 16 * -0.02,
-    width: 72,
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: colors.bone2,
+    letterSpacing: 0.2,
+    width: 80,
     textAlign: 'right',
   },
+  bestRailTrack: {
+    height: 2,
+    width: '100%',
+    backgroundColor: colors.hairlineStrong,
+    marginBottom: spacing.md,
+  },
+  bestRailFill: {
+    height: '100%',
+    backgroundColor: colors.bone2,
+  },
   chartWrap: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
-  chartLabelSlot: {
-    height: 16,
-    marginBottom: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chartLabelText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    color: colors.bone,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  chartCanvas: {
+  // A right-hand gutter holds the goal figure so a tall bar can never collide
+  // with it, and the plot has an explicit baseline rule so the floor of the
+  // chart is a drawn line rather than the point where marks get clipped.
+  chartPlot: {
     position: 'relative',
+    paddingRight: 40,
   },
-  chartTrendOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  chartRow: {
+  chartCols: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-end',
-    gap: spacing.sm,
+    gap: 6,
   },
   chartCol: {
     flex: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
   },
-  chartBarTrack: {
-    height: 88,
-    width: '100%',
-    borderRadius: 0,
-    backgroundColor: colors.ink3,
+  chartValueSlot: {
+    height: 13,
+    justifyContent: 'flex-end',
+  },
+  chartValue: {
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  chartValueToday: {
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
+  },
+  chartBarSlot: {
+    height: 76,
     justifyContent: 'flex-end',
   },
   chartBar: {
     width: '100%',
+    backgroundColor: 'rgba(242,238,230,0.28)',
+  },
+  chartBarCleared: {
+    backgroundColor: colors.bone2,
+  },
+  chartGoalRule: {
+    position: 'absolute',
+    left: 0,
+    right: 40,
+    // The value slot sits above the bars; the rule is measured from the top of
+    // the bar area, so it is offset by that slot's height.
+    marginTop: 13,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  chartGoalLabel: {
+    position: 'absolute',
+    right: 0,
+    width: 36,
+    marginTop: 13,
+    textAlign: 'right',
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 0.6,
+  },
+  chartBaseline: {
+    position: 'absolute',
+    left: 0,
+    right: 40,
+    bottom: 0,
+    height: 1,
+    backgroundColor: colors.hairlineStrong,
+  },
+  chartZeroLabel: {
+    position: 'absolute',
+    right: 0,
+    bottom: -5,
+    width: 36,
+    textAlign: 'right',
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    color: colors.slate2,
+    letterSpacing: 0.6,
+  },
+  chartDayRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingRight: 40,
+  },
+  // An axis pointer under today's column: today is identified at the baseline,
+  // so the bar heights stay a pure reading of magnitude.
+  chartDayMark: {
+    height: 2,
+    backgroundColor: 'transparent',
+  },
+  chartDayMarkToday: {
+    backgroundColor: colors.bone,
   },
   chartDay: {
+    marginTop: 5,
     fontFamily: fonts.mono,
     fontSize: 9,
     color: colors.slate2,
-    letterSpacing: 1.2,
+    letterSpacing: 1,
     textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  chartDayWeekend: {
+    color: colors.slate,
+  },
+  chartDayFuture: {
+    color: colors.slate,
   },
   chartDayToday: {
     fontFamily: fonts.monoMedium,

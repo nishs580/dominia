@@ -24,7 +24,11 @@ import TierBars from './TierBars';
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
 const BONE = '#F2EEE6';
-const BONE_DIM = 'rgba(242,238,230,0.45)';
+// Slate 2, not bone-at-45%. The transparent dim landed around 4:1 against Ink,
+// which put every caption in this section — "LIFETIME · PERMANENT", the 0/4
+// counters, the locked medal names — below the readable floor. Slate 2 is the
+// token for metadata and clears 5.9:1 on Ink, 5.2:1 on Ink 2.
+const BONE_DIM = '#8B8F98';
 const HAIRLINE = 'rgba(242,238,230,0.16)'; // hairline-strong token (tile/cell borders)
 
 function fmtNum(n) {
@@ -119,9 +123,15 @@ function CategoryTile({ category, medals, active, onPress }) {
         <Text style={styles.tileLabel}>{t(`categoryLabel.${category}`)}</Text>
         <Text style={styles.tileCount}>{`${earned}/4`}</Text>
       </View>
+      {/* Four equal columns, each badge centred in its own. `space-between`
+          hung the outer badges off the tile's padding edges, so a category of
+          triangles and a category of squares — whose art fills its square
+          viewBox differently — sat on visibly different rhythms side by side. */}
       <View style={styles.tileIcons}>
         {items.map((m) => (
-          <MedalIcon key={m.key} medal={m} size={30} earned={isMedalEarned(m)} />
+          <View key={m.key} style={styles.tileIconSlot}>
+            <MedalIcon medal={m} size={32} earned={isMedalEarned(m)} />
+          </View>
         ))}
       </View>
     </Pressable>
@@ -283,7 +293,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   tileActive: { borderColor: 'rgba(242,238,230,0.4)' },
   tileHeader: {
@@ -300,8 +310,11 @@ const styles = StyleSheet.create({
   tileCount: { fontFamily: 'GeistMono_400Regular', fontSize: 10, color: BONE_DIM },
   tileIcons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: 8,
+  },
+  tileIconSlot: {
+    flex: 1,
+    alignItems: 'center',
   },
   grid: {
     flexDirection: 'row',
