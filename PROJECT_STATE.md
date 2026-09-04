@@ -1,20 +1,29 @@
 # DOMINIA — MASTER PROJECT STATE
-Last updated: July 8, 2026 (see **SINCE JUL 7** block directly below for the newest work; the **SINCE JUL 5** block after it is the prior burst, and the paragraph after that is the Jul 5 catch-up). Prior header text: catch-up covering all work since S82 close on June 21 — sessions since then ran in Claude Code without S-numbers; entries below are **date-tagged** instead. **Fourteen feature workstreams shipped Jun 23–Jul 5**, all on `main` in both repos (backend auto-deploys to Railway on push — there is NO manual backend deploy step): **RLS lockdown Phases 1+2** (Jun 23–24 — RLS enabled on all public tables, all mobile writes moved server-side, temp anon-write policies dropped; `players`/`territories` now anon-READ-only), **pg-pool hardening + session pooler + activity-batch refactor** (Jun 23–24, `c17f013`/`e7afe26`/`de86364` — fixed the P2028 claim contention root cause), **profile pictures** (Jun 24, Clerk-hosted avatars → `players.avatar_url`; verified on device), **Daily Achievements live data** (Jun 24, `2ed8177`+`3dc3048`), **onboarding tightening** (Jun 24 — dead-ends fixed, Google SSO code, value-first Welcome→SignIn reorder, live username check, funnel instrumentation, UPPERCASE usernames), **Honor Medals / Legacy Medal system** (Jun 28–30 — 16 medals, backend G1–G8+G7 push 100% complete `63261b6`→`0be2949`, mobile UI + final designer badge art + earn celebration + Legacy Power from medals), **i18n Parts A+B+C** (Jun 29–30 — app i18next foundation, per-recipient backend push translation via `players.locale`, full Russian first pass 709 keys + brand transcreation; needs native review), **public player profiles** (Jun 30–Jul 1, mobile-only), **Command Post v1** (Jul 1, `41cdfe6` — Founder-only retention surface, panels 1/2/5), **Living Map Phases 1–3** (Jul 2 — streak borders, ramparts, alliance emblems, home bases w/ 250m snap, D4 walls, siege borders, battle chips; alliance gate lowered to L3 `507edde`), **username uniqueness** (Jul 3, `cb4b89d` — case-insensitive `lower(username)` unique index), **daily challenge redesign** (Jul 3, `ad70b52`+`ffbd4cd` — 4-axis pick-one menu Mon–Fri, Sat/Sun-only Attack Days, weekend-neutral streaks; on-device verified; `ATTACK_DAY_GATE` ships default-OFF), **first-run flow** (Jul 4, `5162fcf`+`a744b2a` — per-screen walkthroughs + persistent first-claim objective + earn-moment resource toasts), **account deletion + password flows** (Jul 5, `eaa3da1`+`36d39d0`+`ef21158` — DELETE /me/account full purge + Clerk delete, forgot/change password via Clerk custom flows). Backend test baseline: **931+ green** (at Jul 3; up from 750 at S82). Mobile: **572 jest** (Jul 3; up from 533). **Big pending bundle: one Android app rebuild** picks up everything since Jun 24 (expo-image-picker native module, `scheme: 'dominia'`, new HC permissions, ru locale, Living Map, walkthroughs, delete-account, password flows) — see WHAT'S NEXT. The three S82-era smokes (chat M2 EAS, defender lifecycle, Activity Slice 7) remain open. Backend slices G1–G4 shipped in `dominia-backend` across `c453da5` (G1 schema + reads + alliance lifecycle hooks), `b8251c6` (G2 write + Ably + rate limit + keyword filter), `db93ace` (G3 moderation + admin endpoints + strike escalation), `95d194b` (G4 alliance push + archive worker + admin queue); the M2-prerequisite `PATCH /me/alliance-chat-push-enabled` endpoint was added inline at `05cd372`. Mobile slices M1–M2 shipped in `dominia` across `a18716b` (M1 read-only scaffold + ChatSideRail + chatApi) and `4e47f22` (M2 composer + Ably realtime + push deep link + AllianceChatPushToggleRow). Backend test baseline: **750/750** zero-flake at `05cd372` (up from 638 at S81 close; +112). Mobile baseline: **533/533** zero-flake at `4e47f22` (up from 505 at S81 close; +28). Railway green; `prisma/migrations-manual/20260621-add-chat-module/up.sql` applied to prod; `CHAT_ADMIN_CLERK_IDS` env var set on Railway with nish_s clerk id; `chat-archive-daily-utc` BullMQ cron registered (`0 3 * * *` UTC). Mobile `ably 2.23.0` added (pure JS — no EAS rebuild required for M2 itself). **Leaderboard module** had shipped at S80 (`16930ac`) between Defender close and Chat open. **Three smokes still pending at chat close**: M2 EAS standalone smoke on Alyona OnePlus 7T (chat send/receive + push deep link), Defender Lifecycle device smoke (carried from S74), Activity Slice 7 device smoke (carried from S66). Carry-forward `B-S81-OPS-realm-removal-state-cleanup` due now at chat close — strip Realm from this doc's "future modules" list.
+Last updated: September 4, 2026
 
-**SINCE JUL 7 (Jul 7 — War Room abilities made functional, all on `main`, backend auto-deployed; mobile pending one rebuild):**
-- **War Room morale abilities** ✅ **SHIPPED** (backend `da7c51d`, mobile `9d6c036`+`ac64d2e`). Previously the panel only burned morale with **no effect** and trusted a client-supplied spend amount. Now a full server-authoritative system: new table `alliance_ability_activations` (**migration `20260707-alliance-abilities` applied live**, RLS deny-all); `ability.catalog.ts` is the single source of truth for costs/durations/windows/cooldowns/effect factors; `GET /alliances/:id/abilities` + `POST /alliances/:id/abilities/:ability/activate` (Founder+Marshal via `can_manage`, morale UPDATE-first row-lock makes concurrent activation race-safe). Old `POST /alliances/:id/morale/spend` route/service + mobile `spendAllianceMorale` **removed**.
-- **Windows/cooldowns (user-specified):** **Unified Front REMOVED** → 5 abilities. War Surge / Iron Bulwark / Rally Cry / Steadfast are **Sat/Sun-only with an 8h per-ability cooldown that starts AFTER the buff duration** (button: ACTIVATE → ACTIVATED while live → cooldown countdown → ACTIVATE again; total lock = duration + 8h). Supply Line is **Mon–Fri-only, once per Monday-anchored calendar week** (leader home tz). **The day-window is ALWAYS enforced** (independent of the contest `ATTACK_DAY_GATE`). *(Both refinements — always-on window + cooldown-after-duration — landed Jul 8 `1c25b21`/`02af101` after the smoke test showed combat abilities activating on a Thursday and the cooldown overlapping the buff.)*
-- **Effects now real (not just morale burns):** War Surge −40% attacker contest Iron · Iron Bulwark +40% Iron to contest the buffed alliance's land (stacks) · Rally Cry attacker walks 80% of contest distance · Steadfast defender response ratio ×0.8 (incl. defend preview) · Supply Line +20% **XP and resources** across challenge/claim/contest/defence earns. Wired via `ability.effects.ts` buff lookups into contest/defend/walk/expiry/claim/challenge paths.
-- **Real Attack Day countdown** (mobile `ac64d2e`): replaced the hardcoded "2D 14H · SATURDAY" placeholder — counts to the next Sat/Sun 05:00 opening (TODAY/SATURDAY/SUNDAY), flips to a LIVE claim-accent state counting to the 23:00 close during the weekend window; mirrors the 05:00–23:00 backend contest hours; units localised (en D/H/M, ru Д/Ч/М). Same 10s tick drives the ability cooldown/active timers.
-- **Backend test baseline: 1007 pass** (up from 990; +17 in `ability.catalog.test.ts`), tsc clean, both locales valid JSON. **Pending:** one Android rebuild to pick up the War Room UI + on-device check.
+**STATE IN ONE LINE:** Feature-complete for a friends beta; everything below is on `main` in both repos (backend auto-deploys to Railway on push — there is NO manual backend deploy step). The single largest blocker is unchanged and now two months stale: **one Android app rebuild** gates on-device verification of roughly nine workstreams. Backend baseline **1058 pass** (`npm test`, isolated Docker Postgres). Mobile baseline **715 jest**.
 
-**SINCE JUL 5 (Jul 5–7 — two new modules + a launch-hardening audit burst, all on `main`, backend auto-deployed):**
-- **Alliance Weekly Tasks module** ✅ **SHIPPED** (backend `82305ee`+`629ee72`, mobile `bba50c8`+`ce4e011`; spec `docs/specs/alliance-weekly-tasks.md`). 5-task leader-picked weekly challenge (Long March / Muster / Forge / Drill / Expansion Order); Founder+Marshal pick Sat–Sun in `hq_timezone` (least-recently-run auto-assign fallback); **Monday 00:10 rollover per hq-tz cohort** in one guarded tx (evaluate last week → tier → per-contributor payouts → war chest → activate + snapshot this week). **Snapshot invariant:** the Monday roster defines BOTH target and reward eligibility (closes leave-Sun/rejoin-Mon exploit). 50% personal floor, half/full tiers, per-task-type payouts, war-chest Morale capped 150/wk. Aggregates accepted `activity_samples` only. Routes `GET/POST /alliances/:id/weekly-task[/menu|/pick]`; Ably + quiet-hours pushes (en+ru). New tables `alliance_weekly_tasks` + members snapshot, `alliances.iron/stone/gold` war-chest cols, `weekly_task_reward` event; **migration `20260705-alliance-weekly-tasks` applied live**. Mobile: weekly-task card + Command Post orders w/ explicit CHOOSE button. *(This resolves the old "Weekly alliance missions §3.10" backlog + the flat alliance-mission payout placeholder.)*
-- **Territory Development module** ✅ **SHIPPED** (backend `a478a0f`, mobile `990a0c6`; mechanics §5.8.1 amended). D0→D4 develop as **one ATOMIC per-level spend** (no partial contributions) and **NO upkeep** (both are deliberate deviations from spec). `POST /territories/:id/develop` holder-only, single balance-guarded + level-guarded tx (double-tap safe); **D3 gated at player L8, D4 at L9**; +500 XP flat/tier; D3/D4 emit alliance-feed rows; **D4 writes a permanent `development_records` row** + Ably `development_updated`. **Influence wallet:** `players.influence`/`lifetime_influence` (x10 fixed-point) + one-shot §5.8.4 milestone acks; **daily influence tick 00:05 per tz** (owner home pin / alliance HQ) via BullMQ repeatable jobs, `influence_credited_ymd` CAS idempotent. **Migration `20260706-territory-development` applied live.** Mobile: develop panel + influence wallet + feed rows + Citadel records.
-- **First-run demo — 3rd iteration** (mobile `d3383e3`→`d7bcdce`→`512472f`, Jul 6): replaced the Jul-4 pointer walkthrough with first-tap tips, then a **gated 13-beat guided demo across four tabs** (claim-red frames on tap targets, coloured colour-words, lazy claim beats). Supersedes the "first-run flow (Jul 4)" entry elsewhere in this doc.
-- **Security lockdown audit** ✅ **SHIPPED** (backend `3653157`, mobile `3e0a32e`, Jul 7). Migration `20260707-security-lockdown-rpcs` (**applied live**): REVOKE anon/PUBLIC EXECUTE on **10 script-only SPB pipeline/loader RPCs** + pin `search_path` on flagged fns; drop `debug_events_anon_insert_temp` policy + revoke table grants. Debug routes now require `requireAuth`+`requireAdmin` (**new `src/shared/admin.ts`, `ADMIN_CLERK_IDS` env**) instead of an env flag alone. `app.ts`: **`@fastify/helmet` + `@fastify/rate-limit` (120/min, healthcheck exempt) + `trustProxy` + global `setErrorHandler`** (generic 500, no message leak). New authed **`POST /me/debug-log`** (derives player_id from token) replaces the mobile anon `debug_events` insert path. **`npm audit fix` cleared all 5 high-sev advisories.**
-- **Perf/ops audit burst** ✅ **SHIPPED** (Jul 6–7): `66d5b9a` **trim query projections** (~20 authed handlers pulling every `players` column; `/me`+bootstrap stopped echoing `fcm_token`/`stride_calibration_samples`/server cursors; new slim id-only helper + `PLAYER_ME_SELECT`) · `f0070a8` **collapse 11 N+1 cohort jobs to set-based** (push batch helpers, chat-archive, weekly-task rollover, week-in-review, daily-influence tick, streak rollover — all idempotency/CAS preserved; `evaluatePlayerDailyMedals` intentionally left per-player) · `229149f` **graceful shutdown** (new `src/shared/shutdown.ts`, fastify→workers→queues→redis→prisma→firebase, 25s cap; gate dev `testQueue`/`testWorker` behind the `/debug` env check so prod drops the idle Redis pull-loop; fix 3 scripts that `process.exit`'d without disconnecting) · `ca0ab97` **batch contest-walk sample lookups+inserts** (per-sample findUnique+create loop → one findMany pre-read + one createMany; removes the last known intra-tx N+1 pool-hold risk).
-- **Backend test baseline: 990 pass** (at `a478a0f`, Jul 6; up from 931+). **Pending externals for this burst:** set `ADMIN_CLERK_IDS` on Railway (nish_s) + confirm debug routes now admin-gated; one Android rebuild still picks up the mobile weekly-task/develop/demo/debug-log UI.
+**Doc convention:** this header carries *current state only*. The old accreted `SINCE <date>` blocks were collapsed into the register below on Sep 4 — per-workstream detail now lives in its own section (STACK / SCREENS / KEY FILES / DECISION LOG), not in a running log at the top.
+
+### SHIPPED SINCE JUL 9 (condensed register)
+
+| Date | Workstream | Detail |
+|---|---|---|
+| Jul 10 | **Players PII lockdown** | `93762a8` + migrations `20260710-restrict-players-columns` / `-revoke-anon-write-grants` (both applied live). Home GPS, `fcm_token`, `clerk_id` no longer readable by the anon key; mobile reads own `home_pin`/stride from the backend (`dd8fb4c`). |
+| Jul 10 | **Responsive + safe-area pass** | `f5b5bad` — safe-area insets, font-scaling caps, ScrollView wraps, name-fit guards, CreateAlliance KAV. `Text.defaultProps` is dead on RN 0.81/React 19 (see Pitfalls). |
+| Jul 10 | **Brand colour correction** | `bbc371e` — off-brand orange `#FF6B35` replaced with brand Claim `#D64525` app-wide. |
+| Jul 10 | **Friends-beta clean reset** | `deb9aa0` — `scripts/wipe-clerk-users.ts`. Note the app is still on the Clerk **DEV** instance (`sk_test`); a real launch needs a separate prod instance and wipes all accounts again. |
+| Jul 11 | **First-claim spine (4th iteration)** | `de7c053` — the 13-beat guided demo was **DELETED**. Replaced by a three-beat spine: camera hook → pulsing objective → CLAIM IT/LATER sheet. Copy must never imply visiting the territory. Supersedes both earlier first-run entries in this doc. |
+| Jul 12 | **Territory Legacy Rank (§9.2)** | Backend `dacc6f0` + `20260712-legacy-rank-backfill` (applied live); mobile `9cf94a9` reads `territories.legacy_rank`. Server-authoritative promotion. Hall of Holders list skipped this version. |
+| Jul 16 | **Game feel Tier 1 / 2 / 2.5** | `b1d7011` + `53a4c62` + `bd1fb3f`, backend `db2497f` + `456118a`. Haptics (**new `expo-haptics` native dep — in the rebuild bundle**), silhouette reveals, count-up rewards, milestone takeovers, resource delta chips, map capture celebration, daily brief (SitrepCard), streak ceremony, DevGlyph, medal earn takeover + deep-link straight to the earned medal. |
+| Jul 17 | **iOS port Phase 1** | `ebbef47` + `a4986a1` — `lib/health/` facade over react-native-health-connect (`.android.js` / `.ios.js`), scheme, iOS block, background location, static frameworks, Mapbox token. Full plan in `iOS_Plan.md`. Not built or run on device. |
+| Jul 19–22 | **Design pass (impeccable)** | `50437d1` added `PRODUCT.md` + `DESIGN.md` + `.impeccable/design.json` to the **mobile** repo (run `/impeccable` from there). Critique-driven fix rounds across onboarding, map, claim arc, contest result, activity, profile, alliance — colour constitution, red discipline, resilience/load-error gates, ARMED/LOCKED labels, field-note walk beats. |
+| Jul 23–24 | **Claim flow v2** | Backend `f8d6ace` + `20260724-claim-flow-v2` (applied live), mobile `8e36e09`. Two-phase claim: arm window, refunds, tiered walk windows, server-verified walk. `claim_intents` + sweep queue. |
+| Jul 24 | **Realms + cities schema** | `5f7b687` + `20260724-realms-and-cities` (applied live). `realms`/`cities` as real rows, `territories.city_id`/`realm_id`, stable ids. **Identity only — no Realm gameplay.** |
+| Jul 24 | **Live map channel** | `05b57b2` + mobile `c1439a8` — authorised, named Ably map channel; MapScreen subscribes to `territory_claimed` and repaints live. |
+| Jul 23–27 | **Walk integrity + anti-cheat** | Live pedometer drives the walk ring with minute-bucket samples and `source_id` dedup vs Health Connect (`c6d4e6f`); 15-min reset removed; completion flush/retry; GPS speed distrusted on weak fixes (`23f5700`); **gait-signature analysis closes the shake-to-fake hole** (mobile `c823b5e` + backend `6f720fa` — client measures, server judges). Client GPS filter is deliberately permissive; the server step-cadence cap is authoritative — **do not re-tighten the client**. |
+| Aug 8–9 | **Design gauntlet vs Ingress Prime** | `87bedbe` (merge). Builder/critic loop; **profile + activity won blind**, map looped through five rounds — parcel lattice, scale bar, HUD control grammar, CONTEST as primary action on the territory sheet, open ground given a face and an edge. Known limit: the map cannot tile at default zoom 14. |
+| Sep 4 | **Notification layer fixes** | Backend `7dde99c` + mobile `618e201`. (i) All three weekly-task pushes shipped with **no `kind` field** in their FCM data, so they were unroutable — fixed, plus `alliance_id` and role for tap targeting. (ii) `defender_notify`'s banner surface was never built and degraded to an 8s toast — real `NotificationBanner` now holds until acted on. (iii) Chat push no longer toasts over the live Ably message when you are already in that room. **Route table is now at full parity: 27 backend kinds, 27 mobile route entries.** |
 
 ---
 
@@ -62,17 +71,18 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Auth | Clerk (`@clerk/clerk-expo`) | ✓ Working end to end |
 | Location | expo-location | ✓ Installed |
 | Sensors | expo-sensors | ✓ Installed |
-| Health | react-native-health-connect 3.x | ✓ Working (read-only, foreground verified) |
+| Health | react-native-health-connect 3.x behind the **`lib/health/` facade** (`index.android.js` / `index.ios.js`, added Jul 17 for the iOS port) | ✓ Working on Android (read-only, foreground verified); iOS side is scaffold only |
 | Animations | react-native-svg | ✓ Installed |
+| Haptics | `expo-haptics ~15.0.8` (**NEW native module Jul 16 — in the pending rebuild**), wrapped in `lib/haptics.js` with a `Vibration` fallback; every call is failure-swallowed so haptics can never break a reward moment | ✓ Live (game feel Tier 1) |
 | Fonts | @expo-google-fonts/archivo + geist-mono + inter + expo-splash-screen | ✓ Installed |
 | Navigation | @react-navigation/native-stack + bottom tabs | ✓ Working |
-| Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` **^23.0.0 (modular API — migrated S53)** + `react-native-toast-message` ^2.3.3. Foreground/background/killed-state all handled via `FcmLifecycle` Effects 3/4/5; D1 routing table in `lib/notifications/route.js` (**20 entries** — added `chat_alliance_message` at S82 M2) | ✓ Working end to end (12/12 device matrix S61b) |
+| Push notifications | `@react-native-firebase/app` + `@react-native-firebase/messaging` **^23.0.0 (modular API — migrated S53)** + `react-native-toast-message` ^2.3.3. Foreground/background/killed-state all handled via `FcmLifecycle` Effects 3/4/5; D1 routing table in `lib/notifications/route.js` (**27 entries as of Sep 4 — full parity with the backend's 27 kinds**; `routeForPush` gained an optional `resolveTarget(data)` hook for payload-dependent tap targets). Surfaces: CARD (modal), TOAST, BANNER_ROUTE (`components/notifications/NotificationBanner.js` — built Sep 4, replaces the interim 8s toast; holds until acted on, `box-none` so it never blocks the app) | ✓ Working end to end (12/12 device matrix S61b) |
 | Realtime client | **`ably ^2.23.0` (added S82 M2)** — pure JS, no native module. `lib/chatRealtime.js` wraps `Ably.Realtime` with token-auth callback for refresh; subscribe per accessible chat room (`chat:${room_id}` namespace); dedupe via `client_temp_id`. No EAS rebuild required for the lib itself. | ✓ Live |
 | Network status | `@react-native-community/netinfo` (Expo SDK 54-compat, native — added S51 for Activity producer) | ✓ Installed |
 | Activity producer | `expo-crypto` (SHA-256 sourceId) + `react-native-health-connect@^3.5.0` (Android-only) | ✓ Live on beta. **(Jul 3)** Now also reads ActiveCaloriesBurned + Distance (NOT TotalCalories — basal kcal would auto-complete tiers; NO Speed — backend derives tempo); producer merges 3 metrics into 1-min buckets. |
 | i18n | `i18next` + `react-i18next` + `expo-localization ~17.0.9` — config `i18n/index.js`, en fallback + device-locale detect + ru v4 plurals. `locales/en.json` source of truth; `ru.json` full first pass (709 keys, needs native review). Territory names (OSM proper nouns) never translated. | ✓ Live (Jun 29) |
 | Avatars | `expo-image-picker` (NEW native module — **in the pending rebuild**) + Clerk-hosted avatar CDN (`user.setProfileImage` → `players.avatar_url` via PATCH /me) | ✓ Live (Jun 24) |
-| Test runner | Jest 29.7 + jest-expo (mobile, **533 tests** as of S82 M2 — 348 formulas + 63 activity.helpers + 40 contest/claim API+producer+helpers + 17 push-route table tests + ~37 leaderboard/chat additions across S80/S82; 533/533 × 4 baseline clean at HEAD `4e47f22`) · backend: `node --test --import tsx` via `npm test`, which **auto-bootstraps an isolated local Docker Postgres** (S66) and runs the **full 750-test suite** sequentially (`--test-concurrency=1`, ~85–100s/run as of S82, 4-run zero-flake gate at HEAD `05cd372`). The historic "79 pre-existing Supabase statement-timeout failures" workaround is obsolete — the full suite now runs clean against the isolated DB. `npx tsc --noEmit` is a mandatory pre-test gate (S65a). | ✓ Green (full suite, isolated DB) |
+| Test runner | Jest 29.7 + jest-expo (mobile, **715 tests / 21 suites** as of Sep 4 — was 533 at S82 M2 — 348 formulas + 63 activity.helpers + 40 contest/claim API+producer+helpers + 17 push-route table tests + ~37 leaderboard/chat additions across S80/S82; 533/533 × 4 baseline clean at HEAD `4e47f22`) · backend: `node --test --import tsx` via `npm test`, which **auto-bootstraps an isolated local Docker Postgres** (S66) and runs the **full 1058-test suite** sequentially (`--test-concurrency=1`, ~140s/run as of Sep 4; was 750 at S82). The historic "79 pre-existing Supabase statement-timeout failures" workaround is obsolete — the full suite now runs clean against the isolated DB. `npx tsc --noEmit` is a mandatory pre-test gate (S65a). | ✓ Green (full suite, isolated DB) |
 
 **Backend (`dominia-backend` repo):**
 
@@ -90,7 +100,7 @@ Real-world mobile territory game. Players walk to claim OSM-defined named territ
 | Job queue | BullMQ 5.x — **8 queues LIVE** (**+3 Jul 5–6:** weekly-task rollover repeatable cron `10 0 * * 1` per hq-tz cohort [Monday 00:10]; weekly-task pick-reminder; territory-development daily-influence tick repeatable `5 0 * * *` per tz [00:05, `influence_credited_ymd` CAS idempotent]): `contestExpiryQueue` (one-shot, 23:59 home_pin expiry), `quietHoursPushQueue` (delayed FCM dispatch at next 05:00 local), `streakRolloverQueue` (repeatable cron `0 0 * * *` per distinct home_timezone), `streakBreakWarningQueue` (repeatable cron `55 23 * * *` per distinct home_timezone), **`chatArchiveQueue`** (S82 G4 — repeatable cron `0 3 * * *` global UTC, jobId `chat-archive-daily-utc`, moves city `chat_messages` older than 30 days to `chat_messages_archive` + recomputes `chat_rooms.last_message_at` for affected rooms). jobIds use hyphens not colons; for tz-based jobs: `streak-rollover-${tz.replace(/\//g, '-')}` so `Europe/Moscow` → `streak-rollover-Europe-Moscow`. | ✓ Live |
 | Real-time | Ably (free tier — Pub/Sub, 6M msg/month, 200 peak channels, 200 peak connections). `Ably.Rest` singleton in `shared/ably.ts`. 4 events live on `contest:<id>` channel: `contest_attacker_started_walking`, `contest_progress`, `contest_resolved`, `contest_expired`. **S82 G2+M2:** new `chat:${room_id}` namespace; backend publishes `chat:message` events post-tx-commit per R-S81-4 (mutable `activePublisher` slot in `modules/chat/chat-ably.ts` for test injection — replaces env-var-bypass pattern). Mobile Realtime client wired at M2 (`lib/chatRealtime.js`) — fetches a JWT-style token with 1h TTL + per-room channel allowlist from `POST /chat/ably-token`, refreshes via authCallback. | ✓ Live |
 | Validation | `zod` | ✓ Live |
-| Push notifications | **Firebase Admin (FCM)** — `firebase-admin` v12+ singleton in `shared/firebase.ts`. `PushNotificationKind` union now **22 kinds** (S53→S82): contest lifecycle (defender_notify, contest_won, contest_lost), streak_break_warning, streak_milestone, 7 alliance lifecycle kinds (S57, `_broadcast` suffix convention), level_up_5/6/10 (S59), first_claim / first_contest_win / first_reconquest / first_alliance_mission (S60), **`chat_alliance_message`** (S82 G4 — alliance chat only at v1; city chat push deferred to post-launch @mention-only slice). Dispatch via per-domain **post-tx push composers** (see Decision Log). Quiet Hours 23:00–05:00 enforced at send site; `sendImmediately` bypasses for 23:55 streak warning. Stale-token cleanup matches 3 error codes. **S82:** `modules/chat/chat-push.composer.ts` honors `players.alliance_chat_push_enabled` at enqueue time (`WHERE alliance_chat_push_enabled = true`) and skips the sender; uses mutable-emitter test injection. **(Jun 28–29)** +3 `legacy_medal_*` kinds (tier-up / count / one-off; per-player hourly Redis flood guard, ETERNAL bypasses quiet hours) → **25 kinds**. **(Jun 29 i18n Part B)** push copy now translated per-recipient at compose time via `PushRequest` (titleKey/bodyKey/params) + `src/shared/i18n/` resolver + `players.locale`; `$t:<key>` param nesting localizes medal/role/tier names. | ✓ Live end to end |
+| Push notifications | **Firebase Admin (FCM)** — `firebase-admin` v12+ singleton in `shared/firebase.ts`. `PushNotificationKind` union now **27 kinds defined / 25 wired** (S53→Sep 4; `first_reconquest` + `first_alliance_mission` are scaffolded but nothing emits them yet): contest lifecycle (defender_notify, contest_won, contest_lost), streak_break_warning, streak_milestone, 7 alliance lifecycle kinds (S57, `_broadcast` suffix convention), level_up_5/6/10 (S59), first_claim / first_contest_win / first_reconquest / first_alliance_mission (S60), **`chat_alliance_message`** (S82 G4 — alliance chat only at v1; city chat push deferred to post-launch @mention-only slice). Dispatch via per-domain **post-tx push composers** (see Decision Log). Quiet Hours 23:00–05:00 enforced at send site; `sendImmediately` bypasses for 23:55 streak warning. Stale-token cleanup matches 3 error codes. **S82:** `modules/chat/chat-push.composer.ts` honors `players.alliance_chat_push_enabled` at enqueue time (`WHERE alliance_chat_push_enabled = true`) and skips the sender; uses mutable-emitter test injection. **(Jun 28–29)** +3 `legacy_medal_*` kinds (tier-up / count / one-off; per-player hourly Redis flood guard, ETERNAL bypasses quiet hours) → **25 kinds**. **(Jul 5)** +3 `weekly_task_*` kinds (started / result / pick_reminder) → **27 kinds**; these shipped WITHOUT a `kind` field in their FCM `data` and were therefore unroutable on mobile until `7dde99c` (Sep 4) — see Pitfalls. **(Jun 29 i18n Part B)** push copy now translated per-recipient at compose time via `PushRequest` (titleKey/bodyKey/params) + `src/shared/i18n/` resolver + `players.locale`; `$t:<key>` param nesting localizes medal/role/tier names. | ✓ Live end to end |
 
 ---
 
@@ -447,6 +457,16 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 
 ---
 
+**SCHEMA CHANGES SINCE JUL 9 (all applied live):**
+
+| Change | Migration | Notes |
+|---|---|---|
+| `realms` + `cities` as real tables; `territories.city_id` / `territories.realm_id`; stable territory ids | `20260724-realms-and-cities` | **Identity only — no Realm gameplay exists.** This does not reopen the "Realm module" question closed by Q-S81-B. |
+| `claim_intents` extended for two-phase claim (arm window, refunds, verified walk) | `20260724-claim-flow-v2` | Paired with the claim-intent sweep queue. |
+| `territories.legacy_rank` backfilled + server-authoritative promotion | `20260712-legacy-rank-backfill` | §9.2. |
+| `players` column-level grants restricted; anon write grants revoked | `20260710-restrict-players-columns`, `20260710-revoke-anon-write-grants` | Closes the anon-key PII read of home GPS / `fcm_token` / `clerk_id`. |
+
+
 ## SCREENS — STATUS
 
 | Screen | Status | Notes |
@@ -579,11 +599,45 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `components/WalkthroughOverlay.js` + `lib/walkthroughFlags.js` + `lib/resourceIntro.js` | (Jul 4, first-run) walkthrough engine (core Animated — repo has NO reanimated), AsyncStorage fires-once flags + event bridge, earn-moment resource toasts. |
 | `screens/WelcomeScreen.js` / `screens/ForgotPasswordScreen.js` / `lib/passwordPolicy.js` | (Jun 24 / Jul 5) pre-auth pitch; Clerk reset-code flow; shared password bounds (8/72). |
 
+**NEW SINCE JUL 9 (mobile):**
+
+| File | Purpose |
+|---|---|
+| `lib/haptics.js` | `claimHaptic` / `contestHaptic` / `milestoneHaptic`. Expo Haptics with a `Vibration` fallback; every call wrapped so a haptics failure can never break a reward moment. |
+| `lib/milestones.js` | Builders for `MilestoneTakeover` items so ClaimSuccess and ContestResult present one identical ceremony. `ALLIANCE_UNLOCK_LEVEL = 3`. |
+| `components/MilestoneTakeover.js` | Full-screen ceremony. Four triggers: level-up after claim, level-up after contest, first contest win, streak milestone. |
+| `components/SitrepCard.js` | Once-per-app-session daily brief on the Map. Streak / today's challenge / Attack Day. At-risk state after 17:00 device-local on an incomplete challenge day. Fetch failure = no card (no spinner, no retry). |
+| `components/CountUpText.js`, `components/ResourceDeltaValue.js`, `components/TerritorySilhouette.js`, `components/DevGlyph.js` | Game-feel Tier 1/2 primitives. |
+| `components/medals/MedalEarnTakeover.js` | Medal ceremony. Any `legacy_medal_*` card swaps the normal dialog for this — explicit CTAs, no backdrop-tap dismiss. |
+| `components/notifications/NotificationBanner.js` | **(Sep 4)** The BANNER_ROUTE surface, finally built. Holds until acted on or dismissed, `pointerEvents="box-none"` so the app stays usable underneath, contest haptic on arrival, ambient 2000ms linear pulse (never an alarm cadence). |
+| `lib/notifications/bannerController.js` | Imperative `showBanner`/`hideBanner`/`subscribe`, same pattern as `cardController`. One banner at a time — a newer one replaces the standing one. |
+| `lib/notifications/chatPresence.js` | **(Sep 4)** Which chat room is on screen. ChatScreen publishes on focus/tab change; FcmLifecycle reads it to drop the duplicate chat toast. Module-level because FcmLifecycle mounts above `NavigationContainer`. |
+| `lib/firstClaimSpine.js`, `lib/firstClaimSpineStore.js`, `lib/firstClaimTarget.js` | The three-beat first-claim spine that replaced the deleted 13-beat demo. |
+| `lib/gaitSignature.js` | Client-side accelerometer gait-vs-shake measurement. **Client measures, server judges** — never move the verdict here. |
+| `lib/claimWalkSamples.js` | Minute-bucket walk samples with `source_id` dedup against Health Connect. |
+| `lib/health/index.android.js`, `lib/health/index.ios.js` | Platform facade over health data, added for the iOS port. Import `lib/health`, never the HC package directly. |
+| `lib/homePinCache.js`, `lib/mapBoard.js`, `lib/territoryShape.js`, `lib/territoryShapeApi.js` | Home-pin caching, map board state, territory geometry helpers. |
+| `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json` | Design context for `/impeccable`. **These live in the MOBILE repo** — run the skill from there, not from the backend. |
+| `iOS_Plan.md` | Full iOS port plan (Jul 7). Health facade + CMPedometer + EAS-only builds. Phase 1 config landed; nothing built or run. |
+
 **Local-only / gitignored:** SPB pipeline scripts (`fetch-spb-*.js`, `load-*-to-postgis.js`, `*.geojson` outputs), original Amsterdam OSM helpers (`fetch-osm-polygons.js`, `migrate-territories-v2.js`, etc.), `candidates_combined.csv`. ⚠️ `retry-failed-polygons.js` still has hardcoded service role key — move to env var before file ever leaves the local machine.
 
 `dominia_mechanics_v6_10.md` — game design doc, formulas.js aligned to this version.
 
 ---
+
+**NEW SINCE JUL 9 (backend):**
+
+| File | Purpose |
+|---|---|
+| `src/modules/territory/claim-activate.{routes,service}.ts`, `claim-intent.queries.ts`, `claim-intent-sweep.{service,bootstrap}.ts` | Claim flow v2 — two-phase claim, arm window, refunds, server-verified walk, intent sweep queue. |
+| `src/shared/queues/claim-intent-sweep.queue.ts` | 9th BullMQ queue — sweeps expired claim intents. |
+| `src/shared/formulas/gait.ts` | Server-side gait verdict. Authoritative; the client only supplies the measurement. |
+| `src/shared/realtime/map-channel.ts` | Authorised, named Ably map channel for live territory repaints. |
+| `src/modules/legacy-rank/legacy-rank.queries.ts` | §9.2 server-authoritative territory Legacy Rank promotion. |
+| `scripts/wipe-clerk-users.ts` | Friends-beta account reset. Destructive — read before running. |
+| `prisma/migrations-manual/` | 5 new folders since Jul 9, **all applied live**: `20260710-restrict-players-columns`, `20260710-revoke-anon-write-grants`, `20260712-legacy-rank-backfill`, `20260724-claim-flow-v2`, `20260724-realms-and-cities`. |
+
 
 ## KEY FILES — BACKEND (`C:\Users\nisha\dominia-backend`)
 
@@ -720,7 +774,7 @@ adb uninstall com.nish_s.dominia
 # Mirror phone to PC
 scrcpy
 
-# Unit tests (533 tests across 9 suites as of S82; must run 4x zero-flake before any commit)
+# Unit tests (715 tests across 21 suites as of Sep 4; must run 4x zero-flake before any commit)
 npm test
 
 # Verify project file vs live file (drift check)
@@ -771,7 +825,9 @@ npm run typecheck                     # tsc --noEmit — NOT sufficient as pre-p
 # Backend tests (S66: ISOLATED local Docker Postgres — REQUIRES Docker Desktop running)
 # Pre-commit gate (UNBLOCKED as of S66):
 #   1. npx tsc --noEmit            # MANDATORY (S65a) — exit 0 required BEFORE tests; tsx type-strips, tsc rejects what Railway will
-#   2. npm test                    # auto-bootstraps the test container, runs the FULL 750-test suite sequentially (~85-100s as of S82). Run 4x, zero-flake.
+#   2. npm test                    # auto-bootstraps the test container, runs the FULL 1058-test suite sequentially (~140s as of Sep 4). Run 4x, zero-flake.
+#      NEVER run `npx tsx --test <file>` bare — it loads .env and hits the LIVE Supabase DB.
+#      Ad-hoc single file: npx tsx --test --env-file=.env.test <file>   (Docker must be up)
 #   3. git status + git diff --stat ; git add . ; git commit (multi -m, ASCII) ; git push origin main
 #   4. Railway healthcheck (60-90s wait) ; device smoke if behaviour changed
 # First-time setup per machine: install Docker Desktop, then: Copy-Item .env.test.example .env.test ; npm test
@@ -926,11 +982,12 @@ WHERE conname = 'activity_log_event_type_check';
 
 # Extend activity_log event_type whitelist (DROP + ADD pattern — every new event_type needs this;
 # prefer the folder-per-migration convention: prisma/migrations-manual/<YYYYMMDD>-<desc>/{up,down}.sql).
-# Current whitelist (20): challenge_completed, territory_claimed, territory_abandoned,
-# contest_participated, km_walked, contest_defended, contest_won, contest_lost,
-# contest_held, contest_expired, streak_broken, streak_milestone,
+# Current whitelist (23, verified live Sep 4): challenge_completed, territory_claimed,
+# territory_abandoned, contest_participated, km_walked, contest_defended, contest_won,
+# contest_lost, contest_held, contest_expired, streak_broken, streak_milestone,
 # alliance_founded, alliance_joined, alliance_left, alliance_role_changed,
-# alliance_kicked, alliance_demoted, alliance_promoted, leveled_up (S59).
+# alliance_kicked, alliance_demoted, alliance_promoted, leveled_up (S59),
+# weekly_task_reward (Jul 5), territory_developed + influence_milestone (Jul 6).
 # NOTE: CHECK-constraint-only changes do NOT require prisma generate; column adds need
 # BOTH `prisma db pull` AND `prisma generate` (two-step sync).
 ALTER TABLE activity_log DROP CONSTRAINT activity_log_event_type_check;
@@ -955,17 +1012,20 @@ CHECK (event_type = ANY (ARRAY[
 SELECT COUNT(*) AS table_exists FROM information_schema.tables
 WHERE table_schema='public' AND table_name='<my_table>';
 
-# === NOTIFICATIONS (S53–S61b) ===
+# === NOTIFICATIONS (S53–S61b, extended Sep 4) ===
 
 # Layer 1 push smoke against Railway prod (verifies route mapping + render + tap nav).
 # ALWAYS audit lib/notifications/route.js for the exact kind string FIRST — wrong kinds
 # silently fall to DEFAULT_ROUTE and mask what the test proves.
+# (Sep 4) Route table is at full parity: 27 backend kinds, 27 route entries. When adding a
+# kind, the composer MUST put `kind` in data{} AND the route entry ships in the same change.
 npx tsx scripts/sendTestPush.ts <fcm_token> <kind> "<title>" "<body>"
 
 # Test env bypasses — set when running tests that import services wired to push composers
 # (prevents Firebase/BullMQ/ioredis from loading and hanging the runner):
 # SKIP_ALLIANCE_PUSH_EMIT=true · SKIP_STREAK_PUSH_EMIT=true
 # SKIP_LEVEL_UP_PUSH_EMIT=true · SKIP_FIRST_EARN_PUSH_EMIT=true
+# SKIP_MEDAL_PUSH_EMIT=true · SKIP_WEEKLY_TASK_PUSH_EMIT=true · SKIP_DEFENDER_NOTIFY_PUSH_EMIT=true
 
 # (S66) The full suite now runs CLEAN against the isolated test DB via `npm test` — the old
 # "79 pre-existing Supabase statement-timeout failures" workaround is OBSOLETE. The narrow-scope
@@ -1350,11 +1410,57 @@ git commit -a -m "subject" -m "body line 1" -m "body line 2"
 
 ---
 
+**ADDED SEP 4 (from Jul–Sep work):**
+
+- **Health Connect `aggregateGroupByPeriod` always throws.**
+  *Signature:* per-day or weekly step charts silently empty or error out.
+  *Cause:* the function is broken in our version of react-native-health-connect.
+  *Fix:* use `aggregateGroupByDuration` for all per-day/weekly aggregation. Fixed the Weekly Steps bug 2026-07-23.
+
+- **EAS env vars are per-environment, and `eas.json` `env` never interpolates `$VARS`.**
+  *Signature:* a build that works locally fails at runtime with a 401 from a third party (this cost a Mapbox 401 build failure).
+  *Cause:* secrets are scoped per Expo environment; a literal `$VAR` in `eas.json` is passed through as the string `$VAR`.
+  *Fix:* set the key in the right EAS environment explicitly; never rely on shell-style interpolation in `eas.json`.
+
+- **Clerk "PLEASE WAIT" hang on signup was never a CAPTCHA problem.**
+  *Signature:* signup hangs forever on a Russian ISP; works over VPN.
+  *Cause:* RU ISPs IP-block the Railway edge. Bot protection was a red herring (now off).
+  *Fix:* front the backend with Cloudflare. Not yet done.
+
+- **`Text.defaultProps` is dead on RN 0.81 / React 19.**
+  *Signature:* a global font-scaling cap set via `Text.defaultProps` silently does nothing.
+  *Fix:* cap `maxFontSizeMultiplier` per component. Done in the `f5b5bad` responsive pass.
+
+- **A push kind with no `kind` field in its FCM `data` is invisible to mobile routing.**
+  *Signature:* a push arrives, renders a generic toast, and taps land on ActivityLog instead of the right screen.
+  *Cause:* `routeForPush` keys off `data.kind`. The three weekly-task composers omitted it for two months.
+  *Fix:* every composer must put `kind` in `data`, not only in the `PushRequest`. Fixed `7dde99c`. **When adding a push kind, add the route entry in the same change** — parity is now 27/27, keep it there.
+
+- **The Command Post screen is founder-gated but the weekly-task pick reminder goes to marshals too.**
+  *Signature:* a marshal taps a notification and lands on a 403 error screen.
+  *Cause:* `getCommandPost` checks `alliances.founder_id`; `pickWeeklyTask` accepts founder **and** marshal.
+  *Fix:* the push carries `recipient_role` and mobile resolves the target per role. The underlying gap remains — **marshals have no picker UI anywhere** (see Open Bugs).
+
+- **Running backend tests without `--env-file=.env.test` hits the LIVE Supabase database.**
+  *Signature:* `npx tsx --test <file>` passes, but fixture rows were written to production.
+  *Cause:* bare `tsx --test` loads `.env`, whose `DATABASE_URL` is the live pooler. Only `npm test` bootstraps the Docker test DB and injects `.env.test`.
+  *Fix:* always use `npm test`. If you must run a single file, pass `--env-file=.env.test` **and** confirm Docker is up first. (Hit on 2026-09-04; the suite's own teardown cleaned up and a follow-up count confirmed zero leftovers, but do not rely on that.)
+
+- **PowerShell here-strings (`@'...'@`) are not valid in the Bash tool.**
+  *Signature:* a git commit subject line starts with a literal `@`.
+  *Fix:* use a heredoc (`git commit -F - <<'EOF'`) in Bash, and reserve `@'...'@` for the PowerShell tool.
+
+
 ## OPEN BUGS
 
 | Bug | Detail |
 |---|---|
-| **Jun 23–Jul 5 carry-forwards (consolidated)** | Google Play Console needs a **web** account-deletion URL for the Data safety form (in-app path alone insufficient) · Google SSO needs Clerk-dashboard Google connection (prod needs real OAuth client id/secret) · medal deep-link opens Profile but not the specific medal's detail modal (optional polish) · ProfileScreen double-fetches medals (power + section — accepted) · WarRoom player rows not wired to PublicProfile · mobile `activity.producer` still flushes ~102 zero-activity samples every ~2 min (client-side efficiency, not correctness) · claim-start's 15s band-aid tx timeout can be lowered now that activity contention is fixed · `insert_*_batch` SECURITY DEFINER pipeline fns still anon-callable + `function_search_path_mutable` warnings · War Room ability `spend` amount still client-supplied (costs should be server-defined) · ProfileScreen sign-out routes to SignIn, skipping the Welcome pitch (intentional, flagged) · `firstClaim.nudgeBody` strings with territory names exist but unused (endpoint would need nearby list). |
+| **Launch-blocking non-code (consolidated, refreshed Sep 4)** | **Clerk is still on the DEV instance (`sk_test`)** — a real launch needs a separate prod instance, which means redoing Google SSO and wiping all accounts again · Google SSO still needs the Clerk-dashboard Google connection + real OAuth creds · Play Console needs a **web** account-deletion URL for the Data safety form · native **Russian review** of ru.json + push copy + brand transcreation · flip **`ATTACK_DAY_GATE=on`** in Railway at launch · set **`ADMIN_CLERK_IDS`** on Railway (nish_s) so the admin gate has an allowlist. |
+| **RU ISPs IP-block the Railway edge** | Signup hangs on "PLEASE WAIT" for Russian users; works over VPN. Fix is to front the backend with Cloudflare — **not done**. Note this is in tension with the Bengaluru-first direction below; it only blocks if RU users are still in scope. |
+| **Marshals have no weekly-task picker UI** | `pickWeeklyTask` accepts founder + marshal, and the Sunday reminder goes to both, but the only picker lives inside founder-gated Command Post. As of Sep 4 marshals are routed to the Alliance tab instead of a 403 — the missing UI is still a product decision: surface a picker to marshals, or stop reminding them. |
+| **Defenders who successfully hold are told nothing** | `contest_won`/`contest_lost` only fire on `attacker_won`. A defender who wins gets no push at all. Combined with the fact that `defender_notify` only got a real banner on Sep 4, the defensive loop is the least-notified path in the game. Needs a new push kind + copy in both locales + a route entry. |
+| **Map cannot tile at default zoom 14** | Surfaced by the Aug 8–9 design gauntlet. Unresolved. |
+| **Older carry-forwards (still open)** | medal deep-link opens the specific medal now, but ProfileScreen still double-fetches medals (accepted) · WarRoom player rows not wired to PublicProfile · mobile `activity.producer` still flushes ~102 zero-activity samples every ~2 min (efficiency, not correctness) · claim-start's 15s band-aid tx timeout can be lowered now that activity contention is fixed · `insert_*_batch` SECURITY DEFINER pipeline fns still anon-callable + `function_search_path_mutable` warnings · ProfileScreen sign-out routes to SignIn, skipping the Welcome pitch (intentional, flagged) · `firstClaim.nudgeBody` strings exist but unused. |
 | **Phantom git "modified" status on backend territory files (recurring)** | `git status` shows backend files as modified after Cursor sessions, but `git diff --stat <file>` shows 0 inserts/deletes — content byte-identical to HEAD. Cosmetic only. Verify with `git diff --stat` BEFORE staging; only `git add` files with real changes. |
 | **BigInt JSON serialization for `osm_id` (masked)** | Typecheck passes but runtime serialization may need a Fastify JSON serializer if `osm_id` ever lands in an outgoing payload. Currently masked because test territories have `osm_id = null`. |
 | **Cross-player defender_notify FCM real-device test deferred to S75 smoke** | Server-side defender_notify trigger verified via temp debug route (now removed). The real flow (second player attacks nish_s, attacker_first_walk_at sets, defender_notify push lands on nish_s's device, deep-links to DefenderAcceptScreen with `extractParams` populating `{contestId}`) NOT verified end-to-end yet. Now wired across S69–S74; verification gated on S75 device smoke (Alyona attacks `nish_s`). Same surface verifies the deferred defender-role /walk test. |
@@ -1454,35 +1560,30 @@ git commit -a -m "subject" -m "body line 1" -m "body line 2"
 
 ## WHAT'S NEXT
 
-**Module sequence (locked + actual): Progression ✅ → Activity ✅ (Slice 7 smoke pending) → Notifications ✅ → Defender Lifecycle ✅ (smoke pending) → Leaderboard ✅ → Chat ✅ (M2 EAS smoke pending) → then the Jun 23–Jul 5 launch-readiness burst: RLS lockdown ✅ → profile pictures ✅ → onboarding tightening ✅ → Honor Medals ✅ → i18n (ru) ✅ code-complete → public profiles ✅ → Command Post v1 ✅ → Living Map 1–3 ✅ → daily challenge redesign ✅ → first-run flow ✅ → account deletion + password flows ✅ → **alliance weekly tasks ✅ → territory development ✅ → security lockdown + perf/ops audit burst ✅** (Jul 5–7 — see SINCE JUL 5 block at top).**
+**Module sequence (locked + actual):** Progression ✅ → Activity ✅ → Notifications ✅ → Defender Lifecycle ✅ → Leaderboard ✅ → Chat ✅ → the Jun 23–Jul 7 launch-readiness burst ✅ → **the Jul 10–Sep 4 hardening + design burst ✅** (see the register at the top). No new module is in flight. The project is feature-complete for a friends beta and blocked on verification, not code.
 
-**IMMEDIATE (Jul 5):**
+**THE ONE BLOCKER — an Android rebuild, now ~2 months stale.**
 
-1. **ONE Android app rebuild** (`npx expo run:android` locally or EAS — npm scripts switched to `expo run:*` at `4e0b118`), then the on-device verification bundle it unblocks: expo-image-picker (avatars), `scheme:'dominia'` (Google SSO), new HC perms (ActiveCaloriesBurned + Distance), ru locale rendering + C4 layout spots (warRoom header, chat SEND, АКТИВНОСТЬ tab), Living Map offset checks (pennant/base iconOffset, lineOffset inset direction, label/emblem collision, rampart legibility on smallest SPB territories), first-run walkthrough pointer coordinate spaces + scroll-reveal + MarkerView, Command Post smoke, delete-account modal, forgot/change-password flows, **(Jul 7) War Room abilities smoke — activate as Founder/Marshal, cooldown countdown appears on the button, active-buff line shows, Supply Line used/resets-Monday state, Attack Day card counts down + flips LIVE on a weekend (or with `ATTACK_DAY_GATE` off, test any day)**.
-2. **Non-code externals:** Clerk dashboard — enable Google social connection (+ real OAuth creds for prod) + confirm "Reset password" on · Play Console — host a web account-deletion URL for the Data safety form · **native Russian review** of ru.json + push copy + brand transcreation (medal names, axis names Марш/Рейд/Муштра/Темп, emblem names) · flip **`ATTACK_DAY_GATE=on`** in Railway at launch · designer may replace the 7 emblem glyphs + base structure glyphs (swap points documented in lib files) · update mechanics doc §6 to the shipped 4-axis design.
+Everything below is written, tested, merged, and unverified on a device. A single `npx expo run:android` (or EAS preview) unblocks all of it:
 
-**STILL-CARRIED S82-ERA SMOKES (unblocked by the same rebuild):**
+1. **Native deps added since the last build:** `expo-haptics` (Jul 16) on top of the already-pending `expo-image-picker`, `scheme:'dominia'`, and the newer Health Connect permissions.
+2. **Verification bundle, roughly in risk order:**
+   - **Walk integrity** — live pedometer ring, minute-bucket samples + `source_id` dedup vs Health Connect, completion flush/retry, gait signature accepting a real walk and rejecting a shake. This is the highest-risk area: it touches sensors, and no amount of unit testing substitutes for walking outside.
+   - **Claim flow v2** — arm window, refunds, tiered walk windows, server-verified walk, the v2 error states.
+   - **Notifications** — the new defender banner (does it hold, does it not block the app, does the haptic fire), weekly-task pushes now landing on the right screen for founder vs marshal, and no duplicate toast while sitting in alliance chat.
+   - **Game feel Tier 1/2/2.5** — haptics, silhouette reveal, count-up rewards, milestone takeovers, capture celebration, daily brief, medal takeover + deep link.
+   - **Design gauntlet output** — map, activity, profile at the Aug 8–9 state; check the zoom-14 tiling limit.
+   - **First-claim spine** — the three beats, and that no copy implies visiting the territory.
+   - **Legacy Rank**, **live map repaint** on `territory_claimed`, **Living Map offsets**, **Command Post**, **delete-account**, **password flows**, **ru locale layout**.
+3. **Three still-carried S82-era smokes** ride the same rebuild: Chat M2 EAS standalone (two devices), Defender lifecycle, Activity Slice 7. All need contest hours (05:00–22:59 local).
 
-1. **Three carried smokes — clear ALL THREE before next module work.** All currently rely on a single device run inside contest hours (05:00–22:59 local).
-   - **(a) Chat M2 EAS standalone smoke (NEW S82, carry-forward `B-S82-OPS-m2-eas-smoke`).** Trigger EAS preview build on `dominia` HEAD `4e47f22`; install on Alyona OP7T. Walk path: nish_s on OnePlus 12 Metro dev client + Alyona on OP7T standalone, both in same alliance. Verify (i) chat send/receive end-to-end via Ably realtime echo (<200ms one device → other); (ii) `chat_alliance_message` push fires when one device sends to alliance, the other receives + foreground card OR background banner OR killed-state ChatScreen+ALLIANCE tab on tap; (iii) settings toggle to OFF on receiving device suppresses push but realtime still works; (iv) optimistic-insert + Ably echo dedupe (no ghost duplicates); (v) rate-limit banner after 6 sends in 30s; (vi) blur-time read-state PATCH (verify in Supabase `chat_read_state` table). Pass criteria: zero console errors, zero ghost dupes, push deep link lands on ALLIANCE tab.
-   - **(b) Defender lifecycle device smoke (S74 carry, hard-ordered ahead at S75 plan).** Setup + scope unchanged from previous What's Next; full happy path + already-defended terminal + past-cutoff terminal + preview-retry + 8 submit-error code matrix. Defender Lifecycle still SHIPPED-PENDING-SMOKE until clean.
-   - **(c) Activity Slice 7 device smoke (S66 carry).** Same nish_s device, same contest hours. Full happy path + insufficient_iron / level_too_low / outside_contest_hours inline error spot-checks. Activity Slice 7 NOT closed until verified.
+**NON-CODE EXTERNALS (see Open Bugs for the full list):** Clerk prod instance · Google SSO connection · Play Console web deletion URL · native ru review · `ATTACK_DAY_GATE=on` · `ADMIN_CLERK_IDS` on Railway.
 
-2. **PROJECT_STATE.md cleanup after smokes pass.** Strip SHIPPED-PENDING-SMOKE status from relevant entries; close `B-S82-OPS-m2-eas-smoke` if (1a) passes.
+**OPEN STRATEGIC QUESTIONS (not code):**
+- **Target market.** Stated direction as of 2026-07-19 is **Bengaluru-first, English-speaking**. That supersedes the SPB/Russian-first framing this document was largely written under, but **nothing has been executed on it** — the territory data, the ru locale, and the RU-ISP problem all still assume Saint Petersburg. Decide whether ru stays in scope before spending more on it.
+- **Design partner.** Aug 2026 hunt for a game designer to fix FTUE/retention. Agency quote (₹10–18L) rejected; freelance shortlist Premjit/Denn; the cofounder-vs-contractor question is still open.
 
-3. **B-S65b-X-onboarding-hardening (b/c/d only, scoped down)** — still applicable, carried forward from S67. Small + contained.
-
-4. **Carry-forward sweep.** Walk B-S82-* (chat — see Open Bugs row for full list, prioritise OPS items: chat-archive-monitoring, ably-realtime-disconnect-handling, keyword-filter-list once first reports land) + B-S73-X-* / B-S74-X-* (defender) + B-S62/B-S65a/B-S66 (older) — close anything that no longer applies; queue actionable ones for dedicated slices.
-
-**Next-module kickoff candidates (post-smoke-closure):**
-
-- **Chat Phase-2 fast-follow: `B-S81-FF-message-hide-on-confirm`** — adds `chat_messages.hidden_at` + filter at read paths; triggered when observed moderation load shows confirmed-but-still-visible messages causing user complaints.
-- **Help Channel (`B-S81-PHASE2-help-channel`)** — separate Q&A channel without level gate; deferred until City Chat moderation load is observed.
-- **Subscription module** — prerequisite for `B-S81-PHASE2-dms` (1:1 DMs). Larger module; sets up tier gating for premium features. Pre-launch consideration anyway.
-- **Slice 8 — kcal Phase 2 (mobile + iOS HealthKit)** — HC ActiveCaloriesBurned read on Android + first iOS slice. Backend has accepted `kcal` since S49.
-- **(Realm explicitly OUT of next-module sequence per Q-S81-B — corporate ops concept only, future realm = separate Supabase + Railway deployment, not a code module.)**
-
-**Quick alternative picks if blocked on smokes:** (a) `total_xp` stale-response one-liner on milestone days (~15 min); (b) GET /alliances?city=X endpoint (~30 min); (c) reconquest +400 XP writer (§7.7, schema ready; **must also call `emitFirstEarnPush({source:'reconquest'})` — composer entry pre-staged from S60**, ~half-day); (d) test-row cleanup (B-S66-X-test-row-cleanup-deferred) now safe to run post-isolation; (e) populate `KEYWORD_FILTER_LIST` once first chat reports land; (f) any of the B-S62/B-S65a/B-S66/B-S73/B-S74/B-S82 backlog carry-forwards.
+**Small picks if blocked on the rebuild:** (a) the defender-win push (new kind + copy + route — closes the last notification gap); (b) `total_xp` stale-response one-liner; (c) `GET /alliances?city=X`; (d) reconquest +400 XP writer (§7.7, schema ready; must also call `emitFirstEarnPush({source:'reconquest'})` — composer entry pre-staged); (e) marshal weekly-task picker UI; (f) test-row cleanup.
 
 ---
 
@@ -1944,6 +2045,17 @@ git commit -a -m "subject" -m "body line 1" -m "body line 2"
 | **Attack Day countdown computed client-side from the device clock** | (Jul 7) The card mirrors the backend 05:00–23:00 weekend contest hours but computes locally off the same 10s `nowMs` tick as the ability timers — no server round-trip for a countdown. Diverges from the backend's home-tz basis only when the player is physically travelling across timezones, which matches how the rest of the War Room screen already behaves. |
 
 ---
+| **(Jul 11) Deleted the 13-beat guided demo; first run is a three-beat spine.** | 4th iteration. The demo taught the UI instead of producing a claim. Camera hook → pulsing objective → CLAIM IT/LATER converts; a tour does not. Copy must never imply the player has to visit the territory. |
+| **(Jul 16) Haptics never throw.** | Every call in `lib/haptics.js` is wrapped and failure-swallowed. A missing haptics module must not break a reward moment. |
+| **(Jul 17) Health data goes behind a platform facade.** | `lib/health/index.{android,ios}.js`. The iOS port needs CMPedometer where Android needs Health Connect; screens should import `lib/health` and never the HC package directly. |
+| **(Jul 23) The client GPS filter stays deliberately permissive.** | Tightening it produced false VEHICLE DETECTED flags on real walks. The server step-cadence cap is authoritative. **Do not re-tighten the client.** |
+| **(Jul 27) Client measures gait, server judges it.** | The accelerometer signature is computed on device because that is where the sensor is, but the accept/reject verdict lives in `src/shared/formulas/gait.ts`. A client that decides its own legitimacy is not an anti-cheat. |
+| **(Jul 24) Realms and cities are identity rows, not a gameplay module.** | `realms`/`cities` tables + `territories.city_id`/`realm_id` give territories a stable home. This does not reopen Q-S81-B: a future realm is still a separate Supabase + Railway deployment, not a column. |
+| **(Jul 24) Claim became two-phase.** | Arm window + refunds + server-verified walk. A one-phase claim could not distinguish "started and gave up" from "never started", so it could neither refund fairly nor verify honestly. |
+| **(Aug 8–9) Design decided by blind builder/critic gauntlet, not by taste assertion.** | Profile and activity won blind against Ingress Prime; the map needed five rounds. Judging blind is what made the map's failure legible instead of arguable. |
+| **(Sep 4) A push kind is not shipped until its route entry exists.** | Three weekly-task kinds sat unroutable for two months because `kind` was missing from the FCM `data` payload and no route entry existed. Parity is now 27/27 — treat backend kind and mobile route as one change, never two. |
+| **(Sep 4) Time-critical pushes get a banner, not a toast.** | A defence window runs minutes; an 8s toast can be missed entirely. The banner holds until acted on and uses `box-none` so it never blocks the app. It keeps the ambient 2000ms linear pulse rather than an alarm cadence — the brand does not panic. |
+| **(Sep 4) A notification that duplicates what is already on screen is suppressed.** | A chat push toasting over the live Ably message it duplicates is noise. ChatScreen publishes its visible room; FcmLifecycle drops the match. |
 
 ## WORKING STYLE — ALWAYS FOLLOW THIS
 
