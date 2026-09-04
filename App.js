@@ -42,6 +42,7 @@ import {
 } from './components/ResourceGlyphs';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
+import NotificationBanner from './components/notifications/NotificationBanner';
 import { useFonts } from 'expo-font';
 import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
@@ -202,6 +203,7 @@ export default function App() {
         <StatusBar style="auto" />
       </NavigationContainer>
       <NotificationCard />
+      <NotificationBanner />
       <Toast />
       </SafeAreaProvider>
     </ClerkProvider>

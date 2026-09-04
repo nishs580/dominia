@@ -1013,7 +1013,14 @@
       "first_claim": "First claim.",
       "first_contest_win": "First conquest.",
       "first_reconquest": "First reconquest.",
-      "first_alliance_mission": "First alliance mission complete."
+      "first_alliance_mission": "First alliance mission complete.",
+      "weekly_task_started": "Orders are in.",
+      "weekly_task_result": "Week closed.",
+      "weekly_task_pick_reminder": "No orders set."
+    },
+    "banner": {
+      "underAttack": "▪ UNDER ATTACK",
+      "defend": "DEFEND"
     }
   },
   "alliance": {

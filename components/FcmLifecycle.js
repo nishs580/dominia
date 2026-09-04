@@ -12,6 +12,9 @@ import {
 } from '../lib/fcm';
 import { routeForPush, SURFACES } from '../lib/notifications/route';
 import { showCard } from '../lib/notifications/cardController';
+import { showBanner, hideBanner } from '../lib/notifications/bannerController';
+import { isChatRoomVisible } from '../lib/notifications/chatPresence';
+import { contestHaptic } from '../lib/haptics';
 import { navigateTo, navigateToAfterAuthGate } from '../lib/navigation';
 import { patchMe } from '../lib/meApi';
 import i18n from '../i18n';
@@ -137,6 +140,15 @@ export default function FcmLifecycle() {
       const body = remoteMessage?.notification?.body || remoteMessage?.data?.body || '';
       const cardData = { ...(remoteMessage?.data || {}), title, body };
 
+      // A chat push for the room already on screen is a duplicate of the live
+      // Ably message — drop it rather than toasting over the message itself.
+      if (
+        kind === 'chat_alliance_message' &&
+        isChatRoomVisible(remoteMessage?.data?.room_id)
+      ) {
+        return;
+      }
+
       if (route.surface === SURFACES.CARD) {
         showCard({ kind, data: cardData, target: route.target, params: route.params });
       } else if (route.surface === SURFACES.TOAST) {
@@ -148,14 +160,14 @@ export default function FcmLifecycle() {
           onPress: () => navigateTo(route.target, route.params),
         });
       } else if (route.surface === SURFACES.BANNER_ROUTE) {
-        // Banner component not yet built; interim is a longer toast with tap-route.
-        Toast.show({
-          type: 'info',
-          text1: title,
-          text2: body,
-          position: 'top',
-          visibilityTime: 8000,
-          onPress: () => navigateTo(route.target, route.params),
+        // Time-critical: holds until acted on or dismissed, never auto-fades.
+        contestHaptic();
+        showBanner({
+          kind,
+          title,
+          body,
+          target: route.target,
+          params: route.params,
         });
       }
     });
@@ -167,6 +179,9 @@ export default function FcmLifecycle() {
     const unsubscribe = onBackgroundTap((remoteMessage) => {
       const kind = remoteMessage?.data?.kind;
       const route = routeForPush(kind, remoteMessage?.data);
+      // A banner raised before the app was backgrounded would otherwise still
+      // be standing over the screen we're navigating to.
+      hideBanner();
       navigateTo(route.target, route.params);
     });
     return unsubscribe;

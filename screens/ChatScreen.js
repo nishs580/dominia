@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 import {
@@ -35,6 +35,10 @@ import {
   disconnectChatRealtime,
   subscribeToChannel,
 } from '../lib/chatRealtime';
+import {
+  setVisibleChatRoom,
+  clearVisibleChatRoom,
+} from '../lib/notifications/chatPresence';
 import { timeAgo } from '../lib/timeAgo';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 
@@ -68,6 +72,7 @@ export default function ChatScreen() {
   getTokenRef.current = getToken;
   const navigation = useNavigation();
   const route = useRoute();
+  const isFocused = useIsFocused();
   const initialTab = route?.params?.initialTab === 'alliance' ? 'alliance' : 'city';
 
   const [rooms, setRooms] = useState([]);
@@ -272,6 +277,19 @@ export default function ChatScreen() {
     });
     return unsubscribe;
   }, [navigation]);
+
+  // Publish which room is on screen so FcmLifecycle can suppress the chat push
+  // toast for it — the live Ably message already rendered in the list, and a
+  // toast on top of it duplicates the same message.
+  useEffect(() => {
+    const roomId = activeRoom?.id ?? null;
+    if (!isFocused || !roomId) {
+      clearVisibleChatRoom(roomId);
+      return undefined;
+    }
+    setVisibleChatRoom(roomId);
+    return () => clearVisibleChatRoom(roomId);
+  }, [isFocused, activeRoom?.id]);
 
   // Cleanup banner timer on unmount.
   useEffect(() => {

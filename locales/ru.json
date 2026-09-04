@@ -995,7 +995,14 @@
       "first_claim": "Первый захват.",
       "first_contest_win": "Первое покорение.",
       "first_reconquest": "Первое отвоёвывание.",
-      "first_alliance_mission": "Первая миссия альянса выполнена."
+      "first_alliance_mission": "Первая миссия альянса выполнена.",
+      "weekly_task_started": "Приказы получены.",
+      "weekly_task_result": "Неделя закрыта.",
+      "weekly_task_pick_reminder": "Приказы не заданы."
+    },
+    "banner": {
+      "underAttack": "▪ ПОД АТАКОЙ",
+      "defend": "ЗАЩИЩАТЬ"
     }
   },
   "alliance": {
