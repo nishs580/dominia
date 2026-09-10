@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
   },
   unlockText: {
     marginTop: 8,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
   },
   xpNumbers: {
     marginTop: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   emptyText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
   },
   territoryName: {
     flex: 1,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   },
   powerRowReason: {
     marginTop: 4,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: SLATE2,
   },

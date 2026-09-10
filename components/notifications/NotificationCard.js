@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   body: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: 'rgba(242,238,230,0.7)',
     marginBottom: 24,

@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   detailCondition: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: BONE_DIM,
     textAlign: 'center',

@@ -359,14 +359,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bTitle: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: BONE,
     lineHeight: 18,
     marginBottom: 4,
   },
   bSub: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: SLATE_2,
     lineHeight: 18,

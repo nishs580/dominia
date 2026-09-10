@@ -34,11 +34,11 @@ typography:
     fontSize: "26px"
     fontWeight: 700
   body:
-    fontFamily: "Inter"
+    fontFamily: "Instrument Sans"
     fontSize: "13px"
     fontWeight: 400
   body-emphasis:
-    fontFamily: "Inter"
+    fontFamily: "Instrument Sans"
     fontSize: "13px"
     fontWeight: 500
   label:
@@ -109,7 +109,7 @@ The system explicitly rejects what PRODUCT.md rejects: no fitness-tracker cheerf
 
 **Key Characteristics:**
 - Dark, flat, and square: 0px radius, no shadows, no gradients, no blur, anywhere.
-- Three typefaces, three jobs: Geist Mono for chrome and data, Inter for sentences, Archivo for ceremony.
+- Three typefaces, three jobs: Geist Mono for chrome and data, Instrument Sans for sentences, Archivo for ceremony.
 - Five colours only, meanings locked; Claim Red on at most one element per screen outside the map.
 - Depth by tonal ink steps and 0.5px hairlines, never by elevation effects.
 - Motion limited to three durations (120 / 280 / 2000ms) on one curve; type is never animated.
@@ -144,21 +144,21 @@ A dark low-chroma field where the three territory colours are the only voices �
 ## 3. Typography
 
 **Display Font:** Archivo (900 / 800 / 700)
-**Body Font:** Inter (400 / 500)
+**Body Font:** Instrument Sans (400 / 500)
 **Label/Mono Font:** Geist Mono (400 / 500 / 300)
 
-**Character:** Instrumental and exact. Mono carries the chrome, Inter carries the sentences, Archivo carries the ceremony — and the three never trade jobs. When in doubt, Geist Mono.
+**Character:** Instrumental and exact. Mono carries the chrome, Instrument Sans carries the sentences, Archivo carries the ceremony — and the three never trade jobs. When in doubt, Geist Mono.
 
 ### Hierarchy
 - **Display** (Archivo 900, 48px, uppercase): hero numerals and wordmark moments — milestone takeovers, Legacy Titles. Always uppercase above 20pt.
 - **Headline** (Archivo 800, 32px, uppercase): large readouts, alliance names, commander names.
 - **Title** (Archivo 700, 26px): contest screens, streak counter. Italic 700 for milestone subtitles only — italic exists nowhere else.
-- **Body** (Inter 400, 13px; emphasis Inter 500): anything a player actually reads — descriptions, chat, prose. Sentence case only; Inter is never uppercased. Emphasis by weight, never by caps or italic.
+- **Body** (Instrument Sans 400, 13px; emphasis Instrument Sans 500): anything a player actually reads — descriptions, chat, prose. Sentence case only; Instrument Sans is never uppercased. Emphasis by weight, never by caps or italic.
 - **Data** (Geist Mono 400, 11–16px): measurements, timers, counts. Real-world case preserved: "km", "×2.50", "9:41".
 - **Label** (Geist Mono 400, 8–10px, uppercase, 0.12–0.18em tracking): section labels and UI chrome. Slate 2 by default.
 
 ### Named Rules
-**The Controlling Rule.** Measurement, state, label, or readout → Geist Mono. A sentence someone would actually read → Inter. A ceremonial moment the player should recall → Archivo. When in doubt → Geist Mono.
+**The Controlling Rule.** Measurement, state, label, or readout → Geist Mono. A sentence someone would actually read → Instrument Sans. A ceremonial moment the player should recall → Archivo. When in doubt → Geist Mono.
 
 **The Still Type Rule.** Type is never animated. Numbers may count up; glyphs never slide, fade, or bounce.
 
@@ -190,7 +190,7 @@ Instrumental and exact: every control feels like an instrument on a console — 
 ### Inputs / Fields
 - **Style:** Ink 2 fill, hairline border, 0px radius, Geist Mono text.
 - **Focus:** border shifts to hairline-strong — no glow, no colour change.
-- **Error:** message set in Inter below the field; the border never turns red (that would spend the screen's Claim Red).
+- **Error:** message set in Instrument Sans below the field; the border never turns red (that would spend the screen's Claim Red).
 
 ### Navigation
 - Bottom tab bar on Ink with hairline top edge; text-only Geist Mono uppercase labels — **no icons in navigation**, per brand. Active tab: Bone at mono 500; inactive: Slate. System Back gesture always honoured.
@@ -205,11 +205,11 @@ Instrumental and exact: every control feels like an instrument on a console — 
 
 ### Do:
 - **Do** keep Claim Red to one element per screen outside the map — its rarity is its authority.
-- **Do** set every label, measurement, and readout in Geist Mono; every readable sentence in Inter; ceremony only in Archivo.
+- **Do** set every label, measurement, and readout in Geist Mono; every readable sentence in Instrument Sans; ceremony only in Archivo.
 - **Do** convey depth with ink steps and hairlines only (0.5px at 8%, 1px at 16%).
 - **Do** use only the three motion durations — 120ms / 280ms / 2000ms — on cubic-bezier(0.2, 0, 0, 1).
 - **Do** honour Android OS guarantees inside the brand skin: system Back, edge-to-edge insets, 48dp touch targets, sp-scaled text.
-- **Do** write British English, sentence-case Inter, no exclamation marks, no emoji.
+- **Do** write British English, sentence-case Instrument Sans, no exclamation marks, no emoji.
 
 ### Don't:
 - **Don't** use gradients, glows, drop shadows, or blur — anywhere, ever.

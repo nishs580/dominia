@@ -1486,12 +1486,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   aNameLine: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 15,
     color: BONE,
   },
   aName: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 15,
     color: BONE,
   },
@@ -1587,7 +1587,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   confirmBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: SLATE2,
     lineHeight: 21,
@@ -1656,9 +1656,9 @@ const styles = StyleSheet.create({
     color: SLATE,
     textTransform: 'uppercase',
   },
-  // Errors read as sentences in Bone (Inter), never Claim red (Locked Meaning).
+  // Errors read as sentences in Bone (Instrument Sans), never Claim red (Locked Meaning).
   joinError: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: BONE,
     marginTop: 16,
@@ -1740,7 +1740,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   rosterName: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: BONE,
   },

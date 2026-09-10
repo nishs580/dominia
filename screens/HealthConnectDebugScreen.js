@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     borderColor: ERROR_RED,
   },
   errorBlockText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: ERROR_RED,
   },

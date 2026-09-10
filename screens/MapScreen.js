@@ -3190,7 +3190,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   // Beat 3 focused sheet — the perimeter distance is the largest element on
-  // the sheet (Archivo), with one Inter supporting line under it.
+  // the sheet (Archivo), with one Instrument Sans supporting line under it.
   spineHeroBlock: {
     marginTop: 14,
     paddingTop: 14,
@@ -3212,7 +3212,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   spineSupportLine: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: 'rgba(242,238,230,0.85)',
     lineHeight: 19,
@@ -3306,7 +3306,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   mapErrorText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: BONE,
   },
@@ -3503,7 +3503,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetTitle: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 20,
     color: '#F2EEE6',
     letterSpacing: -0.015,
@@ -3651,9 +3651,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     lineHeight: 14,
   },
-  // One-line plain-language gloss under a data row — Inter, quiet but readable.
+  // One-line plain-language gloss under a data row — Instrument Sans, quiet but readable.
   sheetGloss: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 11,
     color: '#8B8F98',
     lineHeight: 16,
@@ -3777,16 +3777,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   sheetConfirmHelpText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: 'rgba(242,238,230,0.7)',
     lineHeight: 18,
     marginTop: 6,
   },
-  // Errors are sentences a player reads — Inter in Bone, never Claim Red
+  // Errors are sentences a player reads — Instrument Sans in Bone, never Claim Red
   // (the Locked Meaning Rule keeps red for "yours").
   sheetConfirmError: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: BONE,
     lineHeight: 18,
@@ -3801,7 +3801,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sheetContestActiveText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: 'rgba(242,238,230,0.85)',
     lineHeight: 18,

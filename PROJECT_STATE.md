@@ -537,7 +537,7 @@ WHERE t.territory_name = 'X' ORDER BY th.claimed_at ASC;
 | `components/ProgressBar.js` | 5 horizontal segments (28×2px), 0px radius |
 | `components/PrimaryButton.js` | Claim red, 0px radius, Geist Mono |
 | `components/SectionLabel.js` | Geist Mono 9px uppercase + hairline rule |
-| `components/NumberedRow.js` | Geist Mono number + Inter title/subtitle |
+| `components/NumberedRow.js` | Geist Mono number + Instrument Sans title/subtitle |
 | `lib/theme.js` | Design tokens — colours, fonts, fontSize, spacing, radius, borders, motion |
 | `lib/supabase.js` | Supabase client with fetch wrapper that forces `Connection: close` header (CRITICAL — see Pitfall: dead TCP pool). URL/key hardcoded. |
 | `lib/clerk.js` | ClerkProvider tokenCache with SecureStore |

@@ -1,6 +1,6 @@
 import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
-import { Inter_400Regular } from '@expo-google-fonts/inter';
+import { InstrumentSans_400Regular } from '@expo-google-fonts/instrument-sans';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,7 +30,7 @@ export default function UsernameScreen({ navigation, route }) {
   const [status, setStatus] = useState('idle');
   const insets = useSafeAreaInsets();
 
-  const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, Inter_400Regular });
+  const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular, GeistMono_500Medium, InstrumentSans_400Regular });
 
   // Debounced availability check: only fires once the name is well-formed.
   // Advisory only — PATCH /me re-checks authoritatively on submit.
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   subtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: '#8B8F98',
     fontSize: 13,
     marginBottom: 32,
@@ -203,21 +203,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   error: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: '#D64525',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'left',
   },
   hint: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: '#8B8F98',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'left',
   },
   available: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: '#4CAF50',
     fontSize: 13,
     marginBottom: 12,

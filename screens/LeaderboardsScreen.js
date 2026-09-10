@@ -1,6 +1,6 @@
 // Screen: LeaderboardsScreen — Power, Territory, Battles boards (players + alliances)
 // Surface: Ink #0E1014 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
-// Typography: Geist Mono 500 11px labels, Inter 500 14px names — mirrors ActivityLogScreen patterns.
+// Typography: Geist Mono 500 11px labels, Instrument Sans 500 14px names — mirrors ActivityLogScreen patterns.
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#F2EEE6',
   },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     color: '#8B8F98',
   },
   emptyBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#E8E3D8',
     marginTop: 8,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   nameText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: '#F2EEE6',
   },

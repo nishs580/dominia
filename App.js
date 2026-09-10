@@ -59,9 +59,9 @@ import {
   GeistMono_500Medium,
 } from '@expo-google-fonts/geist-mono';
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-} from '@expo-google-fonts/inter';
+  InstrumentSans_400Regular,
+  InstrumentSans_500Medium,
+} from '@expo-google-fonts/instrument-sans';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -137,8 +137,8 @@ export default function App() {
     GeistMono_300Light,
     GeistMono_400Regular,
     GeistMono_500Medium,
-    Inter_400Regular,
-    Inter_500Medium,
+    InstrumentSans_400Regular,
+    InstrumentSans_500Medium,
   });
 
   useEffect(() => {

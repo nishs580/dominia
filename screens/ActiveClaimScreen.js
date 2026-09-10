@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },
   statValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 14, letterSpacing: 0.2 },
 
-  firstWalkHint: { fontFamily: 'Inter_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
+  firstWalkHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
   bannerZone: { marginTop: 12, minHeight: 36 },
   banner: { borderWidth: 1, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'transparent' },
   bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },
@@ -1379,14 +1379,14 @@ const styles = StyleSheet.create({
   cancelText: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelConfirmBlock: { gap: 10 },
-  cancelConfirmText: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
+  cancelConfirmText: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
   keepWalkingBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   keepWalkingText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Health-Connect blocking state — the walk cannot count; say so and route out.
   hcBlocked: { marginTop: 32, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
   hcBlockedTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  hcBlockedBody: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
+  hcBlockedBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
   hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
@@ -1396,9 +1396,9 @@ const styles = StyleSheet.create({
   armCountdown: { fontFamily: 'Archivo_700Bold', color: CLAIM, fontSize: 72, letterSpacing: -2, textAlign: 'center' },
   armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
   armTitle: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8 },
-  armBody: { fontFamily: 'Inter_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
+  armBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
   armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  armError: { fontFamily: 'Inter_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
+  armError: { fontFamily: 'InstrumentSans_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
   armPrimary: { backgroundColor: CLAIM, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   armPrimaryText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   armSecondary: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },

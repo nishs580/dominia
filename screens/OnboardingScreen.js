@@ -133,10 +133,10 @@ function NumberedRow({ num, title, subtitle, last = false }) {
         {num}
       </Text>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'InstrumentSans_500Medium', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
           {title}
         </Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
           {subtitle}
         </Text>
       </View>
@@ -297,7 +297,7 @@ export default function OnboardingScreen({ route }) {
             <View style={{ flex: 1, height: 0.5, backgroundColor: HAIRLINE_STRONG }} />
           </View>
           <View>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{t('onboarding.introBody')}</Text>
+            <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{t('onboarding.introBody')}</Text>
           </View>
         </Animated.View>
       );
@@ -404,7 +404,7 @@ export default function OnboardingScreen({ route }) {
           >
             {t('onboarding.heading3')}
           </Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: SLATE2, marginBottom: 12, textAlign: 'left' }}>
+          <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 11, color: SLATE2, marginBottom: 12, textAlign: 'left' }}>
             {t('onboarding.setCitySub')}
           </Text>
           <View
@@ -488,7 +488,7 @@ export default function OnboardingScreen({ route }) {
               <View style={{ marginTop: 8, alignItems: 'center' }}>
                 <Text
                   style={{
-                    fontFamily: 'Inter_400Regular',
+                    fontFamily: 'InstrumentSans_400Regular',
                     fontSize: 13,
                     color: BONE,
                     marginBottom: 8,
@@ -558,11 +558,11 @@ export default function OnboardingScreen({ route }) {
           {username || t('onboarding.defaultCommander')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours', { city: homeCity || t('onboarding.cityFallback') })}</Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours', { city: homeCity || t('onboarding.cityFallback') })}</Text>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
           {t('onboarding.threeNearby')}
         </Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
   }, [step, homePin, homeCity, userCoord, introOpacity, username, resolvedPlayerId, resolveError, locationDenied, i18n.language, t]);
@@ -650,7 +650,7 @@ export default function OnboardingScreen({ route }) {
         {saveError ? (
           <Text
             style={{
-              fontFamily: 'Inter_400Regular',
+              fontFamily: 'InstrumentSans_400Regular',
               fontSize: 13,
               color: BONE,
               textAlign: 'center',

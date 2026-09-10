@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   consequenceText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: BONE,
     lineHeight: 19,

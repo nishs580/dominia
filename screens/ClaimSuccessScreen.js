@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
   },
 
   message: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     marginTop: 8,
     color: SLATE2,
     fontSize: 13,
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   errorMessage: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: BONE,
     fontSize: 15,
     lineHeight: 22,
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   },
 
   nudgeTitle: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     color: BONE,
     fontSize: 14,
     textAlign: 'center',

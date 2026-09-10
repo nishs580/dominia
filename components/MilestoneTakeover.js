@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   body: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     color: SLATE2,
     fontSize: 13,
     lineHeight: 20,

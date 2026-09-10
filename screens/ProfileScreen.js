@@ -114,7 +114,7 @@ function RankLadder({ level, progress }) {
 
 // A Power contributor. Every reading — zero or not — states where it comes
 // from, and every row is a door: tapping it goes to the place that moves it.
-// Zero-state reasons are sentences (Inter); live readings are data (mono).
+// Zero-state reasons are sentences (Instrument Sans); live readings are data (mono).
 //
 // `action` replaces the chevron with a control that satisfies the row's
 // prerequisite in place. When one is present the row itself stops navigating —
@@ -1355,7 +1355,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: BONE,
   },
@@ -1495,12 +1495,12 @@ const styles = StyleSheet.create({
   },
   unlockText: {
     marginTop: 8,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     lineHeight: 18,
     color: SLATE2,
   },
-  // The gate is a measurement, so it is mono while the reward stays Inter.
+  // The gate is a measurement, so it is mono while the reward stays Instrument Sans.
   unlockGate: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 10,
@@ -1535,11 +1535,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: SLATE2,
   },
-  // Zero state: a sentence someone reads, so Inter, and Bone because it is the
+  // Zero state: a sentence someone reads, so Instrument Sans, and Bone because it is the
   // most useful thing in the row.
   powerRowReason: {
     marginTop: 5,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     lineHeight: 18,
     color: BONE,
@@ -1564,7 +1564,7 @@ const styles = StyleSheet.create({
   // screen, fainter than its own labels. The scale captions carry the "not yet"
   // instead.
   rowChevron: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 18,
     lineHeight: 20,
     color: SLATE2,
@@ -1601,13 +1601,13 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   emptyLead: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
   emptyBody: {
     marginTop: 6,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     lineHeight: 19,
     color: SLATE2,
@@ -1654,7 +1654,7 @@ const styles = StyleSheet.create({
   },
   territoryName: {
     flex: 1,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
@@ -1669,7 +1669,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK2,
   },
   territoryChevron: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 18,
     lineHeight: 20,
     color: SLATE2,
@@ -1770,18 +1770,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   settingsLabel: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: BONE,
   },
   settingsChevron: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 18,
     color: SLATE2,
   },
   // Sign out is a routine action — neutral bone.
   settingsSignOut: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: BONE,
   },
@@ -1789,7 +1789,7 @@ const styles = StyleSheet.create({
   // screen spends it on the first claim. The permanence is signalled instead by
   // the screen's one sanctioned Caution Amber flag.
   settingsDelete: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: BONE,
   },
@@ -1833,7 +1833,7 @@ const styles = StyleSheet.create({
   },
   deleteModalBody: {
     marginTop: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     lineHeight: 19,
     color: BONE,
@@ -1852,15 +1852,15 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: BONE,
   },
   changePasswordError: {
     marginTop: 12,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
-    // Errors read in Bone (Inter sentence), never Claim red (Locked Meaning).
+    // Errors read in Bone (Instrument Sans sentence), never Claim red (Locked Meaning).
     color: BONE,
   },
   deleteModalActions: {

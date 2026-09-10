@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   bodyText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE_2,
     lineHeight: 20,
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     color: BONE,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 16,
     marginBottom: 18,
   },
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tName: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 15,
     color: BONE,
   },
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   },
   sumValue: {
     flex: 1,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 16,
     color: BONE,
   },

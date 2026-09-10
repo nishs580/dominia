@@ -43,10 +43,10 @@ export default function SessionMismatchScreen({ navigation }) {
           {t('sessionMismatch.title')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginTop: 18, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>
           {t('sessionMismatch.body1')}
         </Text>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>
+        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>
           {t('sessionMismatch.body2')}
         </Text>
       </View>

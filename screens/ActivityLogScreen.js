@@ -1,6 +1,6 @@
 // Component: ActivityLogScreen — unified activity feed
 // Surface: Ink #0E1014 background, rows transparent on Ink, 1px hairline-standard rgba(242,238,230,0.08) divider between rows
-// Typography: section label Geist Mono 500 11px, body Inter 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
+// Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
 // Territory colors: delegated to ActivityLogEvent row accent bars (Claim, Alliance, Enemy, Slate)
 // Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen, end-of-list signaled by hairline + Geist Mono label (grids are visible — brand rule).
 
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#F2EEE6',
   },
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     color: '#8B8F98',
   },
   emptyBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#E8E3D8',
     marginTop: 8,

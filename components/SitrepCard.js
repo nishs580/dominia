@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   line: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     lineHeight: 19,
     color: BONE,

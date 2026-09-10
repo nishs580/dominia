@@ -1,6 +1,6 @@
 // Component: ActivityLogEvent — per-event_type renderer (17 event_types: 8 styled, 10 stubs)
 // Surfaces: transparent rows on Ink #0E1014, 1px hairline-standard divider between rows
-// Typography: Geist Mono 500 10px labels, Inter 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
+// Typography: Geist Mono 500 10px labels, Instrument Sans 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
 // Territory colors used (one per row max — accent bar only, never fills):
 //   Claim #D64525: contest_won, streak_milestone (Claim underline per brand "Streak display")
 //   Alliance #3F8F4E: contest_held, contest_defended
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   headline: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'InstrumentSans_500Medium',
     fontSize: 16,
     color: BONE,
     letterSpacing: -0.24,

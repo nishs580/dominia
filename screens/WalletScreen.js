@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: SLATE2,
   },
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
   },
   modalDonateError: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: '#E05A5A',
     marginTop: 8,
@@ -515,13 +515,13 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   resourceSpend: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
     color: BONE,
     opacity: 0.7,
   },
   resourceEarn: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 11,
     color: SLATE2,
   },

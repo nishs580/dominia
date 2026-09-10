@@ -1,6 +1,6 @@
 // Screen: ChatScreen — City + Alliance chat (M2: composer + Ably + push deep link + error banner)
 // Surface: Ink #0E1014 background, rows transparent, 1px hairline-standard rgba(242,238,230,0.08) divider
-// Typography: section label Geist Mono 500 11px, body Inter 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Inter 400 13px on Claim/red or amber surface
+// Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Instrument Sans 400 13px on Claim/red or amber surface
 // Territory colors: delegated to none — chat is a neutral surface
 // Brand rule applied: Send button is the single Claim CTA on the screen. Inverted FlatList for chat-app convention (newest at bottom). KeyboardAvoidingView wraps composer with platform-appropriate behavior.
 
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   errorBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#F2EEE6',
   },
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
     color: '#8B8F98',
   },
   emptyBody: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#E8E3D8',
     marginTop: 8,
@@ -785,7 +785,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   contentText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#F2EEE6',
     lineHeight: 20,
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(212,160,40,0.85)',
   },
   bannerText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
     color: '#F2EEE6',
   },
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     maxHeight: 96,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
     color: '#F2EEE6',
     backgroundColor: '#0E1014',
