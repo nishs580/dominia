@@ -17,6 +17,14 @@
     "production": {
       "autoIncrement": true,
       "environment": "production"
+    },
+    "demo": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_DEMO_MODE": "1"
+      }
     }
   },
   "submit": {

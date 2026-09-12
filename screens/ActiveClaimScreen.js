@@ -97,8 +97,11 @@ let paceAnchor = { steps: 0, at: Date.now() };
 // Contest walk aggregator (module scope — 30s windows)
 let contestAggregator = { startMs: Date.now(), steps: 0, distanceM: 0 };
 
-// Set to true to drop a COMPLETE NOW button at the bottom for UI iteration without walking.
-const DEV_MODE_MANUAL = false;
+// Demo builds (EXPO_PUBLIC_DEMO_MODE=1) expose a COMPLETE WALK button so the
+// claim and contest loops can be shown without walking. The server must also
+// run with DEMO_SKIP_WALK_VERIFICATION=true — it verifies distance itself and
+// will reject an unwalked claim regardless of what this build asks for.
+const DEV_MODE_MANUAL = process.env.EXPO_PUBLIC_DEMO_MODE === '1';
 
 const HOUSEKEEPING_MS = 5000;            // ambient banners, speed decay, calibration
 const HC_POLL_INTERVAL_MS = 10000;       // HC reconciliation cadence — matches ActivityScreen
@@ -1033,6 +1036,26 @@ export default function ActiveClaimScreen() {
 
   function handleManualComplete() {
     if (navigatingRef.current) return;
+
+    // Contest mode resolves server-side off posted samples, so the demo path
+    // posts one synthetic window covering what is left of the requirement and
+    // lets the real pipeline run — onResolved still drives navigation to the
+    // result screen. Claim mode navigates straight on; ClaimSuccessScreen asks
+    // the server to award the territory, which the demo bypass then allows.
+    if (mode === 'contest') {
+      const remainingM = Math.max(0, requiredWalkM - contestWalk.getCumulativeDistance());
+      if (remainingM <= 0) return;
+      const endMs = Date.now();
+      contestWalk.enqueueSample({
+        steps: Math.max(1, Math.round(remainingM / (claimState.strideM || 0.75))),
+        distanceM: remainingM,
+        windowStartMs: endMs - CONTEST_WINDOW_MS,
+        windowEndMs: endMs,
+      });
+      contestWalk.flushNow();
+      return;
+    }
+
     navigatingRef.current = true;
     completeClaim(perimeterM, claimState.liveSteps);
   }
@@ -1285,7 +1308,9 @@ export default function ActiveClaimScreen() {
 
       <View style={{ flex: 1 }} />
 
-      {DEV_MODE_MANUAL && !hcDenied && (
+      {/* Demo build only. Shown even when Health Connect is denied so a
+          demo can never dead-end on a permission the investor skipped. */}
+      {DEV_MODE_MANUAL && (
         <Pressable onPress={handleManualComplete} style={styles.devBtn}>
           <Text style={styles.devBtnText}>{t('activeClaim.devComplete')}</Text>
         </Pressable>
