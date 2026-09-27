@@ -57,6 +57,7 @@ import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 const DEBUG_MENU = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_MENU === '1';
 
 const CLAIM = '#D64525';
+const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
 const ALLIANCE = '#3F8F4E';
 // The one sanctioned non-territory signal. Used exactly once on this screen.
 const CAUTION = '#D49A2B';
@@ -290,6 +291,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
             </Text>
             <TextInput
               style={styles.deleteModalInput}
+              keyboardAppearance="dark"
               value={confirmText}
               onChangeText={setConfirmText}
               autoCapitalize="none"
@@ -388,6 +390,7 @@ function ChangePasswordSection() {
             <Text style={styles.deleteModalPrompt}>{t('profile.currentPassword')}</Text>
             <TextInput
               style={styles.deleteModalInput}
+              keyboardAppearance="dark"
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry
@@ -398,6 +401,7 @@ function ChangePasswordSection() {
             <Text style={styles.deleteModalPrompt}>{t('profile.newPassword')}</Text>
             <TextInput
               style={styles.deleteModalInput}
+              keyboardAppearance="dark"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
@@ -1290,7 +1294,7 @@ const styles = StyleSheet.create({
   },
   avatarEditBadgeText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 8,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
   },
@@ -1304,39 +1308,39 @@ const styles = StyleSheet.create({
   rankLine: {
     marginTop: 6,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   rankTitle: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     // Bone, not red — the rank title is a label, not the screen's one accent.
     color: BONE,
   },
   rankSeparator: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE2,
   },
   // The rank's position on the ladder, sitting with the rank noun rather than
   // 250px lower in another block.
   rankScale: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAlliance: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAllianceClaim: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     // Alliance Green — the alliance is "ours" (Locked Meaning Rule), never red.
     color: ALLIANCE,
@@ -1384,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   sectionRuleLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
@@ -1396,7 +1400,7 @@ const styles = StyleSheet.create({
   },
   sectionRuleRight: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: SLATE2,
@@ -1420,7 +1424,7 @@ const styles = StyleSheet.create({
   },
   powerHeroUnit: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
@@ -1480,7 +1484,7 @@ const styles = StyleSheet.create({
   },
   ladderXp: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: BONE,
@@ -1488,7 +1492,7 @@ const styles = StyleSheet.create({
   ladderNext: {
     flexShrink: 1,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: SLATE2,
@@ -1503,7 +1507,7 @@ const styles = StyleSheet.create({
   // The gate is a measurement, so it is mono while the reward stays Instrument Sans.
   unlockGate: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
@@ -1548,7 +1552,7 @@ const styles = StyleSheet.create({
   powerRowData: {
     marginTop: 5,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: SLATE2,
@@ -1616,7 +1620,7 @@ const styles = StyleSheet.create({
   // should take. Nothing else on this screen may be red.
   primaryCta: {
     marginTop: 16,
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     minHeight: 48,
     paddingVertical: 15,
     paddingHorizontal: 16,
@@ -1660,7 +1664,7 @@ const styles = StyleSheet.create({
   },
   territoryTier: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: SLATE2,
@@ -1699,7 +1703,7 @@ const styles = StyleSheet.create({
   },
   recordLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: SLATE2,
@@ -1717,7 +1721,7 @@ const styles = StyleSheet.create({
   recordSub: {
     marginTop: 6,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     color: SLATE2,
@@ -1751,7 +1755,7 @@ const styles = StyleSheet.create({
   },
   walletCellLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 8,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: SLATE2,
@@ -1795,7 +1799,7 @@ const styles = StyleSheet.create({
   },
   settingsDeleteFlag: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: CAUTION,

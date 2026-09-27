@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   },
   allow: {
     marginTop: 18,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.claimButton,
     paddingVertical: 12,
     alignItems: 'center',
   },
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   },
   laterText: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
   },

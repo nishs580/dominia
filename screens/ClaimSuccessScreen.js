@@ -23,6 +23,7 @@ const INK2 = colors.ink2;
 const BONE = colors.bone;
 const SLATE2 = colors.slate2;
 const CLAIM = colors.claim;
+const CLAIM_BUTTON = colors.claimButton; // AA-safe button fill under Bone text
 const HAIRLINE_STRONG = colors.hairlineStrong;
 
 // Set to true to show buttons that open ContestResultScreen with canned
@@ -660,7 +661,7 @@ const styles = StyleSheet.create({
   rewardLabel: {
     fontFamily: 'GeistMono_400Regular',
     color: SLATE2,
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -728,7 +729,7 @@ const styles = StyleSheet.create({
   },
 
   retryBtn: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -765,7 +766,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontFamily: 'GeistMono_400Regular',
     color: SLATE2,
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -778,7 +779,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cta: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
     paddingVertical: 14,
     minHeight: 48,
@@ -789,7 +790,7 @@ const styles = StyleSheet.create({
   firstClaimKicker: {
     fontFamily: 'GeistMono_500Medium',
     color: BONE,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     marginBottom: 8,
@@ -818,7 +819,7 @@ const styles = StyleSheet.create({
 
   nudgePrimary: {
     flex: 1,
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
     paddingVertical: 14,
     minHeight: 48,
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
   testTitle: {
     fontFamily: 'GeistMono_400Regular',
     color: SLATE2,
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },

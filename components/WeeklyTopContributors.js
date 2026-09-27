@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   contributorMeta: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',

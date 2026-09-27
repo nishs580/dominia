@@ -108,6 +108,7 @@ export default function UsernameScreen({ navigation, route }) {
 
         <TextInput
           style={styles.input}
+          keyboardAppearance="dark"
           placeholder={t('username.placeholder')}
           placeholderTextColor="#5C6068"
           autoCapitalize="none"

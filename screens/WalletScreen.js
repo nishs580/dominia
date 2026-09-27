@@ -262,6 +262,7 @@ export default function WalletScreen({ route }) {
           <View style={styles.modalInputRow}>
             <TextInput
               style={styles.modalInput}
+              keyboardAppearance="dark"
               value={customAmount}
               onChangeText={text => {
                 setCustomAmount(text.replace(/[^0-9]/g, ''));
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
@@ -415,7 +416,7 @@ const styles = StyleSheet.create({
   },
   modalBalance: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     marginBottom: 20,
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     paddingHorizontal: 8,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
     color: SLATE2,
@@ -509,7 +510,7 @@ const styles = StyleSheet.create({
   },
   resourceLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,

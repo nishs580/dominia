@@ -89,6 +89,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       {isEmailStep ? (
         <TextInput
           style={styles.input}
+          keyboardAppearance="dark"
           placeholder={t('signIn.emailPlaceholder')}
           placeholderTextColor="#6B7280"
           autoCapitalize="none"
@@ -100,6 +101,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         <>
           <TextInput
             style={styles.input}
+            keyboardAppearance="dark"
             placeholder={t('forgotPassword.codePlaceholder')}
             placeholderTextColor="#6B7280"
             keyboardType="number-pad"
@@ -108,6 +110,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           />
           <TextInput
             style={styles.input}
+            keyboardAppearance="dark"
             placeholder={t('forgotPassword.newPasswordPlaceholder')}
             placeholderTextColor="#6B7280"
             secureTextEntry

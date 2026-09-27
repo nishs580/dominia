@@ -7,12 +7,15 @@ module.exports = {
     scheme: 'dominia',
     orientation: 'portrait',
     icon: './assets/icon.png',
-    userInterfaceStyle: 'light',
+    // The UI is ink-dark at all hours, so system chrome (keyboard, alerts,
+    // status bar) must be forced dark too, not follow the device setting.
+    userInterfaceStyle: 'dark',
     newArchEnabled: true,
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: '#ffffff',
+      // Ink — matches the first frame so cold launch has no white flash.
+      backgroundColor: '#0E1014',
     },
     ios: {
       // A GPS walking game on iPad is a review/QA surface with zero upside.

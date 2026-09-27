@@ -751,6 +751,7 @@
     "distance": "ДИСТАНЦИЯ",
     "activeMinutes": "АКТИВНЫЕ МИНУТЫ",
     "weeklySteps": "ШАГИ ЗА НЕДЕЛЮ",
+    "chartThousands": "{{n}}к",
     "chartLabel": "{{day}} — {{steps}} шагов",
     "toastStreakReentry": "Вы вернулись. Это главное.",
     "toastGraceDay": "Льготный день сохранён.",

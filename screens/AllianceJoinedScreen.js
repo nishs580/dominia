@@ -19,6 +19,7 @@ const BONE = THEME.colors.bone;
 const SLATE = '#5C6068';
 const SLATE_2 = '#8B8F98';
 const CLAIM = THEME.colors.claim;
+const CLAIM_BUTTON = THEME.colors.claimButton; // AA-safe button fill under Bone text
 const ALLIANCE = '#3F8F4E';
 const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
   },
   kickerText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: ALLIANCE,
     textTransform: 'uppercase',
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -348,7 +349,7 @@ const styles = StyleSheet.create({
   },
   bNum: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
     textTransform: 'uppercase',
@@ -373,14 +374,14 @@ const styles = StyleSheet.create({
   },
 
   cta: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
   },
   ctaStep: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: BONE,
     opacity: 0.75,

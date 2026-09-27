@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   },
   headerSub: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     marginTop: 6,
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
   },
   influenceSublabel: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 10 * 0.16,
     color: colors.slate2,
     textTransform: 'uppercase',
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   },
   countdownDay: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     marginTop: 6,

@@ -3178,7 +3178,7 @@ const styles = StyleSheet.create({
   },
   objectiveBannerKicker: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     marginBottom: 2,
@@ -3199,7 +3199,7 @@ const styles = StyleSheet.create({
   },
   spineHeroLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3220,7 +3220,7 @@ const styles = StyleSheet.create({
   },
   sheetObjectiveHint: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     // Bone, not Claim — the red CLAIM CTA below is this sheet's one red element.
     color: BONE,
     letterSpacing: 1.4,
@@ -3288,7 +3288,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3366,7 +3366,7 @@ const styles = StyleSheet.create({
   hudLabel: {
     marginTop: 2,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3388,7 +3388,7 @@ const styles = StyleSheet.create({
   },
   allianceBadgeText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     color: '#3F8F4E',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3423,7 +3423,7 @@ const styles = StyleSheet.create({
   },
   locateText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     // Bone, not slate — these controls are read in direct sunlight.
     color: BONE,
     letterSpacing: 1.4,
@@ -3468,7 +3468,7 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3515,7 +3515,7 @@ const styles = StyleSheet.create({
   },
   sheetStateLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3531,7 +3531,7 @@ const styles = StyleSheet.create({
   },
   sheetTierBadgeText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -3597,7 +3597,7 @@ const styles = StyleSheet.create({
   },
   sheetInfluenceLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3605,7 +3605,7 @@ const styles = StyleSheet.create({
   },
   sheetInfluenceSub: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 0.5,
   },
@@ -3631,7 +3631,7 @@ const styles = StyleSheet.create({
   },
   sheetYourWalkLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 8,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -3646,7 +3646,7 @@ const styles = StyleSheet.create({
   },
   sheetYourWalkSub: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 0.3,
     lineHeight: 14,
@@ -3671,7 +3671,7 @@ const styles = StyleSheet.create({
   // walk detail. It stays text-only per the brand's no-icon rule for toggles.
   sheetToggleText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#8B8F98',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -3740,7 +3740,7 @@ const styles = StyleSheet.create({
   },
   sheetActionDisabledSub: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#5C6068',
     marginTop: 4,
     letterSpacing: 0.5,

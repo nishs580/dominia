@@ -139,14 +139,14 @@ const styles = StyleSheet.create({
   },
   kicker: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   dismiss: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',

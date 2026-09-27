@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.4,
     marginBottom: 8,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   },
   statUnit: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE_2,
     letterSpacing: 0.6,
     marginTop: 6,
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   },
   earnedXpLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   earnedBeat: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
     textTransform: 'uppercase',

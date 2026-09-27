@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   },
   headerSub: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     marginTop: 6,
@@ -516,14 +516,14 @@ const styles = StyleSheet.create({
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   sectionLabelText: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
   },
   sectionLabelAccent: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.claim,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   },
   chosenTagBox: { paddingHorizontal: spacing.sm },
   chooseBtn: {
-    backgroundColor: colors.claim,
+    backgroundColor: colors.claimButton,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate2, textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 2 },
   shareBtn: {
     marginTop: spacing.lg,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.claimButton,
     paddingVertical: spacing.md,
     alignItems: 'center',
   },

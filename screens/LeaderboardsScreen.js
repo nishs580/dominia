@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 0.4,
     color: '#8B8F98',
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   },
   subtitleText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: '#8B8F98',

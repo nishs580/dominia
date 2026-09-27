@@ -8,7 +8,7 @@ const INK = '#0E1014';
 const BONE = '#F2EEE6';
 const SLATE = '#5C6068';
 const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
+const CLAIM = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 
 export default function SessionMismatchScreen({ navigation }) {
@@ -36,7 +36,7 @@ export default function SessionMismatchScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
       <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
           {t('sessionMismatch.label')}
         </Text>
         <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>

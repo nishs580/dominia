@@ -13,6 +13,7 @@ const BONE = '#F2EEE6';
 const SLATE = '#5C6068';
 const SLATE_2 = '#8B8F98';
 const CLAIM = '#D64525';
+const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
 const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
 const ALLIANCE = '#3F8F4E';
 const ALLIANCE_SOFT = 'rgba(63,143,78,0.14)';
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE,
     letterSpacing: 1,
     textAlign: 'center',
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
   },
   stoneToggleHelper: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.2,
     marginLeft: 'auto',
@@ -514,7 +515,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ctaPrimary: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',

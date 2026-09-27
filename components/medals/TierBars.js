@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   },
   boneText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 0.5,
     color: '#0E1014',
   },

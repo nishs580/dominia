@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   },
   body: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   timeAgo: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',

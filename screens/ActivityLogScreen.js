@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   endLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
     color: '#8B8F98',

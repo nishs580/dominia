@@ -175,7 +175,16 @@ function clamp(n, min, max) {
 // below zero and were then clipped flat at the floor, so a rest day read as a
 // crash. One mark, an explicit baseline, a labelled goal rule, and a figure
 // over every bar — a steps chart from which a step count can be read.
+// At the 11pt floor a full "15,000" overflows a ~36pt column on a 360-wide
+// phone, so bar figures of 1,000+ read as "15.2k" (≤5 glyphs).
+function compactSteps(n, t) {
+  if (n < 1000) return n.toLocaleString();
+  const k = n < 100000 ? Math.round(n / 100) / 10 : Math.round(n / 1000);
+  return t('activity.chartThousands', { n: k.toLocaleString() });
+}
+
 function WeeklyBarChart({ data, goal }) {
+  const { t } = useTranslation();
   const BAR_MAX = 76;
   const peak = data.reduce((m, d) => Math.max(m, Number(d.steps) || 0), 0);
   // Headroom so a week that never reaches the goal still shows the rule below
@@ -197,10 +206,11 @@ function WeeklyBarChart({ data, goal }) {
                   {!d.future && steps > 0 ? (
                     <Text
                       style={[styles.chartValue, d.isToday && styles.chartValueToday]}
+                      accessibilityLabel={t('activity.chartLabel', { day: d.day, steps: steps.toLocaleString() })}
                       numberOfLines={1}
                       maxFontSizeMultiplier={1.15}
                     >
-                      {steps.toLocaleString()}
+                      {compactSteps(steps, t)}
                     </Text>
                   ) : null}
                 </View>
@@ -225,8 +235,8 @@ function WeeklyBarChart({ data, goal }) {
         {/* The goal rule sits over the bars; the gutter to its right holds the
             figure so the two never collide. */}
         <View style={[styles.chartGoalRule, { top: goalOffset }]} pointerEvents="none" />
-        <Text style={[styles.chartGoalLabel, { top: goalOffset - 5 }]} maxFontSizeMultiplier={1.15}>
-          {goal.toLocaleString()}
+        <Text style={[styles.chartGoalLabel, { top: goalOffset - 7 }]} maxFontSizeMultiplier={1.15}>
+          {compactSteps(goal, t)}
         </Text>
         <View style={styles.chartBaseline} pointerEvents="none" />
         {/* Two labelled references — the floor and the daily minimum — so the
@@ -1757,7 +1767,7 @@ const styles = StyleSheet.create({
   },
   commanderLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: colors.slate2,
@@ -1794,7 +1804,7 @@ const styles = StyleSheet.create({
   },
   weekSectionLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1815,7 +1825,7 @@ const styles = StyleSheet.create({
   },
   streakReadoutLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1855,7 +1865,7 @@ const styles = StyleSheet.create({
   weekCellLabel: {
     marginTop: 5,
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate,
     letterSpacing: 0.8,
     textAlign: 'center',
@@ -1868,7 +1878,7 @@ const styles = StyleSheet.create({
   weekCaption: {
     marginTop: 10,
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1876,7 +1886,7 @@ const styles = StyleSheet.create({
   lifetimeLine: {
     marginTop: 4,
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.bone2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1925,7 +1935,7 @@ const styles = StyleSheet.create({
   },
   weeklySectionLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1938,7 +1948,7 @@ const styles = StyleSheet.create({
   weeklyTotal: {
     flexShrink: 0,
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.bone2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1953,7 +1963,7 @@ const styles = StyleSheet.create({
   },
   permBannerLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1980,7 +1990,7 @@ const styles = StyleSheet.create({
   },
   permBannerBtnText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1988,7 +1998,7 @@ const styles = StyleSheet.create({
   permBannerLink: {
     marginTop: spacing.xs,
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -2033,7 +2043,7 @@ const styles = StyleSheet.create({
   },
   menuRetryText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2043,7 +2053,7 @@ const styles = StyleSheet.create({
   },
   themeBadge: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -2072,7 +2082,7 @@ const styles = StyleSheet.create({
   },
   axisChipText: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.1,
   },
@@ -2087,7 +2097,7 @@ const styles = StyleSheet.create({
   axisChipMeta: {
     marginTop: 3,
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -2097,7 +2107,7 @@ const styles = StyleSheet.create({
   },
   commitBtn: {
     marginBottom: spacing.sm,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.claimButton,
     paddingVertical: spacing.md,
     minHeight: 48,
     alignItems: 'center',
@@ -2105,7 +2115,7 @@ const styles = StyleSheet.create({
   },
   commitBtnText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2155,7 +2165,7 @@ const styles = StyleSheet.create({
   attackWindowLabel: {
     flexShrink: 1,
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -2196,7 +2206,7 @@ const styles = StyleSheet.create({
   attackWindowTick: {
     flex: 1,
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -2220,7 +2230,7 @@ const styles = StyleSheet.create({
   attackHoldLabel: {
     flexShrink: 1,
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -2239,14 +2249,14 @@ const styles = StyleSheet.create({
   },
   attackCta: {
     marginTop: spacing.md,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.claimButton,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   attackCtaText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2259,7 +2269,7 @@ const styles = StyleSheet.create({
   },
   challengeSectionLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2271,7 +2281,7 @@ const styles = StyleSheet.create({
   },
   challengeCount: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -2348,7 +2358,7 @@ const styles = StyleSheet.create({
   },
   challengeDifficulty: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2416,7 +2426,7 @@ const styles = StyleSheet.create({
   },
   challengeReward: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 0.8,
     lineHeight: 14,
@@ -2428,7 +2438,7 @@ const styles = StyleSheet.create({
   challengeRemain: {
     flexShrink: 0,
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.bone2,
     letterSpacing: 1.2,
     lineHeight: 14,
@@ -2450,7 +2460,7 @@ const styles = StyleSheet.create({
   },
   completeBtnText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.bone,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2468,7 +2478,7 @@ const styles = StyleSheet.create({
   },
   securedText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 10,
+    fontSize: 11,
     // Bone, not alliance green — a completed challenge is a success state, not
     // an ownership state. The word carries the meaning (Locked Meaning Rule).
     color: colors.bone,
@@ -2478,7 +2488,7 @@ const styles = StyleSheet.create({
   challengeLocked: {
     flexShrink: 0,
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2494,7 +2504,7 @@ const styles = StyleSheet.create({
   },
   achievementsSectionLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -2517,7 +2527,7 @@ const styles = StyleSheet.create({
   // right of the figures it labelled. Both now share COL_W.
   achievementsColToday: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -2526,7 +2536,7 @@ const styles = StyleSheet.create({
   },
   achievementsColBest: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -2551,7 +2561,7 @@ const styles = StyleSheet.create({
   achievementsLabel: {
     flex: 1,
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -2608,12 +2618,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chartValueSlot: {
-    height: 13,
+    height: 15,
     justifyContent: 'flex-end',
   },
   chartValue: {
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 0.2,
     textAlign: 'center',
@@ -2639,7 +2649,7 @@ const styles = StyleSheet.create({
     right: 40,
     // The value slot sits above the bars; the rule is measured from the top of
     // the bar area, so it is offset by that slot's height.
-    marginTop: 13,
+    marginTop: 15,
     height: 1,
     backgroundColor: colors.hairlineStrong,
   },
@@ -2647,10 +2657,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     width: 36,
-    marginTop: 13,
+    marginTop: 15,
     textAlign: 'right',
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 0.6,
   },
@@ -2665,11 +2675,11 @@ const styles = StyleSheet.create({
   chartZeroLabel: {
     position: 'absolute',
     right: 0,
-    bottom: -5,
+    bottom: -7,
     width: 36,
     textAlign: 'right',
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 0.6,
   },
@@ -2690,7 +2700,7 @@ const styles = StyleSheet.create({
   chartDay: {
     marginTop: 5,
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1,
     textTransform: 'uppercase',

@@ -246,13 +246,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
   },
   timestamp: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.26,
     textTransform: 'uppercase',
     color: SLATE2,
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   },
   graceDayLine: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
     color: SLATE2,

@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   headerSub: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: BONE_DIM,
     letterSpacing: 1,
     marginTop: 2,
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     color: BONE,
     letterSpacing: 0.5,
   },
-  tileCount: { fontFamily: 'GeistMono_400Regular', fontSize: 10, color: BONE_DIM },
+  tileCount: { fontFamily: 'GeistMono_400Regular', fontSize: 11, color: BONE_DIM },
   tileIcons: {
     flexDirection: 'row',
     marginTop: 8,

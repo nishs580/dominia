@@ -21,6 +21,7 @@ const BONE = colors.bone;
 const SLATE = colors.slate;
 const SLATE2 = colors.slate2;
 const CLAIM = colors.claim;
+const CLAIM_BUTTON = colors.claimButton; // AA-safe button fill under Bone text
 const HAIRLINE_STRONG = colors.hairlineStrong;
 
 // Fallback map centres for the two beta cities when no location fix is available.
@@ -62,7 +63,7 @@ function PrimaryButton({ stepLabel, actionLabel, onPress, disabled }) {
       onPress={onPress}
       style={({ pressed }) => [
         {
-          backgroundColor: CLAIM,
+          backgroundColor: CLAIM_BUTTON,
           paddingVertical: 14,
           width: '100%',
           alignItems: 'center',
@@ -74,9 +75,9 @@ function PrimaryButton({ stepLabel, actionLabel, onPress, disabled }) {
       <Text
         style={{
           fontFamily: 'GeistMono_400Regular',
-          fontSize: 9,
+          fontSize: 11,
           letterSpacing: 1.6,
-          color: 'rgba(242,238,230,0.75)',
+          color: BONE,
           textTransform: 'uppercase',
         }}
       >
@@ -103,7 +104,7 @@ function SectionLabel({ label }) {
       <Text
         style={{
           fontFamily: 'GeistMono_400Regular',
-          fontSize: 9,
+          fontSize: 11,
           letterSpacing: 1.6,
           color: SLATE2,
           textTransform: 'uppercase',
@@ -285,7 +286,7 @@ export default function OnboardingScreen({ route }) {
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
-                fontSize: 9,
+                fontSize: 11,
                 letterSpacing: 1.6,
                 color: SLATE2,
                 textTransform: 'uppercase',
@@ -368,7 +369,7 @@ export default function OnboardingScreen({ route }) {
             <Text
               style={{
                 fontFamily: 'GeistMono_400Regular',
-                fontSize: 8,
+                fontSize: 11,
                 letterSpacing: 2,
                 color: SLATE2,
                 textTransform: 'uppercase',
@@ -468,7 +469,7 @@ export default function OnboardingScreen({ route }) {
                 <Text
                   style={{
                     fontFamily: 'GeistMono_400Regular',
-                    fontSize: 9,
+                    fontSize: 11,
                     letterSpacing: 1.4,
                     color: SLATE2,
                     textTransform: 'uppercase',
@@ -521,7 +522,7 @@ export default function OnboardingScreen({ route }) {
               <Text
                 style={{
                   fontFamily: 'GeistMono_400Regular',
-                  fontSize: 9,
+                  fontSize: 11,
                   color: SLATE2,
                   textTransform: 'uppercase',
                   letterSpacing: 1.4,
@@ -540,7 +541,7 @@ export default function OnboardingScreen({ route }) {
     return (
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
+          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
             {t('onboarding.commanderLabel')}
           </Text>
         </View>

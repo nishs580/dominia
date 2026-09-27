@@ -85,7 +85,7 @@ function makeTabOptions(label, Icon) {
         numberOfLines={1}
         style={{
           fontFamily: focused ? 'GeistMono_500Medium' : 'GeistMono_400Regular',
-          fontSize: 10,
+          fontSize: 11,
           textTransform: 'uppercase',
           letterSpacing: 1.4,
           includeFontPadding: false,
@@ -200,7 +200,7 @@ export default function App() {
             options={{ headerShown: false }}
           />
         </Stack.Navigator>
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </NavigationContainer>
       <NotificationCard />
       <NotificationBanner />

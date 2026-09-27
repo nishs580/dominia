@@ -23,7 +23,7 @@ import { logDebug } from '../lib/debug';
 import { STEPS_READ_PERM, hasForegroundStepsRead, hasBackgroundStepsRead } from '../lib/healthConnect';
 import { colors, spacing, text } from '../lib/theme';
 
-const CLAIM = colors.claim;
+const CLAIM = colors.claimButton;
 const INK = colors.ink;
 const BONE = colors.bone;
 const SLATE2 = colors.slate2;
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,
     textTransform: 'uppercase',
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
   },
   sectionLabelText: {
     ...text.sectionLabel,
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     flexShrink: 0,
   },
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   },
   subtext: {
     ...text.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE2,
   },
   rawBox: {
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   },
   rawText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
   },
   dayRow: {
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnStep: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: 'rgba(242,238,230,0.75)',
     textTransform: 'uppercase',

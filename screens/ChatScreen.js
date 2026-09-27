@@ -534,6 +534,7 @@ export default function ChatScreen() {
         <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
           <TextInput
             style={styles.composerInput}
+            keyboardAppearance="dark"
             placeholder={t('chat.messagePlaceholder')}
             placeholderTextColor="#5C6068"
             value={draft}
@@ -780,7 +781,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: '#8B8F98',
     marginLeft: 8,
   },
@@ -834,7 +835,7 @@ const styles = StyleSheet.create({
   },
   counterText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: '#5C6068',
     marginBottom: 4,
   },

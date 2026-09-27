@@ -99,7 +99,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     bottom: 20,
-    width: 104,
+    // 110, not 104: labels moved from 10 to 11pt (HIG floor); the extra 6
+    // keeps what fit on one line at 10pt fitting at 11.
+    width: 110,
     backgroundColor: 'rgba(14,16,20,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairline,
@@ -124,7 +126,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'GeistMono_500Medium',
     fontWeight: '500',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.bone,

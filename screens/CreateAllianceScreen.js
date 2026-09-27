@@ -27,6 +27,7 @@ const BONE_2 = THEME.colors.bone2;
 const SLATE = THEME.colors.slate;
 const SLATE_2 = THEME.colors.slate2;
 const CLAIM = THEME.colors.claim;
+const CLAIM_BUTTON = THEME.colors.claimButton; // AA-safe button fill under Bone text
 const HAIRLINE = THEME.colors.hairline;
 const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
@@ -259,6 +260,7 @@ export default function CreateAllianceScreen() {
           {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
           <TextInput
             style={styles.input}
+            keyboardAppearance="dark"
             placeholder={t('createAlliance.namePlaceholder')}
             placeholderTextColor="#555"
             value={allianceName}
@@ -279,6 +281,7 @@ export default function CreateAllianceScreen() {
               styles.input,
               { fontFamily: 'GeistMono_500Medium', letterSpacing: 4, fontSize: 18 },
             ]}
+            keyboardAppearance="dark"
             placeholder={t('createAlliance.shortNamePlaceholder')}
             placeholderTextColor="#555"
             value={code}
@@ -526,7 +529,7 @@ const styles = StyleSheet.create({
   },
   kickerText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -564,14 +567,14 @@ const styles = StyleSheet.create({
   },
   labelText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE_2,
     textTransform: 'uppercase',
   },
   labelHint: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
     textTransform: 'uppercase',
@@ -590,7 +593,7 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -599,7 +602,7 @@ const styles = StyleSheet.create({
   },
   submitError: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: CLAIM,
     textTransform: 'uppercase',
@@ -608,7 +611,7 @@ const styles = StyleSheet.create({
   },
   micro: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
     textTransform: 'uppercase',
@@ -637,7 +640,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(242,238,230,0.04)',
   },
   cta: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -651,7 +654,7 @@ const styles = StyleSheet.create({
   },
   ctaStep: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: BONE,
     opacity: 0.75,
@@ -718,7 +721,7 @@ const styles = StyleSheet.create({
   },
   tMeta: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -726,7 +729,7 @@ const styles = StyleSheet.create({
   },
   tTag: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: BONE,
     textTransform: 'uppercase',
@@ -746,7 +749,7 @@ const styles = StyleSheet.create({
   },
   sumLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE_2,
     textTransform: 'uppercase',
@@ -764,7 +767,7 @@ const styles = StyleSheet.create({
   },
   sumHomeTag: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.5,
     color: BONE,
     textTransform: 'uppercase',

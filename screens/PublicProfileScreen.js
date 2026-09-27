@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   },
   commanderLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   sectionDividerLabel: {
     paddingHorizontal: 8,
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
     color: SLATE2,
@@ -645,12 +645,12 @@ const styles = StyleSheet.create({
   },
   nextPrefix: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
   },
   nextTitle: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: BONE,
   },
   statGrid: {
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
     color: SLATE2,
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
   },
   influenceSublabel: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: colors.slate2,
     textTransform: 'uppercase',

@@ -10,6 +10,7 @@ colors:
   slate: "#5C6068"
   slate-2: "#8B8F98"
   claim-red: "#D64525"
+  claim-red-button: "#B63B1F" # Claim Red darkened for AA text contrast under Bone labels — button fills only
   alliance-green: "#3F8F4E"
   enemy-slate-blue: "#4A6B8A"
   caution-amber: "#D49A2B"
@@ -43,7 +44,7 @@ typography:
     fontWeight: 500
   label:
     fontFamily: "Geist Mono"
-    fontSize: "10px"
+    fontSize: "11px"
     fontWeight: 400
     letterSpacing: "0.16em"
   data:
@@ -64,7 +65,7 @@ spacing:
   xl4: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.claim-red}"
+    backgroundColor: "{colors.claim-red-button}"
     textColor: "{colors.bone}"
     typography: "{typography.data}"
     rounded: "{rounded.none}"
@@ -119,7 +120,8 @@ The system explicitly rejects what PRODUCT.md rejects: no fitness-tracker cheerf
 A dark low-chroma field where the three territory colours are the only voices — their rarity is their authority.
 
 ### Primary
-- **Claim Red** (#D64525): yours. Your territories on the map, active contests, and the single primary CTA. The most disciplined colour in the system: at most ONE element per screen outside the map. Soft fill `#D6452524` for territory fills.
+- **Claim Red** (#D64525): yours. Your territories on the map, active contests, and Claim Red used as text/accent. The most disciplined colour in the system: at most ONE element per screen outside the map. Soft fill `#D6452524` for territory fills.
+- **Claim Red Button** (#B63B1F): the same identity colour, darkened for the single primary CTA per screen. Bone-on-`#D64525` measures 3.83:1 and fails WCAG AA for normal-size text (4.5:1); Bone-on-`#B63B1F` measures ~5.0:1. Button fills only — never the map, never text/accent uses of Claim Red, which need *more* luminance against the ink background, not less.
 
 ### Secondary
 - **Alliance Green** (#3F8F4E): ours. Alliance-held territories, shields, defensive states. Soft fill `#3F8F4E24`.
@@ -155,10 +157,12 @@ A dark low-chroma field where the three territory colours are the only voices �
 - **Title** (Archivo 700, 26px): contest screens, streak counter. Italic 700 for milestone subtitles only — italic exists nowhere else.
 - **Body** (Instrument Sans 400, 13px; emphasis Instrument Sans 500): anything a player actually reads — descriptions, chat, prose. Sentence case only; Instrument Sans is never uppercased. Emphasis by weight, never by caps or italic.
 - **Data** (Geist Mono 400, 11–16px): measurements, timers, counts. Real-world case preserved: "km", "×2.50", "9:41".
-- **Label** (Geist Mono 400, 8–10px, uppercase, 0.12–0.18em tracking): section labels and UI chrome. Slate 2 by default.
+- **Label** (Geist Mono 400, 11px, uppercase, 0.12–0.18em tracking): section labels and UI chrome. Slate 2 by default.
 
 ### Named Rules
 **The Controlling Rule.** Measurement, state, label, or readout → Geist Mono. A sentence someone would actually read → Instrument Sans. A ceremonial moment the player should recall → Archivo. When in doubt → Geist Mono.
+
+**The Floor Rule.** Nothing renders below 11px (Apple HIG's Caption 2 minimum). Labels are told apart from metadata by case, tracking and colour, not by shrinking. Where a figure will not fit at 11px, change the format (e.g. `15.2k`), never the size.
 
 **The Still Type Rule.** Type is never animated. Numbers may count up; glyphs never slide, fade, or bounce.
 
@@ -177,7 +181,7 @@ Instrumental and exact: every control feels like an instrument on a console — 
 
 ### Buttons
 - **Shape:** hard square (0px radius), full-width in sheets, 48dp minimum touch height.
-- **Primary:** Claim Red background, Bone Geist Mono uppercase label — this is usually the screen's single permitted red element.
+- **Primary:** Claim Red Button (#B63B1F) background, Bone Geist Mono uppercase label — this is usually the screen's single permitted red element. Uses the darkened button variant, not the identity #D64525, so the label clears WCAG AA (~5.0:1).
 - **Pressed:** state change in 120ms on cubic-bezier(0.2, 0, 0, 1); no scale bounce, no ripple tinting beyond an ink step.
 - **Secondary:** Ink 2 with hairline-strong border, Bone mono label. Disabled: Slate label, hairline border.
 

@@ -149,7 +149,7 @@ export default function AuthGate({ navigation }) {
     <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
       {gateError ? (
         <>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 9, letterSpacing: 1.6, color: '#8B8F98', textTransform: 'uppercase', marginBottom: 12 }}>
+          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: '#8B8F98', textTransform: 'uppercase', marginBottom: 12 }}>
             {t('authGate.connectionError')}
           </Text>
           <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: '#F2EEE6', textAlign: 'center', marginBottom: 24 }}>

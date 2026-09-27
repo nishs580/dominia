@@ -769,6 +769,7 @@
     "distance": "DISTANCE",
     "activeMinutes": "ACTIVE MINUTES",
     "weeklySteps": "WEEKLY STEPS",
+    "chartThousands": "{{n}}k",
     "chartLabel": "{{day}} — {{steps}} steps",
     "toastStreakReentry": "Back. That's what matters.",
     "toastGraceDay": "Grace Day banked.",

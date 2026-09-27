@@ -212,14 +212,14 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.alliance,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   timer: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   desc: {
     fontFamily: fonts.mono,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.slate2,
     marginTop: 6,
     lineHeight: 16,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -270,14 +270,14 @@ const styles = StyleSheet.create({
   },
   halfNote: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate,
     marginTop: 6,
     letterSpacing: 0.4,
   },
   shareEarnedNote: {
     fontFamily: fonts.monoMedium,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.alliance,
     marginTop: 6,
     letterSpacing: 0.4,
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
 
   reward: {
     fontFamily: fonts.mono,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.slate2,
     letterSpacing: 1.0,
     textTransform: 'uppercase',
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   pendingText: { fontFamily: fonts.body, fontSize: 12, color: colors.slate2 },
   retryText: {
     fontFamily: fonts.monoMedium,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.claim,
     marginTop: 8,
     letterSpacing: 1.0,

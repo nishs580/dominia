@@ -15,6 +15,7 @@ import { avatarThumb } from '../lib/avatar';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 const CLAIM = '#D64525';
+const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
 const INK = '#0E1014';
 const INK2 = '#1A1D24';
 const INK3 = '#252932';
@@ -625,6 +626,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
 
           <TextInput
             accessibilityLabel={t('alliance.typeTransfer')}
+            keyboardAppearance="dark"
             autoCapitalize="characters"
             autoCorrect={false}
             editable={!transferSaving}
@@ -1359,7 +1361,7 @@ const styles = StyleSheet.create({
   },
   headerKicker: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
@@ -1394,7 +1396,7 @@ const styles = StyleSheet.create({
   },
   headerCity: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     marginTop: 6,
@@ -1451,7 +1453,7 @@ const styles = StyleSheet.create({
   },
   directiveText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE,
     textTransform: 'uppercase',
@@ -1503,7 +1505,7 @@ const styles = StyleSheet.create({
   },
   aMeta: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -1563,7 +1565,7 @@ const styles = StyleSheet.create({
   },
   confirmKicker: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE2,
     textTransform: 'uppercase',
@@ -1595,7 +1597,7 @@ const styles = StyleSheet.create({
   },
 
   cta: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
@@ -1604,7 +1606,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   ctaDestructive: {
-    backgroundColor: CLAIM,
+    backgroundColor: CLAIM_BUTTON,
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
@@ -1674,7 +1676,7 @@ const styles = StyleSheet.create({
   },
   leaveLinkText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE,
     textTransform: 'uppercase',
@@ -1686,14 +1688,14 @@ const styles = StyleSheet.create({
   },
   sectionLabelText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sectionLabelAccent: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1747,7 +1749,7 @@ const styles = StyleSheet.create({
   // Role is a label, not ownership — Slate 2. Founder carries alliance identity.
   rosterRole: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -1773,7 +1775,7 @@ const styles = StyleSheet.create({
   },
   rosterManageText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -1834,7 +1836,7 @@ const styles = StyleSheet.create({
   },
   wireStatusText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: ALLIANCE_GREEN,
     textTransform: 'uppercase',
@@ -1849,7 +1851,7 @@ const styles = StyleSheet.create({
   },
   wireEmptyText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
     textTransform: 'uppercase',
@@ -1859,7 +1861,7 @@ const styles = StyleSheet.create({
   },
   wireEndOfList: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 9,
+    fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE,
     textTransform: 'uppercase',
@@ -1878,7 +1880,7 @@ const styles = StyleSheet.create({
   },
   wireErrorText: {
     fontFamily: 'GeistMono_400Regular',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
     textTransform: 'uppercase',
@@ -1892,7 +1894,7 @@ const styles = StyleSheet.create({
   },
   wireRetryText: {
     fontFamily: 'GeistMono_500Medium',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,
     textTransform: 'uppercase',

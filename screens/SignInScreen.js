@@ -71,6 +71,7 @@ export default function SignInScreen({ navigation }) {
 
       <TextInput
         style={styles.input}
+        keyboardAppearance="dark"
         placeholder={t('signIn.emailPlaceholder')}
         placeholderTextColor="#6B7280"
         autoCapitalize="none"
@@ -80,6 +81,7 @@ export default function SignInScreen({ navigation }) {
       />
       <TextInput
         style={styles.input}
+        keyboardAppearance="dark"
         placeholder={t('signIn.passwordPlaceholder')}
         placeholderTextColor="#6B7280"
         secureTextEntry
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
   },
   claimMark: {
     color: '#E83B3B',
-    fontSize: 9,
+    fontSize: 11,
   },
   subtitle: {
     fontFamily: 'GeistMono_400Regular',

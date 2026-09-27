@@ -121,6 +121,7 @@ const INK3 = colors.ink3;
 const BONE = colors.bone;
 const SLATE2 = colors.slate2;
 const CLAIM = colors.claim;
+const CLAIM_BUTTON = colors.claimButton; // AA-safe button fill under Bone text
 const AMBER = colors.caution;
 const HAIRLINE_STRONG = colors.hairlineStrong;
 
@@ -1370,11 +1371,11 @@ function Banner({ color, label }) {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
+  claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
   territoryName: { fontFamily: 'Archivo_900Black', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
   // Neutral instrument — the progress ring is this screen's one red element.
   badge: { marginTop: 4, backgroundColor: INK2, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase' },
+  badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
   ringWrap: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
@@ -1384,20 +1385,20 @@ const styles = StyleSheet.create({
 
   // The deadline is a first-class instrument, not a table row.
   timeLeftBlock: { marginTop: 18, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
-  timeLeftLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase' },
+  timeLeftLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
   timeLeftValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 18, letterSpacing: 1 },
 
   statsPanel: { marginTop: 24, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
-  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },
+  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
   statValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 14, letterSpacing: 0.2 },
 
   firstWalkHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
   bannerZone: { marginTop: 12, minHeight: 36 },
   banner: { borderWidth: 1, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'transparent' },
-  bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase' },
+  bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
 
-  devBtn: { marginBottom: 8, backgroundColor: CLAIM, borderRadius: 0, paddingVertical: 12, alignItems: 'center' },
+  devBtn: { marginBottom: 8, backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 12, alignItems: 'center' },
   devBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
@@ -1419,12 +1420,12 @@ const styles = StyleSheet.create({
   // element; everything else stays quiet so START WALK is the obvious target.
   armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
   armCountdown: { fontFamily: 'Archivo_700Bold', color: CLAIM, fontSize: 72, letterSpacing: -2, textAlign: 'center' },
-  armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 9, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
   armTitle: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8 },
   armBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
   armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   armError: { fontFamily: 'InstrumentSans_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
-  armPrimary: { backgroundColor: CLAIM, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  armPrimary: { backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   armPrimaryText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   armSecondary: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   armSecondaryText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
