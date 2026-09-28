@@ -161,7 +161,30 @@
     "haveAccount": "Уже есть аккаунт? ",
     "signUpLink": "Регистрация",
     "signInLink": "Войти",
-    "forgotPassword": "Забыли пароль?"
+    "forgotPassword": "Забыли пароль?",
+    "continueWithGoogle": "Войти через Google",
+    "connecting": "Подключение...",
+    "or": "или",
+    "googleFailed": "Не удалось войти через Google. Попробуйте ещё раз.",
+    "extraVerification": "Требуется дополнительная проверка. Попробуйте ещё раз.",
+    "verifyTitle": "Подтвердите email",
+    "codeSentTo": "Мы отправили 6-значный код на {{email}}.",
+    "codeSent": "Мы отправили 6-значный код на вашу почту.",
+    "codePlaceholder": "Код подтверждения",
+    "codeTooShort": "Введите 6-значный код из письма.",
+    "codeFailed": "Код не подошёл. Проверьте почту и попробуйте ещё раз.",
+    "resendFailed": "Не удалось отправить код повторно. Попробуйте ещё раз.",
+    "verify": "Подтвердить",
+    "verifying": "Проверка...",
+    "sending": "Отправка...",
+    "noCode": "Не пришёл код? ",
+    "resendCode": "Отправить снова",
+    "differentEmail": "Указать другой email"
+  },
+  "welcome": {
+    "skipIntro": "Пропустить вступление",
+    "getStarted": "Начать →",
+    "signInLink": "Войти"
   },
   "forgotPassword": {
     "title": "Сброс пароля",

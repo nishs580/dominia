@@ -42,7 +42,7 @@ export default function AuthGate({ navigation }) {
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      navigation.replace('SignIn');
+      navigation.replace('Welcome');
     }
   }, [isLoaded, isSignedIn]);
 
@@ -66,7 +66,7 @@ export default function AuthGate({ navigation }) {
 
     if (!isSignedIn) {
       setCheckingOnboarding(false);
-      navigation.replace('SignIn');
+      navigation.replace('Welcome');
       return;
     }
 

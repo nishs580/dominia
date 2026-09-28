@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { supabase } from '../lib/supabase';
+import { bootstrapPlayer } from '../lib/meApi';
 import { hasFired, onWalkthroughFired } from '../lib/walkthroughFlags';
 import Toast from 'react-native-toast-message';
 import {
@@ -67,6 +67,11 @@ export default function FcmLifecycle() {
     };
   }, [userId]);
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -76,32 +81,26 @@ export default function FcmLifecycle() {
     }
 
     (async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('has_onboarded')
-        .eq('clerk_id', userId)
-        .maybeSingle();
+      // Gate on the authoritative backend (idempotent /me/bootstrap) rather than
+      // a direct Supabase read, which can fail under the RLS lockdown and would
+      // silently disable push registration for a legitimate onboarded player.
+      const res = await bootstrapPlayer({ clerkGetToken: () => getTokenRef.current() });
 
       if (cancelled) return;
 
-      if (error) {
-        console.error('AuthGate has_onboarded check failed:', error);
+      if (!res.ok) {
+        console.error('FcmLifecycle onboarding check failed:', res.status, res.error);
         setHasOnboarded(false);
         return;
       }
 
-      setHasOnboarded(data?.has_onboarded === true);
+      setHasOnboarded(res.data?.player?.has_onboarded === true);
     })();
 
     return () => {
       cancelled = true;
     };
   }, [isLoaded, isSignedIn, userId]);
-
-  const getTokenRef = useRef(getToken);
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !userId || hasOnboarded !== true || !notifReady) {

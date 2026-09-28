@@ -155,7 +155,30 @@
     "haveAccount": "Already have an account? ",
     "signUpLink": "Sign Up",
     "signInLink": "Sign In",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "continueWithGoogle": "Continue with Google",
+    "connecting": "Connecting...",
+    "or": "or",
+    "googleFailed": "Google sign-in failed. Try again.",
+    "extraVerification": "Additional verification is required. Please try again.",
+    "verifyTitle": "Verify your email",
+    "codeSentTo": "We sent a 6-digit code to {{email}}.",
+    "codeSent": "We sent a 6-digit code to your email.",
+    "codePlaceholder": "Verification code",
+    "codeTooShort": "Enter the 6-digit code from your email.",
+    "codeFailed": "That code didn’t work. Check your email and try again.",
+    "resendFailed": "Could not resend the code. Try again.",
+    "verify": "Verify",
+    "verifying": "Verifying...",
+    "sending": "Sending...",
+    "noCode": "Didn’t get it? ",
+    "resendCode": "Resend code",
+    "differentEmail": "Use a different email"
+  },
+  "welcome": {
+    "skipIntro": "Skip intro",
+    "getStarted": "Get started →",
+    "signInLink": "Sign in"
   },
   "forgotPassword": {
     "title": "Reset password",
