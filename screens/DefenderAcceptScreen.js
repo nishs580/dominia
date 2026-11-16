@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
 import { useFlag } from '../lib/flags';
+import { defenceGoldGate } from '../lib/defendPopup';
+import { GoldGlyph } from '../components/ResourceGlyphs';
 
 const INK = '#0E1014';
 const INK_2 = '#1A1D24';
@@ -54,7 +56,7 @@ export default function DefenderAcceptScreen() {
 
       const { data, error } = await supabase
         .from('players')
-        .select('id')
+        .select('id, gold')
         .eq('clerk_id', userId)
         .maybeSingle();
 
@@ -137,7 +139,17 @@ export default function DefenderAcceptScreen() {
   const snapshotDefenderThreshold = previewData
     ? Math.floor(selectedRatio * previewData.attacker_walked_m)
     : 0;
-  const canSubmit = !submitting && !!myPlayer?.id;
+  // Gold economy (plan U12): with multi_resource_economy off every defence
+  // costs the mandatory Gold fee; below it the action is disabled with the
+  // shortfall. The preview's balance and fee win once the backend sends them
+  // (plan U5); until then the player row and the economy parameter stand in.
+  const previewGold = Number.isFinite(previewData?.current_gold) ? previewData.current_gold : null;
+  const goldGate = defenceGoldGate({
+    gold: previewGold ?? (myPlayer ? (myPlayer.gold ?? 0) : null),
+    multiResource: stoneOn,
+    fee: Number.isFinite(previewData?.gold_defence_cost) ? previewData.gold_defence_cost : undefined,
+  });
+  const canSubmit = !submitting && !!myPlayer?.id && !goldGate.disabled;
 
   const handleRetry = () => setRetryCount((c) => c + 1);
 
@@ -309,11 +321,38 @@ export default function DefenderAcceptScreen() {
         </>
       ) : null}
 
+      {goldGate.applies ? (
+        <View style={styles.feeBlock}>
+          <View
+            style={styles.feeRow}
+            accessible
+            accessibilityLabel={t('defenderAccept.goldFeeA11y', {
+              defaultValue: 'Defence fee: {{n}} Gold',
+              n: goldGate.price,
+            })}
+          >
+            <Text style={styles.previewRowLabel}>
+              {t('defenderAccept.goldFee', { defaultValue: 'DEFENCE FEE' })}
+            </Text>
+            <View style={styles.feeValue}>
+              <Text style={styles.previewRowDistance}>{goldGate.price}</Text>
+              <GoldGlyph size={14} color={BONE} />
+            </View>
+          </View>
+          {goldGate.disabled ? (
+            <Text style={styles.feeShortfall} accessibilityLiveRegion="polite">
+              {t('defenderAccept.goldShortfall', { defaultValue: '{{n}} Gold short', n: goldGate.shortfall })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       {submitError ? (
         <Text style={styles.submitErrorText}>
           {submitError.code === 'contest_too_advanced' ? t('defenderAccept.errTooAdvanced') :
             submitError.code === 'contest_already_defended' ? t('defenderAccept.errAlreadyDefended') :
               submitError.code === 'insufficient_stone' ? t('defenderAccept.errInsufficientStone') :
+              submitError.code === 'insufficient_gold' ? t('defenderAccept.errInsufficientGold', { defaultValue: 'Not enough Gold to defend.' }) :
                 submitError.code === 'not_in_defender_alliance' ? t('defenderAccept.errNotInAlliance') :
                   t('defenderAccept.errGeneric')}
         </Text>
@@ -322,6 +361,7 @@ export default function DefenderAcceptScreen() {
       <View style={styles.ctaStack}>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit }}
           disabled={!canSubmit}
           onPress={handleSubmit}
           style={({ pressed }) => [
@@ -509,6 +549,32 @@ const styles = StyleSheet.create({
     color: SLATE_2,
     letterSpacing: 1.2,
     marginLeft: 'auto',
+  },
+  feeBlock: {
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: INK_2,
+    borderWidth: 0.5,
+    borderColor: HAIRLINE,
+  },
+  feeValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  feeShortfall: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 13,
+    color: SLATE_2,
+    textAlign: 'center',
   },
   submitErrorText: {
     fontFamily: 'GeistMono_400Regular',

@@ -57,6 +57,8 @@ import { getFlag, useFlag } from '../lib/flags';
 import { navigateTo } from '../lib/navigation';
 import MapTopBar from '../components/MapTopBar';
 import TerritoryCard from '../components/TerritoryCard';
+import DefendPopup, { useDefendPopupFeed } from '../components/DefendPopup';
+import { defendPopupModel } from '../lib/defendPopup';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
@@ -2898,6 +2900,26 @@ export default function MapScreen() {
   const fullSheetOn = useFlag('full_territory_sheet');
   const selectedFeature = selected?.feature ?? selected ?? null;
 
+  // Defend pop-ups (plan U12), Figma mode only. One at a time; it takes
+  // priority over the territory card (hidden while it shows) and covers the
+  // search results, and never shows during a challenge or the spine flight.
+  const defendFeed = useDefendPopupFeed({ enabled: figmaChrome, getTokenRef });
+  const defendModel = useMemo(
+    () => (flightActive ? null : defendPopupModel({
+      attacks: defendFeed.attacks,
+      figmaMode: figmaChrome,
+      challengeActive: defendFeed.challengeActive,
+      gold: myPlayer ? (myPlayer.gold ?? 0) : null,
+      multiResource: multiResourceOn,
+    })),
+    // dismissTick re-runs selection after a dismissal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [defendFeed.attacks, defendFeed.challengeActive, defendFeed.dismissTick, figmaChrome, flightActive, myPlayer?.gold, multiResourceOn],
+  );
+  const handleDefendFromPopup = useCallback((model) => {
+    navigation.navigate('DefenderAccept', { contestId: model.contestId });
+  }, [navigation]);
+
   const cardAtCap = useMemo(() => {
     const xp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
     const held = (selected?.allFeatures ?? []).filter((f) => f.properties?.color === '#D64525').length;
@@ -3321,7 +3343,7 @@ export default function MapScreen() {
       />
       ) : (
         <TerritoryCard
-          territory={selectedFeature}
+          territory={defendModel ? null : selectedFeature}
           myPlayer={myPlayer}
           multiResource={multiResourceOn}
           streaksOn={streaksOn}
@@ -3342,6 +3364,14 @@ export default function MapScreen() {
       ) : (
         <MapSideRail hidden={selected != null || flightActive} />
       )}
+
+      {defendModel ? (
+        <DefendPopup
+          model={defendModel}
+          onDefend={handleDefendFromPopup}
+          onDismiss={defendFeed.dismiss}
+        />
+      ) : null}
 
       {tips.tipElement}
       <NotifPrimeModal

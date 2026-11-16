@@ -485,7 +485,11 @@
     "errAlreadyDefended": "Someone else just accepted.",
     "errInsufficientStone": "You don't have enough stone.",
     "errNotInAlliance": "You're not in this alliance anymore.",
-    "errGeneric": "Something went wrong. Try again."
+    "errGeneric": "Something went wrong. Try again.",
+    "goldFee": "DEFENCE FEE",
+    "goldFeeA11y": "Defence fee: {{n}} Gold",
+    "goldShortfall": "{{n}} Gold short",
+    "errInsufficientGold": "Not enough Gold to defend."
   },
   "commandPost": {
     "back": "← ALLIANCE",
@@ -1637,5 +1641,19 @@
     "next": "Next",
     "nextA11y": "Next",
     "pager": "{{n}} / {{total}}"
+  },
+  "defendPopup": {
+    "underAttack": "Under attack by {{attacker}}",
+    "soloBody": "{{attacker}} started the attack {{minutes}} min ago. Start defending and protect your territory.",
+    "soloBodyJustNow": "{{attacker}} started the attack just now. Start defending and protect your territory.",
+    "allianceBody": "Your Alliance member's ({{owner}}) territory is under attack, defend their territory for them",
+    "alreadyStarted": "{{defender}} has already started defending this territory.",
+    "windowClosed": "The defence window for this attack has closed.",
+    "defend": "DEFEND TERRITORY",
+    "shortfall": "{{n}} Gold short",
+    "more": "+{{n}} more",
+    "closeA11y": "Dismiss defend alert",
+    "ctaA11y": "{{label}}, costs {{price}} Gold",
+    "announce": "{{territory}} is under attack"
   }
 }
