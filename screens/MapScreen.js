@@ -52,7 +52,9 @@ import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
-import { SPINE_EVENTS, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
+import { SPINE_EVENTS, gateSpineState, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
+import { getFlag, useFlag } from '../lib/flags';
+import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
 import { loadHomePin, peekHomePin, saveHomePin } from '../lib/homePinCache';
@@ -218,6 +220,10 @@ function contestStartErrorMessage(t, error) {
 function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [], objectiveTerritoryId = null, spineActive = false, onSpineClaim }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  // App-only sheet rows and actions (Figma parity plan U3).
+  const developmentOn = useFlag('territory_development');
+  const legacyOn = useFlag('territory_legacy');
+  const streaksOn = useFlag('streaks');
   const [expanded, setExpanded] = useState(false);
   const [sheetState, setSheetState] = useState('info'); // 'info' | 'confirm' | 'develop' | 'developConfirm'
   const [contestMode, setContestMode] = useState(false);
@@ -672,7 +678,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 </View>
               </View>
             )}
-            {!isUnclaimed && (
+            {streaksOn && !isUnclaimed && (
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>{t('map.streak')}</Text>
                 <Text style={styles.sheetRowValue}>{streakTierName(ownerStreakTier.tier)}</Text>
@@ -685,6 +691,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
           </View>
 
           {/* Influence hero row */}
+          {developmentOn && (
+            <>
           <View style={styles.sheetInfluenceRow}>
             <View>
               <Text style={styles.sheetInfluenceLabel}>{t('map.generates')}</Text>
@@ -693,16 +701,22 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             <Text style={styles.sheetInfluenceValue}>{t('map.influenceValue', { n: influence })}</Text>
           </View>
           <Text style={styles.sheetGloss}>{t('map.influenceGloss')}</Text>
+            </>
+          )}
 
           {/* Expanded detail */}
           {expanded && (
             <View style={styles.sheetExpandedBlock}>
+              {developmentOn && (
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>{t('map.development')}</Text>
                 <Text style={styles.sheetRowValue}>
                   D{developmentLevel} · {developmentName(developmentLevel)}
                 </Text>
               </View>
+              )}
+              {legacyOn && (
+                <>
               <View style={styles.sheetRow}>
                 <Text style={styles.sheetRowLabel}>{t('map.legacy')}</Text>
                 <Text style={styles.sheetRowValue}>
@@ -710,6 +724,8 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                 </Text>
               </View>
               <Text style={styles.sheetGloss}>{t('map.legacyGloss')}</Text>
+                </>
+              )}
               {!isUnclaimed && (
                 <>
                   {formatHeldDays(historyStats.heldDays) !== null && (
@@ -722,10 +738,12 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     <Text style={styles.sheetRowLabel}>{t('map.changedHands')}</Text>
                     <Text style={styles.sheetRowValue}>{formatChangedHands(historyStats.changedHands)}</Text>
                   </View>
+                  {legacyOn && (
                   <View style={styles.sheetRow}>
                     <Text style={styles.sheetRowLabel}>{t('map.hallOfHolders')}</Text>
                     <Text style={styles.sheetRowValue}>{formatHolderCount(historyStats.holderCount)}</Text>
                   </View>
+                  )}
                 </>
               )}
 
@@ -736,7 +754,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   <Text style={styles.sheetYourWalkValue}>
                     {t('map.yourWalkValue', { metres: walkDistance.toLocaleString(), iron: ironCost })}
                   </Text>
-                  {reductionPct > 0 && (
+                  {streaksOn && reductionPct > 0 && (
                     <Text style={styles.sheetYourWalkSub}>
                       {t('map.streakReduces', { days: myStreak, pct: reductionPct })}
                     </Text>
@@ -777,7 +795,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             </View>
           )}
 
-          {isOwnTerritory && !isMaxDev && (
+          {developmentOn && isOwnTerritory && !isMaxDev && (
             <Pressable
               accessibilityRole="button"
               style={({ pressed }) => [styles.sheetAction, pressed && { opacity: 0.92 }]}
@@ -790,13 +808,13 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
             </Pressable>
           )}
 
-          {isOwnTerritory && isMaxDev && (
+          {developmentOn && isOwnTerritory && isMaxDev && (
             <View style={styles.sheetActionDisabled}>
               <Text style={styles.sheetActionDisabledText}>{t('map.devCitadelComplete')}</Text>
             </View>
           )}
 
-          {isOwnTerritory && !isAllianceTerritory && (
+          {legacyOn && isOwnTerritory && !isAllianceTerritory && (
             <Pressable
               accessibilityRole="button"
               style={({ pressed }) => [styles.sheetActionSecondary, pressed && { opacity: 0.92 }]}
@@ -1284,31 +1302,35 @@ export default function MapScreen() {
   const [spine, setSpine] = useState(null);
   const spineRef = useRef(null);
   const [flightPhase, setFlightPhase] = useState('idle'); // idle | hold | await-target | flying
+  // Flag off: the spine loads as complete (not persisted) and the objective
+  // banner, layers and pulse never mount.
+  const firstClaimObjectiveOn = useFlag('first_claim_objective');
 
   useEffect(() => {
     if (!userId) return undefined;
     let cancelled = false;
     loadSpineState(userId).then((state) => {
       if (cancelled) return;
-      spineRef.current = state;
-      setSpine(state);
+      const gated = gateSpineState(state, { objectiveEnabled: firstClaimObjectiveOn });
+      spineRef.current = gated;
+      setSpine(gated);
     });
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, firstClaimObjectiveOn]);
 
   const dispatchSpine = useCallback(
     (event) => {
       const current = spineRef.current;
       if (!current) return;
-      const next = spineReduce(current, event);
+      const next = spineReduce(current, event, { objectiveEnabled: firstClaimObjectiveOn });
       if (next === current) return;
       spineRef.current = next;
       setSpine(next);
       saveSpineState(userId, next);
     },
-    [userId],
+    [userId, firstClaimObjectiveOn],
   );
 
   const spineActive = spine != null && !isSpineComplete(spine);
@@ -1399,7 +1421,7 @@ export default function MapScreen() {
     };
   }, [target]);
 
-  const objectiveActive = heldCount === 0 && objectiveFeature != null;
+  const objectiveActive = firstClaimObjectiveOn && heldCount === 0 && objectiveFeature != null;
 
   const openObjectiveSheet = useCallback(() => {
     if (!objectiveFeature) return;
@@ -1828,6 +1850,7 @@ export default function MapScreen() {
   // to a ~250m grid server-side (privacy); the player's own base is
   // re-anchored to their exact pin, which the client already holds.
   const fetchBasesForViewport = useCallback(async (bounds) => {
+    if (!getFlag('home_bases')) return;
     if (!bounds || !Array.isArray(bounds) || bounds.length < 2) return;
     const [ne, sw] = bounds;
     const seq = ++basesFetchSeqRef.current;
@@ -2802,6 +2825,25 @@ export default function MapScreen() {
     }
   }, [couchClose, selected, target]);
 
+  // App-only map surfaces (Figma parity plan U3). Defaults are on, so today's
+  // map is unchanged until Remote Config turns a surface off.
+  const multiResourceOn = useFlag('multi_resource_economy');
+  const sitrepOn = useFlag('sitrep_card');
+  const battleChipsOn = useFlag('battle_chips');
+  const homeBasesOn = useFlag('home_bases');
+  const streaksOn = useFlag('streaks');
+  const developmentOn = useFlag('territory_development');
+  const mapLayers = useMemo(
+    () => new Set(visibleMapLayers({
+      battle_chips: battleChipsOn,
+      home_bases: homeBasesOn,
+      streaks: streaksOn,
+      territory_development: developmentOn,
+      first_claim_objective: firstClaimObjectiveOn,
+    })),
+    [battleChipsOn, homeBasesOn, streaksOn, developmentOn, firstClaimObjectiveOn],
+  );
+
   const recenter = () => {
     if (!cameraRef.current) return;
     const centerCoordinate = lastUserCoord ?? homePin ?? fallbackCentre;
@@ -2817,6 +2859,7 @@ export default function MapScreen() {
       {/* Beat 1 suppresses the HUD visually (opacity, not layout — no reflow
           when it returns). The flight plays clean; everything comes back on
           settle. */}
+      {multiResourceOn ? (
       <View
         ref={resourceBannerRef}
         collapsable={false}
@@ -2842,9 +2885,12 @@ export default function MapScreen() {
           <ResourceDeltaValue value={myPlayer ? (myPlayer.morale ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
       </View>
-      <SitrepCard
-        suppressed={objectiveActive || spineActive || flightActive || spineFlightPending}
-      />
+      ) : null}
+      {sitrepOn ? (
+        <SitrepCard
+          suppressed={objectiveActive || spineActive || flightActive || spineFlightPending}
+        />
+      ) : null}
       {objectiveActive && !flightActive && !spineFlightPending ? (
         <Pressable
           accessibilityRole="button"
@@ -3001,12 +3047,18 @@ export default function MapScreen() {
           <MapboxGL.FillLayer id="territories-open-fill" filter={openFilter} style={openFillStyle} />
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
           <MapboxGL.FillLayer id="territories-hatch" filter={claimedFilter} style={hatchStyle} />
-          <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
+          {mapLayers.has('territories-d4-walls') ? (
+            <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
+          ) : null}
           <MapboxGL.LineLayer id="territories-casing" filter={claimedFilter} style={casingStyle} />
           <MapboxGL.LineLayer id="territories-line" filter={claimedFilter} style={lineStyle} />
           <MapboxGL.LineLayer id="territories-open" filter={openFilter} style={unclaimedLineStyle} />
-          <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
-          <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
+          {mapLayers.has('territories-streak-inner') ? (
+            <MapboxGL.LineLayer id="territories-streak-inner" filter={streakInnerFilter} style={streakInnerStyle} />
+          ) : null}
+          {mapLayers.has('territories-rampart') ? (
+            <MapboxGL.LineLayer id="territories-rampart" filter={rampartFilter} style={rampartStyle} />
+          ) : null}
           <MapboxGL.LineLayer id="territories-contested-casing" filter={contestedFilter} style={contestedCasingStyle} />
           <MapboxGL.LineLayer id="territories-contested" filter={contestedFilter} style={contestedLineStyle} />
           <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
@@ -3022,7 +3074,9 @@ export default function MapScreen() {
               only ever there to clear Mapbox's own labels, which are now off. */}
           <MapboxGL.SymbolLayer id="territories-labels" style={labelStyle} />
           <MapboxGL.SymbolLayer id="territories-emblems" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
-          <MapboxGL.SymbolLayer id="territories-battle-chips" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
+          {mapLayers.has('territories-battle-chips') ? (
+            <MapboxGL.SymbolLayer id="territories-battle-chips" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
+          ) : null}
         </MapboxGL.ShapeSource>
 
         {/* Survey nodes on the corners of held parcels. */}
@@ -3030,6 +3084,7 @@ export default function MapScreen() {
           <MapboxGL.CircleLayer id="territory-nodes-circles" minZoomLevel={14} style={nodeStyle} />
         </MapboxGL.ShapeSource>
 
+        {mapLayers.has('bases-icons') ? (
         <MapboxGL.ShapeSource
           id="bases"
           shape={bases}
@@ -3046,8 +3101,9 @@ export default function MapScreen() {
           <MapboxGL.SymbolLayer id="bases-icons" minZoomLevel={12} style={baseIconStyle} />
           <MapboxGL.SymbolLayer id="bases-pennants" minZoomLevel={13} filter={pennantFilter} style={pennantStyle} />
         </MapboxGL.ShapeSource>
+        ) : null}
 
-        {objectiveActive ? (
+        {objectiveActive && mapLayers.has('objective-fill') ? (
           <MapboxGL.ShapeSource id="first-claim-objective" shape={objectiveFeature} onPress={openObjectiveSheet}>
             <MapboxGL.FillLayer id="objective-fill" style={objectiveFillStyle} />
             <MapboxGL.LineLayer id="objective-line" style={objectiveLineStyle} />
