@@ -15,7 +15,24 @@
     "map": "MAP",
     "activity": "ACTIVITY",
     "alliance": "ALLIANCE",
-    "profile": "PROFILE"
+    "profile": "PROFILE",
+    "missions": "MISSIONS",
+    "events": "EVENTS"
+  },
+  "nav": {
+    "openProfileA11y": "Open your profile"
+  },
+  "missions": {
+    "kicker": "Daily orders",
+    "title": "Missions",
+    "comingSoon": "Being rebuilt",
+    "comingSoonBody": "Missions are moving here. Your challenges return in the next update."
+  },
+  "events": {
+    "kicker": "City-wide",
+    "title": "Events",
+    "comingSoon": "Coming soon",
+    "comingSoonBody": "Timed events for the whole city will appear here. Check back soon."
   },
   "levelTitle": {
     "Scout": "Scout",

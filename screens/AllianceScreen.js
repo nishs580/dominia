@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { useFlag } from '../lib/flags';
+import ProfileAvatarButton from '../components/ProfileAvatarButton';
 
 const CLAIM = '#D64525';
 const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
@@ -1245,6 +1246,8 @@ export default function AllianceScreen() {
             <View style={styles.shortNameBox}>
               <Text style={styles.shortNameText}>{myAlliance?.short_name ?? '—'}</Text>
             </View>
+            {/* legacy_tabs off only; renders nothing with it on. */}
+            <ProfileAvatarButton style={styles.headerAvatar} />
           </View>
 
           <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>{myAlliance?.name ?? t('alliance.allianceFallback')}</Text>
@@ -1271,7 +1274,11 @@ export default function AllianceScreen() {
       )}
       {!isMember && !confirmAlliance && (
         <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
-          <HeaderKicker>{t('alliance.kicker')}</HeaderKicker>
+          <View style={styles.headerTopRow}>
+            <HeaderKicker>{t('alliance.kicker')}</HeaderKicker>
+            {/* legacy_tabs off only; renders nothing with it on. */}
+            <ProfileAvatarButton style={styles.headerAvatar} />
+          </View>
           <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>{t('alliance.noAllianceTitle')}</Text>
           <Text style={styles.headerSubtitle}>{t('alliance.unaffiliated')}</Text>
         </View>
@@ -1391,6 +1398,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+  },
+  headerAvatar: {
+    marginLeft: 12,
   },
   // The [TAG] chip is an identifier, not ownership — neutral hairline + Bone.
   shortNameBox: {

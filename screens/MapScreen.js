@@ -54,6 +54,8 @@ import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
 import { SPINE_EVENTS, gateSpineState, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
 import { getFlag, useFlag } from '../lib/flags';
+import { navigateTo } from '../lib/navigation';
+import ProfileAvatarButton from '../components/ProfileAvatarButton';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
@@ -980,7 +982,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                   // Carry the resource the player came to earn so Activity can
                   // name it and pre-select a paying axis (challenges pay iron/
                   // stone; gold has no paying axis, so that banner stays hidden).
-                  navigation.navigate('Activity', { needResource: contestMode ? 'iron' : 'gold' });
+                  navigateTo('Activity', { needResource: contestMode ? 'iron' : 'gold' });
                 }}
               >
                 <Text style={styles.sheetActionText}>{t('map.goToActivity')}</Text>
@@ -3128,6 +3130,14 @@ export default function MapScreen() {
           </MapboxGL.ShapeSource>
         ) : null}
       </MapboxGL.MapView>
+      {/* Profile avatar (legacy_tabs off; renders nothing with it on). Inside
+          the map wrap so it sits below the in-flow banners. Mount-only: U11
+          rebuilds this top bar. */}
+      {flightActive ? null : (
+        <View pointerEvents="box-none" style={styles.profileAvatarSlot}>
+          <ProfileAvatarButton />
+        </View>
+      )}
       </View>
 
       {flightActive ? null : (
@@ -3214,6 +3224,12 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  profileAvatarSlot: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    zIndex: 20,
   },
 
   // The objective banner is information that points somewhere, not the action

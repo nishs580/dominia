@@ -29,19 +29,23 @@ import ActivityLogScreen from './screens/ActivityLogScreen';
 import LeaderboardsScreen from './screens/LeaderboardsScreen';
 import ChatScreen from './screens/ChatScreen';
 import PublicProfileScreen from './screens/PublicProfileScreen';
+import MissionsScreen from './screens/MissionsScreen';
+import EventsScreen from './screens/EventsScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
 import FlagsLifecycle from './components/FlagsLifecycle';
 import StreakBreakLifecycle from './components/StreakBreakLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
-import { ensureFlagsInitialized } from './lib/flags';
+import { ensureFlagsInitialized, useFlag } from './lib/flags';
+import { tabsFor, rootRoutesFor } from './lib/navLayout';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MapGlyph,
   ActivityGlyph,
   AllianceGlyph,
   ProfileGlyph,
+  BoardsGlyph,
 } from './components/ResourceGlyphs';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
@@ -101,9 +105,29 @@ function makeTabOptions(label, Icon) {
   };
 }
 
+// Every tab either layout can show. Which ones mount is decided by
+// `legacy_tabs` through lib/navLayout: Map · Activity · Alliance · Profile
+// with it on (today), Map · Missions · Alliance · Events with it off.
+const TAB_SCREENS = {
+  Map: { component: MapScreen, labelKey: 'tabs.map', Icon: MapGlyph },
+  Activity: { component: ActivityScreen, labelKey: 'tabs.activity', Icon: ActivityGlyph },
+  Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph },
+  Profile: { component: ProfileScreen, labelKey: 'tabs.profile', Icon: ProfileGlyph },
+  // Tab icons stay for now; DESIGN.md's no-icons rule is deferred (plan U9).
+  Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: ActivityGlyph },
+  Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: BoardsGlyph },
+};
+
+// Root stack screens that only exist in one layout. With `legacy_tabs` off,
+// Profile leaves the tab bar and opens from the header avatar.
+const ROOT_SCREENS = {
+  Profile: ProfileScreen,
+};
+
 const TabNavigator = () => {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const legacyTabs = useFlag('legacy_tabs');
   return (
     <View style={{ flex: 1 }}>
     <Tab.Navigator
@@ -122,10 +146,17 @@ const TabNavigator = () => {
         headerShown: false,
       }}
     >
-      <Tab.Screen name="Map" options={makeTabOptions(t('tabs.map'), MapGlyph)} component={MapScreen} />
-      <Tab.Screen name="Activity" options={makeTabOptions(t('tabs.activity'), ActivityGlyph)} component={ActivityScreen} />
-      <Tab.Screen name="Alliance" options={makeTabOptions(t('tabs.alliance'), AllianceGlyph)} component={AllianceScreen} />
-      <Tab.Screen name="Profile" options={makeTabOptions(t('tabs.profile'), ProfileGlyph)} component={ProfileScreen} />
+      {tabsFor(legacyTabs).map((name) => {
+        const { component, labelKey, Icon } = TAB_SCREENS[name];
+        return (
+          <Tab.Screen
+            key={name}
+            name={name}
+            options={makeTabOptions(t(labelKey), Icon)}
+            component={component}
+          />
+        );
+      })}
     </Tab.Navigator>
     </View>
   );
@@ -148,6 +179,7 @@ export default function App() {
   // the right mode. Capped at 300 ms; on timeout the app starts on defaults
   // and FlagsLifecycle catches up in the background.
   const [flagsReady, setFlagsReady] = useState(false);
+  const legacyTabs = useFlag('legacy_tabs');
   useEffect(() => {
     ensureFlagsInitialized().finally(() => setFlagsReady(true));
   }, []);
@@ -186,6 +218,9 @@ export default function App() {
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
           <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+          {rootRoutesFor(legacyTabs).map((name) => (
+            <Stack.Screen key={name} name={name} component={ROOT_SCREENS[name]} />
+          ))}
           <Stack.Screen
             name="WarRoom"
             component={WarRoomScreen}

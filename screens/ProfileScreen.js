@@ -48,7 +48,8 @@ import { colors, fonts, spacing } from '../lib/theme';
 import { IronGlyph, StoneGlyph, GoldGlyph, MoraleGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
-import { useFlag } from '../lib/flags';
+import { getFlag, useFlag } from '../lib/flags';
+import { navigateTo } from '../lib/navigation';
 
 // Hidden diagnostics (long-press the profile header → Health Connect debug).
 // __DEV__ alone hid it from every EAS build, including internal test ones —
@@ -70,6 +71,14 @@ const SLATE = '#5C6068';
 const SLATE2 = '#8B8F98';
 const HAIRLINE = 'rgba(242,238,230,0.08)';
 const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+
+// With `legacy_tabs` off Profile is pushed on top of MainTabs in the root
+// stack, so replace would leave MainTabs (signed out) behind SignIn. Clear the
+// stack in that mode; legacy mode keeps today's replace.
+function exitToSignIn(navigation) {
+  if (getFlag('legacy_tabs')) navigation.replace('SignIn');
+  else navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
+}
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -267,7 +276,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
       // The Clerk user is already gone server-side; a signOut error is moot.
       console.warn('[deleteAccount] signOut error:', err?.message);
     }
-    navigation.replace('SignIn');
+    exitToSignIn(navigation);
   };
 
   return (
@@ -959,7 +968,7 @@ export default function ProfileScreen() {
                 label={t('profile.activityPower')}
                 value={activityPower}
                 reason={activityReason}
-                onPress={() => navigation.navigate('Activity')}
+                onPress={() => navigateTo('Activity')}
                 a11y={t('profile.activityPower')}
                 action={trackingOff ? (
                   // Secondary instrument, never Claim Red: red means yours /
@@ -986,7 +995,7 @@ export default function ProfileScreen() {
                 label={t('profile.territoryPower')}
                 value={territoryPower}
                 reason={territoryReason}
-                onPress={() => navigation.navigate('Map')}
+                onPress={() => navigateTo('Map')}
                 a11y={t('profile.territoryPower')}
               />
               {honourMedalsOn ? (
@@ -1029,7 +1038,7 @@ export default function ProfileScreen() {
                 </Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => navigation.navigate('Map')}
+                  onPress={() => navigateTo('Map')}
                   style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}
                 >
                   <Text
@@ -1055,7 +1064,7 @@ export default function ProfileScreen() {
                       <OwnedTerritoryRow
                         name={terr.territory_name ?? t('common.territoryFallback')}
                         tier={terr.tier}
-                        onPress={canLocate ? () => navigation.navigate('Map', {
+                        onPress={canLocate ? () => navigateTo('Map', {
                           focusTerritory: { id: terr.id, name: terr.territory_name, latitude: lat, longitude: lng },
                           focusNonce: Date.now(),
                         }) : undefined}
@@ -1223,7 +1232,7 @@ export default function ProfileScreen() {
                           }
                           const signOutTimeout = new Promise((resolve) => setTimeout(resolve, 5000));
                           await Promise.race([signOut(), signOutTimeout]);
-                          navigation.replace('SignIn');
+                          exitToSignIn(navigation);
                         },
                       },
                     ]

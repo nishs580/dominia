@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { useNavigation } from '@react-navigation/native';
+import { navigateTo } from '../lib/navigation';
 import { useTranslation } from 'react-i18next';
 import { fetchChallengesToday } from '../lib/challengesTodayApi';
 
@@ -29,7 +29,6 @@ export function resetSitrepForSession() {
 }
 
 export default function SitrepCard({ suppressed = false }) {
-  const navigation = useNavigation();
   const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
@@ -95,7 +94,7 @@ export default function SitrepCard({ suppressed = false }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={t('sitrep.kicker')}
-      onPress={() => navigation.navigate('Activity')}
+      onPress={() => navigateTo('Activity')}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
     >
       <View style={styles.kickerRow}>
