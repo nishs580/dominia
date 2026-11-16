@@ -33,11 +33,15 @@ import ChatScreen from './screens/ChatScreen';
 import PublicProfileScreen from './screens/PublicProfileScreen';
 import MissionsScreen from './screens/MissionsScreen';
 import EventsScreen from './screens/EventsScreen';
+import LandingScreen from './screens/LandingScreen';
+import FigmaOnboardingScreen from './screens/FigmaOnboardingScreen';
+import DailyRewardScreen from './screens/DailyRewardScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
 import FlagsLifecycle from './components/FlagsLifecycle';
 import StreakBreakLifecycle from './components/StreakBreakLifecycle';
+import OnboardingTutorialLifecycle from './components/OnboardingTutorialLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
 import { ensureFlagsInitialized, useFlag } from './lib/flags';
 import { tabsFor, rootRoutesFor } from './lib/navLayout';
@@ -90,6 +94,21 @@ function PlaceholderScreen({ label }) {
 function ProfileRoute(props) {
   const powerRank = useFlag('power_rank');
   return powerRank ? <ProfileScreen {...props} /> : <ProfileAccordionScreen {...props} />;
+}
+
+// Onboarding in either mode (plan U10). `legacy_tabs` on keeps today's
+// Welcome pitch and OnboardingScreen untouched; off runs the Figma flow:
+// Landing in place of Welcome, then age → daily rewards → city intro. The
+// route names stay the same so AuthGate, SignIn and Username need no mode
+// checks to navigate.
+function WelcomeRoute(props) {
+  const legacyTabs = useFlag('legacy_tabs');
+  return legacyTabs ? <WelcomeScreen {...props} /> : <LandingScreen {...props} />;
+}
+
+function OnboardingRoute(props) {
+  const legacyTabs = useFlag('legacy_tabs');
+  return legacyTabs ? <OnboardingScreen {...props} /> : <FigmaOnboardingScreen {...props} />;
 }
 
 function makeTabOptions(label, Icon) {
@@ -213,16 +232,22 @@ export default function App() {
       <FcmLifecycle />
       <FlagsLifecycle />
       <StreakBreakLifecycle />
+      <OnboardingTutorialLifecycle />
       <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="AuthGate" component={AuthGate} />
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Welcome" component={WelcomeRoute} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Username" component={UsernameScreen} />
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingRoute} />
           <Stack.Screen name="SessionMismatch" component={SessionMismatchScreen} />
           <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen
+            name="DailyReward"
+            component={DailyRewardScreen}
+            options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }}
+          />
           <Stack.Screen name="ActivityLog" component={ActivityLogScreen} />
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
           <Stack.Screen name="Chat" component={ChatScreen} />
