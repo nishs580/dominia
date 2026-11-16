@@ -55,7 +55,8 @@ import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimA
 import { SPINE_EVENTS, gateSpineState, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
 import { getFlag, useFlag } from '../lib/flags';
 import { navigateTo } from '../lib/navigation';
-import ProfileAvatarButton from '../components/ProfileAvatarButton';
+import MapTopBar from '../components/MapTopBar';
+import TerritoryCard from '../components/TerritoryCard';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
@@ -217,6 +218,83 @@ function contestStartErrorMessage(t, error) {
     default:
       return null;
   }
+}
+
+// Claim/contest start, shared by TerritorySheet and TerritoryCard (Figma
+// parity plan U11) so the start flow lives in one place. Each resolves to
+// { ok: true } after navigating to ActiveClaim, or a failure the caller
+// renders in its own surface.
+function claimStartErrorMessage(t, startError, tier) {
+  const { code, context = {} } = startError;
+  switch (code) {
+    case 'level_too_low':
+      return t('map.startErr.levelTooLow', { level: context.required_level, tier });
+    case 'insufficient_gold':
+      return t('map.startErr.insufficientGold', { n: context.required_gold - context.player_gold });
+    case 'territory_already_claimed':
+      return t('map.startErr.alreadyClaimed');
+    case 'territory_being_claimed':
+      return t('map.startErr.beingClaimed', { countdown: liveCountdown(t, context.expires_at) });
+    case 'active_claim_in_progress':
+      return t('map.startErr.activeInProgress', { countdown: liveCountdown(t, context.expires_at) });
+    case 'claim_cooldown':
+      return t('map.startErr.cooldown', { countdown: liveCountdown(t, context.cooldown_until) });
+    case 'network_error':
+      return t('map.startErr.network');
+    case 'no_token':
+    case 'unauthorized':
+      return t('map.startErr.signIn');
+    default:
+      return t('map.startErr.generic');
+  }
+}
+
+// -> { ok: true } | { ok: false, error: { code, context, status } }
+async function beginClaim({ territory, name, perimeter, getTokenRef, myPlayer, setMyPlayer, navigation, onClose }) {
+  const result = await startClaim({
+    clerkGetToken: () => getTokenRef.current(),
+    territoryId: territory.id,
+  });
+  if (!result.ok) {
+    return { ok: false, error: { code: result.code, context: result.context, status: result.status } };
+  }
+  setMyPlayer((prev) => (prev ? { ...prev, gold: result.data.gold_balance_after } : prev));
+  onClose?.();
+  navigation.navigate('ActiveClaim', {
+    territoryName: name,
+    perimeterDistance: perimeter,
+    territoryId: territory.id,
+    territoryGeojson: territory?.geometry ?? null,
+    playerId: myPlayer?.id,
+    goldPaid: result.data.gold_paid,
+    freeClaim: result.data.free_claim,
+    intentExpiresAt: result.data.expires_at ?? null,
+    armExpiresAt: result.data.arm_expires_at ?? null,
+    walkWindowMinutes: result.data.walk_window_minutes ?? null,
+  });
+  return { ok: true };
+}
+
+// -> { ok: true } | { ok: false, code, context }
+async function beginContest({ territory, name, getTokenRef, myPlayer, navigation, onClose }) {
+  const result = await startContest({
+    clerkGetToken: () => getTokenRef.current(),
+    territoryId: territory.id,
+  });
+  if (!result.ok) return { ok: false, code: result.code, context: result.context };
+  const env = result.data;
+  onClose?.();
+  navigation.navigate('ActiveClaim', {
+    mode: 'contest',
+    territoryName: name,
+    territoryId: territory.id,
+    territoryGeojson: territory?.geometry ?? null,
+    contestId: env.contest_id,
+    requiredWalkM: env.required_walk_m,
+    attackerAllianceId: env.attacker_alliance_id,
+    playerId: myPlayer?.id,
+  });
+  return { ok: true };
 }
 
 function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, onResourceBannerRefresh, myPlayer, setMyPlayer, getTokenRef, showTopBanner, allFeatures = [], objectiveTerritoryId = null, spineActive = false, onSpineClaim }) {
@@ -472,32 +550,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     }
   };
 
-  const startErrorMessage = startError
-    ? (() => {
-        const { code, context } = startError;
-        switch (code) {
-          case 'level_too_low':
-            return t('map.startErr.levelTooLow', { level: context.required_level, tier });
-          case 'insufficient_gold':
-            return t('map.startErr.insufficientGold', { n: context.required_gold - context.player_gold });
-          case 'territory_already_claimed':
-            return t('map.startErr.alreadyClaimed');
-          case 'territory_being_claimed':
-            return t('map.startErr.beingClaimed', { countdown: liveCountdown(t, context.expires_at) });
-          case 'active_claim_in_progress':
-            return t('map.startErr.activeInProgress', { countdown: liveCountdown(t, context.expires_at) });
-          case 'claim_cooldown':
-            return t('map.startErr.cooldown', { countdown: liveCountdown(t, context.cooldown_until) });
-          case 'network_error':
-            return t('map.startErr.network');
-          case 'no_token':
-          case 'unauthorized':
-            return t('map.startErr.signIn');
-          default:
-            return t('map.startErr.generic');
-        }
-      })()
-    : null;
+  const startErrorMessage = startError ? claimStartErrorMessage(t, startError, tier) : null;
 
   const startErrorAllowsRetry = startError
     && !['level_too_low', 'insufficient_gold', 'territory_already_claimed', 'active_claim_in_progress', 'claim_cooldown', 'no_token', 'unauthorized'].includes(startError.code);
@@ -520,27 +573,18 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     setIsDeducting(true);
     setStartError(null);
     try {
-      const result = await startClaim({
-        clerkGetToken: () => getTokenRef.current(),
-        territoryId: territory.id,
+      const result = await beginClaim({
+        territory,
+        name: selectedTerritory.name,
+        perimeter: selectedTerritory.perimeter,
+        getTokenRef,
+        myPlayer,
+        setMyPlayer,
+        navigation,
+        onClose,
       });
-      if (result.ok) {
-        setMyPlayer((prev) => (prev ? { ...prev, gold: result.data.gold_balance_after } : prev));
-        onClose?.();
-        navigation.navigate('ActiveClaim', {
-          territoryName: selectedTerritory.name,
-          perimeterDistance: selectedTerritory.perimeter,
-          territoryId: territory.id,
-          territoryGeojson: territory?.geometry ?? null,
-          playerId: myPlayer?.id,
-          goldPaid: result.data.gold_paid,
-          freeClaim: result.data.free_claim,
-          intentExpiresAt: result.data.expires_at ?? null,
-          armExpiresAt: result.data.arm_expires_at ?? null,
-          walkWindowMinutes: result.data.walk_window_minutes ?? null,
-        });
-      } else {
-        setStartError({ code: result.code, context: result.context, status: result.status });
+      if (!result.ok) {
+        setStartError(result.error);
       }
     } finally {
       setIsDeducting(false);
@@ -552,24 +596,15 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
     setContestStartError(null);
     setContestAlreadyActiveInfo(null);
     try {
-      const result = await startContest({
-        clerkGetToken: () => getTokenRef.current(),
-        territoryId: territory.id,
+      const result = await beginContest({
+        territory,
+        name: selectedTerritory.name,
+        getTokenRef,
+        myPlayer,
+        navigation,
+        onClose,
       });
-      if (result.ok) {
-        const env = result.data;
-        onClose();
-        navigation.navigate('ActiveClaim', {
-          mode: 'contest',
-          territoryName: selectedTerritory.name,
-          territoryId: territory.id,
-          territoryGeojson: territory?.geometry ?? null,
-          contestId: env.contest_id,
-          requiredWalkM: env.required_walk_m,
-          attackerAllianceId: env.attacker_alliance_id,
-          playerId: myPlayer?.id,
-        });
-      } else {
+      if (!result.ok) {
         const { code, context } = result;
         if (code === 'contest_already_active') {
           setContestAlreadyActiveInfo({
@@ -2856,6 +2891,87 @@ export default function MapScreen() {
     });
   };
 
+  // Figma map chrome and compact card (plan U11). legacy_tabs off mounts the
+  // top bar, search and five-control rail; full_territory_sheet off mounts
+  // TerritoryCard in place of TerritorySheet. Both on is today's map.
+  const figmaChrome = !useFlag('legacy_tabs');
+  const fullSheetOn = useFlag('full_territory_sheet');
+  const selectedFeature = selected?.feature ?? selected ?? null;
+
+  const cardAtCap = useMemo(() => {
+    const xp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
+    const held = (selected?.allFeatures ?? []).filter((f) => f.properties?.color === '#D64525').length;
+    return held >= territoryCapForLevel(F.calcLevel(xp));
+  }, [myPlayer?.xp, selected?.allFeatures]);
+
+  const handleCardClaim = useCallback(async (model) => {
+    if (!selectedFeature) return { ok: false };
+    if (spineActive && objectiveActive && target?.id === selectedFeature.id) {
+      dispatchSpine(SPINE_EVENTS.CLAIM_STARTED);
+    }
+    const res = await beginClaim({
+      territory: selectedFeature,
+      name: model.name ?? t('common.territoryFallback'),
+      perimeter: model.perimeterM,
+      getTokenRef,
+      myPlayer,
+      setMyPlayer,
+      navigation,
+      onClose: handleSheetClose,
+    });
+    if (res.ok) return res;
+    return {
+      ok: false,
+      message: claimStartErrorMessage(t, res.error, selectedFeature.properties?.tier ?? 'Medium'),
+    };
+  }, [selectedFeature, spineActive, objectiveActive, target, dispatchSpine, t, myPlayer, navigation, handleSheetClose]);
+
+  const handleCardContest = useCallback(async (model) => {
+    if (!selectedFeature) return { ok: false };
+    const res = await beginContest({
+      territory: selectedFeature,
+      name: model.name ?? t('common.territoryFallback'),
+      getTokenRef,
+      myPlayer,
+      navigation,
+      onClose: handleSheetClose,
+    });
+    if (res.ok) return res;
+    if (res.code === 'contest_already_active') {
+      return {
+        ok: false,
+        message: t('map.contestActiveCard', {
+          attacker: res.context?.attacker_username ?? 'someone',
+          date: res.context?.attack_day_date ?? '',
+        }),
+      };
+    }
+    return {
+      ok: false,
+      message: contestStartErrorMessage(t, res) ?? topBannerMessageForContestCode(t, res.code),
+    };
+  }, [selectedFeature, t, myPlayer, navigation, handleSheetClose]);
+
+  // Search result: fly to its bbox (padding clears the top bar, rail and
+  // card), then open it the same way a focusTerritory deep link does.
+  const handleSearchSelect = useCallback((result) => {
+    if (cameraRef.current) {
+      if (result.bbox) {
+        const [minLng, minLat, maxLng, maxLat] = result.bbox;
+        cameraRef.current.fitBounds([maxLng, maxLat], [minLng, minLat], [140, 64, 240, 24], 800);
+      } else if (result.centroid) {
+        cameraRef.current.setCamera({ centerCoordinate: result.centroid, zoomLevel: 15.5, animationDuration: 800 });
+      }
+    }
+    const cached = featureCacheRef.current.get(result.id);
+    if (cached) {
+      pendingFocusIdRef.current = null;
+      setSelected({ feature: cached, allFeatures: territories.features });
+    } else {
+      pendingFocusIdRef.current = result.id;
+    }
+  }, [territories.features]);
+
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       {/* Beat 1 suppresses the HUD visually (opacity, not layout — no reflow
@@ -3130,17 +3246,17 @@ export default function MapScreen() {
           </MapboxGL.ShapeSource>
         ) : null}
       </MapboxGL.MapView>
-      {/* Profile avatar (legacy_tabs off; renders nothing with it on). Inside
-          the map wrap so it sits below the in-flow banners. Mount-only: U11
-          rebuilds this top bar. */}
-      {flightActive ? null : (
-        <View pointerEvents="box-none" style={styles.profileAvatarSlot}>
-          <ProfileAvatarButton />
-        </View>
-      )}
+      {/* Figma top bar: avatar, Gold panel, territory search (legacy_tabs
+          off). Inside the map wrap so it sits below the in-flow banners. */}
+      {figmaChrome && !flightActive ? (
+        <MapTopBar
+          gold={myPlayer ? (myPlayer.gold ?? 0) : null}
+          onSelectSearchResult={handleSearchSelect}
+        />
+      ) : null}
       </View>
 
-      {flightActive ? null : (
+      {flightActive || figmaChrome ? null : (
         <Pressable
           accessibilityRole="button"
           style={styles.locateButton}
@@ -3153,7 +3269,7 @@ export default function MapScreen() {
       )}
 
       {/* Colour key — recognition over recall for the territory colours. */}
-      {flightActive ? null : (
+      {flightActive || figmaChrome ? null : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('map.legendKey')}
@@ -3165,14 +3281,20 @@ export default function MapScreen() {
         </Pressable>
       )}
       {legendOpen && !flightActive ? (
-        <View style={styles.legendPanel}>
-          {[
+        <View style={figmaChrome ? styles.legendPanelFigma : styles.legendPanel}>
+          {(figmaChrome
+            ? [
+                { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendFigma.yours', { defaultValue: 'Your territory' }) },
+                { key: 'alliance', fill: 'rgba(63,143,78,0.14)', border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
+                { key: 'theirs', fill: 'rgba(74,107,138,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
+              ]
+            : [
             { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendYours') },
             { key: 'alliance', fill: 'rgba(63,143,78,0.14)', border: ALLIANCE, label: t('map.legendAlliance') },
             { key: 'theirs', fill: 'rgba(74,107,138,0.14)', border: ENEMY, label: t('map.legendTheirs') },
             { key: 'unclaimed', fill: 'transparent', border: SLATE, label: t('map.legendUnclaimed') },
             { key: 'siege', fill: 'transparent', border: CLAIM, label: t('map.legendSiege') },
-          ].map((row) => (
+          ]).map((row) => (
             <View key={row.key} style={styles.legendRow}>
               <View style={[styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
               <Text style={styles.legendLabel}>{row.label}</Text>
@@ -3181,6 +3303,7 @@ export default function MapScreen() {
         </View>
       ) : null}
 
+      {fullSheetOn ? (
       <TerritorySheet
         territory={selected?.feature ?? selected}
         allFeatures={selected?.allFeatures ?? []}
@@ -3196,7 +3319,29 @@ export default function MapScreen() {
         spineActive={spineActive}
         onSpineClaim={() => dispatchSpine(SPINE_EVENTS.CLAIM_STARTED)}
       />
-      <MapSideRail hidden={selected != null || flightActive} />
+      ) : (
+        <TerritoryCard
+          territory={selectedFeature}
+          myPlayer={myPlayer}
+          multiResource={multiResourceOn}
+          streaksOn={streaksOn}
+          atCap={cardAtCap}
+          onClose={handleSheetClose}
+          onStartClaim={handleCardClaim}
+          onStartContest={handleCardContest}
+        />
+      )}
+      {figmaChrome ? (
+        <MapSideRail
+          figma
+          hidden={flightActive}
+          keyOpen={legendOpen}
+          onToggleKey={() => setLegendOpen((o) => !o)}
+          onLocate={recenter}
+        />
+      ) : (
+        <MapSideRail hidden={selected != null || flightActive} />
+      )}
 
       {tips.tipElement}
       <NotifPrimeModal
@@ -3224,12 +3369,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  profileAvatarSlot: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    zIndex: 20,
   },
 
   // The objective banner is information that points somewhere, not the action
@@ -3527,6 +3666,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     gap: 8,
+  },
+  // Figma mode: the key opens beside the rail's Key control, top right.
+  legendPanelFigma: {
+    position: 'absolute',
+    right: 64,
+    top: 112,
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    borderRadius: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+    zIndex: 11,
   },
   legendRow: {
     flexDirection: 'row',

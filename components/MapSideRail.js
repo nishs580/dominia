@@ -17,6 +17,18 @@ import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
 import { colors } from '../lib/theme';
 
 const ICON_SIZE = 14;
+const FIGMA_ICON_SIZE = 18;
+
+// Three swatches in the territory colours — the key's own legend in miniature.
+function KeyGlyph() {
+  return (
+    <View style={styles.keyGlyph}>
+      {[colors.claim, colors.alliance, colors.enemy].map((c) => (
+        <View key={c} style={[styles.keySwatch, { borderColor: c }]} />
+      ))}
+    </View>
+  );
+}
 
 function withCount(base, count) {
   if (count == null || count === 0) return base;
@@ -24,7 +36,11 @@ function withCount(base, count) {
   return `${base} · ${count}`;
 }
 
-export default function MapSideRail({ hidden = false }) {
+// figma (legacy_tabs off, plan U11): a vertical rail of five icon controls —
+// Territories key · Locate me · Leaderboard · Log · Chat — under the top bar.
+// Key and Locate act on the map, so MapScreen passes their handlers in.
+// Without `figma` the rail renders exactly as before.
+export default function MapSideRail({ hidden = false, figma = false, keyOpen = false, onToggleKey, onLocate }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const { getToken } = useAuth();
@@ -57,6 +73,69 @@ export default function MapSideRail({ hidden = false }) {
   );
 
   if (hidden) return null;
+
+  if (figma) {
+    const figmaItems = [
+      {
+        key: 'key',
+        render: () => <KeyGlyph />,
+        label: t('map.rail.keyA11y', { defaultValue: 'Territory colours key' }),
+        onPress: onToggleKey,
+        expanded: keyOpen,
+      },
+      {
+        key: 'locate',
+        render: (c) => <Text style={[styles.locateGlyph, { color: c }]}>⌖</Text>,
+        label: t('map.locateMe'),
+        onPress: onLocate,
+      },
+      {
+        key: 'boards',
+        render: (c) => <BoardsGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        label: t('map.rail.leaderboardA11y', { defaultValue: 'Leaderboard' }),
+        onPress: () => navigation.navigate('Leaderboards'),
+      },
+      {
+        key: 'log',
+        render: (c) => <LogGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        label: withCount(t('map.rail.logA11y', { defaultValue: 'Log' }), logUnread),
+        count: logUnread,
+        onPress: () => navigation.navigate('ActivityLog'),
+      },
+      {
+        key: 'chat',
+        render: (c) => <ChatGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        label: withCount(t('map.rail.chatA11y', { defaultValue: 'Chat' }), chatUnread),
+        count: chatUnread,
+        onPress: () => navigation.navigate('Chat'),
+      },
+    ];
+    return (
+      <View style={styles.figmaContainer}>
+        {figmaItems.map((item, i) => (
+          <Pressable
+            key={item.key}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            accessibilityState={item.expanded != null ? { expanded: item.expanded } : undefined}
+            onPress={item.onPress}
+            style={({ pressed }) => [
+              styles.figmaItem,
+              i > 0 && styles.itemDivider,
+              (pressed || item.expanded) && styles.itemPressed,
+            ]}
+          >
+            {item.render(colors.bone)}
+            {item.count ? (
+              <Text style={styles.figmaCount} maxFontSizeMultiplier={1.2}>
+                {item.count > 99 ? '99+' : item.count}
+              </Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
 
   const items = [
     { key: 'chat', Icon: ChatGlyph, label: withCount(t('sideRail.chat'), chatUnread), onPress: () => navigation.navigate('Chat') },
@@ -122,6 +201,44 @@ const styles = StyleSheet.create({
   },
   itemPressed: {
     backgroundColor: 'rgba(242,238,230,0.06)',
+  },
+  // Figma rail: icon-only, 44pt square targets (plan Accessibility), sits
+  // under the top bar and search field on the right edge.
+  figmaContainer: {
+    position: 'absolute',
+    right: 12,
+    top: 112,
+    width: 44,
+    backgroundColor: 'rgba(14,16,20,0.86)',
+    borderWidth: 0.5,
+    borderColor: colors.hairline,
+    borderRadius: 0,
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  figmaItem: {
+    width: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  figmaCount: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: colors.bone,
+  },
+  locateGlyph: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 18,
+  },
+  keyGlyph: {
+    gap: 2,
+  },
+  keySwatch: {
+    width: 14,
+    height: 4,
+    borderWidth: 1,
   },
   label: {
     fontFamily: 'GeistMono_500Medium',
