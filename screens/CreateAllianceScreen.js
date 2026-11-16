@@ -19,6 +19,13 @@ import { supabase } from '../lib/supabase';
 import THEME from '../lib/theme';
 import AllianceEmblem from '../components/AllianceEmblem';
 import { ALLIANCE_EMBLEMS, DEFAULT_ALLIANCE_EMBLEM } from '../lib/allianceEmblems';
+import { useFlag } from '../lib/flags';
+import {
+  ALLIANCE_NAME_MAX,
+  ALLIANCE_TEXT_MAX,
+  sanitizeShortName,
+  validateAllianceForm,
+} from '../lib/allianceValidation';
 
 const INK = THEME.colors.ink;
 const INK_2 = THEME.colors.ink2;
@@ -55,7 +62,228 @@ function mapFoundAllianceError(t, error) {
   }
 }
 
+// alliance_hq_create on keeps today's 3-step create with an HQ territory;
+// off mounts the Figma single-page create with Rules and no HQ.
 export default function CreateAllianceScreen() {
+  const hqCreateOn = useFlag('alliance_hq_create');
+  return hqCreateOn ? <LegacyCreateAllianceScreen /> : <FigmaCreateAllianceScreen />;
+}
+
+function fieldErrorText(t, code) {
+  switch (code) {
+    case 'name_required':
+    case 'name_too_short':
+    case 'name_too_long':
+      return t('allianceFigma.errName', { defaultValue: 'Alliance name must be 3–24 characters' });
+    case 'short_name_required':
+    case 'short_name_invalid':
+      return t('allianceFigma.errShortName', { defaultValue: 'Short name must be exactly 3 letters' });
+    case 'text_too_long':
+      return t('allianceFigma.errRulesLength', { defaultValue: 'Rules must be 500 characters or fewer' });
+    default:
+      return '';
+  }
+}
+
+function FigmaCreateAllianceScreen() {
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const { getToken } = useAuth();
+
+  const [fullName, setFullName] = useState('');
+  const [shortName, setShortName] = useState('');
+  const [emblem, setEmblem] = useState(DEFAULT_ALLIANCE_EMBLEM);
+  const [rules, setRules] = useState('');
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  const handleCreate = async () => {
+    if (saving) return;
+    const v = validateAllianceForm({ fullName, shortName, rules });
+    setErrors(v.errors);
+    setSubmitError('');
+    if (!v.ok) return;
+    setSaving(true);
+    try {
+      const result = await foundAlliance({
+        clerkGetToken: getToken,
+        fullName: v.values.fullName,
+        shortName: v.values.shortName,
+        emblem,
+        ...(v.values.rules ? { rules: v.values.rules } : {}),
+      });
+      if (result.ok) {
+        navigation.navigate('AllianceJoined', { allianceId: result.data.alliance.id });
+        return;
+      }
+      setSubmitError(mapFoundAllianceError(t, result.error));
+    } catch (err) {
+      console.error('Create alliance failed:', err);
+      setSubmitError(t('createAlliance.errGeneric'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const nameErr = fieldErrorText(t, errors.fullName);
+  const shortErr = fieldErrorText(t, errors.shortName);
+  const rulesErr = fieldErrorText(t, errors.rules);
+
+  return (
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={[styles.backRow, { paddingTop: insets.top + 16 }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('createAlliance.back')}
+          onPress={() => navigation.goBack()}
+          hitSlop={12}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.75 }]}
+        >
+          <Text style={styles.backBtnText}>{t('createAlliance.back')}</Text>
+        </Pressable>
+      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepTitle} accessibilityRole="header">
+          {t('allianceFigma.createTitle', { defaultValue: 'CREATE ALLIANCE' })}
+        </Text>
+
+        <View style={styles.labelRow}>
+          <Text style={styles.labelText}>{t('allianceFigma.allianceType', { defaultValue: 'ALLIANCE TYPE' })}</Text>
+        </View>
+        <View style={styles.typeRow}>
+          {/* Only Open exists until design defines invite-only. */}
+          <View
+            style={[styles.typeChip, styles.typeChipSelected]}
+            accessible
+            accessibilityRole="radio"
+            accessibilityState={{ selected: true }}
+            accessibilityLabel={t('allianceFigma.typeOpen', { defaultValue: 'Open' })}
+          >
+            <Text style={styles.typeChipText}>{t('allianceFigma.typeOpen', { defaultValue: 'Open' })}</Text>
+          </View>
+        </View>
+
+        <View style={styles.labelRow}>
+          <Text style={styles.labelText}>{t('allianceFigma.fullName', { defaultValue: 'Alliance Full Name' })}</Text>
+          <Text style={styles.labelHint}>{t('allianceFigma.fullNameHint', { defaultValue: '3–24 characters' })}</Text>
+        </View>
+        <TextInput
+          style={styles.input}
+          keyboardAppearance="dark"
+          placeholderTextColor="#555"
+          placeholder={t('createAlliance.namePlaceholder')}
+          value={fullName}
+          maxLength={ALLIANCE_NAME_MAX + 8}
+          onChangeText={(v) => {
+            setFullName(v);
+            if (errors.fullName) setErrors((e) => ({ ...e, fullName: undefined }));
+          }}
+          autoCapitalize="words"
+          accessibilityLabel={t('allianceFigma.fullName', { defaultValue: 'Alliance Full Name' })}
+        />
+        {nameErr ? <Text style={styles.figmaFieldError} accessibilityLiveRegion="polite">{nameErr}</Text> : null}
+
+        <View style={styles.labelRow}>
+          <Text style={styles.labelText}>{t('allianceFigma.shortName', { defaultValue: 'Alliance Short Name' })}</Text>
+          <Text style={styles.labelHint}>{t('allianceFigma.shortNameHint', { defaultValue: '3 letters' })}</Text>
+        </View>
+        <TextInput
+          style={[styles.input, { fontFamily: 'GeistMono_500Medium', letterSpacing: 4, fontSize: 18 }]}
+          keyboardAppearance="dark"
+          placeholderTextColor="#555"
+          placeholder={t('createAlliance.shortNamePlaceholder')}
+          value={shortName}
+          onChangeText={(v) => {
+            setShortName(sanitizeShortName(v));
+            if (errors.shortName) setErrors((e) => ({ ...e, shortName: undefined }));
+          }}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={3}
+          accessibilityLabel={t('allianceFigma.shortName', { defaultValue: 'Alliance Short Name' })}
+        />
+        {shortErr ? <Text style={styles.figmaFieldError} accessibilityLiveRegion="polite">{shortErr}</Text> : null}
+
+        <View style={styles.labelRow}>
+          <Text style={styles.labelText}>{t('allianceFigma.logo', { defaultValue: 'Alliance Logo' })}</Text>
+        </View>
+        <View style={styles.emblemGrid}>
+          {ALLIANCE_EMBLEMS.map((key) => {
+            const isSelected = key === emblem;
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={t(`emblems.${key}`)}
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => setEmblem(key)}
+                style={({ pressed }) => [
+                  styles.emblemCell,
+                  isSelected && styles.emblemCellSelected,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <AllianceEmblem emblem={key} size={44} />
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.labelRow}>
+          <Text style={styles.labelText}>{t('allianceFigma.rules', { defaultValue: 'Alliance Rules' })}</Text>
+          <Text style={styles.labelHint}>{`${rules.length} / ${ALLIANCE_TEXT_MAX}`}</Text>
+        </View>
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          keyboardAppearance="dark"
+          placeholderTextColor="#555"
+          placeholder={t('allianceFigma.rulesPlaceholder', { defaultValue: 'Optional' })}
+          value={rules}
+          onChangeText={(v) => {
+            setRules(v);
+            if (errors.rules) setErrors((e) => ({ ...e, rules: undefined }));
+          }}
+          multiline
+          textAlignVertical="top"
+          maxLength={ALLIANCE_TEXT_MAX}
+          accessibilityLabel={t('allianceFigma.rules', { defaultValue: 'Alliance Rules' })}
+        />
+        {rulesErr ? <Text style={styles.figmaFieldError}>{rulesErr}</Text> : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving, busy: saving }}
+          disabled={saving}
+          onPress={handleCreate}
+          style={({ pressed }) => [
+            styles.cta,
+            styles.ctaCentered,
+            saving && styles.ctaDisabled,
+            pressed && !saving && { opacity: 0.9 },
+          ]}
+        >
+          {saving ? (
+            <ActivityIndicator color={BONE} />
+          ) : (
+            <Text style={styles.ctaAction}>{t('allianceFigma.createCta', { defaultValue: 'CREATE ALLIANCE' })}</Text>
+          )}
+        </Pressable>
+        {submitError ? (
+          <Text style={styles.submitError} accessibilityLiveRegion="polite">{submitError}</Text>
+        ) : null}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function LegacyCreateAllianceScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -493,6 +721,47 @@ export default function CreateAllianceScreen() {
 }
 
 const styles = StyleSheet.create({
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  typeChip: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK_2,
+  },
+  typeChipSelected: {
+    borderColor: BONE_2,
+  },
+  typeChipText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.2,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  textarea: {
+    minHeight: 120,
+  },
+  figmaFieldError: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: CLAIM,
+    textTransform: 'uppercase',
+    marginTop: -10,
+    marginBottom: 18,
+    lineHeight: 15,
+  },
+  ctaCentered: {
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
   screen: {
     flex: 1,
     backgroundColor: INK,
