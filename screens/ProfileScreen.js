@@ -75,7 +75,7 @@ const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
 // With `legacy_tabs` off Profile is pushed on top of MainTabs in the root
 // stack, so replace would leave MainTabs (signed out) behind SignIn. Clear the
 // stack in that mode; legacy mode keeps today's replace.
-function exitToSignIn(navigation) {
+export function exitToSignIn(navigation) {
   if (getFlag('legacy_tabs')) navigation.replace('SignIn');
   else navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
 }
@@ -196,7 +196,7 @@ function OwnedTerritoryRow({ name, tier, onPress }) {
   );
 }
 
-function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
+export function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState(
     playerRow?.alliance_chat_push_enabled !== false,
@@ -245,7 +245,7 @@ function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
 // Play Store account-deletion requirement: an in-app path that permanently
 // deletes the account. The modal requires re-typing the username so a stray
 // tap can never fire the irreversible DELETE /me/account call.
-function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) {
+export function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -340,7 +340,7 @@ function DeleteAccountSection({ username, clerkGetToken, signOut, navigation }) 
 // Hidden for SSO-only accounts — they have no password credential to change
 // (user.passwordEnabled is false). Clerk keeps the current session alive and
 // signOutOfOtherSessions revokes every other device.
-function ChangePasswordSection() {
+export function ChangePasswordSection() {
   const { t } = useTranslation();
   const { user } = useUser();
   const [visible, setVisible] = useState(false);

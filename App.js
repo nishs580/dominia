@@ -7,6 +7,8 @@ import { tokenCache } from './lib/clerk';
 import { StyleSheet, Text, View } from 'react-native';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import ProfileAccordionScreen from './screens/ProfileAccordionScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
 import AllianceScreen from './screens/AllianceScreen';
 import MapScreen from './screens/MapScreen';
 import ActiveClaimScreen from './screens/ActiveClaimScreen';
@@ -83,6 +85,13 @@ function PlaceholderScreen({ label }) {
   );
 }
 
+// The Profile route in either layout: today's ProfileScreen with `power_rank`
+// on, the Figma accordion with it off (plan U16).
+function ProfileRoute(props) {
+  const powerRank = useFlag('power_rank');
+  return powerRank ? <ProfileScreen {...props} /> : <ProfileAccordionScreen {...props} />;
+}
+
 function makeTabOptions(label, Icon) {
   return {
     tabBarIcon: ({ color }) => <Icon size={20} color={color} />,
@@ -112,7 +121,7 @@ const TAB_SCREENS = {
   Map: { component: MapScreen, labelKey: 'tabs.map', Icon: MapGlyph },
   Activity: { component: ActivityScreen, labelKey: 'tabs.activity', Icon: ActivityGlyph },
   Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph },
-  Profile: { component: ProfileScreen, labelKey: 'tabs.profile', Icon: ProfileGlyph },
+  Profile: { component: ProfileRoute, labelKey: 'tabs.profile', Icon: ProfileGlyph },
   // Tab icons stay for now; DESIGN.md's no-icons rule is deferred (plan U9).
   Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: ActivityGlyph },
   Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: BoardsGlyph },
@@ -121,7 +130,7 @@ const TAB_SCREENS = {
 // Root stack screens that only exist in one layout. With `legacy_tabs` off,
 // Profile leaves the tab bar and opens from the header avatar.
 const ROOT_SCREENS = {
-  Profile: ProfileScreen,
+  Profile: ProfileRoute,
 };
 
 const TabNavigator = () => {
@@ -218,6 +227,7 @@ export default function App() {
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} />
           <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
           {rootRoutesFor(legacyTabs).map((name) => (
             <Stack.Screen key={name} name={name} component={ROOT_SCREENS[name]} />
           ))}
