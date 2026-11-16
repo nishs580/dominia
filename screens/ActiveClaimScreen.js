@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase';
 import { colors } from '../lib/theme';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
+import { holdFlagChanges } from '../lib/flags';
 import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
@@ -536,6 +537,9 @@ export default function ActiveClaimScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
+
+  // Remote Config changes wait until the challenge screen unmounts.
+  useEffect(() => holdFlagChanges(), []);
 
   // One-time first-walk hint (fires once per player, ever — the first claim
   // walk is the only time the fill mechanic needs words).

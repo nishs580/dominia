@@ -32,8 +32,10 @@ import PublicProfileScreen from './screens/PublicProfileScreen';
 import AuthGate from './components/AuthGate';
 import ActivitySyncLifecycle from './components/ActivitySyncLifecycle';
 import FcmLifecycle from './components/FcmLifecycle';
+import FlagsLifecycle from './components/FlagsLifecycle';
 import StreakBreakLifecycle from './components/StreakBreakLifecycle';
 import { navigationRef, onNavigationReady } from './lib/navigation';
+import { ensureFlagsInitialized } from './lib/flags';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MapGlyph,
@@ -47,7 +49,7 @@ import NotificationBanner from './components/notifications/NotificationBanner';
 import { useFonts } from 'expo-font';
 import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Archivo_700Bold,
   Archivo_700Bold_Italic,
@@ -142,13 +144,21 @@ export default function App() {
     InstrumentSans_500Medium,
   });
 
+  // Start on the last activated flag values so the first frame is already in
+  // the right mode. Capped at 300 ms; on timeout the app starts on defaults
+  // and FlagsLifecycle catches up in the background.
+  const [flagsReady, setFlagsReady] = useState(false);
   useEffect(() => {
-    if (fontsLoaded) {
+    ensureFlagsInitialized().finally(() => setFlagsReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded && flagsReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, flagsReady]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || !flagsReady) {
     return null;
   }
 
@@ -160,6 +170,7 @@ export default function App() {
       <SafeAreaProvider>
       <ActivitySyncLifecycle />
       <FcmLifecycle />
+      <FlagsLifecycle />
       <StreakBreakLifecycle />
       <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <Stack.Navigator initialRouteName="AuthGate" screenOptions={{ headerShown: false }}>
