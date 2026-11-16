@@ -1360,6 +1360,43 @@
       "contestData": "Couldn't load contest data. Try again.",
       "network": "Network issue. Try again.",
       "generic": "Something went wrong. Try again."
+    },
+    "topBar": {
+      "goldA11y": "Gold balance: {{n}}",
+      "goldLoadingA11y": "Gold balance loading"
+    },
+    "search": {
+      "placeholder": "Search territories",
+      "a11y": "Search territories by name",
+      "clearA11y": "Clear search",
+      "searching": "Searching…",
+      "empty": "No territories match that name",
+      "error": "Couldn't search right now",
+      "resultA11y": "Show {{name}} on the map"
+    },
+    "card": {
+      "startClaiming": "START CLAIMING",
+      "contestTerritory": "CONTEST TERRITORY",
+      "ownerTerritory": "{{owner}}'s territory",
+      "unclaimed": "Unclaimed",
+      "gold": "Gold",
+      "iron": "Iron",
+      "closeA11y": "Close territory card",
+      "distance": "Distance: {{metres}}m",
+      "timeLimit": "Time limit: {{minutes}} min",
+      "ctaA11y": "{{label}}, costs {{price}} {{currency}}",
+      "shortfall": "Short by {{n}} {{currency}}"
+    },
+    "rail": {
+      "keyA11y": "Territory colours key",
+      "leaderboardA11y": "Leaderboard",
+      "logA11y": "Log",
+      "chatA11y": "Chat"
+    },
+    "legendFigma": {
+      "yours": "Your territory",
+      "alliance": "Alliance territory",
+      "enemy": "Enemy territory"
     }
   },
   "walkthrough": {
