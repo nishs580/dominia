@@ -336,7 +336,14 @@
       "lapsedBodyFree": "Территория снова свободна — вы сможете заявить её после короткой паузы.",
       "backToMap": "НА КАРТУ"
     },
-    "bannerShake": "ДВИЖЕНИЕ НЕ РАСПОЗНАНО · Шаги на паузе"
+    "bannerShake": "ДВИЖЕНИЕ НЕ РАСПОЗНАНО · Шаги на паузе",
+    "attacking": "АТАКА",
+    "defending": "ОБОРОНА",
+    "cancelAttack": "Отменить атаку",
+    "cancelDefense": "Отменить оборону",
+    "fillHint": "Идите куда угодно. Территория заполняется по мере пройденного расстояния",
+    "recenter": "Центрировать карту",
+    "recenterShort": "В центр"
   },
   "claimSuccess": {
     "securing": "Закрепляем захват…",
@@ -1406,5 +1413,18 @@
     "title": "Dominia предупредит, когда ваша земля под атакой.",
     "allow": "РАЗРЕШИТЬ УВЕДОМЛЕНИЯ",
     "later": "НЕ СЕЙЧАС"
+  },
+  "challengeResult": {
+    "victory": "ПОБЕДА",
+    "defeat": "ПОРАЖЕНИЕ",
+    "continue": "ПРОДОЛЖИТЬ",
+    "defendWonTitle": "Оборона удалась, территория сохранена.",
+    "defendWonBody": "{{territory}} остаётся за вами",
+    "defendLostTitle": "Оборона не удалась, удачи в следующий раз!",
+    "defendLostBody": "{{territory}} теперь принадлежит {{owner}}",
+    "attackWonTitle": "Атака удалась, территория ваша.",
+    "attackWonBody": "{{territory}} теперь принадлежит вам",
+    "attackLostTitle": "Атака не удалась, удачи в следующий раз!",
+    "attackLostBody": "{{territory}} остаётся за {{owner}}"
   }
 }

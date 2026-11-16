@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
@@ -21,7 +21,23 @@ import { supabase } from '../lib/supabase';
 import { colors } from '../lib/theme';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
-import { getFlag, holdFlagChanges } from '../lib/flags';
+import { holdFlagChanges, useFlag } from '../lib/flags';
+import {
+  secureClaim,
+  completeErrorShowsRetry,
+  claimCompleteErrorMessage,
+} from '../lib/claimCompletion';
+import {
+  challengeKind,
+  showsChallengeMap,
+  challengeHeaderCopy,
+  challengeResult,
+  continueToMap,
+  securedClaimToMap,
+} from '../lib/challengeScreen';
+import { claimHaptic, contestHaptic } from '../lib/haptics';
+import ChallengeMap from '../components/ChallengeMap';
+import ChallengeResultOverlay from '../components/ChallengeResultOverlay';
 import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
@@ -585,6 +601,49 @@ export default function ActiveClaimScreen() {
     : Math.max(0, Number(perimeterDistance) || 0);
   const progressThresholdM = perimeterM;
 
+  // Surface selection (plan U13). Flag changes are held while this screen is
+  // mounted, so these stay fixed for the whole challenge. Each mode's Figma
+  // surface ships with its ending: claims follow claim_celebration, contests
+  // follow contest_result_screen (see lib/challengeScreen.js).
+  const claimCelebration = useFlag('claim_celebration');
+  const contestResultScreen = useFlag('contest_result_screen');
+  const kind = challengeKind({ mode, role });
+  const mapMode = showsChallengeMap(kind, (name) => (
+    name === 'claim_celebration' ? claimCelebration : contestResultScreen
+  ));
+  const claimCelebrationRef = useRef(claimCelebration);
+  const contestResultScreenRef = useRef(contestResultScreen);
+  useEffect(() => {
+    claimCelebrationRef.current = claimCelebration;
+    contestResultScreenRef.current = contestResultScreen;
+  }, [claimCelebration, contestResultScreen]);
+
+  // claim_celebration off: the server completion runs here, in a "Securing
+  // the claim…" state over the map. { phase: 'securing' | 'error', error?,
+  // verifyProgress? } or null while walking.
+  const [secureState, setSecureState] = useState(null);
+  // contest_result_screen off: the resolved contest, shown as an overlay.
+  const [contestOutcome, setContestOutcome] = useState(null);
+  const unmountedRef = useRef(false);
+  useEffect(() => () => { unmountedRef.current = true; }, []);
+  // Heights of the header and footer laid over the map, so the camera frames
+  // the territory in the visible gap between them.
+  const [chromeInsets, setChromeInsets] = useState({ top: 0, bottom: 0 });
+
+  // "Securing the claim…" and its failure are announced when they appear
+  // (plan: Accessibility). VICTORY/DEFEAT announce from their overlay.
+  const securePhase = secureState?.phase ?? null;
+  useEffect(() => {
+    if (securePhase === 'securing') {
+      AccessibilityInfo.announceForAccessibility?.(t('claimSuccess.securing'));
+    } else if (securePhase === 'error') {
+      AccessibilityInfo.announceForAccessibility?.(
+        claimCompleteErrorMessage(t, secureState?.error, { freeClaim, goldPaid }),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [securePhase]);
+
   const progress = useRef(new Animated.Value(0)).current;
   const navigatingRef = useRef(false);
   const [, forceRender] = useReducer((x) => x + 1, 0);
@@ -913,10 +972,11 @@ export default function ActiveClaimScreen() {
     const navigateToResult = (env) => {
       navigatingRef.current = true;
       flushPartialContestWindow();
-      // TODO(U13): with contest_result_screen off, U13's VICTORY/DEFEAT
-      // overlay replaces ContestResultScreen. Until it exists, go to the Map.
-      if (!getFlag('contest_result_screen')) {
-        navigation.navigate('MainTabs', { screen: 'Map' });
+      // contest_result_screen off: VICTORY/DEFEAT over the challenge map
+      // replaces ContestResultScreen; CONTINUE returns to the Map.
+      if (!contestResultScreenRef.current) {
+        contestHaptic();
+        setContestOutcome({ outcome: env.outcome, opponentName: opponentNameRef.current });
         return;
       }
       navigation.replace('ContestResultScreen', {
@@ -1022,10 +1082,47 @@ export default function ActiveClaimScreen() {
     };
   }, [armPhase]);
 
+  // claim_celebration off: ask the server to award the claim from here. The
+  // sample producer stays alive until a success (secureClaim stops it) or the
+  // player leaves, so a retry resubmits the same completed walk.
+  async function runSecureClaim({ manual = false } = {}) {
+    setSecureState({ phase: 'securing', verifyProgress: null });
+    const result = await secureClaim({
+      clerkGetToken: () => getTokenRef.current(),
+      territoryId,
+      // Same budget as ClaimSuccessScreen: automatic waits on the first
+      // attempt, a single request per retry tap.
+      ...(manual ? { maxVerifyRetries: 0 } : {}),
+      isCancelled: () => unmountedRef.current,
+      onVerifyProgress: (verifyProgress) => {
+        if (!unmountedRef.current) setSecureState({ phase: 'securing', verifyProgress });
+      },
+    });
+    if (unmountedRef.current || result.code === 'cancelled') return;
+    if (result.ok) {
+      claimHaptic();
+      endClaim();
+      navigation.navigate(...securedClaimToMap({ envelope: result.data, geojson: territoryGeojson }));
+      return;
+    }
+    setSecureState({
+      phase: 'error',
+      error: { code: result.code, context: result.context, status: result.status },
+    });
+  }
+
+  function leaveAfterSecureError() {
+    claimWalkSamples.stop();
+    endClaim();
+    navigation.navigate('MainTabs', { screen: 'Map' });
+  }
+
   function completeClaim(walkedM, finalSteps) {
-    // TODO(U13): ClaimSuccessScreen owns the server completeClaim call, so it
-    // stays the route regardless of claim_celebration until U13 moves that call
-    // into the "Securing the claim…" step.
+    if (!claimCelebrationRef.current) {
+      runSecureClaim();
+      return;
+    }
+    // claim_celebration on: ClaimSuccessScreen owns the completion call.
     navigation.navigate('ClaimSuccessScreen', {
       territoryName,
       perimeterDistance: perimeterM,
@@ -1189,6 +1286,230 @@ export default function ActiveClaimScreen() {
             <Text style={styles.armSecondaryText}>{t('activeClaim.arm.notYet')}</Text>
           </Pressable>
         </View>
+      </View>
+    );
+  }
+
+  if (mapMode) {
+    const headerCopy = challengeHeaderCopy(kind);
+    const cancelLabel = t(headerCopy.cancel.key, { defaultValue: headerCopy.cancel.defaultValue });
+    const fillFraction = progressThresholdM > 0 ? claimState.distanceM / progressThresholdM : 0;
+    const result = contestOutcome
+      ? challengeResult({
+          outcome: contestOutcome.outcome,
+          role,
+          territoryName: territoryNameRef.current,
+          opponentName: contestOutcome.opponentName && contestOutcome.opponentName !== 'opponent'
+            ? contestOutcome.opponentName
+            : t('contestResult.opponentFallback'),
+        })
+      : null;
+    const secureErrorMessage = secureState?.phase === 'error'
+      ? claimCompleteErrorMessage(t, secureState.error, { freeClaim, goldPaid })
+      : null;
+    const secureErrorRetry = secureState?.phase === 'error'
+      && completeErrorShowsRetry(secureState.error?.code);
+    const verifyProgress = secureState?.verifyProgress;
+
+    return (
+      <View style={{ flex: 1, backgroundColor: INK }}>
+        <ChallengeMap
+          geometry={territoryGeojson}
+          progress={fillFraction}
+          topInset={chromeInsets.top}
+          bottomInset={chromeInsets.bottom}
+        />
+
+        <View
+          style={[styles.mapHeader, { paddingTop: insets.top + 12 }]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            setChromeInsets((c) => (c.top === h ? c : { ...c, top: h }));
+          }}
+        >
+          <View style={styles.topRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.claimingLabel}>
+                {t(headerCopy.header.key, { defaultValue: headerCopy.header.defaultValue })}
+              </Text>
+              <Text style={styles.territoryName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>
+                {territoryName}
+              </Text>
+            </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{t('activeClaim.inProgress')}</Text>
+            </View>
+          </View>
+          <Text style={styles.mapFillHint}>
+            {t('activeClaim.fillHint', {
+              defaultValue: 'Walk anywhere. The territory fills as your distance adds up',
+            })}
+          </Text>
+        </View>
+
+        <View
+          style={[styles.mapFooter, { paddingBottom: insets.bottom + 16 }]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            setChromeInsets((c) => (c.bottom === h ? c : { ...c, bottom: h }));
+          }}
+        >
+          {secureState ? (
+            <View style={styles.securePanel} accessibilityLiveRegion="polite">
+              {secureState.phase === 'securing' ? (
+                <>
+                  <Text style={styles.secureTitle}>{t('claimSuccess.securing')}</Text>
+                  {verifyProgress?.walkedM != null && verifyProgress?.requiredM != null ? (
+                    <Text style={styles.secureBody}>
+                      {t('claimSuccess.securingProgress', {
+                        walked: Math.round(verifyProgress.walkedM),
+                        required: Math.round(verifyProgress.requiredM),
+                      })}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.secureBody}>{secureErrorMessage}</Text>
+                  {secureErrorRetry ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => runSecureClaim({ manual: true })}
+                      style={({ pressed }) => [styles.armPrimary, { marginTop: 0 }, pressed && { opacity: 0.9 }]}
+                    >
+                      <Text style={styles.armPrimaryText}>{t('common.retry')}</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={leaveAfterSecureError}
+                    style={({ pressed }) => [styles.keepWalkingBtn, pressed && { opacity: 0.9 }]}
+                  >
+                    <Text style={styles.keepWalkingText}>{t('claimSuccess.backToMap')}</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          ) : hcDenied ? (
+            <View style={[styles.hcBlocked, { marginTop: 0 }]}>
+              <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
+              <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => Linking.openSettings()}
+                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={exitClaim}
+                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <View style={styles.bannerZoneMap}>
+                {claimState.bannerState === 'vehicle' && (
+                  <Banner color={AMBER} label={t('activeClaim.bannerVehicle')} />
+                )}
+                {claimState.bannerState === 'shake' && (
+                  <Banner color={AMBER} label={t('activeClaim.bannerShake')} />
+                )}
+                {claimState.bannerState === 'paused' && (
+                  <Banner color={AMBER} label={t('activeClaim.bannerPaused')} />
+                )}
+                {claimState.bannerState === 'gpsWeak' && (
+                  <Banner color={SLATE2} label={t('activeClaim.bannerGpsWeak')} />
+                )}
+                {claimState.bannerState === 'halfway' && (
+                  <Banner color={BONE} label={t('activeClaim.bannerHalfway')} />
+                )}
+                {claimState.bannerState === 'finalStretch' && (
+                  <Banner color={BONE} label={t('activeClaim.bannerFinalStretch')} />
+                )}
+              </View>
+
+              {showFirstWalkHint ? (
+                <Text style={styles.mapHint}>{t('firstClaim.activeHint')}</Text>
+              ) : null}
+              {claimState.hcPermission === 'unknown' && !pedometerLive ? (
+                <Text style={styles.mapHint}>{t('activeClaim.hcChecking')}</Text>
+              ) : null}
+
+              <View style={styles.statsPanel}>
+                <StatRow
+                  label={`${pct}%`}
+                  value={`${formatMetres(claimState.distanceM)} / ${formatMetres(progressThresholdM)} m`}
+                />
+                {timeLeftMs != null ? (
+                  <StatRow
+                    label={t('activeClaim.statTimeLeft')}
+                    value={formatTimeLeft(timeLeftMs)}
+                    valueStyle={
+                      timeLeftCritical && !['paused', 'vehicle', 'shake'].includes(claimState.bannerState)
+                        ? { color: AMBER }
+                        : null
+                    }
+                  />
+                ) : null}
+                <StatRow label={t('activeClaim.statSteps')} value={String(claimState.liveSteps)} last />
+              </View>
+
+              {DEV_MODE_MANUAL && (
+                <Pressable onPress={handleManualComplete} style={[styles.devBtn, { marginTop: 12, marginBottom: 0 }]}>
+                  <Text style={styles.devBtnText}>{t('activeClaim.devComplete')}</Text>
+                </Pressable>
+              )}
+
+              <View style={{ marginTop: 12 }}>
+                {confirmingCancel ? (
+                  <View style={styles.cancelConfirmBlock}>
+                    <Text style={styles.cancelConfirmText}>{cancelConfirmBody}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setConfirmingCancel(false)}
+                      style={({ pressed }) => [styles.keepWalkingBtn, pressed && { opacity: 0.9 }]}
+                    >
+                      <Text style={styles.keepWalkingText}>{t('activeClaim.keepWalking')}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={exitClaim}
+                      style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
+                    >
+                      <Text style={styles.cancelText}>
+                        {mode === 'contest' ? t('activeClaim.endWalk') : t('activeClaim.endClaim')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={cancelLabel}
+                    onPress={() => setConfirmingCancel(true)}
+                    style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
+                  >
+                    <Text style={styles.cancelText}>{cancelLabel}</Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+
+        {result ? (
+          <ChallengeResultOverlay
+            result={result}
+            bottomInset={insets.bottom}
+            onContinue={() => navigation.navigate(...continueToMap({
+              state: result.state,
+              geojson: territoryGeojson,
+            }))}
+          />
+        ) : null}
       </View>
     );
   }
@@ -1428,6 +1749,17 @@ const styles = StyleSheet.create({
   hcBlockedBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
   hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+
+  // Map mode (plan U13): chrome laid over the live challenge map. The map's
+  // fill is the one red element; panels are Ink 2 instruments.
+  mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 18, paddingBottom: 12, backgroundColor: INK2, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
+  mapFillHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  mapFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: INK, borderTopWidth: 1, borderTopColor: HAIRLINE_STRONG },
+  mapHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginBottom: 8 },
+  bannerZoneMap: { marginBottom: 8 },
+  securePanel: { backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
+  secureTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  secureBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
   // Arm gate — fee paid, walk clock not started. The countdown is the one loud
   // element; everything else stays quiet so START WALK is the obvious target.

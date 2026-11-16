@@ -330,7 +330,14 @@
       "lapsedBodyFree": "The territory is open again — you can claim it after a short cooldown.",
       "backToMap": "BACK TO MAP"
     },
-    "bannerShake": "MOTION UNRECOGNISED · Steps paused"
+    "bannerShake": "MOTION UNRECOGNISED · Steps paused",
+    "attacking": "ATTACKING",
+    "defending": "DEFENDING",
+    "cancelAttack": "Cancel attack",
+    "cancelDefense": "Cancel defense",
+    "fillHint": "Walk anywhere. The territory fills as your distance adds up",
+    "recenter": "Recenter map",
+    "recenterShort": "Recenter"
   },
   "claimSuccess": {
     "securing": "Securing the claim…",
@@ -1424,5 +1431,18 @@
     "title": "Dominia warns you when your land is under attack.",
     "allow": "ALLOW NOTIFICATIONS",
     "later": "NOT NOW"
+  },
+  "challengeResult": {
+    "victory": "VICTORY",
+    "defeat": "DEFEAT",
+    "continue": "CONTINUE",
+    "defendWonTitle": "Defend won, territory is saved.",
+    "defendWonBody": "{{territory}} territory stays with you",
+    "defendLostTitle": "Defend lost, better luck next time!",
+    "defendLostBody": "{{territory}} now belongs to {{owner}}",
+    "attackWonTitle": "Attack won, territory is yours.",
+    "attackWonBody": "{{territory}} now belongs to you",
+    "attackLostTitle": "Attack lost, better luck next time!",
+    "attackLostBody": "{{territory}} stays with {{owner}}"
   }
 }
