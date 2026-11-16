@@ -947,7 +947,19 @@
     "subTerritoryPlayer": "УР {{lvl}}",
     "subTerritoryAlliance": "УЧ {{m}}",
     "subBattlesPlayer": "УР {{lvl}} · В {{w}} · П {{l}}",
-    "subBattlesAlliance": "УЧ {{m}} · В {{w}} · П {{l}}"
+    "subBattlesAlliance": "УЧ {{m}} · В {{w}} · П {{l}}",
+    "figmaTitle": "Рейтинги",
+    "boardTerritories": "Территории",
+    "boardDistance": "Расстояние",
+    "boardPickerA11y": "Рейтинг: {{board}}",
+    "scopeSolo": "СОЛО",
+    "scopeAlliance": "АЛЬЯНС",
+    "solo": "Соло",
+    "territoriesValue": "Территорий: {{n}}",
+    "distanceValue": "{{distance}}",
+    "place": "{{rank}}-е место",
+    "yourPosition": "ВАША ПОЗИЦИЯ",
+    "you": "Вы"
   },
   "wallet": {
     "back": "← ПРОФИЛЬ",
@@ -1014,7 +1026,8 @@
     "rateLimited": "Помедленнее — повтор через {{secs}}с.",
     "filtered": "Сообщение заблокировано правилами.",
     "roomForbidden": "У вас больше нет доступа к этой комнате.",
-    "sendFailed": "Отправка не удалась. Попробуйте снова."
+    "sendFailed": "Отправка не удалась. Попробуйте снова.",
+    "tabGlobal": "ОБЩИЙ"
   },
   "medal": {
     "viewMedal": "К МЕДАЛИ",

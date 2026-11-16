@@ -41,6 +41,7 @@ import {
 } from '../lib/notifications/chatPresence';
 import { timeAgo } from '../lib/timeAgo';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
+import { useFlag } from '../lib/flags';
 
 const MAX_CONTENT_LENGTH = 500;
 const BANNER_AUTO_DISMISS_MS = 5000;
@@ -58,6 +59,11 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { userId, getToken } = useAuth();
+  // Figma labels the city room "Global"; the room itself stays city-scoped.
+  const legacyTabs = useFlag('legacy_tabs');
+  const cityTabLabel = legacyTabs
+    ? t('chat.tabCity')
+    : t('chat.tabGlobal', { defaultValue: 'GLOBAL' });
 
   // First-tap tip on the room tabs.
   const walkthroughTabsRef = useRef(null);
@@ -485,7 +491,7 @@ export default function ChatScreen() {
       <View ref={walkthroughTabsRef} collapsable={false} style={styles.tabStrip}>
         {(
           [
-            { key: 'city', label: t('chat.tabCity'), visible: true },
+            { key: 'city', label: cityTabLabel, visible: true },
             { key: 'alliance', label: t('chat.tabAlliance'), visible: allianceRoom != null },
           ]
         )

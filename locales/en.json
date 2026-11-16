@@ -965,7 +965,19 @@
     "subTerritoryPlayer": "LVL {{lvl}}",
     "subTerritoryAlliance": "MBR {{m}}",
     "subBattlesPlayer": "LVL {{lvl}} · W {{w}} · L {{l}}",
-    "subBattlesAlliance": "MBR {{m}} · W {{w}} · L {{l}}"
+    "subBattlesAlliance": "MBR {{m}} · W {{w}} · L {{l}}",
+    "figmaTitle": "Leaderboards",
+    "boardTerritories": "Territories",
+    "boardDistance": "Distance",
+    "boardPickerA11y": "Board: {{board}}",
+    "scopeSolo": "SOLO",
+    "scopeAlliance": "ALLIANCE",
+    "solo": "Solo",
+    "territoriesValue": "{{n}} Territories",
+    "distanceValue": "{{distance}}",
+    "place": "{{ordinal}} Place",
+    "yourPosition": "YOUR POSITION",
+    "you": "You"
   },
   "wallet": {
     "back": "← PROFILE",
@@ -1032,7 +1044,8 @@
     "rateLimited": "Slow down — retry in {{secs}}s.",
     "filtered": "Message blocked by content rules.",
     "roomForbidden": "You no longer have access to this room.",
-    "sendFailed": "Send failed. Try again."
+    "sendFailed": "Send failed. Try again.",
+    "tabGlobal": "GLOBAL"
   },
   "medal": {
     "viewMedal": "VIEW MEDAL",
