@@ -29,6 +29,7 @@ import { colors, fonts, fontSize, spacing } from '../lib/theme';
 import { InfluenceGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
+import { useFlag } from '../lib/flags';
 
 const CLAIM = '#D64525';
 const INK = '#0E1014';
@@ -77,6 +78,10 @@ export default function PublicProfileScreen() {
   const playerId = route.params?.playerId ?? null;
   const seedUsername = route.params?.username ?? null;
   const seedAvatarUrl = route.params?.avatarUrl ?? null;
+  // App-only surfaces (Remote Config), mirroring ProfileScreen.
+  const powerRankOn = useFlag('power_rank');
+  const honourMedalsOn = useFlag('honour_medals');
+  const streaksOn = useFlag('streaks');
 
   const [loading, setLoading] = useState(true);
   const [playerRow, setPlayerRow] = useState(null);
@@ -304,6 +309,7 @@ export default function PublicProfileScreen() {
 
         {!loading && playerRow ? (
           <>
+            {powerRankOn ? (
             <View style={styles.powerSection}>
               <View style={styles.influenceHeader}>
                 <Text style={styles.influenceLabel}>{t('profile.power')}</Text>
@@ -331,6 +337,8 @@ export default function PublicProfileScreen() {
                 </View>
                 <Text style={styles.powerRowValueLive}>{territoryPower.toLocaleString()}</Text>
               </View>
+              {honourMedalsOn ? (
+                <>
               <View style={styles.powerRowDivider} />
               <View style={styles.powerRow}>
                 <View style={styles.powerRowLeft}>
@@ -341,7 +349,10 @@ export default function PublicProfileScreen() {
                 </View>
                 <Text style={styles.powerRowValueLive}>{legacyPower.toLocaleString()}</Text>
               </View>
+                </>
+              ) : null}
             </View>
+            ) : null}
 
             <View style={styles.influenceBlock}>
               <View style={styles.influenceHeader}>
@@ -379,6 +390,8 @@ export default function PublicProfileScreen() {
             </View>
 
             <View style={styles.statGrid}>
+              {streaksOn ? (
+                <>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.streak')}</Text>
                 <Text style={styles.statValue}>{t('profile.daysValue', { n: currentStreak })}</Text>
@@ -387,6 +400,8 @@ export default function PublicProfileScreen() {
                 <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
                 <Text style={styles.statValue}>{t('profile.daysValue', { n: longestStreak })}</Text>
               </View>
+                </>
+              ) : null}
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.territoriesLabel')}</Text>
                 <Text style={styles.statValue}>
@@ -450,11 +465,13 @@ export default function PublicProfileScreen() {
               </View>
             ) : null}
 
+            {honourMedalsOn ? (
             <View>
               <View style={{ marginTop: 24 }}>
                 <LegacyMedalsSection clerkGetToken={getToken} playerId={playerId} />
               </View>
             </View>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

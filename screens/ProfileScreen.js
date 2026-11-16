@@ -48,6 +48,7 @@ import { colors, fonts, spacing } from '../lib/theme';
 import { IronGlyph, StoneGlyph, GoldGlyph, MoraleGlyph } from '../components/ResourceGlyphs';
 import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
+import { useFlag } from '../lib/flags';
 
 // Hidden diagnostics (long-press the profile header → Health Connect debug).
 // __DEV__ alone hid it from every EAS build, including internal test ones —
@@ -449,6 +450,12 @@ export default function ProfileScreen() {
   const { signOut, userId, getToken } = useAuth();
   // Medal-push deep-link: land on the earned medal's detail card.
   const focusMedalKey = route?.params?.medalKey ?? null;
+  // App-only surfaces (Remote Config). power_rank: Power section, rank
+  // ladder and record grid. honour_medals: medal section and the Legacy
+  // Power row that scrolls to it. streaks: the two streak record cells.
+  const powerRankOn = useFlag('power_rank');
+  const honourMedalsOn = useFlag('honour_medals');
+  const streaksOn = useFlag('streaks');
 
   // First-tap tips — each section explains itself the first time the player's
   // finger lands on it (rects are measured at touch time, so scroll position
@@ -912,6 +919,7 @@ export default function ProfileScreen() {
               The hero number, the ten-rank ladder it sits on, and the three
               contributors — each stating its source and routing to the place
               that moves it. A zero here is a position, not an absence. */}
+          {powerRankOn ? (
           <View ref={walkthroughPowerRef} collapsable={false} style={styles.powerSection}>
             <SectionRule label={t('profile.power')} />
             <View style={styles.powerHeroRow}>
@@ -981,6 +989,8 @@ export default function ProfileScreen() {
                 onPress={() => navigation.navigate('Map')}
                 a11y={t('profile.territoryPower')}
               />
+              {honourMedalsOn ? (
+                <>
               <View style={styles.powerRowDivider} />
               <PowerRow
                 label={t('profile.legacyPower')}
@@ -989,8 +999,11 @@ export default function ProfileScreen() {
                 onPress={scrollToMedals}
                 a11y={t('profile.legacyPower')}
               />
+                </>
+              ) : null}
             </View>
           </View>
+          ) : null}
 
           {/* ── TERRITORIES ─────────────────────────────────────────────
               With nothing held this is the screen's one instruction, and it
@@ -1056,9 +1069,12 @@ export default function ProfileScreen() {
 
           {/* ── RECORD ──────────────────────────────────────────────────
               Six instruments, each printing the scale it is measured on. */}
+          {powerRankOn ? (
           <View style={styles.section}>
             <SectionRule label={t('profile.record')} />
             <View style={styles.recordTable}>
+              {streaksOn ? (
+                <>
               <RecordCell
                 label={t('profile.streak')}
                 value={String(currentStreak)}
@@ -1072,6 +1088,8 @@ export default function ProfileScreen() {
                 sub={t('profile.subPersonalBest')}
                 rightEdge
               />
+                </>
+              ) : null}
               <RecordCell
                 label={t('profile.influence')}
                 value={dailyInfluence % 1 === 0 ? dailyInfluence.toLocaleString() : dailyInfluence.toFixed(1)}
@@ -1096,6 +1114,7 @@ export default function ProfileScreen() {
               />
             </View>
           </View>
+          ) : null}
 
           {citadelRecords.length > 0 ? (
             <View style={styles.section}>
@@ -1114,6 +1133,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
+          {honourMedalsOn ? (
           <View
             style={styles.section}
             onLayout={(e) => { medalsYRef.current = e.nativeEvent.layout.y; }}
@@ -1124,6 +1144,7 @@ export default function ProfileScreen() {
               onFocusConsumed={() => navigation.setParams({ medalKey: undefined })}
             />
           </View>
+          ) : null}
         </>
       ) : null}
 

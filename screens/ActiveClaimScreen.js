@@ -21,7 +21,7 @@ import { supabase } from '../lib/supabase';
 import { colors } from '../lib/theme';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
-import { holdFlagChanges } from '../lib/flags';
+import { getFlag, holdFlagChanges } from '../lib/flags';
 import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
@@ -913,6 +913,12 @@ export default function ActiveClaimScreen() {
     const navigateToResult = (env) => {
       navigatingRef.current = true;
       flushPartialContestWindow();
+      // TODO(U13): with contest_result_screen off, U13's VICTORY/DEFEAT
+      // overlay replaces ContestResultScreen. Until it exists, go to the Map.
+      if (!getFlag('contest_result_screen')) {
+        navigation.navigate('MainTabs', { screen: 'Map' });
+        return;
+      }
       navigation.replace('ContestResultScreen', {
         outcome: env.outcome,
         role,
@@ -1017,6 +1023,9 @@ export default function ActiveClaimScreen() {
   }, [armPhase]);
 
   function completeClaim(walkedM, finalSteps) {
+    // TODO(U13): ClaimSuccessScreen owns the server completeClaim call, so it
+    // stays the route regardless of claim_celebration until U13 moves that call
+    // into the "Securing the claim…" step.
     navigation.navigate('ClaimSuccessScreen', {
       territoryName,
       perimeterDistance: perimeterM,

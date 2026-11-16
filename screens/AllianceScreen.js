@@ -13,6 +13,7 @@ import { getAvailableActions } from '../lib/alliancePermissions';
 import { supabase } from '../lib/supabase';
 import { avatarThumb } from '../lib/avatar';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
+import { useFlag } from '../lib/flags';
 
 const CLAIM = '#D64525';
 const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
@@ -371,6 +372,11 @@ function NonMemberContent({
 function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  // App-only surfaces (Remote Config). Off leaves a read-only member list
+  // with no top contributors, manage tools, Command Post or War Room entry.
+  const rosterToolsOn = useFlag('alliance_roster_tools');
+  const commandPostOn = useFlag('command_post');
+  const warRoomOn = useFlag('war_room');
   const allianceId = myAlliance?.id;
   const [events, setEvents] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -917,6 +923,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           )}
         </View>
 
+        {rosterToolsOn ? (
+          <>
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.topContributors')}</Text>
           <Text style={styles.sectionLabelAccent}>{t('alliance.thisWeekAccent')}</Text>
@@ -924,6 +932,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         </View>
 
         <WeeklyTopContributors allianceId={allianceId} getToken={getToken} />
+          </>
+        ) : null}
 
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.roster')}</Text>
@@ -934,7 +944,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           // Tap any row → that member's profile. Long-press a member you can
           // manage → the kick/promote/demote modal (handleRosterRowTap).
           const actions =
-            myRole && myPlayerId
+            rosterToolsOn && myRole && myPlayerId
               ? getAvailableActions({
                   actorRole: myRole,
                   actorPlayerId: myPlayerId,
@@ -964,7 +974,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           );
         })}
 
-        {isFounder ? (
+        {isFounder && commandPostOn ? (
           <Pressable
             style={({ pressed }) => [styles.commandPostBtn, pressed && { opacity: 0.7 }]}
             onPress={() => navigation.navigate('CommandPost', {
@@ -977,8 +987,9 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           </Pressable>
         ) : null}
 
+        {warRoomOn ? (
         <Pressable
-          style={({ pressed }) => [styles.warRoomBtn, isFounder && { marginTop: 12 }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.warRoomBtn, isFounder && commandPostOn && { marginTop: 12 }, pressed && { opacity: 0.7 }]}
           onPress={() => navigation.navigate('WarRoom', {
             allianceId: myAlliance?.id,
             allianceName: myAlliance?.name,
@@ -988,6 +999,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         >
           <Text style={styles.warRoomBtnText}>{t('alliance.enterWarRoom')}</Text>
         </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"

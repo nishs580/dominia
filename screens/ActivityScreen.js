@@ -51,6 +51,7 @@ function levelFromXp(xp) {
 import { colors, fonts, spacing } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { maybeExplainResources } from '../lib/resourceIntro';
+import { useFlag } from '../lib/flags';
 
 const DEV_MODE_MANUAL = false; // set true to show COMPLETE buttons for manual testing
 
@@ -366,6 +367,10 @@ export default function ActivityScreen() {
   const { userId, getToken } = useAuth();
   const route = useRoute();
   const navigation = useNavigation();
+  // App-only surfaces (Remote Config). Off hides the Attack Day card/headline
+  // and every streak readout, line, toast and ceremony on this screen.
+  const attackDayOn = useFlag('attack_day');
+  const streaksOn = useFlag('streaks');
   // The map's "earn X" dead-ends route here with the resource the player came
   // for; the menu then names it and pre-selects a paying axis.
   const needResource = route?.params?.needResource ?? null;
@@ -383,12 +388,14 @@ export default function ActivityScreen() {
   const walkthroughAchievementsRef = useRef(null);
   const activityTips = useMemo(
     () => [
-      { key: 'streak', text: t('walkthrough.activity.streak'), getRect: () => rectFromRef(walkthroughHeaderRef) },
+      ...(streaksOn
+        ? [{ key: 'streak', text: t('walkthrough.activity.streak'), getRect: () => rectFromRef(walkthroughHeaderRef) }]
+        : []),
       { key: 'health', text: t('walkthrough.activity.health'), getRect: () => rectFromRef(walkthroughPermRef) },
       { key: 'challenges', text: t('walkthrough.activity.challenges'), getRect: () => rectFromRef(walkthroughChallengesRef) },
       { key: 'achievements', text: t('walkthrough.activity.achievements'), getRect: () => rectFromRef(walkthroughAchievementsRef) },
     ],
-    [t],
+    [t, streaksOn],
   );
   const tips = useFirstTapTips({ screenKey: 'activity', userId, tips: activityTips });
 
@@ -615,6 +622,9 @@ export default function ActivityScreen() {
   // fallback before that so the header renders immediately.
   const clientThemeToken = themeAxisForDate(today); // axis name | 'war_prep' | null
   const isChallengeDay = todayMenu ? todayMenu.is_challenge_day : clientThemeToken !== null;
+  // With attack_day off there is no Attack Day surface; a non-challenge day
+  // falls through to the challenge block (U5 makes every day a challenge day).
+  const showAttackDay = attackDayOn && !isChallengeDay;
   const boostedAxes = todayMenu?.theme?.boosted_axes
     ?? boostedAxesForTheme(clientThemeToken);
   const serverThemeToken = todayMenu?.theme
@@ -817,7 +827,7 @@ export default function ActivityScreen() {
 
       // Streak milestone ceremony — server decided the crossing (7/14/21/
       // 30/60/90) and granted the XP; the client only plays the moment.
-      if (d.streak_milestone) {
+      if (streaksOn && d.streak_milestone) {
         setStreakMilestone(streakMilestoneItem(t, d.streak_milestone, d.streak.tier_name));
       }
 
@@ -829,7 +839,7 @@ export default function ActivityScreen() {
         // Unknown earnKey must never break the completion path.
       }
 
-      if (d.streak_re_entry === true) {
+      if (streaksOn && d.streak_re_entry === true) {
         Toast.show({
           type: 'info',
           text1: t('activity.toastStreakReentry'),
@@ -1200,7 +1210,7 @@ export default function ActivityScreen() {
 
   // The screen's headline. Falls back to the tab's own name only in the gap
   // before the theme resolves, so it is never blank.
-  const dayTitle = !isChallengeDay
+  const dayTitle = showAttackDay
     ? t('activity.attackDay')
     : themeToken
       ? t(`activity.theme_${themeToken}`)
@@ -1238,6 +1248,7 @@ export default function ActivityScreen() {
           <View style={styles.weekHeaderRow}>
             <Text style={styles.weekSectionLabel}>{t('activity.thisWeek')}</Text>
             <View style={styles.weekHeaderRule} />
+            {streaksOn ? (
             <Text style={styles.streakReadout} maxFontSizeMultiplier={1.3}>
               {streakSecuredToday ? (
                 <CountUpText value={currentStreak} countOnMount style={styles.streakReadoutValue} />
@@ -1246,6 +1257,7 @@ export default function ActivityScreen() {
               )}
               <Text style={styles.streakReadoutLabel}>{`  ${t('activity.dayStreakLabel')}`}</Text>
             </Text>
+            ) : null}
           </View>
 
           <WeekTrack
@@ -1267,7 +1279,7 @@ export default function ActivityScreen() {
 
         {/* The at-risk warning is the screen's one caution element, and it can
             only fire on a drill day — a weekend has no challenge to lose. */}
-        {streakAtRisk ? (
+        {!streaksOn ? null : streakAtRisk ? (
           <Text style={styles.streakAtRiskLine}>{t('activity.streakEndsTonight')}</Text>
         ) : streakSecuredToday ? (
           <Text style={styles.streakSafeLine}>{t('activity.streakSafeToday')}</Text>
@@ -1376,7 +1388,7 @@ export default function ActivityScreen() {
           </View>
         ) : null}
 
-        {!isChallengeDay ? (
+        {showAttackDay ? (
           // Two days in seven this panel is the whole screen, so it carries the
           // weight: a live countdown to close, what is at stake, what today has
           // measured, and the one action available. The section label is gone —
@@ -1750,7 +1762,7 @@ export default function ActivityScreen() {
       </ScrollView>
 
       {tips.tipElement}
-      <MilestoneTakeover item={streakMilestone} onDismiss={() => setStreakMilestone(null)} />
+      <MilestoneTakeover item={streaksOn ? streakMilestone : null} onDismiss={() => setStreakMilestone(null)} />
     </View>
   );
 }

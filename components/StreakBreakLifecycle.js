@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { navigationRef } from '../lib/navigation';
 import { showCard, getCurrentCard } from '../lib/notifications/cardController';
 import { getStreakBreakStatus, acknowledgeStreakBreak } from '../lib/streakBreakApi';
+import { useFlag } from '../lib/flags';
 
 const STREAK_BROKEN_TITLE = 'Your streak reset.';
 
@@ -21,6 +22,9 @@ function isMainTabsRoute() {
 
 export default function StreakBreakLifecycle() {
   const { isSignedIn, getToken } = useAuth();
+  // App-only: with `streaks` off there is no streak to break, so no check runs.
+  const streaksOn = useFlag('streaks');
+  const active = isSignedIn && streaksOn;
   const getTokenRef = useRef(getToken);
   const inflightRef = useRef(false);
 
@@ -29,7 +33,7 @@ export default function StreakBreakLifecycle() {
   }, [getToken]);
 
   const checkAndShow = useCallback(async () => {
-    if (!isSignedIn) return;
+    if (!active) return;
     if (!isMainTabsRoute()) return;
     if (inflightRef.current) return;
     if (getCurrentCard() !== null) return;
@@ -69,10 +73,10 @@ export default function StreakBreakLifecycle() {
     } finally {
       inflightRef.current = false;
     }
-  }, [isSignedIn]);
+  }, [active]);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!active) return;
 
     const tryCheck = () => {
       if (isMainTabsRoute()) {
@@ -83,10 +87,10 @@ export default function StreakBreakLifecycle() {
     tryCheck();
     const unsubscribe = navigationRef.addListener('state', tryCheck);
     return unsubscribe;
-  }, [isSignedIn, checkAndShow]);
+  }, [active, checkAndShow]);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!active) return;
 
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
@@ -94,7 +98,7 @@ export default function StreakBreakLifecycle() {
       }
     });
     return () => sub.remove();
-  }, [isSignedIn, checkAndShow]);
+  }, [active, checkAndShow]);
 
   return null;
 }

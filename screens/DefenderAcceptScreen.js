@@ -6,6 +6,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
+import { useFlag } from '../lib/flags';
 
 const INK = '#0E1014';
 const INK_2 = '#1A1D24';
@@ -35,6 +36,9 @@ export default function DefenderAcceptScreen() {
   const [previewError, setPreviewError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [spendStone, setSpendStone] = useState(false);
+  // App-only (Remote Config): the optional Stone boost exists only in the
+  // multi-resource economy. Off hides it and never sends spendStone.
+  const stoneOn = useFlag('multi_resource_economy');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [myPlayer, setMyPlayer] = useState(null);
@@ -124,7 +128,7 @@ export default function DefenderAcceptScreen() {
   const canAffordStone = previewData
     ? previewData.current_stone >= previewData.stone_defence_cost
     : false;
-  const effectiveSpendStone = spendStone && canAffordStone;
+  const effectiveSpendStone = stoneOn && spendStone && canAffordStone;
   const selectedRatio = previewData
     ? (effectiveSpendStone
       ? previewData.defender_response_ratio_with_stone
@@ -274,6 +278,8 @@ export default function DefenderAcceptScreen() {
         </Text>
       </View>
 
+      {stoneOn ? (
+        <>
       <View style={[styles.previewRow, effectiveSpendStone ? styles.previewRowActive : styles.previewRowInactive]}>
         <Text style={styles.previewRowLabel}>{t('defenderAccept.withStone')}</Text>
         <Text style={styles.previewRowDistance}>
@@ -300,6 +306,8 @@ export default function DefenderAcceptScreen() {
           </Text>
         ) : null}
       </Pressable>
+        </>
+      ) : null}
 
       {submitError ? (
         <Text style={styles.submitErrorText}>
