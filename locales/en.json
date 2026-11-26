@@ -1464,6 +1464,7 @@
     },
     "card": {
       "startClaiming": "START CLAIMING",
+      "processing": "PROCESSING…",
       "contestTerritory": "CONTEST TERRITORY",
       "ownerTerritory": "{{owner}}'s territory",
       "unclaimed": "Unclaimed",
@@ -1678,7 +1679,9 @@
     "title": "Select your Age",
     "subtitle": "Select the appropriate option to where your age lies",
     "selectedAge": "Selected age",
-    "next": "NEXT"
+    "next": "NEXT",
+    "typeLabel": "Or type your age",
+    "typePlaceholder": "Age"
   },
   "ageBlocked": {
     "title": "Not yet",

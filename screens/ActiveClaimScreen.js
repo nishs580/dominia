@@ -607,6 +607,8 @@ export default function ActiveClaimScreen() {
   // follow contest_result_screen (see lib/challengeScreen.js).
   const claimCelebration = useFlag('claim_celebration');
   const contestResultScreen = useFlag('contest_result_screen');
+  // Figma mode shows the territory on the Start walk (arming) screen.
+  const figmaArmMap = !useFlag('legacy_tabs');
   const kind = challengeKind({ mode, role });
   const mapMode = showsChallengeMap(kind, (name) => (
     name === 'claim_celebration' ? claimCelebration : contestResultScreen
@@ -1243,6 +1245,15 @@ export default function ActiveClaimScreen() {
           </View>
         </View>
 
+        {figmaArmMap && territoryGeojson ? (
+          // The selected territory, outlined in lime with the player dot,
+          // before the walk starts (review comment: "selected map area should
+          // be showcased here"). Display-only; unmounts when the walk begins.
+          <View style={styles.armMap} importantForAccessibility="no-hide-descendants">
+            <ChallengeMap geometry={territoryGeojson} progress={0} />
+          </View>
+        ) : null}
+
         <View style={styles.armBlock}>
           <Text style={styles.armCountdown} maxFontSizeMultiplier={1.2}>
             {armSecondsLeft ?? 0}
@@ -1764,6 +1775,7 @@ const styles = StyleSheet.create({
   // Arm gate — fee paid, walk clock not started. The countdown is the one loud
   // element; everything else stays quiet so START WALK is the obvious target.
   armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
+  armMap: { height: 220, marginTop: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(245,244,239,0.08)' },
   armCountdown: { fontFamily: 'GeistMono_300Light', color: '#C8FF3D', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
   armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
   armTitle: { fontFamily: 'SofiaSansExtraCondensed_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },

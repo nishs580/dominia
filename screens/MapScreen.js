@@ -62,6 +62,7 @@ import { defendPopupModel } from '../lib/defendPopup';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
+import { centredFlightCamera, flightBounds } from '../lib/mapFlight';
 import { loadHomePin, peekHomePin, saveHomePin } from '../lib/homePinCache';
 import { getMe } from '../lib/meApi';
 import {
@@ -122,33 +123,6 @@ const FLIGHT_SETTLE_BUFFER_MS = 250;
 // How long the hold may stretch waiting for the objective to resolve (backend
 // cold starts) before the flight gives up and settles on the home pin alone.
 const FLIGHT_TARGET_TIMEOUT_MS = 10000;
-
-// Bounding box framing the home pin and the objective territory's polygon,
-// for the single flyTo of Beat 1.
-function flightBounds(homeLng, homeLat, target) {
-  let minLng = homeLng;
-  let maxLng = homeLng;
-  let minLat = homeLat;
-  let maxLat = homeLat;
-  const extend = (lng, lat) => {
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  };
-  extend(Number(target?.longitude), Number(target?.latitude));
-  const ring =
-    target?.geojson?.type === 'Polygon'
-      ? target.geojson.coordinates?.[0]
-      : target?.geojson?.type === 'MultiPolygon'
-        ? target.geojson.coordinates?.[0]?.[0]
-        : null;
-  if (Array.isArray(ring)) {
-    for (const vertex of ring) extend(Number(vertex?.[0]), Number(vertex?.[1]));
-  }
-  return { ne: [maxLng, maxLat], sw: [minLng, minLat] };
-}
 
 const INK = colors.ink;
 const INK2 = colors.ink2;
@@ -1221,6 +1195,10 @@ function ObjectivePulse() {
 }
 
 export default function MapScreen() {
+  // Read before the flight effects below; mirrors `figmaChrome` further down.
+  const figmaModeEarly = !useFlag('legacy_tabs');
+  const figmaChromeRef = useRef(figmaModeEarly);
+  figmaChromeRef.current = figmaModeEarly;
   const navigation = useNavigation();
   const route = useRoute();
   const { t, i18n } = useTranslation();
@@ -1501,9 +1479,13 @@ export default function MapScreen() {
         getRect: mapRect,
       },
       { key: 'colours', text: t('walkthrough.map.colours'), getRect: mapRect },
-      { key: 'card', text: t('walkthrough.map.card'), getRect: mapRect },
+      // Figma mode drops "tap any territory": the objective ring and its card
+      // already say it (review comment on the coach mark).
+      ...(figmaModeEarly
+        ? []
+        : [{ key: 'card', text: t('walkthrough.map.card'), getRect: mapRect }]),
     ];
-  }, [myPlayer?.home_city, t, winH, winW]);
+  }, [myPlayer?.home_city, t, winH, winW, figmaModeEarly]);
 
   // Tips stay quiet during the Beat 1 flight — nothing may compete with it.
   const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive });
@@ -2183,6 +2165,12 @@ export default function MapScreen() {
     if (userMovedCameraRef.current) return;
     if (!target || !homePin || !cameraRef.current) return;
     objectiveFramedRef.current = true;
+    // Figma mode centres the objective itself; legacy frames home + objective.
+    const centred = figmaChromeRef.current ? centredFlightCamera(target) : null;
+    if (centred) {
+      cameraRef.current.setCamera({ ...centred, animationMode: 'easeTo', animationDuration: 600 });
+      return;
+    }
     const { ne, sw } = flightBounds(homePin[0], homePin[1], target);
     cameraRef.current.setCamera({
       bounds: { ne, sw },
@@ -2208,7 +2196,10 @@ export default function MapScreen() {
     const home = flightHomeRef.current;
     const fly = (frameTarget) => {
       if (cameraRef.current && home) {
-        if (frameTarget) {
+        const centred = frameTarget && figmaChromeRef.current ? centredFlightCamera(frameTarget) : null;
+        if (centred) {
+          cameraRef.current.setCamera({ ...centred, animationMode: 'flyTo', animationDuration: FLIGHT_MS });
+        } else if (frameTarget) {
           const { ne, sw } = flightBounds(home[0], home[1], frameTarget);
           cameraRef.current.setCamera({
             bounds: { ne, sw },
@@ -3352,6 +3343,7 @@ export default function MapScreen() {
           onClose={handleSheetClose}
           onStartClaim={handleCardClaim}
           onStartContest={handleCardContest}
+          firstClaim={objectiveActive && selectedFeature?.id != null && selectedFeature.id === objectiveFeature?.id}
         />
       )}
       {figmaChrome ? (

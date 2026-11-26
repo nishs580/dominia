@@ -17,7 +17,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useTranslation } from 'react-i18next';
 import TerritorySilhouette from './TerritorySilhouette';
 import { GoldGlyph, IronGlyph } from './ResourceGlyphs';
-import { territoryCardModel } from '../lib/territoryCard';
+import { BUSY_LABEL, territoryCardModel } from '../lib/territoryCard';
+import { formatWalkDistance } from '../lib/firstClaimApi';
 import { colors, fonts } from '../lib/theme';
 
 const SILHOUETTE = 56;
@@ -38,6 +39,7 @@ export default function TerritoryCard({
   onClose,
   onStartClaim,
   onStartContest,
+  firstClaim = false,
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -87,6 +89,9 @@ export default function TerritoryCard({
     ? t('map.card.iron', { defaultValue: 'Iron' })
     : t('map.card.gold', { defaultValue: 'Gold' });
   const ctaLabel = action ? t(action.label.key, { defaultValue: action.label.defaultValue }) : null;
+  // Only on open ground: the first-claim objective is always unclaimed, but a
+  // stale prop must never decorate someone's territory.
+  const showFirstClaim = firstClaim && model.ownership === 'unclaimed';
 
   const onCta = async () => {
     if (!action || action.disabled || busy) return;
@@ -132,6 +137,19 @@ export default function TerritoryCard({
         </Pressable>
       </View>
 
+      {showFirstClaim ? (
+        <View style={styles.firstClaim}>
+          <View style={styles.firstClaimTag}>
+            <Text style={styles.firstClaimTagText} maxFontSizeMultiplier={1.3}>
+              {t('firstClaim.kicker', { defaultValue: 'FIRST CLAIM · FREE' })}
+            </Text>
+          </View>
+          <Text style={styles.firstClaimLine} maxFontSizeMultiplier={1.3}>
+            {t('firstClaim.sheetLine', { distance: formatWalkDistance(model.distanceM) })}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.metaBlock}>
         <Text style={styles.meta} maxFontSizeMultiplier={1.3}>
           {t('map.card.distance', { defaultValue: 'Distance: {{metres}}m', metres: model.distanceM.toLocaleString() })}
@@ -158,10 +176,14 @@ export default function TerritoryCard({
               styles.cta,
               action.disabled && styles.ctaDisabled,
               pressed && !action.disabled && styles.ctaPressed,
+              busy && styles.ctaBusy,
             ]}
           >
             {busy ? (
-              <ActivityIndicator size="small" color={colors.bone} />
+              <>
+                <ActivityIndicator size="small" color={colors.bone} />
+                <Text style={styles.ctaText}>{t(BUSY_LABEL.key, { defaultValue: BUSY_LABEL.defaultValue })}</Text>
+              </>
             ) : (
               <>
                 <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{action.price}</Text>
@@ -267,6 +289,32 @@ const styles = StyleSheet.create({
   },
   ctaPressed: {
     opacity: 0.92,
+  },
+  ctaBusy: {
+    opacity: 0.6,
+  },
+  // First-claim objective: a Signal Lime moment (tag + emphasised line).
+  firstClaim: {
+    gap: 8,
+  },
+  firstClaimTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.limeSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  firstClaimTagText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: colors.lime,
+    textTransform: 'uppercase',
+  },
+  firstClaimLine: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.lime,
   },
   ctaDisabled: {
     backgroundColor: colors.ink2,

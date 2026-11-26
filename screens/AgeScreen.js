@@ -4,10 +4,10 @@
 // FigmaOnboardingScreen; it reports the chosen age through onNext.
 
 import React, { useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { AGE_SLIDER_DEFAULT, AGE_SLIDER_MAX, AGE_SLIDER_MIN } from '../lib/onboardingFlow';
+import { AGE_SLIDER_DEFAULT, AGE_SLIDER_MAX, AGE_SLIDER_MIN, parseTypedAge } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
 
 const THUMB = 28;
@@ -80,6 +80,21 @@ export default function AgeScreen({ onNext }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [age, setAge] = useState(AGE_SLIDER_DEFAULT);
+  // Typed text is kept separately so a half-typed value (or an empty field)
+  // doesn't fight the slider; a valid number moves the slider, the slider
+  // rewrites the text.
+  const [typed, setTyped] = useState(String(AGE_SLIDER_DEFAULT));
+  const [typedFocused, setTypedFocused] = useState(false);
+  const onSlide = (v) => {
+    setAge(v);
+    setTyped(String(v));
+  };
+  const onType = (text) => {
+    const digits = text.replace(/[^0-9]/g, '').slice(0, 3);
+    setTyped(digits);
+    const v = parseTypedAge(digits);
+    if (v != null) setAge(v);
+  };
   const display = age >= AGE_SLIDER_MAX ? `${AGE_SLIDER_MAX}+` : String(age);
 
   return (
@@ -99,11 +114,33 @@ export default function AgeScreen({ onNext }) {
           </Text>
         </View>
 
-        <AgeSlider value={age} onChange={setAge} label={t('age.selectedAge', { defaultValue: 'Selected age' })} />
+        <AgeSlider value={age} onChange={onSlide} label={t('age.selectedAge', { defaultValue: 'Selected age' })} />
         <View style={styles.scale} importantForAccessibility="no-hide-descendants">
           <Text style={styles.scaleText}>{AGE_SLIDER_MIN}</Text>
           <Text style={styles.scaleText}>{`${AGE_SLIDER_MAX}+`}</Text>
         </View>
+
+        <Text style={styles.typeLabel}>{t('age.typeLabel', { defaultValue: 'Or type your age' })}</Text>
+        <TextInput
+          value={typed}
+          onChangeText={onType}
+          onFocus={() => setTypedFocused(true)}
+          onBlur={() => {
+            setTypedFocused(false);
+            // Leaving the field snaps the text to the clamped age in use.
+            setTyped(String(age));
+          }}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          maxLength={3}
+          returnKeyType="done"
+          placeholder={t('age.typePlaceholder', { defaultValue: 'Age' })}
+          placeholderTextColor={colors.slate}
+          accessibilityLabel={t('age.typeLabel', { defaultValue: 'Or type your age' })}
+          selectionColor={colors.lime}
+          style={[styles.typeInput, typedFocused && styles.typeInputFocused]}
+          maxFontSizeMultiplier={1.3}
+        />
       </View>
 
       <Pressable
@@ -149,6 +186,26 @@ const styles = StyleSheet.create({
   },
   scale: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   scaleText: { fontFamily: fonts.mono, fontSize: 11, color: colors.slate2 },
+  typeLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.8,
+    color: colors.slate2,
+    textTransform: 'uppercase',
+    marginTop: 28,
+    marginBottom: 8,
+  },
+  typeInput: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink2,
+    paddingHorizontal: 14,
+    fontFamily: fonts.mono,
+    fontSize: 18,
+    color: colors.bone,
+  },
+  typeInputFocused: { borderColor: colors.lime },
   next: {
     backgroundColor: colors.claimButton,
     minHeight: 48,

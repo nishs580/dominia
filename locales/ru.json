@@ -1446,6 +1446,7 @@
     },
     "card": {
       "startClaiming": "НАЧАТЬ ЗАХВАТ",
+      "processing": "ОБРАБОТКА…",
       "contestTerritory": "ОСПОРИТЬ ТЕРРИТОРИЮ",
       "ownerTerritory": "Территория {{owner}}",
       "unclaimed": "Свободна",
@@ -1660,7 +1661,9 @@
     "title": "Укажите возраст",
     "subtitle": "Выберите вариант, соответствующий вашему возрасту",
     "selectedAge": "Выбранный возраст",
-    "next": "ДАЛЕЕ"
+    "next": "ДАЛЕЕ",
+    "typeLabel": "Или введите возраст",
+    "typePlaceholder": "Возраст"
   },
   "ageBlocked": {
     "title": "Пока рано",
