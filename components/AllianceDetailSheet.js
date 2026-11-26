@@ -1,32 +1,41 @@
 /**
  * components/AllianceDetailSheet.js
  *
- * Figma alliance detail pop-up (alliance_hq_create off). Opens from a row in
- * the alliance list: emblem, "NAME - TAG", description, LOCATION /
- * TERRITORIES / TYPE, member count, Join, and the member list ranked by
- * territories held.
+ * Figma alliance detail pop-up (F4; alliance_hq_create off). Opens from a row
+ * in the alliance list: emblem beside the name with [TAG] below, description,
+ * a 2×2 grid (LOCATION / TERRITORIES / TYPE / MEMBERS), JOIN or REQUEST TO
+ * JOIN by join_type (with a Request sent state), and the member list ranked
+ * by territories held.
  *
- * Also exports AllianceStatsRow and AllianceMemberRow, reused by the member
- * view header in screens/AllianceScreen.js so both read the same way.
+ * Also exports the pieces the member view (F5) in screens/AllianceScreen.js
+ * reuses so both read the same way: AllianceEmblemTile, AllianceStatsGrid and
+ * AllianceMemberRow.
  *
  * Description and rules render as plain <Text> — no link detection.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import AllianceEmblem from './AllianceEmblem';
-import THEME from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
+import { avatarThumb } from '../lib/avatar';
 import { getAllianceById, joinAlliance, normalizeAllianceDetail } from '../lib/allianceApi';
 import { ALLIANCE_MAX_MEMBERS, isAllianceFull, joinErrorKey } from '../lib/allianceValidation';
+import {
+  hasPendingRequest, joinButtonState, joinOutcome, joinTypeLabelKey, memberInitials, padRank,
+} from '../lib/allianceJoin';
+import { displayRole, roleLabel, roleLabelKey } from '../lib/allianceRoles';
 
-const { ink2: INK2, ink3: INK3, bone: BONE, slate: SLATE, slate2: SLATE2,
-  claimButton: CLAIM_BUTTON, claim: CLAIM, hairline: HAIRLINE, hairlineStrong: HAIRLINE_STRONG } = THEME.colors;
+/** Name only, upper-cased (the tag sits on its own line in Figma). */
+export function allianceName(alliance) {
+  return (alliance?.name ?? '').toUpperCase();
+}
 
-export function allianceTitle(alliance) {
-  const name = (alliance?.name ?? '').toUpperCase();
+/** "[TAG]" or '' when there is no tag. */
+export function allianceTag(alliance) {
   const tag = (alliance?.short_name ?? '').toUpperCase();
-  return tag ? `${name} - ${tag}` : name;
+  return tag ? `[${tag}]` : '';
 }
 
 /**
@@ -40,44 +49,90 @@ export function allianceBlurb(alliance) {
   return typeof alliance?.rules === 'string' ? alliance.rules.trim() : '';
 }
 
-/** LOCATION / TERRITORIES / TYPE. Type is "Open" until design defines invite-only. */
-export function AllianceStatsRow({ location, territories }) {
+/** Emblem on the alliance-blue tile used by F4 and F5. */
+export function AllianceEmblemTile({ emblem, size = 64 }) {
+  return (
+    <View style={[styles.emblemTile, { width: size, height: size }]}>
+      <AllianceEmblem emblem={emblem} size={Math.round(size * 0.56)} />
+    </View>
+  );
+}
+
+/** F4/F5 2×2 grid: LOCATION / TERRITORIES on top, TYPE / MEMBERS below. */
+export function AllianceStatsGrid({ location, territories, joinType, memberCount }) {
   const { t } = useTranslation();
+  const typeKey = joinTypeLabelKey(joinType);
   const cells = [
-    { label: t('allianceFigma.location', { defaultValue: 'LOCATION' }), value: location || '—' },
-    { label: t('allianceFigma.territories', { defaultValue: 'TERRITORIES' }), value: territories ?? '—' },
-    { label: t('allianceFigma.type', { defaultValue: 'TYPE' }), value: t('allianceFigma.typeOpen', { defaultValue: 'Open' }) },
+    { key: 'loc', label: t('allianceFigma.location', { defaultValue: 'LOCATION' }), value: location || '—' },
+    { key: 'terr', label: t('allianceFigma.territories', { defaultValue: 'TERRITORIES' }), value: territories ?? '—' },
+    {
+      key: 'type',
+      label: t('allianceFigma.type', { defaultValue: 'TYPE' }),
+      value: t(typeKey, { defaultValue: typeKey.endsWith('InviteOnly') ? 'INVITE ONLY' : 'OPEN' }),
+    },
+    {
+      key: 'members',
+      label: t('allianceFigma.members', { defaultValue: 'MEMBERS' }),
+      value: `${memberCount ?? '—'} / ${ALLIANCE_MAX_MEMBERS}`,
+    },
   ];
   return (
-    <View style={styles.statsRow}>
-      {cells.map((c) => (
-        <View key={c.label} style={styles.statCell} accessible accessibilityLabel={`${c.label} ${c.value}`}>
-          <Text style={styles.statLabel}>{c.label}</Text>
-          <Text style={styles.statValue} numberOfLines={1}>{String(c.value)}</Text>
+    <View style={styles.grid}>
+      {[cells.slice(0, 2), cells.slice(2)].map((row, r) => (
+        <View key={r} style={[styles.gridRow, r === 0 && styles.gridRowTop]}>
+          {row.map((c, i) => (
+            <View
+              key={c.key}
+              style={[styles.gridCell, i === 0 && styles.gridCellLeft]}
+              accessible
+              accessibilityLabel={`${c.label} ${c.value}`}
+            >
+              <Text style={styles.gridLabel}>{c.label}</Text>
+              <Text style={styles.gridValue} numberOfLines={1}>{String(c.value).toUpperCase()}</Text>
+            </View>
+          ))}
         </View>
       ))}
     </View>
   );
 }
 
+/** "01  [KA]  Moksh   CAPTAIN  16 TERR." */
 export function AllianceMemberRow({ rank, member, onPress, showBorder }) {
   const { t } = useTranslation();
   const name = member?.username ?? '—';
-  const held = t('allianceFigma.territoriesHeld', {
-    count: member?.territories_held ?? 0,
-    defaultValue: '{{count}} Territories',
+  const role = displayRole(member?.role);
+  const roleText = t(roleLabelKey(member?.role), { defaultValue: roleLabel(member?.role) });
+  const held = t('allianceFigma.terrShort', {
+    count: padRank(member?.territories_held ?? 0),
+    defaultValue: '{{count}} TERR.',
   });
+  const a11y = `${rank}. ${name}, ${roleText}, ${held}`;
+  const avatarUrl = member?.avatar_url ?? null;
   const body = (
     <>
-      <Text style={styles.memberRank}>{rank}</Text>
+      <Text style={styles.memberRank}>{padRank(rank)}</Text>
+      <View style={styles.memberTile}>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarThumb(avatarUrl, 32) }} style={styles.memberTileImg} />
+        ) : (
+          <Text style={styles.memberInitials}>{memberInitials(name)}</Text>
+        )}
+      </View>
       <Text style={styles.memberName} numberOfLines={1}>{name}</Text>
+      <Text
+        style={[styles.memberRole, (role === 'captain' || role === 'commander') && styles.memberRoleLead]}
+        numberOfLines={1}
+      >
+        {roleText}
+      </Text>
       <Text style={styles.memberHeld}>{held}</Text>
     </>
   );
   const rowStyle = [styles.memberRow, showBorder && styles.memberRowBorder];
   if (!onPress) {
     return (
-      <View style={rowStyle} accessible accessibilityLabel={`${rank}. ${name}, ${held}`}>
+      <View style={rowStyle} accessible accessibilityLabel={a11y}>
         {body}
       </View>
     );
@@ -85,7 +140,7 @@ export function AllianceMemberRow({ rank, member, onPress, showBorder }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${rank}. ${name}, ${held}`}
+      accessibilityLabel={a11y}
       onPress={onPress}
       style={({ pressed }) => [...rowStyle, pressed && { opacity: 0.7 }]}
     >
@@ -102,6 +157,7 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
   const [loadError, setLoadError] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [requested, setRequested] = useState(false);
 
   const load = useCallback(async () => {
     if (!listItem?.id) return;
@@ -117,6 +173,7 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
     setDetail(null);
     setJoinError('');
     setJoining(false);
+    setRequested(false);
     if (listItem?.id) load();
   }, [listItem?.id, load]);
 
@@ -127,14 +184,21 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
   const territories = Number.isFinite(listItem?.territory_count)
     ? listItem.territory_count
     : members.reduce((sum, m) => sum + m.territories_held, 0);
+  const joinType = detail?.alliance?.join_type ?? listItem?.join_type;
+  const isRequested = requested || hasPendingRequest(detail?.alliance);
+  const button = joinButtonState({ joinType, requested: isRequested, full, joining });
 
   const handleJoin = async () => {
-    if (!listItem?.id || joining || full) return;
+    if (!listItem?.id || button.disabled) return;
     setJoining(true);
     setJoinError('');
     try {
       const res = await joinAlliance({ clerkGetToken: getToken, allianceId: listItem.id });
       if (res.ok) {
+        if (joinOutcome(res.data) === 'requested') {
+          setRequested(true);
+          return;
+        }
         await onJoined?.(listItem.id);
         return;
       }
@@ -147,9 +211,8 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
     }
   };
 
-  const joinLabel = full
-    ? t('allianceFigma.full', { defaultValue: 'Alliance full' })
-    : t('alliance.join');
+  const joinLabel = t(button.labelKey, { defaultValue: button.defaultValue });
+  const tag = allianceTag(alliance);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -161,59 +224,72 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
           accessibilityLabel={t('allianceFigma.close', { defaultValue: 'Close' })}
         />
         <View style={styles.card} accessibilityViewIsModal>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('allianceFigma.close', { defaultValue: 'Close' })}
-            onPress={onClose}
-            disabled={joining}
-            hitSlop={12}
-            style={styles.closeBtn}
-          >
-            <Text style={styles.closeText}>✕</Text>
-          </Pressable>
-
           <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.emblemWrap}>
-              <AllianceEmblem emblem={alliance.emblem} size={64} />
+            <View style={styles.headRow}>
+              <AllianceEmblemTile emblem={alliance.emblem} size={64} />
+              <View style={styles.headText}>
+                <Text
+                  style={styles.title}
+                  accessibilityRole="header"
+                  maxFontSizeMultiplier={1.2}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
+                  {allianceName(alliance)}
+                </Text>
+                {tag ? <Text style={styles.tag}>{tag}</Text> : null}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('allianceFigma.close', { defaultValue: 'Close' })}
+                onPress={onClose}
+                disabled={joining}
+                hitSlop={12}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeText}>✕</Text>
+              </Pressable>
             </View>
-            <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-              {allianceTitle(alliance)}
-            </Text>
             {allianceBlurb(alliance) ? (
               <Text style={styles.description}>{allianceBlurb(alliance)}</Text>
             ) : null}
 
-            <AllianceStatsRow location={alliance.city} territories={territories} />
-
-            <View style={styles.membersHead}>
-              <Text style={styles.sectionLabel}>{t('allianceFigma.members', { defaultValue: 'Members' })}</Text>
-              <Text style={styles.sectionValue}>{`${memberCount} / ${ALLIANCE_MAX_MEMBERS}`}</Text>
-            </View>
+            <AllianceStatsGrid
+              location={alliance.city}
+              territories={territories}
+              joinType={joinType}
+              memberCount={memberCount}
+            />
 
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={joinLabel}
-              accessibilityState={{ disabled: full || joining, busy: joining }}
-              disabled={full || joining}
+              accessibilityState={{ disabled: button.disabled, busy: joining }}
+              disabled={button.disabled}
               onPress={handleJoin}
               style={({ pressed }) => [
                 styles.joinBtn,
-                (full || joining) && styles.joinBtnDisabled,
-                pressed && !full && !joining && { opacity: 0.9 },
+                button.disabled && !joining && styles.joinBtnDisabled,
+                pressed && !button.disabled && { opacity: 0.9 },
               ]}
             >
               {joining ? (
-                <ActivityIndicator color={BONE} />
+                <ActivityIndicator color={colors.bone} />
               ) : (
-                <Text style={[styles.joinText, full && styles.joinTextDisabled]}>{joinLabel}</Text>
+                <Text style={[styles.joinText, button.disabled && styles.joinTextDisabled]}>{joinLabel}</Text>
               )}
             </Pressable>
             {joinError ? (
               <Text style={styles.joinError} accessibilityLiveRegion="polite">{joinError}</Text>
             ) : null}
 
+            <Text style={styles.sectionLabel}>
+              {t('allianceFigma.membersByTerritories', { defaultValue: 'MEMBERS · BY TERRITORIES HELD' })}
+            </Text>
+
             {loading && !detail ? (
-              <ActivityIndicator color={SLATE2} style={{ marginTop: 20 }} />
+              <ActivityIndicator color={colors.slate2} style={{ marginTop: 20 }} />
             ) : loadError && !detail ? (
               <View style={styles.loadError}>
                 <Text style={styles.loadErrorText}>{t('alliance.couldNotLoad')}</Text>
@@ -247,144 +323,173 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   card: {
-    backgroundColor: INK2,
+    backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.hairlineStrong,
     maxHeight: '100%',
   },
   cardContent: {
     padding: 20,
-    paddingTop: 28,
+  },
+  headRow: { flexDirection: 'row', alignItems: 'center' },
+  headText: { flex: 1, marginLeft: 14 },
+  emblemTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.alliance,
+    backgroundColor: colors.allianceSoft,
   },
   closeBtn: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    zIndex: 2,
     minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: -10,
   },
-  closeText: { color: SLATE2, fontSize: 16 },
-  emblemWrap: { alignItems: 'center', marginBottom: 12 },
+  closeText: { color: colors.slate2, fontSize: 18 },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 22,
-    color: BONE,
-    textAlign: 'center',
-    letterSpacing: -0.4,
+    fontFamily: fonts.display,
+    fontSize: 34,
+    lineHeight: 36,
+    color: colors.bone,
     textTransform: 'uppercase',
+  },
+  tag: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.slate2,
+    marginTop: 2,
   },
   description: {
-    fontFamily: 'InstrumentSans_400Regular',
-    fontSize: 13,
-    lineHeight: 20,
-    color: SLATE2,
-    textAlign: 'center',
-    marginTop: 10,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.slate2,
+    marginTop: 14,
   },
-  statsRow: {
-    flexDirection: 'row',
-    marginTop: 18,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: HAIRLINE,
+  grid: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
   },
-  statCell: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  statLabel: {
-    fontFamily: 'GeistMono_400Regular',
+  gridRow: { flexDirection: 'row' },
+  gridRowTop: { borderBottomWidth: 1, borderBottomColor: colors.hairlineStrong },
+  gridCell: { flex: 1, paddingVertical: 12, paddingHorizontal: 12 },
+  gridCellLeft: { borderRightWidth: 1, borderRightColor: colors.hairlineStrong },
+  gridLabel: {
+    fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.6,
-    color: SLATE,
+    letterSpacing: 1.4,
+    color: colors.slate2,
     textTransform: 'uppercase',
   },
-  statValue: {
-    fontFamily: 'GeistMono_500Medium',
+  gridValue: {
+    fontFamily: fonts.mono,
     fontSize: 13,
-    color: BONE,
-    marginTop: 4,
-  },
-  membersHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginTop: 18,
+    letterSpacing: 0.8,
+    color: colors.bone,
+    marginTop: 6,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.6,
-    color: SLATE2,
+    letterSpacing: 1.4,
+    color: colors.slate2,
     textTransform: 'uppercase',
+    marginTop: 18,
+    marginBottom: 4,
   },
-  sectionValue: { fontFamily: 'GeistMono_500Medium', fontSize: 13, color: BONE },
   joinBtn: {
-    backgroundColor: CLAIM_BUTTON,
+    backgroundColor: colors.action,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
-    marginBottom: 6,
+    marginTop: 16,
   },
   joinBtnDisabled: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.hairlineStrong,
   },
   joinText: {
-    fontFamily: 'GeistMono_500Medium',
-    fontSize: 16,
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
     letterSpacing: 1.6,
-    color: BONE,
+    color: colors.bone,
     textTransform: 'uppercase',
   },
-  joinTextDisabled: { color: SLATE },
+  joinTextDisabled: { color: colors.slate2 },
   joinError: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.2,
-    color: '#E8432B',
+    color: colors.danger,
     textTransform: 'uppercase',
-    marginTop: 6,
+    marginTop: 8,
     lineHeight: 15,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
+    minHeight: 56,
     paddingVertical: 10,
   },
-  memberRowBorder: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
+  memberRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
   memberRank: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: fonts.mono,
     fontSize: 13,
-    color: SLATE2,
+    color: colors.slate,
     width: 28,
   },
+  memberTile: {
+    width: 32,
+    height: 32,
+    borderWidth: 1.5,
+    borderColor: colors.self,
+    backgroundColor: colors.ink3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  memberTileImg: { width: 32, height: 32 },
+  memberInitials: { fontFamily: fonts.monoMedium, fontSize: 11, color: colors.bone },
   memberName: {
     flex: 1,
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
-    color: BONE,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 16,
+    color: colors.bone,
   },
-  memberHeld: {
-    fontFamily: 'GeistMono_400Regular',
+  memberRole: {
+    fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1,
-    color: SLATE2,
+    color: colors.slate2,
+    textTransform: 'uppercase',
     marginLeft: 8,
   },
+  memberRoleLead: { color: colors.lime },
+  memberHeld: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    letterSpacing: 0.6,
+    color: colors.slate2,
+    marginLeft: 10,
+    minWidth: 64,
+    textAlign: 'right',
+  },
   loadError: { alignItems: 'center', marginTop: 16 },
-  loadErrorText: { fontFamily: 'GeistMono_400Regular', fontSize: 11, color: SLATE2, textTransform: 'uppercase' },
+  loadErrorText: { fontFamily: fonts.mono, fontSize: 11, color: colors.slate2, textTransform: 'uppercase' },
   retryBtn: {
     marginTop: 10,
     minHeight: 44,
     paddingHorizontal: 20,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    backgroundColor: INK3,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.ink3,
   },
-  retryText: { fontFamily: 'GeistMono_500Medium', fontSize: 13, color: BONE, textTransform: 'uppercase' },
+  retryText: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.bone, textTransform: 'uppercase' },
 });
