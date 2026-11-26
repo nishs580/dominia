@@ -259,10 +259,11 @@ const styles = StyleSheet.create({
   figmaItemActive: {
     borderColor: colors.lime,
   },
+  // Inside the tile's top-right corner, clear of the centred icon and the map.
   figmaCountBadge: {
     position: 'absolute',
-    top: -6,
-    left: -6,
+    top: 2,
+    right: 2,
     minWidth: 16,
     paddingHorizontal: 3,
     backgroundColor: colors.ink3,

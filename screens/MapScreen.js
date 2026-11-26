@@ -3919,11 +3919,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 2,
   },
-  // Figma C1: RELOCATE, bottom-left above the tab bar.
+  // Figma C1: RELOCATE, bottom-left above the tab bar, lifted clear of the
+  // Mapbox logo and (i) attribution in that corner (both must stay visible
+  // under Mapbox's terms; together they reach ~32pt up).
   relocateButton: {
     position: 'absolute',
     left: 12,
-    bottom: 16,
+    bottom: 44,
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
