@@ -1836,7 +1836,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
-    color: CAUTION,
+    // Destructive actions are Vermillion in the design system (Figma G2).
+    color: colors.danger,
   },
 
   // ── Modals ───────────────────────────────────────────────────────────────
