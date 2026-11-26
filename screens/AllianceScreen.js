@@ -9,7 +9,7 @@ import AllianceLogEvent from '../components/AllianceLogEvent';
 import WeeklyTaskCard from '../components/WeeklyTaskCard';
 import WeeklyTopContributors from '../components/WeeklyTopContributors';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder, listAlliances, normalizeAllianceDetail, listJoinRequests, acceptJoinRequest, declineJoinRequest } from '../lib/allianceApi';
-import { ALLIANCE_MAX_MEMBERS, allianceListState, joinErrorKey } from '../lib/allianceValidation';
+import { ALLIANCE_MAX_MEMBERS, allianceListState, joinErrorKey, joinRequestErrorKey } from '../lib/allianceValidation';
 import AllianceDetailSheet, { AllianceEmblemTile, AllianceMemberRow, AllianceStatsGrid, allianceBlurb, allianceName } from '../components/AllianceDetailSheet';
 import { isAllianceLeader } from '../lib/allianceRoles';
 import { memberInitials, normalizeJoinRequests } from '../lib/allianceJoin';
@@ -437,11 +437,17 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
         if (action === 'accept') await onRefreshAfterLeave();
         return;
       }
-      setRequestError(
-        res.error?.code === 'alliance_full'
-          ? t('alliance.errAllianceFull')
-          : t('allianceFigma.errRequestAction', { defaultValue: 'Could not update the request. Try again.' }),
-      );
+      // Backend error body is { error: '<code>' }.
+      const errKey = joinRequestErrorKey(res.error);
+      if (errKey === 'allianceFigma.errRequestNotPending') {
+        // Another leader already handled it: drop the stale row.
+        setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      }
+      setRequestError(t(errKey, {
+        defaultValue: errKey === 'allianceFigma.errRequestNotPending'
+          ? 'This request was already handled.'
+          : 'Could not update the request. Try again.',
+      }));
     } catch (err) {
       console.error('Resolve join request failed:', err);
       setRequestError(t('allianceFigma.errRequestAction', { defaultValue: 'Could not update the request. Try again.' }));

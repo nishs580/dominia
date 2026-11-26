@@ -25,6 +25,7 @@ import {
   ALLIANCE_TEXT_MAX,
   createFieldErrorKey,
   foundErrorFields,
+  foundSubmitErrorKey,
   hasFieldErrors,
   sanitizeShortName,
   validateAllianceForm,
@@ -42,7 +43,9 @@ const HAIRLINE = THEME.colors.hairline;
 const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
 function mapFoundAllianceError(t, error) {
-  const code = error?.code ?? null;
+  const submitKey = foundSubmitErrorKey(error);
+  if (submitKey) return t(submitKey);
+  const code = error?.code ?? error?.error ?? null;
   switch (code) {
     case 'short_name_taken':
       return t('createAlliance.errShortNameTaken');
