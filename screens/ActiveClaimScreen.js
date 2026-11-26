@@ -822,6 +822,8 @@ export default function ActiveClaimScreen() {
 
   useEffect(() => {
     if (mode !== 'claim') return;
+    // Cancel confirmed: the "Cancelling…" screen is showing; never award it.
+    if (cancelling) return;
     if (claimState.completed && !navigatingRef.current) {
       navigatingRef.current = true;
       setTimeout(() => completeClaim(claimState.distanceM, claimState.liveSteps), 600);
@@ -1503,6 +1505,15 @@ export default function ActiveClaimScreen() {
     const confirmCancel = () => {
       setCancelDialogOpen(false);
       setCancelling(true);
+      // Stop sampling and end the walk now, so nothing completes (or is
+      // posted for award) during the 1.2 s "Cancelling…" screen.
+      if (mode === 'contest') {
+        flushPartialContestWindow();
+        contestWalk.stop();
+      } else {
+        claimWalkSamples.stop();
+      }
+      endClaim();
       cancelTimerRef.current = setTimeout(exitClaim, 1200);
     };
 
