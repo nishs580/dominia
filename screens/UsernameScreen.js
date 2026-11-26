@@ -6,8 +6,12 @@ import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Pla
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
-import { checkUsernameAvailable, patchMe } from '../lib/meApi';
+import { checkUsernameAvailable, getMe, patchMe } from '../lib/meApi';
 import { usernameProblem, visibleProblem } from '../lib/usernameRules';
+import { useFlag } from '../lib/flags';
+import { usesFigmaOnboarding } from '../lib/onboardingFlow';
+import { colors, fonts } from '../lib/theme';
+import OnboardingHeader from '../components/OnboardingHeader';
 
 // i18n keys for each problem from lib/usernameRules.
 const PROBLEM_KEYS = {
@@ -34,6 +38,26 @@ export default function UsernameScreen({ navigation, route }) {
   // 'idle' | 'checking' | 'available' | 'taken'
   const [status, setStatus] = useState('idle');
   const insets = useSafeAreaInsets();
+  // Figma onboarding (Updated UX A4/A4b/A4c) restyles this screen; with
+  // legacy_tabs on it renders exactly as before.
+  const legacyTabs = useFlag('legacy_tabs');
+  const figma = usesFigmaOnboarding(() => legacyTabs);
+  // Back from the age step (Updated UX A5 ←): the name is already saved, so
+  // prefill it and let NEXT keep it without a second PATCH.
+  const editing = Boolean(route.params?.editing);
+  const [savedName, setSavedName] = useState(null);
+  useEffect(() => {
+    if (!figma || !editing) return undefined;
+    let cancelled = false;
+    getMe({ clerkGetToken: getToken }).then((res) => {
+      const name = res.ok ? res.data?.player?.username : null;
+      if (cancelled || !name) return;
+      setSavedName(name);
+      setUsername((cur) => cur || name);
+    });
+    return () => { cancelled = true; };
+  }, [figma, editing, getToken]);
+  const keepsSavedName = Boolean(savedName) && username.trim() === savedName;
 
   const [fontsLoaded] = useFonts({ SofiaSansExtraCondensed_800ExtraBold, GeistMono_400Regular, GeistMono_500Medium, InstrumentSans_400Regular });
 
@@ -46,6 +70,10 @@ export default function UsernameScreen({ navigation, route }) {
     }
     setStatus('checking');
     let cancelled = false;
+    if (keepsSavedName) {
+      setStatus('available');
+      return;
+    }
     const handle = setTimeout(async () => {
       const res = await checkUsernameAvailable({ clerkGetToken: getToken, username: username.trim() });
       if (cancelled) return;
@@ -57,7 +85,7 @@ export default function UsernameScreen({ navigation, route }) {
       }
     }, 400);
     return () => { cancelled = true; clearTimeout(handle); };
-  }, [username, getToken]);
+  }, [username, getToken, keepsSavedName]);
 
   if (!fontsLoaded) return null;
 
@@ -69,6 +97,10 @@ export default function UsernameScreen({ navigation, route }) {
     }
     if (status === 'taken') {
       setError(t('username.errorTaken'));
+      return;
+    }
+    if (keepsSavedName) {
+      navigation.replace('Onboarding', { playerId });
       return;
     }
     setLoading(true);
@@ -105,6 +137,62 @@ export default function UsernameScreen({ navigation, route }) {
     loading ||
     validateUsername(username) !== null ||
     status === 'taken';
+
+  if (figma) {
+    const message = error
+      || (liveProblem ? t(`username.${PROBLEM_KEYS[liveProblem]}`) : null)
+      || (status === 'taken' ? t('username.errorTaken') : null);
+    return (
+      <KeyboardAvoidingView
+        style={[figmaStyles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <OnboardingHeader title={t('username.title')} />
+        <Text style={figmaStyles.subtitle}>
+          {t('username.figmaSubtitle', { defaultValue: 'This is how the other Commanders will know you.' })}
+        </Text>
+
+        <Text style={figmaStyles.label}>{t('username.figmaLabel', { defaultValue: 'Commander name' })}</Text>
+        <TextInput
+          style={[figmaStyles.input, showErrorBorder && figmaStyles.inputError]}
+          keyboardAppearance="dark"
+          placeholder={t('username.placeholder')}
+          placeholderTextColor={colors.muted}
+          selectionColor={colors.lime}
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={username}
+          onChangeText={(text) => { setUsername(text); setError(''); }}
+          onBlur={() => setTouched(true)}
+          maxLength={20}
+          accessibilityLabel={t('username.figmaLabel', { defaultValue: 'Commander name' })}
+          accessibilityHint={message || undefined}
+        />
+        {message ? (
+          <Text style={figmaStyles.error} accessibilityLiveRegion="polite">{message}</Text>
+        ) : null}
+        <Text style={figmaStyles.helper}>
+          {t('username.figmaHelper', { defaultValue: 'Names can’t contain symbols.' })}
+        </Text>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled }}
+          onPress={handleConfirm}
+          disabled={disabled}
+          style={({ pressed }) => [
+            figmaStyles.next,
+            disabled && figmaStyles.nextDisabled,
+            pressed && !disabled && figmaStyles.nextPressed,
+          ]}
+        >
+          <Text style={[figmaStyles.nextText, disabled && figmaStyles.nextTextDisabled]}>
+            {t('username.figmaNext', { defaultValue: 'Next' })}
+          </Text>
+        </Pressable>
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -237,4 +325,44 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'left',
   },
+});
+
+// Updated UX A4: top-aligned, on lib/theme tokens.
+const figmaStyles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 24 },
+  subtitle: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 4, marginBottom: 16 },
+  label: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: colors.muted2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  input: {
+    width: '100%',
+    minHeight: 48,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    color: colors.white,
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  inputError: { borderColor: colors.danger },
+  error: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 8 },
+  helper: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16 },
+  next: {
+    marginTop: 16,
+    minHeight: 52,
+    backgroundColor: colors.action,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextDisabled: { opacity: 0.45 },
+  nextPressed: { backgroundColor: colors.actionPressed },
+  nextText: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.8, color: colors.white, textTransform: 'uppercase' },
+  nextTextDisabled: { color: colors.muted2 },
 });

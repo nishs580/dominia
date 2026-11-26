@@ -1,4 +1,5 @@
-// "Select your Age" (plan U10): a slider, the selected age and NEXT. The app
+// "Select your Age" (Updated UX A5): ← back to choose-name, a centred readout
+// with YEARS, a 1–100 slider starting at 24, a typed field and NEXT. The app
 // only ever sends the derived band (13_17 / 18_plus) — never the age itself —
 // and under 13 routes to AgeBlockedScreen with nothing saved. A step inside
 // FigmaOnboardingScreen; it reports the chosen age through onNext.
@@ -9,8 +10,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { AGE_SLIDER_DEFAULT, AGE_SLIDER_MAX, AGE_SLIDER_MIN, parseTypedAge } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
+import OnboardingHeader from '../components/OnboardingHeader';
 
-const THUMB = 28;
+const THUMB = 20;
+const SLIDER_HEIGHT = 44;
 
 function clampAge(n) {
   return Math.min(AGE_SLIDER_MAX, Math.max(AGE_SLIDER_MIN, Math.round(n)));
@@ -76,7 +79,7 @@ function AgeSlider({ value, onChange, label }) {
   );
 }
 
-export default function AgeScreen({ onNext }) {
+export default function AgeScreen({ onNext, onBack }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [age, setAge] = useState(AGE_SLIDER_DEFAULT);
@@ -95,29 +98,25 @@ export default function AgeScreen({ onNext }) {
     const v = parseTypedAge(digits);
     if (v != null) setAge(v);
   };
-  const display = age >= AGE_SLIDER_MAX ? `${AGE_SLIDER_MAX}+` : String(age);
-
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.body}>
-        <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-          {t('age.title', { defaultValue: 'Select your Age' })}
-        </Text>
+        <OnboardingHeader title={t('age.title', { defaultValue: 'Select your age' })} onBack={onBack} />
         <Text style={styles.subtitle}>
-          {t('age.subtitle', { defaultValue: 'Select the appropriate option to where your age lies' })}
+          {t('age.subtitle', { defaultValue: 'Select the option where your age lies.' })}
         </Text>
 
-        <View style={styles.readout}>
-          <Text style={styles.readoutLabel}>{t('age.selectedAge', { defaultValue: 'Selected age' })}</Text>
+        <View style={styles.readout} accessible accessibilityLabel={`${age} ${t('age.years', { defaultValue: 'Years' })}`}>
           <Text style={styles.readoutValue} maxFontSizeMultiplier={1.2}>
-            {display}
+            {age}
           </Text>
+          <Text style={styles.readoutLabel}>{t('age.years', { defaultValue: 'Years' })}</Text>
         </View>
 
         <AgeSlider value={age} onChange={onSlide} label={t('age.selectedAge', { defaultValue: 'Selected age' })} />
         <View style={styles.scale} importantForAccessibility="no-hide-descendants">
           <Text style={styles.scaleText}>{AGE_SLIDER_MIN}</Text>
-          <Text style={styles.scaleText}>{`${AGE_SLIDER_MAX}+`}</Text>
+          <Text style={styles.scaleText}>{AGE_SLIDER_MAX}</Text>
         </View>
 
         <Text style={styles.typeLabel}>{t('age.typeLabel', { defaultValue: 'Or type your age' })}</Text>
@@ -155,64 +154,64 @@ export default function AgeScreen({ onNext }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.ink, paddingHorizontal: 24 },
-  body: { flex: 1, justifyContent: 'center' },
-  title: {
-    fontFamily: fonts.display,
-    fontSize: 32,
-    letterSpacing: -0.9,
-    color: colors.bone,
-    textTransform: 'uppercase',
+  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 24 },
+  body: { flex: 1 },
+  subtitle: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 4 },
+  readout: { alignItems: 'center', marginTop: 48, marginBottom: 20 },
+  readoutValue: {
+    fontFamily: fonts.monoLight,
+    fontSize: 56,
+    lineHeight: 62,
+    letterSpacing: -1.6,
+    color: colors.white,
   },
-  subtitle: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.slate2, marginTop: 8 },
-  readout: { marginTop: 40, marginBottom: 24 },
   readoutLabel: {
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.8,
-    color: colors.slate2,
+    color: colors.muted2,
     textTransform: 'uppercase',
+    marginTop: 4,
   },
-  readoutValue: { fontFamily: 'GeistMono_300Light', fontSize: 48, letterSpacing: -1.4, color: colors.bone, marginTop: 4, textTransform: 'uppercase' },
-  slider: { height: 48, justifyContent: 'center' },
-  track: { height: 2, backgroundColor: colors.hairlineStrong, marginHorizontal: 0 },
-  fill: { height: 2, backgroundColor: colors.lime },
+  slider: { height: SLIDER_HEIGHT, justifyContent: 'center' },
+  track: { height: 4, backgroundColor: colors.raised },
+  fill: { height: 4, backgroundColor: colors.lime },
   thumb: {
     position: 'absolute',
-    top: (48 - THUMB) / 2,
+    top: (SLIDER_HEIGHT - THUMB) / 2,
     width: THUMB,
     height: THUMB,
     backgroundColor: colors.lime,
   },
   scale: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  scaleText: { fontFamily: fonts.mono, fontSize: 11, color: colors.slate2 },
+  scaleText: { fontFamily: fonts.mono, fontSize: 11, color: colors.muted },
   typeLabel: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.slate2,
+    letterSpacing: 1.6,
+    color: colors.muted2,
     textTransform: 'uppercase',
-    marginTop: 28,
+    marginTop: 24,
     marginBottom: 8,
   },
   typeInput: {
     minHeight: 48,
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
-    backgroundColor: colors.ink2,
-    paddingHorizontal: 14,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
     fontFamily: fonts.mono,
-    fontSize: 18,
-    color: colors.bone,
+    fontSize: 15,
+    color: colors.white,
   },
   typeInputFocused: { borderColor: colors.lime },
   next: {
-    backgroundColor: colors.claimButton,
-    minHeight: 48,
+    backgroundColor: colors.action,
+    minHeight: 52,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nextText: { fontFamily: fonts.monoMedium, fontSize: 14, letterSpacing: 2, color: colors.bone, textTransform: 'uppercase' },
-  pressed: { opacity: 0.9 },
+  nextText: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.8, color: colors.white, textTransform: 'uppercase' },
+  pressed: { backgroundColor: colors.actionPressed },
 });
