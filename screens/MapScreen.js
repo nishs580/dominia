@@ -198,6 +198,9 @@ function contestStartErrorMessage(t, error) {
       return t('map.contestErr.outsideHours');
     case 'insufficient_iron':
       return t('map.contestErr.insufficientIron');
+    case 'insufficient_gold':
+      // Gold-only economy (402): same body and copy as the claim flow.
+      return t('map.startErr.insufficientGold', { n: context.required_gold - context.player_gold });
     default:
       return null;
   }
@@ -259,13 +262,17 @@ async function beginClaim({ territory, name, perimeter, getTokenRef, myPlayer, s
 }
 
 // -> { ok: true } | { ok: false, code, context }
-async function beginContest({ territory, name, getTokenRef, myPlayer, navigation, onClose }) {
+async function beginContest({ territory, name, getTokenRef, myPlayer, setMyPlayer, navigation, onClose }) {
   const result = await startContest({
     clerkGetToken: () => getTokenRef.current(),
     territoryId: territory.id,
   });
   if (!result.ok) return { ok: false, code: result.code, context: result.context };
   const env = result.data;
+  // Gold-only economy: the start charged Gold; the balance after is echoed.
+  if (typeof env?.gold_balance_after === 'number' && Number.isFinite(env.gold_balance_after)) {
+    setMyPlayer?.((prev) => (prev ? { ...prev, gold: env.gold_balance_after } : prev));
+  }
   onClose?.();
   navigation.navigate('ActiveClaim', {
     mode: 'contest',
@@ -276,6 +283,8 @@ async function beginContest({ territory, name, getTokenRef, myPlayer, navigation
     requiredWalkM: env.required_walk_m,
     attackerAllianceId: env.attacker_alliance_id,
     playerId: myPlayer?.id,
+    // A LOST result shows GOLD −n for what the start charged.
+    goldPaid: env.gold_cost_paid,
   });
   return { ok: true };
 }
@@ -584,6 +593,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
         name: selectedTerritory.name,
         getTokenRef,
         myPlayer,
+        setMyPlayer,
         navigation,
         onClose,
       });
@@ -3050,6 +3060,7 @@ export default function MapScreen() {
       name: model.name ?? t('common.territoryFallback'),
       getTokenRef,
       myPlayer,
+      setMyPlayer,
       navigation,
       onClose: handleSheetClose,
     });
