@@ -4,6 +4,7 @@ import { SvgXml } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AllianceEmblem from '../components/AllianceEmblem';
 import AllianceLogEvent from '../components/AllianceLogEvent';
 import WeeklyTaskCard from '../components/WeeklyTaskCard';
@@ -369,6 +370,7 @@ function NonMemberContent({
 function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave, figma = false, territoryCount = null }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   // App-only surfaces (Remote Config). Off leaves a read-only member list
   // with no top contributors, manage tools, Command Post or War Room entry.
   const rosterToolsOn = useFlag('alliance_roster_tools');
@@ -947,7 +949,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       <>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.figmaMemberContent}
+          // Figma header sits below the status bar (as TabScreenHeader).
+          contentContainerStyle={[styles.figmaMemberContent, { paddingTop: insets.top + 12 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.figmaMemberTitleRow}>
@@ -1556,6 +1559,7 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) 
 export default function AllianceScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { userId, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -1825,7 +1829,7 @@ export default function AllianceScreen() {
         </View>
       )}
       {!isMember && figma && (
-        <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
+        <View ref={walkthroughHeaderRef} collapsable={false} style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
             {t('allianceFigma.title', { defaultValue: 'ALLIANCES' })}
           </Text>
