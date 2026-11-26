@@ -1,11 +1,12 @@
-// Figma Missions tab (plan U14), mounted with legacy_tabs off; legacy_tabs on
-// keeps ActivityScreen. Daily MARCH / RANGE missions over the existing
-// challenge APIs: GET /me/challenges/today for progress and the server lock,
-// POST /me/challenges/lock-axis for LOCK, POST /me/challenge-complete for
-// CLAIM. Decisions live in lib/missions.js.
+// Figma Missions tab (plan U14, frames E1–E5 in U11), mounted with
+// legacy_tabs off; legacy_tabs on keeps ActivityScreen. Daily MARCH / RANGE
+// missions over the existing challenge APIs: GET /me/challenges/today for
+// progress and the server lock, POST /me/challenges/lock-axis for LOCK (no
+// confirmation: Figma has none), POST /me/challenge-complete for CLAIM.
+// Decisions and display models live in lib/missions.js.
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +15,10 @@ import Toast from 'react-native-toast-message';
 import TabScreenHeader from '../components/TabScreenHeader';
 import FeatureExplainer from '../components/FeatureExplainer';
 import WeeklyTaskCard from '../components/WeeklyTaskCard';
+import { AllianceGlyph, GoldGlyph } from '../components/ResourceGlyphs';
+import { ClockGlyph, InfoGlyph, LockGlyph, PinGlyph, StepsGlyph } from '../components/MissionGlyphs';
 import { fetchChallengesToday } from '../lib/challengesTodayApi';
-import { getMyAlliance } from '../lib/allianceApi';
+import { getAllianceById, getMyAlliance } from '../lib/allianceApi';
 import { navigateTo } from '../lib/navigation';
 import * as activityProducer from '../lib/activity';
 import { formatDistance, useUnits } from '../lib/units';
@@ -25,10 +28,15 @@ import {
   carryStorageKey,
   typeDescription,
   buildMissionRows,
+  missionRowView,
+  sectionLabel,
+  typeSubtitle,
+  lockButtonCopy,
+  lockedView,
   initialLockState,
   lockReducer,
   isToggleEnabled,
-  confirmAndLock,
+  lockNow,
   lockMissionType,
   claimMission,
   errorCopy,
@@ -183,29 +191,13 @@ export default function MissionsScreen() {
   );
 
   // ── LOCK ────────────────────────────────────────────────────────────────
-  const confirmLock = useCallback((type) => new Promise((resolve) => {
-    const typeName = tc(t, TYPE_LABEL[type]);
-    Alert.alert(
-      t('missions.lockConfirmTitle', { defaultValue: 'Lock {{type}} for today?', type: typeName }),
-      t('missions.lockConfirmBody', {
-        defaultValue: 'Once locked, the mission type cannot be changed until the next day.',
-      }),
-      [
-        { text: t('missions.lockConfirmCancel', { defaultValue: 'Cancel' }), style: 'cancel', onPress: () => resolve(false) },
-        { text: t('missions.lockConfirmOk', { defaultValue: 'Lock' }), onPress: () => resolve(true) },
-      ],
-      { cancelable: true, onDismiss: () => resolve(false) },
-    );
-  }), [t]);
-
   const lockFn = useCallback((type) => lockMissionType({ clerkGetToken: tokenFn, type }), [tokenFn]);
 
   const onLock = useCallback(() => {
-    confirmAndLock({ state: lock, confirm: confirmLock, lock: lockFn, dispatch });
-  }, [lock, confirmLock, lockFn]);
+    lockNow({ state: lock, lock: lockFn, dispatch });
+  }, [lock, lockFn]);
 
   const onRetryLock = useCallback(async () => {
-    // Already confirmed once; retry sends the same type straight away.
     dispatch({ type: 'LOCK_STARTED' });
     const res = await lockFn(lock.type);
     if (res.ok) dispatch({ type: 'LOCK_SUCCEEDED', lockedType: res.lockedType });
@@ -253,11 +245,27 @@ export default function MissionsScreen() {
 
   // ── Alliance ────────────────────────────────────────────────────────────
   const [alliance, setAlliance] = useState({ loaded: false, error: null, allianceId: null });
+  const [allianceName, setAllianceName] = useState(null);
   const loadAlliance = useCallback(async () => {
     const res = await getMyAlliance({ clerkGetToken: tokenFn });
     if (res.ok) setAlliance({ loaded: true, error: null, allianceId: res.data?.alliance_id ?? null });
     else setAlliance((prev) => (prev.loaded && !prev.error ? prev : { loaded: true, error: res.error || 'load_failed', allianceId: null }));
   }, [tokenFn]);
+  // The alliance name tag on the alliance mission card (Figma E1).
+  useEffect(() => {
+    const id = alliance.allianceId;
+    if (!id) {
+      setAllianceName(null);
+      return undefined;
+    }
+    let cancelled = false;
+    getAllianceById({ clerkGetToken: tokenFn, allianceId: id }).then((res) => {
+      if (!cancelled && res.ok) setAllianceName(res.data?.alliance?.name ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [alliance.allianceId, tokenFn]);
   useFocusEffect(useCallback(() => { loadAlliance(); }, [loadAlliance]));
   const allianceView = allianceSection(alliance);
 
@@ -266,8 +274,22 @@ export default function MissionsScreen() {
   const explainerPages = useMemo(() => [{
     title: t('missions.explainerTitle', { defaultValue: 'MISSIONS TYPE' }),
     body: t('missions.explainerBody', {
-      defaultValue:
-        'You can lock a mission type for the day. Once locked, it cannot be changed until the next day. Each type represents a different category of missions.',
+      defaultValue: 'You can lock a mission type for the day. Once locked, it can\u2019t be changed until the next day.',
+    }),
+    rows: [
+      {
+        icon: <StepsGlyph size={20} color={colors.lime} />,
+        title: tc(t, TYPE_LABEL.march),
+        body: t('missions.explainerMarch', { defaultValue: 'Missions count your steps.' }),
+      },
+      {
+        icon: <PinGlyph size={20} color={colors.lime} />,
+        title: tc(t, TYPE_LABEL.range),
+        body: t('missions.explainerRange', { defaultValue: 'Missions count the distance you cover.' }),
+      },
+    ],
+    footer: t('missions.explainerFooter', {
+      defaultValue: 'Once locked, the type stays until missions refresh. Finish a mission, then tap Claim to collect its Gold.',
     }),
   }], [t]);
 
@@ -276,100 +298,92 @@ export default function MissionsScreen() {
   const countdownText = tc(t, countdown);
   const noMissionsToday = today?.data?.is_challenge_day === false;
   const lockedOther = lock.lockedType === 'other';
-
-  function taskText(row) {
-    if (row.type === 'range') {
-      return t('missions.taskRange', {
-        defaultValue: 'Cover a total of {{distance}}',
-        distance: formatDistance(row.target, units),
-      });
-    }
-    return t('missions.taskMarch', {
-      defaultValue: 'Complete a total of {{n}}k steps',
-      n: Math.round(row.target / 1000),
-    });
-  }
-
-  function progressText(row) {
-    if (row.type === 'range') {
-      return `${formatDistance(row.current, units)}/${formatDistance(row.target, units)}`;
-    }
-    return `${Math.floor(row.current)}/${row.target}`;
-  }
+  const locked = lockedView(lock);
+  const fmtDistance = (m) => formatDistance(m, units);
+  const section = sectionLabel(tc(t, TYPE_LABEL[lock.type]), rows);
 
   function renderRow(row, keyPrefix = '') {
+    const view = missionRowView(row, fmtDistance);
     const tier = tc(t, TIER_LABEL[row.tier]);
-    const task = taskText(row);
-    const progress = progressText(row);
+    const title = tc(t, view.title);
     const gold = t('missions.goldReward', { defaultValue: '{{n}} Gold', n: row.gold });
+    const chip = view.chip ? tc(t, view.chip) : null;
     return (
-      <View key={`${keyPrefix}${row.challengeKey}`} style={styles.row}>
+      <View key={`${keyPrefix}${row.challengeKey}`} style={[styles.row, view.claimable && styles.rowReady]}>
         <View
           style={styles.rowTop}
           accessible
           accessibilityLabel={t('missions.rowA11y', {
             defaultValue: '{{tier}}. {{task}}. Progress {{progress}}. Reward {{gold}}.',
-            tier, task, progress, gold,
+            tier, task: title, progress: view.progress, gold,
           })}
         >
-          <View style={styles.rowMain}>
-            <Text style={styles.tier} maxFontSizeMultiplier={1.3}>{tier}</Text>
-            <Text style={styles.task}>{task}</Text>
-            <Text style={styles.progress} maxFontSizeMultiplier={1.3}>{progress}</Text>
+          <Text style={styles.tier} maxFontSizeMultiplier={1.3}>{tier}</Text>
+          <Text style={styles.rowTitle} maxFontSizeMultiplier={1.3} numberOfLines={1}>{title}</Text>
+          <View style={styles.goldWrap}>
+            <GoldGlyph size={12} color={colors.lime} strokeWidth={3} />
+            <Text style={styles.gold} maxFontSizeMultiplier={1.3}>{row.gold}</Text>
           </View>
-          <Text style={styles.gold} maxFontSizeMultiplier={1.3}>{gold}</Text>
         </View>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${Math.round(row.fraction * 100)}%` }]} />
         </View>
-        {row.secured ? (
-          <Text style={styles.secured} maxFontSizeMultiplier={1.3}>
-            {t('missions.secured', { defaultValue: 'Secured' })}
-          </Text>
-        ) : row.showClaim ? (
-          <Pressable
-            onPress={() => onClaim(row)}
-            disabled={!row.canClaim}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !row.canClaim, busy: !!row.claiming }}
-            accessibilityLabel={t('missions.claimA11y', { defaultValue: 'Claim {{tier}} mission, {{gold}}', tier, gold })}
-            style={({ pressed }) => [styles.claimBtn, row.canClaim && styles.claimBtnReady, !row.canClaim && styles.claimBtnDisabled, pressed && styles.pressed]}
-          >
-            {row.claiming ? (
-              <ActivityIndicator color={colors.bone} />
-            ) : (
-              <Text style={[styles.btnText, row.canClaim && styles.btnTextOnLime, !row.canClaim && styles.btnTextDisabled]} maxFontSizeMultiplier={1.3}>
-                {t('missions.claim', { defaultValue: 'Claim' })}
-              </Text>
-            )}
-          </Pressable>
-        ) : null}
+        <View style={styles.rowFoot}>
+          <Text style={styles.progress} maxFontSizeMultiplier={1.3}>{view.progress}</Text>
+          {view.status === 'claim' ? (
+            <Pressable
+              onPress={() => onClaim(row)}
+              disabled={!row.canClaim}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !row.canClaim, busy: !!row.claiming }}
+              accessibilityLabel={t('missions.claimA11y', { defaultValue: 'Claim {{tier}} mission, {{gold}}', tier, gold })}
+              style={({ pressed }) => [styles.claimBtn, view.claimable && styles.claimBtnReady, pressed && view.claimable && styles.claimPressed]}
+            >
+              {row.claiming ? (
+                <ActivityIndicator color={colors.bone} />
+              ) : (
+                <Text style={[styles.btnText, view.claimable ? styles.btnTextOnLime : styles.btnTextDisabled]} maxFontSizeMultiplier={1.3}>
+                  {t('missions.claim', { defaultValue: 'Claim' })}
+                </Text>
+              )}
+            </Pressable>
+          ) : chip ? (
+            <View style={[styles.chip, view.status === 'complete' && styles.chipLime]}>
+              <Text style={[styles.chipText, view.status === 'complete' && styles.chipTextLime]} maxFontSizeMultiplier={1.3}>{chip}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <TabScreenHeader title={t('missions.yourMissions', { defaultValue: 'Your Missions' })} />
+      <TabScreenHeader
+        title={t('missions.yourMissions', { defaultValue: 'Your Missions' })}
+        right={(
+          <Pressable
+            onPress={() => setExplainerReopen((n) => n + 1)}
+            accessibilityRole="button"
+            accessibilityLabel={t('missions.infoA11y', { defaultValue: 'About mission types' })}
+            hitSlop={4}
+            style={({ pressed }) => [styles.infoBtn, pressed && styles.infoPressed]}
+          >
+            <InfoGlyph size={22} color={colors.bone2} />
+          </Pressable>
+        )}
+      />
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.refreshRow}>
+          <ClockGlyph size={14} color={countdown.underMinute ? colors.caution : colors.slate2} />
           <Text
             style={[styles.refresh, countdown.underMinute && styles.refreshCaution]}
             accessibilityLiveRegion="polite"
             accessibilityLabel={t('missions.refreshA11y', { defaultValue: 'Missions refresh in {{time}}', time: countdownText })}
             maxFontSizeMultiplier={1.3}
           >
-            {t('missions.refreshIn', { defaultValue: 'Refreshes in: {{time}}', time: countdownText })}
+            {t('missions.refreshIn', { defaultValue: 'Refreshes in {{time}}', time: countdownText })}
           </Text>
-          <Pressable
-            onPress={() => setExplainerReopen((n) => n + 1)}
-            accessibilityRole="button"
-            accessibilityLabel={t('missions.infoA11y', { defaultValue: 'About mission types' })}
-            hitSlop={4}
-            style={({ pressed }) => [styles.infoBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.infoText} maxFontSizeMultiplier={1.2}>i</Text>
-          </Pressable>
         </View>
 
         {loadError && !today ? (
@@ -398,32 +412,53 @@ export default function MissionsScreen() {
 
         {today && !noMissionsToday ? (
           <>
+            <Text style={styles.typeLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
+              {t('missions.typeForToday', { defaultValue: 'Mission type for today' })}
+            </Text>
             <View style={styles.toggle} accessibilityRole="tablist">
               {MISSION_TYPES.map((type) => {
                 const selected = lock.type === type && !lockedOther;
                 const label = tc(t, TYPE_LABEL[type]);
+                const sub = tc(t, typeSubtitle(type));
+                const lockedHere = locked.lockIconOn === type;
+                const dim = !toggleEnabled && !selected;
                 return (
                   <Pressable
                     key={type}
                     onPress={() => dispatch({ type: 'SELECT_TYPE', missionType: type })}
                     disabled={!toggleEnabled}
                     accessibilityRole="tab"
-                    accessibilityLabel={label}
+                    accessibilityLabel={lockedHere
+                      ? t('missions.tabLockedA11y', { defaultValue: '{{type}}, {{sub}}, locked', type: label, sub })
+                      : `${label}, ${sub}`}
                     accessibilityState={{ selected, disabled: !toggleEnabled }}
                     style={[styles.toggleBtn, selected && styles.toggleBtnOn]}
                   >
-                    <Text
-                      style={[styles.toggleText, selected && styles.toggleTextOn, !toggleEnabled && !selected && styles.btnTextDisabled]}
-                      maxFontSizeMultiplier={1.3}
-                    >
-                      {label}
-                    </Text>
+                    <View style={styles.toggleHead}>
+                      <Text style={[styles.toggleText, selected && styles.toggleTextOn, dim && styles.toggleDim]} maxFontSizeMultiplier={1.3}>
+                        {label}
+                      </Text>
+                      {lockedHere ? <LockGlyph size={13} color={colors.lime} strokeWidth={1.8} /> : null}
+                    </View>
+                    <Text style={[styles.toggleSub, dim && styles.toggleDim]} maxFontSizeMultiplier={1.3}>{sub}</Text>
                   </Pressable>
                 );
               })}
             </View>
 
             <Text style={styles.desc}>{tc(t, typeDescription(lock.type))}</Text>
+
+            {locked.banner ? (
+              <View style={styles.lockedBanner} accessible accessibilityRole="text">
+                <LockGlyph size={14} color={colors.lime} strokeWidth={1.8} />
+                <Text style={styles.lockedBannerText}>
+                  {t(locked.banner.key, {
+                    defaultValue: locked.banner.defaultValue,
+                    type: tc(t, locked.banner.nameKey),
+                  })}
+                </Text>
+              </View>
+            ) : null}
 
             {lockedOther ? (
               <Text style={styles.note}>
@@ -433,31 +468,26 @@ export default function MissionsScreen() {
               </Text>
             ) : null}
 
-            {carried.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
-                  {t('missions.fromYesterday', { defaultValue: 'From yesterday' })}
-                </Text>
-                {carried.map((m) => renderRow(m, 'carry:'))}
-              </View>
-            ) : null}
-
-            {!lockedOther ? <View style={styles.section}>{rows.map((r) => renderRow(r))}</View> : null}
-
-            {claimError ? (
-              <View style={styles.banner}>
-                <Text style={styles.bannerText}>{tc(t, errorCopy('claim', claimError.error.code))}</Text>
-                {claimError.error.retryable ? (
-                  <Pressable
-                    onPress={() => onClaim(claimError.mission)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('missions.retry', { defaultValue: 'Retry' })}
-                    style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.btnText}>{t('missions.retry', { defaultValue: 'Retry' })}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
+            {locked.showLockButton ? (
+              <Pressable
+                onPress={onLock}
+                disabled={lock.locking}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: lock.locking, busy: lock.locking }}
+                accessibilityLabel={t('missions.lockA11y', {
+                  defaultValue: 'Lock {{type}} as today’s mission type',
+                  type: tc(t, TYPE_LABEL[lock.type]),
+                })}
+                style={({ pressed }) => [styles.lockBtn, pressed && styles.pressed]}
+              >
+                {lock.locking ? (
+                  <ActivityIndicator color={colors.bone} />
+                ) : (
+                  <Text style={styles.btnText} maxFontSizeMultiplier={1.3}>
+                    {tc(t, lockButtonCopy(tc(t, TYPE_LABEL[lock.type])))}
+                  </Text>
+                )}
+              </Pressable>
             ) : null}
 
             {lock.error ? (
@@ -476,36 +506,60 @@ export default function MissionsScreen() {
               </View>
             ) : null}
 
-            {!lock.lockedType ? (
-              <Pressable
-                onPress={onLock}
-                disabled={lock.locking}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: lock.locking, busy: lock.locking }}
-                accessibilityLabel={t('missions.lockA11y', {
-                  defaultValue: 'Lock {{type}} as today’s mission type',
-                  type: tc(t, TYPE_LABEL[lock.type]),
-                })}
-                style={({ pressed }) => [styles.lockBtn, pressed && styles.lockBtnPressed]}
-              >
-                {lock.locking ? (
-                  <ActivityIndicator color={colors.bone} />
-                ) : (
-                  <Text style={styles.btnText} maxFontSizeMultiplier={1.3}>
-                    {t('missions.lock', { defaultValue: 'Lock' })}
-                  </Text>
-                )}
-              </Pressable>
+            {carried.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
+                  {t('missions.fromYesterday', { defaultValue: 'From yesterday' })}
+                </Text>
+                {carried.map((m) => renderRow(m, 'carry:'))}
+              </View>
+            ) : null}
+
+            {!lockedOther ? (
+              <View style={styles.section}>
+                <Text
+                  style={[styles.sectionLabel, section.lime && styles.sectionLabelLime]}
+                  accessibilityRole="header"
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {tc(t, section.base)}
+                  {section.ready ? ` · ${tc(t, section.ready)}` : ''}
+                </Text>
+                {rows.map((r) => renderRow(r))}
+              </View>
+            ) : null}
+
+            {claimError ? (
+              <View style={styles.banner}>
+                <Text style={styles.bannerText}>{tc(t, errorCopy('claim', claimError.error.code))}</Text>
+                {claimError.error.retryable ? (
+                  <Pressable
+                    onPress={() => onClaim(claimError.mission)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('missions.retry', { defaultValue: 'Retry' })}
+                    style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.btnText}>{t('missions.retry', { defaultValue: 'Retry' })}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </>
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
+        <View style={styles.allianceSection}>
+          <Text style={styles.allianceHeading} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
             {t('missions.allianceMissions', { defaultValue: 'Alliance Missions' })}
           </Text>
           {allianceView === 'loading' ? <ActivityIndicator color={colors.slate2} /> : null}
-          {allianceView === 'card' ? <WeeklyTaskCard allianceId={alliance.allianceId} getToken={getToken} /> : null}
+          {allianceView === 'card' ? (
+            <WeeklyTaskCard
+              variant="mission"
+              allianceId={alliance.allianceId}
+              allianceName={allianceName}
+              getToken={getToken}
+            />
+          ) : null}
           {allianceView === 'error' ? (
             <View style={styles.banner}>
               <Text style={styles.bannerText}>
@@ -522,18 +576,24 @@ export default function MissionsScreen() {
             </View>
           ) : null}
           {allianceView === 'join_prompt' ? (
-            <Pressable
-              onPress={() => navigateTo('Alliance')}
-              accessibilityRole="button"
-              accessibilityLabel={t('missions.joinPromptA11y', { defaultValue: 'Open Alliance to join or create one' })}
-              style={({ pressed }) => [styles.joinCard, pressed && styles.pressed]}
-            >
+            <View style={styles.joinCard}>
+              <AllianceGlyph size={28} color={colors.slate2} />
               <Text style={styles.joinText}>
                 {t('missions.joinPrompt', {
-                  defaultValue: 'Join or Create an alliance to be a part of alliance missions',
+                  defaultValue: 'Join or create an alliance to be part of alliance missions.',
                 })}
               </Text>
-            </Pressable>
+              <Pressable
+                onPress={() => navigateTo('Alliance')}
+                accessibilityRole="button"
+                accessibilityLabel={t('missions.joinPromptA11y', { defaultValue: 'Open Alliance to join or create one' })}
+                style={({ pressed }) => [styles.findBtn, pressed && styles.findPressed]}
+              >
+                <Text style={styles.btnText} maxFontSizeMultiplier={1.3}>
+                  {t('missions.findAlliance', { defaultValue: 'Find an alliance' })}
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       </ScrollView>
@@ -550,54 +610,20 @@ export default function MissionsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink },
-  body: { padding: 16, paddingBottom: 48 },
+  body: { padding: 16, paddingTop: 12, paddingBottom: 48 },
   loading: { marginTop: 24 },
-  refreshRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  refresh: { fontFamily: fonts.mono, fontSize: 13, color: colors.slate2 },
-  refreshCaution: { color: colors.caution },
-  infoBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
-  },
-  infoText: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.bone },
-  toggle: { marginTop: 16, flexDirection: 'row', borderWidth: 1, borderColor: colors.hairlineStrong },
-  toggleBtn: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink },
-  // Figma segmented control: raised fill + 2px Signal Lime underline.
-  toggleBtnOn: { backgroundColor: colors.raised, borderBottomWidth: 2, borderBottomColor: colors.lime },
-  toggleText: { fontFamily: fonts.mono, fontSize: 13, letterSpacing: 1.6, color: colors.slate2 },
-  toggleTextOn: { fontFamily: fonts.monoMedium, color: colors.bone },
-  desc: { marginTop: 12, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bone2 },
-  note: { marginTop: 16, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.slate2 },
-  section: { marginTop: 24 },
-  sectionLabel: {
-    marginBottom: 8,
+  infoBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  infoPressed: { opacity: 0.6 },
+  refreshRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
+  refresh: {
     fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
+    fontSize: 12,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
     color: colors.slate2,
   },
-  row: {
-    backgroundColor: colors.ink2,
-    borderWidth: 0.5,
-    borderColor: colors.hairline,
-    padding: 16,
-    marginBottom: 8,
-  },
-  rowTop: { flexDirection: 'row', alignItems: 'flex-start' },
-  rowMain: { flex: 1, paddingRight: 12 },
-  tier: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.8, color: colors.slate2 },
-  task: { marginTop: 4, fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 19, color: colors.bone },
-  progress: { marginTop: 4, fontFamily: fonts.mono, fontSize: 13, color: colors.bone2 },
-  gold: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.bone },
-  track: { marginTop: 12, height: 4, backgroundColor: colors.ink3 },
-  fill: { height: 4, backgroundColor: colors.lime },
-  secured: {
+  refreshCaution: { color: colors.caution },
+  typeLabel: {
     marginTop: 12,
     fontFamily: fonts.mono,
     fontSize: 11,
@@ -605,26 +631,103 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.bone2,
   },
-  claimBtn: {
+  toggle: { marginTop: 12, flexDirection: 'row', borderWidth: 1, borderColor: colors.hairlineStrong },
+  toggleBtn: {
+    flex: 1,
+    minHeight: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  // Figma segmented control: raised fill + 2px Signal Lime underline.
+  toggleBtnOn: { backgroundColor: colors.raised, borderBottomColor: colors.lime },
+  toggleHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  toggleText: { fontFamily: fonts.mono, fontSize: 13, letterSpacing: 1.6, color: colors.slate2 },
+  toggleTextOn: { fontFamily: fonts.monoMedium, color: colors.bone },
+  toggleSub: { marginTop: 4, fontFamily: fonts.body, fontSize: 13, color: colors.slate2 },
+  toggleDim: { color: colors.slate },
+  desc: { marginTop: 12, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bone2 },
+  note: { marginTop: 16, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.slate2 },
+  lockedBanner: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.limeSoft,
+  },
+  lockedBannerText: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bone },
+  section: { marginTop: 20 },
+  sectionLabel: {
+    marginBottom: 12,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    color: colors.slate2,
+  },
+  sectionLabelLime: { fontFamily: fonts.monoMedium, color: colors.lime },
+  row: {
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    padding: 16,
+    marginBottom: 12,
+  },
+  // A claimable reward: Signal Lime border (Figma E4).
+  rowReady: { borderColor: colors.lime },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tier: { fontFamily: fonts.monoMedium, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: colors.lime },
+  rowTitle: {
+    flex: 1,
+    fontFamily: fonts.display,
+    fontSize: 20,
+    lineHeight: 24,
+    textTransform: 'uppercase',
+    color: colors.bone,
+  },
+  goldWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  gold: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.bone },
+  track: { marginTop: 12, height: 4, backgroundColor: colors.ink3 },
+  fill: { height: 4, backgroundColor: colors.lime },
+  rowFoot: {
     marginTop: 12,
-    minHeight: 48,
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progress: { fontFamily: fonts.mono, fontSize: 13, letterSpacing: 0.6, color: colors.slate2 },
+  chip: { backgroundColor: colors.ink3, paddingHorizontal: 8, paddingVertical: 4 },
+  chipLime: { backgroundColor: colors.limeSoft },
+  chipText: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: colors.bone2 },
+  chipTextLime: { color: colors.lime },
+  claimBtn: {
+    minHeight: 44,
+    minWidth: 96,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.ink3,
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
   },
   // A ready reward is a Signal Lime moment (Figma Mission Row · Ready).
   claimBtnReady: { backgroundColor: colors.lime, borderColor: colors.lime },
-  claimBtnDisabled: { backgroundColor: colors.ink2, borderColor: colors.hairline },
+  claimPressed: { opacity: 0.85 },
   lockBtn: {
     marginTop: 16,
-    minHeight: 48,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.action, // Electric Blue primary action
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
   },
-  lockBtnPressed: { opacity: 0.85 },
   btnText: {
     fontFamily: fonts.mono,
     fontSize: 13,
@@ -653,12 +756,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
   },
-  joinCard: {
-    backgroundColor: colors.ink2,
-    borderWidth: 0.5,
-    borderColor: colors.hairline,
-    padding: 16,
-    minHeight: 48,
+  allianceSection: { marginTop: 16 },
+  allianceHeading: {
+    marginBottom: 16,
+    fontFamily: fonts.display,
+    fontSize: 24,
+    lineHeight: 28,
+    textTransform: 'uppercase',
+    color: colors.bone,
   },
-  joinText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bone },
+  // Figma E5: dashed empty card with the people icon and a blue CTA.
+  joinCard: {
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.hairlineStrong,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  joinText: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.slate2,
+  },
+  findBtn: {
+    marginTop: 20,
+    alignSelf: 'stretch',
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.action, // Electric Blue primary action
+  },
+  findPressed: { backgroundColor: colors.actionPressed },
 });

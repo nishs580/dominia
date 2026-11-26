@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts } from '../lib/theme';
 import { getWeeklyTask } from '../lib/weeklyTaskApi';
-import { formatTaskValue as formatValue, rewardLine } from '../lib/weeklyTaskFormat';
+import { formatInt, formatTaskValue as formatValue, rewardLine } from '../lib/weeklyTaskFormat';
+import { allianceCardModel } from '../lib/missions';
+import { GoldGlyph } from './ResourceGlyphs';
 
 /**
  * Alliance Weekly Task card — the member-facing two-bar surface.
@@ -15,6 +17,10 @@ import { formatTaskValue as formatValue, rewardLine } from '../lib/weeklyTaskFor
  * floor) with the qualifying floor as a tick that flips to "share earned".
  * At 100% of quota the personal bar collapses to "your part is done". No
  * formula, snapshot or scaling rule is ever explained in-product.
+ *
+ * variant="mission" is the Figma Missions-tab card (E1): task name, the
+ * alliance name tag, a one-line goal, one alliance bar, "128 / 200 KM" and
+ * the shared Gold reward. Same API data; only the presentation differs.
  */
 
 function pct(part, whole) {
@@ -33,7 +39,67 @@ function Bar({ fillPct, markerPct, fillColor }) {
   );
 }
 
-export default function WeeklyTaskCard({ allianceId, getToken }) {
+/** Progress figure without its unit ("128"), matching formatValue's scale. */
+function progressFigure(unit, value) {
+  if (unit === 'm') return String(Math.round((value / 1000) * 10) / 10);
+  return formatInt(value);
+}
+
+function MissionCard({ t, data, allianceName }) {
+  const m = allianceCardModel(data);
+  if (m.state !== 'active') {
+    return (
+      <View style={[styles.card, styles.missionCard]}>
+        <Text style={styles.pendingText}>{t('weeklyTask.ordersPending')}</Text>
+      </View>
+    );
+  }
+  const name = t(`weeklyTask.name.${m.taskType}`);
+  const target = formatValue(t, m.unit, m.target);
+  const progress = `${progressFigure(m.unit, m.progress)} / ${target}`;
+  const goal = t(`missions.allianceGoal.${m.taskType}`, {
+    defaultValue: t('missions.allianceGoal.default', {
+      defaultValue: 'Reach {{target}} together as an alliance this week.',
+      target,
+    }),
+    target,
+  });
+  const reward = m.sharedGold > 0
+    ? t('missions.allianceShared', { defaultValue: '{{n}} SHARED', n: m.sharedGold })
+    : rewardLine(t, data.task.personal_payout ?? {});
+  return (
+    <View
+      style={[styles.card, styles.missionCard]}
+      accessible
+      accessibilityLabel={t('missions.allianceCardA11y', {
+        defaultValue: '{{name}}, {{alliance}}. {{goal}} Progress {{progress}}. Reward {{reward}}.',
+        name, alliance: allianceName ?? '', goal, progress, reward,
+      })}
+    >
+      <View style={styles.missionHead}>
+        <Text style={styles.missionTitle} maxFontSizeMultiplier={1.3} numberOfLines={2}>{name}</Text>
+        {allianceName ? (
+          <View style={styles.tag}>
+            <Text style={styles.tagText} maxFontSizeMultiplier={1.3} numberOfLines={1}>{allianceName}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.missionGoal}>{goal}</Text>
+      <View style={styles.missionTrack}>
+        <View style={[styles.fill, { width: `${Math.round(m.fraction * 100)}%`, backgroundColor: colors.lime }]} />
+      </View>
+      <View style={styles.missionFoot}>
+        <Text style={styles.missionProgress} maxFontSizeMultiplier={1.3}>{progress}</Text>
+        <View style={styles.missionReward}>
+          {m.sharedGold > 0 ? <GoldGlyph size={12} color={colors.lime} strokeWidth={3} /> : null}
+          <Text style={styles.missionRewardText} maxFontSizeMultiplier={1.3}>{reward}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function WeeklyTaskCard({ allianceId, getToken, variant, allianceName }) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -83,6 +149,10 @@ export default function WeeklyTaskCard({ allianceId, getToken }) {
         </Pressable>
       </View>
     );
+  }
+
+  if (variant === 'mission') {
+    return <MissionCard t={t} data={data} allianceName={allianceName} />;
   }
 
   const { task, personal, marches_from: marchesFrom, last_week: lastWeek } = data;
@@ -330,4 +400,50 @@ const styles = StyleSheet.create({
     borderTopColor: colors.hairline,
   },
   lastWeekText: { fontFamily: fonts.body, fontSize: 11, color: colors.slate2, lineHeight: 16 },
+
+  // ── variant="mission" (Figma E1) ──
+  missionCard: { marginTop: 0, borderLeftWidth: 3, padding: 20 },
+  missionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  missionTitle: {
+    flexShrink: 1,
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 26,
+    color: colors.bone,
+    textTransform: 'uppercase',
+  },
+  tag: {
+    flexShrink: 0,
+    maxWidth: '50%',
+    backgroundColor: colors.allianceSoft,
+    borderWidth: 1,
+    borderColor: colors.alliance,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  tagText: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.bone,
+  },
+  missionGoal: { marginTop: 12, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.bone2 },
+  missionTrack: { marginTop: 14, height: 4, backgroundColor: colors.ink3, overflow: 'hidden' },
+  missionFoot: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  missionProgress: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+    color: colors.slate2,
+  },
+  missionReward: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  missionRewardText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+    color: colors.bone,
+  },
 });

@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileAvatarButton from './ProfileAvatarButton';
 import { colors, fonts } from '../lib/theme';
 
-export default function TabScreenHeader({ kicker, title }) {
+// `right` replaces the avatar with a screen's own control (Missions: the (i)).
+export default function TabScreenHeader({ kicker, title, right }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -27,7 +28,7 @@ export default function TabScreenHeader({ kicker, title }) {
           {title}
         </Text>
       </View>
-      <ProfileAvatarButton />
+      {right ?? <ProfileAvatarButton />}
     </View>
   );
 }
