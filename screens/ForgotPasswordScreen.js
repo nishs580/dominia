@@ -1,5 +1,5 @@
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
-import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/archivo';
+import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/sofia-sans-extra-condensed';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';

@@ -1,4 +1,4 @@
-import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/archivo';
+import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/sofia-sans-extra-condensed';
 import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
 import { InstrumentSans_400Regular } from '@expo-google-fonts/instrument-sans';
 import { useEffect, useState } from 'react';
