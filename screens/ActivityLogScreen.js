@@ -10,6 +10,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  SectionList,
   StatusBar,
   StyleSheet,
   Text,
@@ -18,14 +19,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
-import ActivityLogEvent from '../components/ActivityLogEvent';
+import { useNavigation } from '@react-navigation/native';
+import ActivityLogEvent, { HistoryRow } from '../components/ActivityLogEvent';
+import BackTitleHeader from '../components/BackTitleHeader';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
+import { buildHistorySections } from '../lib/activityHistory';
+import { useFlag } from '../lib/flags';
+import { colors, fonts } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 export default function ActivityLogScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { userId, getToken } = useAuth();
+  // legacy_tabs off: Figma G8 History — back arrow + HISTORY title, rows
+  // grouped TODAY / YESTERDAY / date, Final event labels (plan 2026-11-27 U13).
+  const figma = !useFlag('legacy_tabs');
 
   // First-tap tip anywhere on the screen (header + feed are one surface).
   const walkthroughRootRef = useRef(null);
@@ -105,7 +115,31 @@ export default function ActivityLogScreen() {
     return null;
   };
 
+  const sections = useMemo(
+    () => (figma ? buildHistorySections(events, { now: new Date(), locale: i18n.language }) : []),
+    [figma, events, i18n.language],
+  );
+
+  // Figma mode keeps its header on every state so the back arrow is always there.
+  const wrapFigma = (body) => (
+    <View style={styles.screen}>
+      <BackTitleHeader
+        title={t('activityLog.historyTitle', { defaultValue: 'History' })}
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
+      <View style={[styles.figmaBody, styles.centered]}>{body}</View>
+    </View>
+  );
+
   if (initialLoading) {
+    if (figma) {
+      return wrapFigma(
+        <>
+          <ActivityIndicator size="large" color="#6C6C69" />
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
+        </>,
+      );
+    }
     return (
       <View style={[styles.screen, styles.centered]}>
         <ActivityIndicator size="large" color="#6C6C69" />
@@ -115,6 +149,20 @@ export default function ActivityLogScreen() {
   }
 
   if (error && events.length === 0) {
+    if (figma) {
+      return wrapFigma(
+        <>
+          <Text style={styles.errorBody}>{t('activityLog.failedToLoad')}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={fetchFirstPage}
+            style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
+          </Pressable>
+        </>,
+      );
+    }
     return (
       <View style={[styles.screen, styles.centered]}>
         <Text style={styles.errorBody}>{t('activityLog.failedToLoad')}</Text>
@@ -129,11 +177,60 @@ export default function ActivityLogScreen() {
     );
   }
 
-  if (events.length === 0 && !error && !initialLoading) {
+  // In Figma mode a page of only hidden rows (streaks, levels) still reads as
+  // empty; keep paging in the list below once anything is visible.
+  const figmaEmpty = figma && sections.length === 0 && endReached;
+  if ((events.length === 0 && !error && !initialLoading) || figmaEmpty) {
+    if (figma) {
+      return wrapFigma(
+        <>
+          <Text style={styles.emptyLabel}>{t('activityLog.emptyTitle')}</Text>
+          <Text style={styles.emptyBody}>{t('activityLog.emptyBody')}</Text>
+        </>,
+      );
+    }
     return (
       <View style={[styles.screen, styles.centered]}>
         <Text style={styles.emptyLabel}>{t('activityLog.emptyTitle')}</Text>
         <Text style={styles.emptyBody}>{t('activityLog.emptyBody')}</Text>
+      </View>
+    );
+  }
+
+  if (figma) {
+    return (
+      <View ref={walkthroughRootRef} collapsable={false} style={styles.screen} onTouchStart={tips.onTouchStart}>
+        <BackTitleHeader
+          title={t('activityLog.historyTitle', { defaultValue: 'History' })}
+          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+        />
+        <SectionList
+          sections={sections}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          keyExtractor={(item) => item.id}
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.groupHeader} accessibilityRole="header">
+              {section.title.key
+                ? t(section.title.key, { defaultValue: section.title.defaultValue })
+                : section.title.text}
+            </Text>
+          )}
+          renderItem={({ item }) => <HistoryRow item={item} />}
+          onEndReached={fetchNextPage}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? renderFooter : null}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#F5F4EF"
+              colors={['#F5F4EF']}
+            />
+          }
+        />
+
+        {tips.tipElement}
       </View>
     );
   }
@@ -175,6 +272,19 @@ const styles = StyleSheet.create({
   centered: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  figmaBody: {
+    flex: 1,
+  },
+  groupHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted2,
   },
   loadingText: {
     fontFamily: 'GeistMono_500Medium',
