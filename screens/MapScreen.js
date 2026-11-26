@@ -1271,6 +1271,9 @@ export default function MapScreen() {
   const [mapError, setMapError] = useState(false);
   // Colour-key panel toggled from the KEY control beside LOCATE.
   const [legendOpen, setLegendOpen] = useState(false);
+  // While territory search is open its results drop down the right edge, so
+  // the side rail steps aside (it would otherwise sit on top of them).
+  const [searchActive, setSearchActive] = useState(false);
   // The key is a glance aid: picking a territory closes it so it never sits
   // over the search bar or the sheet.
   useEffect(() => {
@@ -3423,6 +3426,7 @@ export default function MapScreen() {
         <MapTopBar
           gold={myPlayer ? (myPlayer.gold ?? 0) : null}
           onSelectSearchResult={handleSearchSelect}
+          onSearchActiveChange={setSearchActive}
         />
       ) : null}
       </View>
@@ -3532,7 +3536,7 @@ export default function MapScreen() {
           // The full territory sheet grows past the rail when expanded (MORE),
           // and the rail would cover its close button, so step aside while it
           // is open. The compact Figma card sits below the rail and keeps it.
-          hidden={flightActive || (fullSheetOn && selected != null)}
+          hidden={flightActive || searchActive || (fullSheetOn && selected != null)}
           keyOpen={legendOpen}
           onToggleKey={() => setLegendOpen((o) => !o)}
           onLocate={recenter}

@@ -21,11 +21,14 @@ import TerritorySearch from './TerritorySearch';
 import { GoldGlyph } from './ResourceGlyphs';
 import { colors, fonts } from '../lib/theme';
 
-export default function MapTopBar({ gold, onSelectSearchResult }) {
+export default function MapTopBar({ gold, onSelectSearchResult, onSearchActiveChange }) {
   const { t } = useTranslation();
   const [searchActive, setSearchActive] = useState(false);
   const [dismissKey, setDismissKey] = useState(0);
-  const onActiveChange = useCallback((active) => setSearchActive(active), []);
+  const onActiveChange = useCallback((active) => {
+    setSearchActive(active);
+    onSearchActiveChange?.(active);
+  }, [onSearchActiveChange]);
   const loaded = gold != null;
   const balanceA11y = loaded
     ? t('map.topBar.goldA11y', { defaultValue: 'Gold balance: {{n}}', n: Math.round(Number(gold) || 0) })
