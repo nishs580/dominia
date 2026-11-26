@@ -69,3 +69,5 @@ load-admin-to-postgis.js
 spb_envelope.geojson
 roads_spb.geojson
 pois_spb.geojson
+# Agent worktrees
+.claude/worktrees/

@@ -290,8 +290,8 @@
     "errorEmpty": "Please enter a username.",
     "errorTooShort": "Username must be at least 2 characters.",
     "errorTooLong": "Username must be 20 characters or less.",
-    "errorInvalidChars": "Only letters, numbers, dots and underscores allowed.",
-    "errorTaken": "Username already taken. Try another.",
+    "errorInvalidChars": "Name cannot contain a symbol. Please try a new name.",
+    "errorTaken": "Name is already taken. Please try a different name.",
     "errorGeneric": "Couldn't save your name. Please try again.",
     "checking": "Checking availability…",
     "available": "Available ✓"
@@ -1493,7 +1493,7 @@
       "kicker": "THE MAP",
       "intro": "This is {{city}}. Every outlined shape is real territory that you can occupy by walking.",
       "introNoCity": "This is your city. Every outlined shape is real territory that you can occupy by walking.",
-      "colours": "Empty territories are unclaimed. Red marks what you hold. Green marks your allies. Blue marks your rivals.",
+      "colours": "Empty territories are unclaimed. Green marks what you hold. Blue marks your allies. Red marks your rivals.",
       "card": "Tap any territory to see its name, its owner, and the distance you'd walk to take it.",
       "resources": "Iron, stone, gold, morale. Your war chest, earned by moving."
     },

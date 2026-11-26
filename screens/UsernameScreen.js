@@ -7,16 +7,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { checkUsernameAvailable, patchMe } from '../lib/meApi';
+import { usernameProblem, visibleProblem } from '../lib/usernameRules';
 
-// Client-side validation mirrors the backend's normalizeUsername rules.
+// i18n keys for each problem from lib/usernameRules.
+const PROBLEM_KEYS = {
+  empty: 'errorEmpty',
+  tooShort: 'errorTooShort',
+  tooLong: 'errorTooLong',
+  symbol: 'errorInvalidChars',
+};
+
 // Returns an i18n error key, or null when the shape is valid.
 function validateUsername(name) {
-  const v = name.trim();
-  if (!v) return 'errorEmpty';
-  if (v.length < 2) return 'errorTooShort';
-  if (v.length > 20) return 'errorTooLong';
-  if (!/^[a-zA-Z0-9._]+$/.test(v)) return 'errorInvalidChars';
-  return null;
+  const p = usernameProblem(name);
+  return p === 'ok' ? null : PROBLEM_KEYS[p];
 }
 
 export default function UsernameScreen({ navigation, route }) {
@@ -25,6 +29,7 @@ export default function UsernameScreen({ navigation, route }) {
   const { getToken } = useAuth();
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   // 'idle' | 'checking' | 'available' | 'taken'
   const [status, setStatus] = useState('idle');
@@ -92,6 +97,10 @@ export default function UsernameScreen({ navigation, route }) {
   // The availability check is advisory — PATCH /me re-checks authoritatively on
   // submit — so a slow or failed check must never hard-block Next. Only an
   // explicit 'taken' (or an invalid shape) disables submission.
+  // A symbol shows the moment it is typed (Figma A4c); NEXT stays disabled.
+  const liveProblem = visibleProblem(username, { touched });
+  const showErrorBorder = Boolean(error || liveProblem || status === 'taken');
+
   const disabled =
     loading ||
     validateUsername(username) !== null ||
@@ -107,18 +116,21 @@ export default function UsernameScreen({ navigation, route }) {
         <Text style={styles.subtitle}>{t('username.subtitle')}</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, showErrorBorder && styles.inputError]}
           keyboardAppearance="dark"
           placeholder={t('username.placeholder')}
           placeholderTextColor="#6C6C69"
           autoCapitalize="none"
           value={username}
           onChangeText={(text) => { setUsername(text); setError(''); }}
+          onBlur={() => setTouched(true)}
           maxLength={20}
         />
 
         {error ? (
           <Text style={styles.error}>{error}</Text>
+        ) : liveProblem ? (
+          <Text style={styles.error}>{t(`username.${PROBLEM_KEYS[liveProblem]}`)}</Text>
         ) : status === 'taken' ? (
           <Text style={styles.error}>{t('username.errorTaken')}</Text>
         ) : status === 'checking' ? (
@@ -203,6 +215,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 12,
   },
+  inputError: { borderColor: '#E8432B' },
   error: {
     fontFamily: 'InstrumentSans_400Regular',
     color: '#E8432B',

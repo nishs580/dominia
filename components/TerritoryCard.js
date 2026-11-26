@@ -56,9 +56,9 @@ export default function TerritoryCard({
   const attackerStreakDays = streaksOn ? (myPlayer?.current_streak ?? 0) : 0;
   const model = useMemo(
     () => (properties
-      ? territoryCardModel({ properties, gold, iron, multiResource, atCap, attackerStreakDays })
+      ? territoryCardModel({ properties, gold, iron, multiResource, atCap, attackerStreakDays, free: firstClaim })
       : null),
-    [properties, gold, iron, multiResource, atCap, attackerStreakDays],
+    [properties, gold, iron, multiResource, atCap, attackerStreakDays, firstClaim],
   );
 
   if (!territory || !model) return null;
@@ -163,7 +163,7 @@ export default function TerritoryCard({
         <>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('map.card.ctaA11y', {
+            accessibilityLabel={action.free ? ctaLabel : t('map.card.ctaA11y', {
               defaultValue: '{{label}}, costs {{price}} {{currency}}',
               label: ctaLabel,
               price: action.price,
@@ -186,8 +186,12 @@ export default function TerritoryCard({
               </>
             ) : (
               <>
-                <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{action.price}</Text>
-                <Glyph size={14} color={action.disabled ? colors.slate2 : colors.bone} />
+                {action.free ? null : (
+                  <>
+                    <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{action.price}</Text>
+                    <Glyph size={14} color={action.disabled ? colors.slate2 : colors.bone} />
+                  </>
+                )}
                 <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{ctaLabel}</Text>
               </>
             )}
