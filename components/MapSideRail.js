@@ -14,21 +14,14 @@ import { useTranslation } from 'react-i18next';
 import { getRooms } from '../lib/chatApi';
 import { getActivityLog } from '../lib/activityLogApi';
 import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
-import { colors } from '../lib/theme';
+import { BubbleIcon, CrosshairIcon, LayersIcon, ListIcon, TrophyIcon } from './MapIcons';
+import { colors, fonts } from '../lib/theme';
 
 const ICON_SIZE = 14;
 const FIGMA_ICON_SIZE = 18;
-
-// Three swatches in the territory colours — the key's own legend in miniature.
-function KeyGlyph() {
-  return (
-    <View style={styles.keyGlyph}>
-      {[colors.claim, colors.alliance, colors.enemy].map((c) => (
-        <View key={c} style={[styles.keySwatch, { borderColor: c }]} />
-      ))}
-    </View>
-  );
-}
+// Figma C1: five separate square tiles stacked with a gap.
+const FIGMA_TILE = 44;
+const FIGMA_GAP = 8;
 
 function withCount(base, count) {
   if (count == null || count === 0) return base;
@@ -36,11 +29,25 @@ function withCount(base, count) {
   return `${base} · ${count}`;
 }
 
-// figma (legacy_tabs off, plan U11): a vertical rail of five icon controls —
-// Territories key · Locate me · Leaderboard · Log · Chat — under the top bar.
-// Key and Locate act on the map, so MapScreen passes their handlers in.
+// figma (legacy_tabs off, plan U11; Updated UX C1/C2, plan U8): five
+// separate square tiles — Territories key (layers) · Locate me (crosshair) ·
+// Leaderboard (trophy) · Log (list) · Chat (bubble) — under the top bar. The
+// key tile wears a lime border while the key is open. Key and Locate act on
+// the map, so MapScreen passes their handlers in.
+//
+// coach (B1 side-panel coach mark): the rail lifts above the coach scrim,
+// gains a lime frame and a label beside each tile, and any tile tap just
+// continues the coach mark (onCoachContinue) instead of navigating.
 // Without `figma` the rail renders exactly as before.
-export default function MapSideRail({ hidden = false, figma = false, keyOpen = false, onToggleKey, onLocate }) {
+export default function MapSideRail({
+  hidden = false,
+  figma = false,
+  keyOpen = false,
+  onToggleKey,
+  onLocate,
+  coach = false,
+  onCoachContinue,
+}) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const { getToken } = useAuth();
@@ -78,61 +85,77 @@ export default function MapSideRail({ hidden = false, figma = false, keyOpen = f
     const figmaItems = [
       {
         key: 'key',
-        render: () => <KeyGlyph />,
+        Icon: LayersIcon,
         label: t('map.rail.keyA11y', { defaultValue: 'Territory colours key' }),
+        coachLabel: t('map.coach.railKey', { defaultValue: 'TERRITORIES COLOURING' }),
         onPress: onToggleKey,
         expanded: keyOpen,
       },
       {
         key: 'locate',
-        render: (c) => <Text style={[styles.locateGlyph, { color: c }]}>⌖</Text>,
+        Icon: CrosshairIcon,
         label: t('map.locateMe'),
+        coachLabel: t('map.coach.railLocate', { defaultValue: 'LOCATE ME' }),
         onPress: onLocate,
       },
       {
         key: 'boards',
-        render: (c) => <BoardsGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        Icon: TrophyIcon,
         label: t('map.rail.leaderboardA11y', { defaultValue: 'Leaderboard' }),
+        coachLabel: t('map.coach.railLeaderboard', { defaultValue: 'LEADERBOARD' }),
         onPress: () => navigation.navigate('Leaderboards'),
       },
       {
         key: 'log',
-        render: (c) => <LogGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        Icon: ListIcon,
         label: withCount(t('map.rail.logA11y', { defaultValue: 'Log' }), logUnread),
+        coachLabel: t('map.coach.railLog', { defaultValue: 'LOG' }),
         count: logUnread,
         onPress: () => navigation.navigate('ActivityLog'),
       },
       {
         key: 'chat',
-        render: (c) => <ChatGlyph size={FIGMA_ICON_SIZE} color={c} />,
+        Icon: BubbleIcon,
         label: withCount(t('map.rail.chatA11y', { defaultValue: 'Chat' }), chatUnread),
+        coachLabel: t('map.coach.railChat', { defaultValue: 'CHAT' }),
         count: chatUnread,
         onPress: () => navigation.navigate('Chat'),
       },
     ];
     return (
-      <View style={styles.figmaContainer}>
-        {figmaItems.map((item, i) => (
-          <Pressable
-            key={item.key}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            accessibilityState={item.expanded != null ? { expanded: item.expanded } : undefined}
-            onPress={item.onPress}
-            style={({ pressed }) => [
-              styles.figmaItem,
-              i > 0 && styles.itemDivider,
-              (pressed || item.expanded) && styles.itemPressed,
-            ]}
-          >
-            {item.render(colors.bone)}
-            {item.count ? (
-              <Text style={styles.figmaCount} maxFontSizeMultiplier={1.2}>
-                {item.count > 99 ? '99+' : item.count}
-              </Text>
+      <View style={[styles.figmaContainer, coach && styles.figmaContainerCoach]} pointerEvents="box-none">
+        {figmaItems.map((item) => (
+          <View key={item.key} style={styles.figmaRow} pointerEvents="box-none">
+            {coach ? (
+              <View style={styles.coachLabel} pointerEvents="none">
+                <Text style={styles.coachLabelText} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                  {item.coachLabel}
+                </Text>
+              </View>
             ) : null}
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityState={item.expanded != null ? { expanded: item.expanded } : undefined}
+              onPress={coach ? onCoachContinue : item.onPress}
+              style={({ pressed }) => [
+                styles.figmaItem,
+                item.expanded && !coach && styles.figmaItemActive,
+                pressed && styles.itemPressed,
+              ]}
+            >
+              <item.Icon size={FIGMA_ICON_SIZE} color={colors.bone} />
+              {item.count && !coach ? (
+                <View style={styles.figmaCountBadge} pointerEvents="none">
+                  <Text style={styles.figmaCount} maxFontSizeMultiplier={1.2}>
+                    {item.count > 99 ? '99+' : item.count}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
         ))}
+        {coach ? <View style={styles.coachFrame} pointerEvents="none" /> : null}
       </View>
     );
   }
@@ -208,37 +231,72 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     top: 112,
-    width: 44,
-    backgroundColor: 'rgba(16,16,16,0.86)',
-    borderWidth: 0.5,
-    borderColor: colors.hairline,
-    borderRadius: 0,
-    overflow: 'hidden',
+    alignItems: 'flex-end',
+    gap: FIGMA_GAP,
     zIndex: 10,
   },
+  // Above the coach scrim (CoachMark zIndex 70) so the rail reads as the
+  // highlighted subject of B1.
+  figmaContainerCoach: {
+    zIndex: 80,
+    elevation: 80,
+  },
+  figmaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   figmaItem: {
-    width: 44,
-    minHeight: 44,
+    width: FIGMA_TILE,
+    height: FIGMA_TILE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    backgroundColor: 'rgba(16,16,16,0.86)',
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    borderRadius: 0,
+  },
+  figmaItemActive: {
+    borderColor: colors.lime,
+  },
+  figmaCountBadge: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    minWidth: 16,
+    paddingHorizontal: 3,
+    backgroundColor: colors.ink3,
+    borderWidth: 0.5,
+    borderColor: colors.hairlineStrong,
+    alignItems: 'center',
   },
   figmaCount: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: fonts.monoMedium,
     fontSize: 11,
     color: colors.bone,
   },
-  locateGlyph: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 18,
-  },
-  keyGlyph: {
-    gap: 2,
-  },
-  keySwatch: {
-    width: 14,
-    height: 4,
+  coachLabel: {
+    backgroundColor: colors.ink2,
     borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  coachLabelText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.bone,
+  },
+  coachFrame: {
+    position: 'absolute',
+    top: -5,
+    bottom: -5,
+    right: -5,
+    width: FIGMA_TILE + 10,
+    borderWidth: 2,
+    borderColor: colors.lime,
   },
   label: {
     fontFamily: 'GeistMono_500Medium',
