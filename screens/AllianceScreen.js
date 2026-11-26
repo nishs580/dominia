@@ -1560,9 +1560,13 @@ export default function AllianceScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { userId, getToken } = useAuth();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  const { userId, getToken: clerkGetToken } = useAuth();
+  const getTokenRef = useRef(clerkGetToken);
+  getTokenRef.current = clerkGetToken;
+  // Clerk's getToken changes identity between renders. Everything below (and
+  // every child that takes it as a prop) uses this stable wrapper, so focus
+  // effects and loaders keyed on it run once per focus instead of looping.
+  const getToken = useCallback((...args) => getTokenRef.current(...args), []);
   const hasLoadedOnceRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);

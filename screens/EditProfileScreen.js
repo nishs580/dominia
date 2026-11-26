@@ -98,7 +98,9 @@ export default function EditProfileScreen() {
       else setNameStatus('idle');
     }, AVAILABILITY_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(handle); };
-  }, [name, currentName, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
+    // getToken is left out on purpose: Clerk returns a new function each
+    // render, which would restart the debounce forever.
+  }, [name, currentName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Photo ──────────────────────────────────────────────────────────────
 

@@ -218,6 +218,13 @@ export default function ProfileAccordionScreen() {
   const [goldUsed, setGoldUsed] = useState(null);
   const [savingUnits, setSavingUnits] = useState(false);
   const loadedOnceRef = useRef(false);
+  // Clerk's getToken is not referentially stable across renders. Reading it
+  // through a ref keeps the loaders below stable, so the focus effect runs
+  // once per focus instead of after every state update (which looped and
+  // tripped the backend rate limit).
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const stableGetToken = useCallback((...args) => getTokenRef.current(...args), []);
 
   const loadProfile = useCallback(async () => {
     if (!userId) {
@@ -235,7 +242,7 @@ export default function ProfileAccordionScreen() {
         .select('id, username, level, alliance_id, gold, alliance_chat_push_enabled, avatar_url')
         .eq('clerk_id', userId)
         .maybeSingle(),
-      getMe({ clerkGetToken: getToken }),
+      getMe({ clerkGetToken: stableGetToken }),
     ]);
 
     if (error || !player) {
@@ -286,7 +293,7 @@ export default function ProfileAccordionScreen() {
 
     loadedOnceRef.current = true;
     setLoading(false);
-  }, [userId, getToken]);
+  }, [userId, stableGetToken]);
 
   // Refresh on focus so a name or photo change in Edit Profile shows on return.
   useFocusEffect(
@@ -296,10 +303,10 @@ export default function ProfileAccordionScreen() {
   );
 
   const loadActivity = useCallback(
-    () => getActivityLog({ clerkGetToken: getToken, limit: RECENT_ACTIVITY_LIMIT }),
-    [getToken],
+    () => getActivityLog({ clerkGetToken: stableGetToken, limit: RECENT_ACTIVITY_LIMIT }),
+    [stableGetToken],
   );
-  const loadStats = useCallback(() => fetchActivityBests({ clerkGetToken: getToken }), [getToken]);
+  const loadStats = useCallback(() => fetchActivityBests({ clerkGetToken: stableGetToken }), [stableGetToken]);
   const [activity, reloadActivity] = useLazyLoad(sections.activity, loadActivity);
   const [stats, reloadStats] = useLazyLoad(sections.statistics, loadStats);
 
