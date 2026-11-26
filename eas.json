@@ -31,7 +31,7 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_FLAG_OVERRIDES": "{\"legacy_tabs\":false}"
+        "EXPO_PUBLIC_FLAG_OVERRIDES": "{\"multi_resource_economy\":false,\"attack_day\":false,\"full_territory_sheet\":false,\"territory_development\":false,\"territory_legacy\":false,\"sitrep_card\":false,\"battle_chips\":false,\"home_bases\":false,\"streaks\":false,\"war_room\":false,\"command_post\":false,\"alliance_roster_tools\":false,\"alliance_hq_create\":false,\"power_rank\":false,\"honour_medals\":false,\"claim_celebration\":false,\"contest_result_screen\":false,\"legacy_tabs\":false,\"first_claim_objective\":true}"
       }
     }
   },

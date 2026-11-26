@@ -1254,6 +1254,11 @@ export default function MapScreen() {
   const [mapError, setMapError] = useState(false);
   // Colour-key panel toggled from the KEY control beside LOCATE.
   const [legendOpen, setLegendOpen] = useState(false);
+  // The key is a glance aid: picking a territory closes it so it never sits
+  // over the search bar or the sheet.
+  useEffect(() => {
+    if (selected != null) setLegendOpen(false);
+  }, [selected]);
   // True after a successful fetch that left the feature cache empty — the
   // player is looking at unmapped ground and deserves a line saying so.
   const [emptyViewport, setEmptyViewport] = useState(false);
@@ -2052,6 +2057,8 @@ export default function MapScreen() {
   const onCameraChanged = useCallback((state) => {
     if (state?.gestures?.isGestureActive === true) {
       userMovedCameraRef.current = true;
+      // Panning the map is a sign the player is done with the colour key.
+      setLegendOpen(false);
       return;
     }
     if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
@@ -3349,7 +3356,10 @@ export default function MapScreen() {
       {figmaChrome ? (
         <MapSideRail
           figma
-          hidden={flightActive}
+          // The full territory sheet grows past the rail when expanded (MORE),
+          // and the rail would cover its close button, so step aside while it
+          // is open. The compact Figma card sits below the rail and keeps it.
+          hidden={flightActive || (fullSheetOn && selected != null)}
           keyOpen={legendOpen}
           onToggleKey={() => setLegendOpen((o) => !o)}
           onLocate={recenter}
