@@ -93,7 +93,8 @@
     "kicker": "City-wide",
     "title": "Events",
     "comingSoon": "Coming soon",
-    "comingSoonBody": "Timed events for the whole city will appear here. Check back soon."
+    "comingSoonBody": "Seasonal tournaments and city-wide events will show up here.",
+    "headline": "Events are coming"
   },
   "levelTitle": {
     "Scout": "Scout",
