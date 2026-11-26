@@ -689,7 +689,7 @@ function FigmaLeaderboards() {
       </View>
 
       <View style={figma.seasonRow}>
-        <Text style={figma.seasonLabel} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+        <Text style={figma.seasonLabel} numberOfLines={2} maxFontSizeMultiplier={1.3}>
           {tc(t, seasonLabel(viewer.city))}
         </Text>
         <View style={figma.toggle} accessibilityRole="tablist">
@@ -777,7 +777,8 @@ const figma = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.6,
+    lineHeight: 15,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.muted2,
   },
@@ -787,7 +788,7 @@ const figma = StyleSheet.create({
     borderColor: colors.hairlineStrong,
   },
   toggleCell: {
-    minWidth: 84,
+    minWidth: 72,
     minHeight: 32,
     paddingHorizontal: 12,
     alignItems: 'center',
