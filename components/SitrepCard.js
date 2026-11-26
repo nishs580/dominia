@@ -14,10 +14,10 @@ import { navigateTo } from '../lib/navigation';
 import { useTranslation } from 'react-i18next';
 import { fetchChallengesToday } from '../lib/challengesTodayApi';
 
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK2 = '#1A1A1A';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 const AT_RISK_HOUR = 17;
 

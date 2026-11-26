@@ -1,5 +1,5 @@
 // Component: ActivityLogScreen — unified activity feed
-// Surface: Ink #0E1014 background, rows transparent on Ink, 1px hairline-standard rgba(242,238,230,0.08) divider between rows
+// Surface: Ink #101010 background, rows transparent on Ink, 1px hairline-standard rgba(245,244,239,0.08) divider between rows
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
 // Territory colors: delegated to ActivityLogEvent row accent bars (Claim, Alliance, Enemy, Slate)
 // Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen, end-of-list signaled by hairline + Geist Mono label (grids are visible — brand rule).
@@ -92,7 +92,7 @@ export default function ActivityLogScreen() {
 
   const renderFooter = () => {
     if (loadingMore) {
-      return <ActivityIndicator color="#5C6068" style={{ paddingVertical: 16 }} />;
+      return <ActivityIndicator color="#6C6C69" style={{ paddingVertical: 16 }} />;
     }
     if (endReached && events.length > 0) {
       return (
@@ -108,7 +108,7 @@ export default function ActivityLogScreen() {
   if (initialLoading) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator size="large" color="#5C6068" />
+        <ActivityIndicator size="large" color="#6C6C69" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
@@ -156,8 +156,8 @@ export default function ActivityLogScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F2EEE6"
-            colors={['#F2EEE6']}
+            tintColor="#F5F4EF"
+            colors={['#F5F4EF']}
           />
         }
       />
@@ -170,7 +170,7 @@ export default function ActivityLogScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0E1014',
+    backgroundColor: '#101010',
   },
   centered: {
     alignItems: 'center',
@@ -181,16 +181,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
     marginTop: 12,
   },
   errorBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   retryBtn: {
-    backgroundColor: '#D64525',
+    backgroundColor: '#3155FF',
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -201,19 +201,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   emptyLabel: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   emptyBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#E8E3D8',
+    color: '#E4E3DE',
     marginTop: 8,
   },
   header: {
@@ -226,16 +226,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginTop: 4,
   },
   endDivider: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginHorizontal: 16,
   },
   endLabel: {
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
     textAlign: 'center',
     paddingVertical: 16,
   },

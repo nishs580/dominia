@@ -1064,7 +1064,7 @@ export default function ActiveClaimScreen() {
           foregroundService: {
             notificationTitle: t('activeClaim.fgServiceTitle'),
             notificationBody: t('activeClaim.fgServiceBody'),
-            notificationColor: '#D64525',
+            notificationColor: '#C8FF3D',
           },
           pausesUpdatesAutomatically: false,
         });
@@ -1559,7 +1559,7 @@ export default function ActiveClaimScreen() {
               cx={ring.cx}
               cy={ring.cy}
               r={ring.radius}
-              stroke={CLAIM}
+              stroke={'#C8FF3D'}
               strokeWidth={ring.strokeWidth}
               fill="none"
               strokeLinecap="butt"
@@ -1706,14 +1706,14 @@ const styles = StyleSheet.create({
   screen: { flexGrow: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
-  territoryName: { fontFamily: 'Archivo_900Black', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
+  territoryName: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
   // Neutral instrument — the progress ring is this screen's one red element.
   badge: { marginTop: 4, backgroundColor: INK2, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
   badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
   ringWrap: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  pctText: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 48, letterSpacing: -1 },
+  pctText: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 48, letterSpacing: -1, textTransform: 'uppercase' },
   // Bone, not slate — this is the real number, read mid-walk in direct sun.
   metresText: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
 
@@ -1764,9 +1764,9 @@ const styles = StyleSheet.create({
   // Arm gate — fee paid, walk clock not started. The countdown is the one loud
   // element; everything else stays quiet so START WALK is the obvious target.
   armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
-  armCountdown: { fontFamily: 'Archivo_700Bold', color: CLAIM, fontSize: 72, letterSpacing: -2, textAlign: 'center' },
+  armCountdown: { fontFamily: 'GeistMono_300Light', color: '#C8FF3D', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
   armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
-  armTitle: { fontFamily: 'Archivo_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8 },
+  armTitle: { fontFamily: 'SofiaSansExtraCondensed_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },
   armBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
   armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   armError: { fontFamily: 'InstrumentSans_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },

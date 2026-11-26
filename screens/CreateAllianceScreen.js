@@ -582,7 +582,7 @@ function LegacyCreateAllianceScreen() {
 
           {playerLoading ? (
             <View style={styles.centered}>
-              <ActivityIndicator color={CLAIM} />
+              <ActivityIndicator color={'#C8FF3D'} />
             </View>
           ) : !playerId ? (
             <View style={styles.emptyWrap}>
@@ -590,7 +590,7 @@ function LegacyCreateAllianceScreen() {
             </View>
           ) : territoriesLoading ? (
             <View style={styles.centered}>
-              <ActivityIndicator color={CLAIM} />
+              <ActivityIndicator color={'#C8FF3D'} />
             </View>
           ) : territories.length === 0 ? (
             <View style={styles.emptyWrap}>
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     letterSpacing: 1.2,
-    color: CLAIM,
+    color: '#E8432B',
     textTransform: 'uppercase',
     marginTop: -10,
     marginBottom: 18,
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
     backgroundColor: HAIRLINE_STRONG,
   },
   stepTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 28,
     color: BONE,
     textTransform: 'uppercase',
@@ -873,7 +873,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     letterSpacing: 1.4,
-    color: CLAIM,
+    color: '#E8432B',
     textTransform: 'uppercase',
     marginTop: 12,
     lineHeight: 14,
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
   },
   emblemCellSelected: {
     borderColor: BONE_2,
-    backgroundColor: 'rgba(242,238,230,0.04)',
+    backgroundColor: 'rgba(245,244,239,0.04)',
   },
   cta: {
     backgroundColor: CLAIM_BUTTON,
@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
     borderBottomColor: HAIRLINE,
   },
   tRowSelected: {
-    backgroundColor: 'rgba(242,238,230,0.04)',
+    backgroundColor: 'rgba(245,244,239,0.04)',
     borderLeftWidth: 1,
     borderLeftColor: BONE_2,
     paddingLeft: 11,
@@ -984,9 +984,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tName: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontSize: 20,
     color: BONE,
+    lineHeight: 22,
+    textTransform: 'uppercase',
   },
   tMeta: {
     fontFamily: 'GeistMono_400Regular',
@@ -1042,7 +1044,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     paddingHorizontal: 7,
     paddingVertical: 3,
-    backgroundColor: 'rgba(242,238,230,0.06)',
+    backgroundColor: 'rgba(245,244,239,0.06)',
     marginLeft: 8,
   },
 });

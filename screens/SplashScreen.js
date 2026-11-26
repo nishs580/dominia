@@ -29,5 +29,5 @@ const styles = StyleSheet.create({
     letterSpacing: -1.4,
     textTransform: 'uppercase',
   },
-  mark: { fontFamily: fonts.display, fontSize: 13, color: colors.claim, marginLeft: 4, marginBottom: 10 },
+  mark: { fontFamily: fonts.display, fontSize: 13, color: colors.lime, marginLeft: 4, marginBottom: 10, textTransform: 'uppercase' },
 });

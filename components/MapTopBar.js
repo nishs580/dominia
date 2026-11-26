@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairlineStrong,
     borderRadius: 0,

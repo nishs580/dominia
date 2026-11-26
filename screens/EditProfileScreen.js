@@ -421,11 +421,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     marginLeft: 8,
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    fontFamily: fonts.display,
+    fontSize: 32,
     color: colors.bone,
+    lineHeight: 34,
+    textTransform: 'uppercase',
   },
   content: {
     padding: 16,
@@ -459,15 +459,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: fonts.display,
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 30,
     color: colors.slate2,
+    textTransform: 'uppercase',
   },
   avatarBusy: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(14,16,20,0.6)',
+    backgroundColor: 'rgba(16,16,16,0.6)',
   },
   photoActions: {
     flex: 1,

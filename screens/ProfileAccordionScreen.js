@@ -576,11 +576,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     marginLeft: 8,
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    fontFamily: fonts.display,
+    fontSize: 32,
     color: colors.bone,
+    lineHeight: 34,
+    textTransform: 'uppercase',
   },
   identity: {
     flexDirection: 'row',
@@ -602,9 +602,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: fonts.display,
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 24,
     color: colors.slate2,
+    textTransform: 'uppercase',
   },
   identityText: {
     flex: 1,
@@ -618,11 +619,11 @@ const styles = StyleSheet.create({
   },
   allianceName: {
     marginTop: 2,
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    fontFamily: fonts.displayBold,
+    fontSize: 16,
     color: colors.slate2,
+    lineHeight: 18,
+    textTransform: 'uppercase',
   },
   editLink: {
     marginTop: 8,

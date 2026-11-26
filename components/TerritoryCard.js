@@ -223,9 +223,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   name: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 26,
     color: colors.bone,
+    lineHeight: 28,
+    textTransform: 'uppercase',
   },
   status: {
     fontFamily: fonts.mono,

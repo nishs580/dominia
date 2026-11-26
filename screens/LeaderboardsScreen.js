@@ -1,5 +1,5 @@
 // Screen: LeaderboardsScreen — Power, Territory, Battles boards (players + alliances)
-// Surface: Ink #0E1014 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
+// Surface: Ink #101010 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
 // Typography: Geist Mono 500 11px labels, Instrument Sans 500 14px names — mirrors ActivityLogScreen patterns.
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 //
@@ -270,7 +270,7 @@ function LegacyLeaderboards() {
     if (loading && rows.length === 0) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#5C6068" />
+          <ActivityIndicator size="large" color="#6C6C69" />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
@@ -324,8 +324,8 @@ function LegacyLeaderboards() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F2EEE6"
-            colors={['#F2EEE6']}
+            tintColor="#F5F4EF"
+            colors={['#F5F4EF']}
           />
         }
       />
@@ -757,6 +757,7 @@ const figma = StyleSheet.create({
     fontFamily: fonts.displayMedium,
     fontSize: 20,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   dropdown: {
     flexDirection: 'row',
@@ -816,8 +817,9 @@ const figma = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // SOLO / ALLIANCE: the active option is a Signal Lime fill.
   toggleCellActive: {
-    backgroundColor: colors.ink3,
+    backgroundColor: colors.lime,
   },
   toggleText: {
     fontFamily: fonts.mono,
@@ -828,7 +830,7 @@ const figma = StyleSheet.create({
   },
   toggleTextActive: {
     fontFamily: fonts.monoMedium,
-    color: colors.bone,
+    color: colors.onLime,
   },
   podium: {
     flexDirection: 'row',
@@ -858,7 +860,7 @@ const figma = StyleSheet.create({
     borderColor: 'transparent',
   },
   podiumMarkSelf: {
-    borderColor: colors.claim,
+    borderColor: colors.lime,
   },
   medalSlot: {
     marginTop: -10,
@@ -880,7 +882,7 @@ const figma = StyleSheet.create({
     color: colors.bone,
   },
   selfText: {
-    color: colors.claim,
+    color: colors.lime,
   },
   podiumValue: {
     marginTop: 2,
@@ -920,7 +922,9 @@ const figma = StyleSheet.create({
     borderBottomColor: colors.hairline,
   },
   rowSelf: {
-    backgroundColor: colors.claimSoft,
+    backgroundColor: colors.limeSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.lime,
   },
   rowText: {
     flex: 1,
@@ -969,7 +973,7 @@ const figma = StyleSheet.create({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0E1014',
+    backgroundColor: '#101010',
   },
   centered: {
     flex: 1,
@@ -981,16 +985,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
     marginTop: 12,
   },
   errorBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   retryBtn: {
-    backgroundColor: '#D64525',
+    backgroundColor: '#3155FF',
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1001,19 +1005,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   emptyLabel: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   emptyBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#E8E3D8',
+    color: '#E4E3DE',
     marginTop: 8,
   },
   header: {
@@ -1026,16 +1030,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginTop: 4,
   },
   hairline: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.08)',
+    backgroundColor: 'rgba(245,244,239,0.08)',
   },
   boardStrip: {
     flexDirection: 'row',
@@ -1056,21 +1060,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   tabLabelActive: {
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   tabMarkBoard: {
     height: 1,
     width: 32,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: '#C8FF3D',
     marginTop: 6,
   },
   tabMarkSubject: {
     height: 1,
     width: 28,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: '#C8FF3D',
     marginTop: 4,
   },
   row: {
@@ -1079,10 +1083,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242,238,230,0.08)',
+    borderBottomColor: 'rgba(245,244,239,0.08)',
   },
   rowSelf: {
-    backgroundColor: 'rgba(214,69,37,0.14)',
+    backgroundColor: 'rgba(200,255,61,0.14)',
   },
   rankCell: {
     width: 32,
@@ -1090,16 +1094,16 @@ const styles = StyleSheet.create({
   rankText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   avatar: {
     width: 28,
     height: 28,
     borderRadius: 4,
     marginLeft: 8,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
   },
   avatarPlaceholder: {
     alignItems: 'center',
@@ -1109,7 +1113,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 0.4,
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   nameCell: {
     flex: 1,
@@ -1118,19 +1122,19 @@ const styles = StyleSheet.create({
   nameText: {
     fontFamily: 'InstrumentSans_500Medium',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   subtitleText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
     marginTop: 2,
   },
   valueText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
 });

@@ -29,7 +29,7 @@ const BONE = colors.bone;
 const SLATE2 = colors.slate2;
 const HAIRLINE = colors.hairline;
 const HAIRLINE_STRONG = colors.hairlineStrong;
-const ERROR_RED = '#E05A5A';
+const ERROR_RED = '#E8432B';
 
 const SDK_STATUS_NAMES = {
   [SdkAvailabilityStatus.SDK_AVAILABLE]: 'SDK_AVAILABLE',
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 28,
     color: BONE,
     textTransform: 'uppercase',
@@ -568,10 +568,11 @@ const styles = StyleSheet.create({
     color: ERROR_RED,
   },
   bigSteps: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_300Light',
     fontSize: 48,
     color: BONE,
     letterSpacing: -0.02,
+    textTransform: 'uppercase',
   },
   subtext: {
     ...text.mono,
@@ -599,7 +600,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: spacing.sm,
-    backgroundColor: CLAIM,
+    backgroundColor: '#3155FF',
     paddingVertical: 14,
     width: '100%',
     alignItems: 'center',
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: 'rgba(242,238,230,0.75)',
+    color: 'rgba(245,244,239,0.75)',
     textTransform: 'uppercase',
   },
   primaryBtnAction: {

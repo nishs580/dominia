@@ -171,24 +171,24 @@ export default function AuthGate({ navigation }) {
   }, [isLoaded, isSignedIn, userId, navigation, retryNonce]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+    <View style={{ flex: 1, backgroundColor: '#101010', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
       {gateError ? (
         <>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: '#8B8F98', textTransform: 'uppercase', marginBottom: 12 }}>
+          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: '#A3A29F', textTransform: 'uppercase', marginBottom: 12 }}>
             {t('authGate.connectionError')}
           </Text>
-          <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: '#F2EEE6', textAlign: 'center', marginBottom: 24 }}>
+          <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: '#F5F4EF', textAlign: 'center', marginBottom: 24 }}>
             {t('authGate.couldNotCheckSession')}
           </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setRetryNonce((n) => n + 1)}
             style={({ pressed }) => [
-              { backgroundColor: '#D64525', paddingVertical: 14, paddingHorizontal: 32 },
+              { backgroundColor: '#3155FF', paddingVertical: 14, paddingHorizontal: 32 },
               pressed && { opacity: 0.9 },
             ]}
           >
-            <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 14, letterSpacing: 2.4, color: '#F2EEE6', textTransform: 'uppercase' }}>
+            <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 14, letterSpacing: 2.4, color: '#F5F4EF', textTransform: 'uppercase' }}>
               {t('common.retry')}
             </Text>
           </Pressable>
@@ -199,7 +199,7 @@ export default function AuthGate({ navigation }) {
             <SplashScreen />
           </View>
         ) : (
-          <ActivityIndicator color="#D64525" />
+          <ActivityIndicator color="#C8FF3D" />
         )
       ) : null}
     </View>

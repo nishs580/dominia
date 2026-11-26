@@ -3,12 +3,12 @@ import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-const INK = '#0E1014';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE2 = '#A3A29F';
+const CLAIM = '#22D65E';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 function ProgressBar({ step }) {
   return (
@@ -34,7 +34,7 @@ function PrimaryButton({ actionLabel, onPress, disabled }) {
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        { backgroundColor: CLAIM, paddingVertical: 14, width: '100%', alignItems: 'center' },
+        { backgroundColor: '#3155FF', paddingVertical: 14, width: '100%', alignItems: 'center' },
         disabled && { opacity: 0.5 },
         pressed && !disabled && { opacity: 0.9 },
       ]}
@@ -190,10 +190,10 @@ export default function WelcomeScreen({ navigation }) {
         <Pressable accessibilityRole="button" accessibilityLabel={t('welcome.skipIntro')} onPress={skipIntro} style={{ flex: 1, justifyContent: 'center' }}>
           <View style={{ paddingHorizontal: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-              <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+              <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
                 DOMINIA
               </Text>
-              <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: CLAIM, marginLeft: 4, marginBottom: 6 }}>▪</Text>
+              <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 11, color: '#C8FF3D', marginLeft: 4, marginBottom: 6 }}>▪</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
               <Text
@@ -218,7 +218,7 @@ export default function WelcomeScreen({ navigation }) {
           <SectionLabel label={t('onboarding.sectionHowItWorks')} />
           <Text
             style={{
-              fontFamily: 'Archivo_900Black',
+              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',

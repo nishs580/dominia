@@ -241,7 +241,7 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(14,16,20,0.82)',
+    backgroundColor: 'rgba(16,16,16,0.82)',
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 48,
@@ -269,11 +269,12 @@ const styles = StyleSheet.create({
   closeText: { color: SLATE2, fontSize: 16 },
   emblemWrap: { alignItems: 'center', marginBottom: 12 },
   title: {
-    fontFamily: 'Archivo_800ExtraBold',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 22,
     color: BONE,
     textAlign: 'center',
     letterSpacing: -0.4,
+    textTransform: 'uppercase',
   },
   description: {
     fontFamily: 'InstrumentSans_400Regular',
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
     letterSpacing: 1.2,
-    color: CLAIM,
+    color: '#E8432B',
     textTransform: 'uppercase',
     marginTop: 6,
     lineHeight: 15,

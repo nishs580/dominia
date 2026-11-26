@@ -181,7 +181,7 @@ export default function DailyRewardScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent' },
-  scrim: { backgroundColor: 'rgba(14,16,20,0.72)' },
+  scrim: { backgroundColor: 'rgba(16,16,16,0.72)' },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   title: {
     fontFamily: fonts.display,
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    borderColor: colors.lime, // today's reward is a Signal Lime moment
     alignItems: 'center',
     paddingVertical: 24,
     paddingHorizontal: 16,
@@ -211,12 +211,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loading: { marginVertical: 12 },
-  dayLine: { fontFamily: fonts.displayMedium, fontSize: 26, color: colors.bone },
+  dayLine: { fontFamily: fonts.displayMedium, fontSize: 26, color: colors.bone, textTransform: 'uppercase' },
   cta: {
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.8,
-    color: colors.slate2,
+    color: colors.lime,
     textTransform: 'uppercase',
     marginTop: 8,
   },

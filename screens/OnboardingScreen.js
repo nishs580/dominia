@@ -275,10 +275,10 @@ export default function OnboardingScreen({ route }) {
       return (
         <Animated.View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4, opacity: introOpacity }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
-            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
               DOMINIA
             </Text>
-            <Text style={{ fontFamily: 'Archivo_900Black', fontSize: 11, color: BONE, marginLeft: 4, marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 11, color: BONE, marginLeft: 4, marginBottom: 6 }}>
               ▪
             </Text>
           </View>
@@ -310,7 +310,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionHowItWorks')} />
           <Text
             style={{
-              fontFamily: 'Archivo_900Black',
+              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',
@@ -343,7 +343,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionBeforeStart')} />
           <Text
             style={{
-              fontFamily: 'Archivo_900Black',
+              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',
@@ -393,7 +393,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionSetBase')} />
           <Text
             style={{
-              fontFamily: 'Archivo_900Black',
+              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
               fontSize: 19,
               color: BONE,
               textTransform: 'uppercase',
@@ -473,7 +473,7 @@ export default function OnboardingScreen({ route }) {
                     letterSpacing: 1.4,
                     color: SLATE2,
                     textTransform: 'uppercase',
-                    backgroundColor: 'rgba(14,16,20,0.75)',
+                    backgroundColor: 'rgba(16,16,16,0.75)',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     textAlign: 'center',
@@ -548,7 +548,7 @@ export default function OnboardingScreen({ route }) {
         <Text
           maxFontSizeMultiplier={1.2}
           style={{
-            fontFamily: 'Archivo_900Black',
+            fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
             fontSize: 32,
             color: BONE,
             textTransform: 'uppercase',

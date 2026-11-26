@@ -11,8 +11,8 @@
 //
 // Surface: an ink scrim over the map (so it sits above the territory card and
 // search results) and an Ink 2 card with a 1px top edge in the defence colour
-// (Alliance Green), 0 radius. DEFEND TERRITORY is the screen's single Claim
-// Red Button element; below the Gold fee it is disabled with the shortfall.
+// (vermillion for your own ground, electric blue for an ally's), 0 radius.
+// DEFEND TERRITORY is the screen's single Electric Blue button; below the Gold fee it is disabled with the shortfall.
 // Announced to screen readers when it appears.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -173,7 +173,18 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
 
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
-      <View style={styles.card} accessibilityLiveRegion="assertive">
+      <View
+        style={[
+          styles.card,
+          // Figma Defend Pop-up: vermillion edge when your own ground is under
+          // attack, electric blue for an ally's, neutral once someone defends.
+          {
+            borderTopColor:
+              model.state !== 'open' ? colors.hairlineStrong : model.scope === 'alliance' ? colors.alliance : colors.enemy,
+          },
+        ]}
+        accessibilityLiveRegion="assertive"
+      >
         <View style={styles.topRow}>
           <View style={styles.titleBlock}>
             <Text style={styles.name} numberOfLines={2} maxFontSizeMultiplier={1.3} accessibilityRole="header">
@@ -249,7 +260,7 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14,16,20,0.6)',
+    backgroundColor: 'rgba(16,16,16,0.6)',
     justifyContent: 'center',
     paddingHorizontal: 16,
     zIndex: 60,
@@ -257,10 +268,9 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.ink2,
-    borderTopWidth: 1,
-    borderTopColor: colors.alliance,
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: colors.hairlineStrong,
+    borderTopWidth: 3,
     borderRadius: 0,
     padding: 16,
     gap: 12,
@@ -278,6 +288,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.displayMedium,
     fontSize: 20,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   status: {
     fontFamily: fonts.mono,

@@ -333,12 +333,12 @@ export default function MissionsScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !row.canClaim, busy: !!row.claiming }}
             accessibilityLabel={t('missions.claimA11y', { defaultValue: 'Claim {{tier}} mission, {{gold}}', tier, gold })}
-            style={({ pressed }) => [styles.claimBtn, !row.canClaim && styles.claimBtnDisabled, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.claimBtn, row.canClaim && styles.claimBtnReady, !row.canClaim && styles.claimBtnDisabled, pressed && styles.pressed]}
           >
             {row.claiming ? (
               <ActivityIndicator color={colors.bone} />
             ) : (
-              <Text style={[styles.btnText, !row.canClaim && styles.btnTextDisabled]} maxFontSizeMultiplier={1.3}>
+              <Text style={[styles.btnText, row.canClaim && styles.btnTextOnLime, !row.canClaim && styles.btnTextDisabled]} maxFontSizeMultiplier={1.3}>
                 {t('missions.claim', { defaultValue: 'Claim' })}
               </Text>
             )}
@@ -567,7 +567,8 @@ const styles = StyleSheet.create({
   infoText: { fontFamily: fonts.monoMedium, fontSize: 16, color: colors.bone },
   toggle: { marginTop: 16, flexDirection: 'row', borderWidth: 1, borderColor: colors.hairlineStrong },
   toggleBtn: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink },
-  toggleBtnOn: { backgroundColor: colors.ink3 },
+  // Figma segmented control: raised fill + 2px Signal Lime underline.
+  toggleBtnOn: { backgroundColor: colors.raised, borderBottomWidth: 2, borderBottomColor: colors.lime },
   toggleText: { fontFamily: fonts.mono, fontSize: 13, letterSpacing: 1.6, color: colors.slate2 },
   toggleTextOn: { fontFamily: fonts.monoMedium, color: colors.bone },
   desc: { marginTop: 12, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bone2 },
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
   progress: { marginTop: 4, fontFamily: fonts.mono, fontSize: 13, color: colors.bone2 },
   gold: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.bone },
   track: { marginTop: 12, height: 4, backgroundColor: colors.ink3 },
-  fill: { height: 4, backgroundColor: colors.bone },
+  fill: { height: 4, backgroundColor: colors.lime },
   secured: {
     marginTop: 12,
     fontFamily: fonts.mono,
@@ -613,13 +614,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
   },
+  // A ready reward is a Signal Lime moment (Figma Mission Row · Ready).
+  claimBtnReady: { backgroundColor: colors.lime, borderColor: colors.lime },
   claimBtnDisabled: { backgroundColor: colors.ink2, borderColor: colors.hairline },
   lockBtn: {
     marginTop: 16,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.claimButton, // the screen's one Claim Red element
+    backgroundColor: colors.action, // Electric Blue primary action
   },
   lockBtnPressed: { opacity: 0.85 },
   btnText: {
@@ -629,6 +632,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.bone,
   },
+  btnTextOnLime: { fontFamily: fonts.monoMedium, color: colors.onLime },
   btnTextDisabled: { color: colors.slate },
   pressed: { backgroundColor: colors.ink3 },
   banner: {

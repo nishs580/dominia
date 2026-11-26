@@ -10,18 +10,18 @@ import { useFlag } from '../lib/flags';
 import { defenceGoldGate } from '../lib/defendPopup';
 import { GoldGlyph } from '../components/ResourceGlyphs';
 
-const INK = '#0E1014';
-const INK_2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE_2 = '#8B8F98';
-const CLAIM = '#D64525';
-const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
-const CLAIM_SOFT = 'rgba(214,69,37,0.14)';
-const ALLIANCE = '#3F8F4E';
-const ALLIANCE_SOFT = 'rgba(63,143,78,0.14)';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const INK_2 = '#1A1A1A';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE_2 = '#A3A29F';
+const CLAIM = '#22D65E';
+const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
+const CLAIM_SOFT = 'rgba(34,214,94,0.14)';
+const ALLIANCE = '#3155FF';
+const ALLIANCE_SOFT = 'rgba(49,85,255,0.14)';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 export default function DefenderAcceptScreen() {
   const { contestId } = useRoute().params ?? {};
@@ -407,21 +407,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   territoryName: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 36,
     color: BONE,
     letterSpacing: -1,
     textAlign: 'center',
     lineHeight: 38,
     marginBottom: 6,
+    textTransform: 'uppercase',
   },
   headline: {
-    fontFamily: 'Archivo_800ExtraBold',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginBottom: 8,
+    textTransform: 'uppercase',
   },
   fullScreenCentered: {
     flex: 1,
@@ -441,7 +443,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#C8FF3D',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
@@ -449,7 +451,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: CLAIM,
+    color: '#C8FF3D',
     textTransform: 'uppercase',
   },
   tierSubtitle: {
@@ -513,10 +515,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
   },
   previewRowDistance: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 16,
     color: BONE,
     letterSpacing: -0.5,
+    textTransform: 'uppercase',
   },
   stoneToggleRow: {
     flexDirection: 'row',
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
   submitErrorText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: CLAIM,
+    color: '#E8432B',
     letterSpacing: 0.4,
     textAlign: 'center',
     marginBottom: 12,

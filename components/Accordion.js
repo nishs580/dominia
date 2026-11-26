@@ -63,11 +63,11 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    fontFamily: fonts.displayBold,
+    fontSize: 22,
     color: colors.bone,
+    lineHeight: 24,
+    textTransform: 'uppercase',
   },
   marker: {
     fontFamily: fonts.mono,

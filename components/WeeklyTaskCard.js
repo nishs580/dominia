@@ -165,7 +165,7 @@ export default function WeeklyTaskCard({ allianceId, getToken }) {
             <Bar
               fillPct={pct(personal.contribution, personal.quota)}
               markerPct={pct(personal.floor, personal.quota)}
-              fillColor={colors.claim}
+              fillColor={colors.lime}
             />
             <Text style={personal.share_earned ? styles.shareEarnedNote : styles.halfNote}>
               {personal.share_earned
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   retryText: {
     fontFamily: fonts.monoMedium,
     fontSize: 11,
-    color: colors.claim,
+    color: colors.lime,
     marginTop: 8,
     letterSpacing: 1.0,
     textTransform: 'uppercase',

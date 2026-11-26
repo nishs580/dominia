@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   fieldFocused: {
-    borderColor: colors.hairlineStrong,
+    borderColor: colors.lime,
   },
   input: {
     flex: 1,

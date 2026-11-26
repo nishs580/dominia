@@ -29,23 +29,23 @@ import {
 import { influenceToDisplay } from '../lib/formulas';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
-const INK = '#0E1014';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 // Display copy (label/spend/earn) lives in locales under wallet.resources.<key>.
 // Influence is stored fixed-point ×10; format renders it in display units.
 const RESOURCES = [
-  { key: 'iron', Glyph: IronGlyph, glyphColor: '#F2EEE6' },
-  { key: 'stone', Glyph: StoneGlyph, glyphColor: '#F2EEE6' },
-  { key: 'gold', Glyph: GoldGlyph, glyphColor: '#F2EEE6' },
-  { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#F2EEE6' },
+  { key: 'iron', Glyph: IronGlyph, glyphColor: '#F5F4EF' },
+  { key: 'stone', Glyph: StoneGlyph, glyphColor: '#F5F4EF' },
+  { key: 'gold', Glyph: GoldGlyph, glyphColor: '#F5F4EF' },
+  { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#F5F4EF' },
   {
     key: 'influence',
     Glyph: InfluenceGlyph,
-    glyphColor: '#F2EEE6',
+    glyphColor: '#F5F4EF',
     format: (fixedPoint) => influenceToDisplay(fixedPoint).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
   },
 ];
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
-    color: '#D64525',
+    color: '#C8FF3D',
     letterSpacing: 1.4,
   },
   headerLabel: {
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 36,
     color: BONE,
     textTransform: 'uppercase',
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   errorBanner: {
     marginTop: 8,
     padding: 12,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
   },
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   modalSheet: {
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderTopWidth: 1,
     borderTopColor: HAIRLINE_STRONG,
     paddingHorizontal: 20,
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   modalDonateError: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 12,
-    color: '#E05A5A',
+    color: '#E8432B',
     marginTop: 8,
   },
   sectionDivider: {
@@ -527,10 +527,11 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   resourceBalance: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 28,
     color: BONE,
     letterSpacing: -0.02,
+    textTransform: 'uppercase',
   },
   rowDivider: {
     height: 1,

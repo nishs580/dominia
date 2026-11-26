@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontFamily: fonts.monoMedium,
     fontSize: 11,
-    color: colors.claim,
+    color: colors.lime,
     letterSpacing: 1.6,
     marginBottom: 6,
   },

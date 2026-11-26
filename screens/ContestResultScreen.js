@@ -327,21 +327,23 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   territoryName: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 36,
     color: BONE,
     letterSpacing: -1,
     textAlign: 'center',
     lineHeight: 38,
     marginBottom: 6,
+    textTransform: 'uppercase',
   },
   headline: {
-    fontFamily: 'Archivo_800ExtraBold',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginBottom: 8,
+    textTransform: 'uppercase',
   },
   perimeter: {
     fontFamily: 'GeistMono_400Regular',
@@ -378,10 +380,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 26,
     letterSpacing: -1,
     lineHeight: 26,
+    textTransform: 'uppercase',
   },
   statUnit: {
     fontFamily: 'GeistMono_400Regular',
@@ -413,12 +416,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   earnedXpValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_300Light',
     fontSize: 32,
     lineHeight: 34,
     color: BONE,
     letterSpacing: -0.5,
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
   earnedXpLabel: {
     fontFamily: 'GeistMono_400Regular',

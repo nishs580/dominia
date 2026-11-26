@@ -1,6 +1,6 @@
 // Component: MapSideRail — unified floating navigation rail on the Map screen
-// Surface: single Ink-2 #1A1D24 segmented control on Map content, square corners
-// Typography: Geist Mono 500, 11px (letterSpacing 1.76 = 11 × 0.16em), uppercase, Bone #F2EEE6
+// Surface: single Ink-2 #1A1A1A segmented control on Map content, square corners
+// Typography: Geist Mono 500, 11px (letterSpacing 1.76 = 11 × 0.16em), uppercase, Bone #F5F4EF
 // Territory colors: none
 // Brand rule applied: Claim red is reserved for the Inspect Sheet primary CTA on Map.
 // The rail uses a neutral Ink-2 surface. Unread counts (Chat, Log) surface inline via the
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     // 110, not 104: labels moved from 10 to 11pt (HIG floor); the extra 6
     // keeps what fit on one line at 10pt fitting at 11.
     width: 110,
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairline,
     borderRadius: 0,
@@ -197,10 +197,10 @@ const styles = StyleSheet.create({
   },
   itemDivider: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(242,238,230,0.10)',
+    borderTopColor: 'rgba(245,244,239,0.10)',
   },
   itemPressed: {
-    backgroundColor: 'rgba(242,238,230,0.06)',
+    backgroundColor: 'rgba(245,244,239,0.06)',
   },
   // Figma rail: icon-only, 44pt square targets (plan Accessibility), sits
   // under the top bar and search field on the right edge.
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     right: 12,
     top: 112,
     width: 44,
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairline,
     borderRadius: 0,

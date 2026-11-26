@@ -39,7 +39,7 @@ export default function WelcomeOverlay({ onContinue }) {
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(14,16,20,0.78)',
+    backgroundColor: 'rgba(16,16,16,0.78)',
     paddingHorizontal: 24,
     paddingBottom: 64,
     justifyContent: 'center',

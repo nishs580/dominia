@@ -113,7 +113,7 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(14,16,20,0.82)', // Ink, dimmed — no blur
+    backgroundColor: 'rgba(16,16,16,0.82)', // Ink, dimmed — no blur
     justifyContent: 'center',
     padding: 16,
   },
@@ -125,11 +125,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   title: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
+    fontFamily: fonts.display,
+    fontSize: 30,
     color: colors.slate2,
+    lineHeight: 32,
+    textTransform: 'uppercase',
   },
   body: {
     marginTop: 12,

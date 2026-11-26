@@ -2,55 +2,61 @@
 name: Dominia
 description: A city-scale strategy game played on foot — walk, claim, conquer, defend.
 colors:
-  ink: "#0E1014"
-  ink-2: "#1A1D24"
-  ink-3: "#252932"
-  bone: "#F2EEE6"
-  bone-2: "#E8E3D8"
-  slate: "#5C6068"
-  slate-2: "#8B8F98"
-  claim-red: "#D64525"
-  claim-red-button: "#B63B1F" # Claim Red darkened for AA text contrast under Bone labels — button fills only
-  alliance-green: "#3F8F4E"
-  enemy-slate-blue: "#4A6B8A"
+  obsidian: "#101010"
+  surface: "#1A1A1A"
+  raised: "#242424"
+  white: "#F5F4EF"
+  white-2: "#E4E3DE"
+  muted: "#6C6C69"
+  muted-2: "#A3A29F"
+  electric-blue: "#3155FF"
+  signal-lime: "#C8FF3D"
+  smash-green: "#22D65E"
+  vermillion: "#E8432B"
   caution-amber: "#D49A2B"
-  claim-soft: "#D6452524"
-  alliance-soft: "#3F8F4E24"
-  enemy-soft: "#4A6B8A24"
-  hairline: "#F2EEE614"
-  hairline-strong: "#F2EEE629"
+  self-soft: "#22D65E24"
+  alliance-soft: "#3155FF24"
+  enemy-soft: "#E8432B24"
+  lime-soft: "#C8FF3D24"
+  hairline: "#F5F4EF14"
+  hairline-strong: "#F5F4EF2E"
 typography:
   display:
-    fontFamily: "Archivo"
-    fontSize: "48px"
-    fontWeight: 900
-    letterSpacing: "-0.03em"
-  headline:
-    fontFamily: "Archivo"
+    fontFamily: "Sofia Sans Extra Condensed"
+    fontSize: "56px"
+    fontWeight: 800
+    textTransform: "uppercase"
+  title:
+    fontFamily: "Sofia Sans Extra Condensed"
     fontSize: "32px"
     fontWeight: 800
-    letterSpacing: "-0.03em"
-  title:
-    fontFamily: "Archivo"
-    fontSize: "26px"
+    textTransform: "uppercase"
+  section:
+    fontFamily: "Sofia Sans Extra Condensed"
+    fontSize: "22px"
     fontWeight: 700
+    textTransform: "uppercase"
   body:
     fontFamily: "Instrument Sans"
-    fontSize: "13px"
+    fontSize: "15px"
     fontWeight: 400
   body-emphasis:
     fontFamily: "Instrument Sans"
-    fontSize: "13px"
+    fontSize: "15px"
     fontWeight: 500
   label:
     fontFamily: "Geist Mono"
     fontSize: "11px"
-    fontWeight: 400
-    letterSpacing: "0.16em"
+    fontWeight: 500
+    letterSpacing: "0.12em"
   data:
     fontFamily: "Geist Mono"
     fontSize: "13px"
     fontWeight: 400
+  numeral-xl:
+    fontFamily: "Geist Mono"
+    fontSize: "56px"
+    fontWeight: 300
 rounded:
   none: "0px"
   pill: "4px"
@@ -65,37 +71,36 @@ spacing:
   xl4: "64px"
 components:
   button-primary:
-    backgroundColor: "{colors.claim-red-button}"
-    textColor: "{colors.bone}"
+    backgroundColor: "{colors.electric-blue}"
+    textColor: "{colors.white}"
     typography: "{typography.data}"
     rounded: "{rounded.none}"
     padding: "12px 24px"
+  button-accent:
+    backgroundColor: "{colors.signal-lime}"
+    textColor: "{colors.obsidian}"
+    typography: "{typography.data}"
+    rounded: "{rounded.none}"
   button-secondary:
-    backgroundColor: "{colors.ink-2}"
-    textColor: "{colors.bone}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.white}"
     typography: "{typography.data}"
     rounded: "{rounded.none}"
     padding: "12px 24px"
   card:
-    backgroundColor: "{colors.ink-2}"
-    textColor: "{colors.bone}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.white}"
     rounded: "{rounded.none}"
     padding: "16px"
   input:
-    backgroundColor: "{colors.ink-2}"
-    textColor: "{colors.bone}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.white}"
     typography: "{typography.data}"
     rounded: "{rounded.none}"
     padding: "12px"
   section-label:
-    textColor: "{colors.slate-2}"
+    textColor: "{colors.muted-2}"
     typography: "{typography.label}"
-  resource-pill:
-    backgroundColor: "{colors.ink-2}"
-    textColor: "{colors.bone}"
-    typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "4px 8px"
 ---
 
 # Design System: Dominia
@@ -104,76 +109,83 @@ components:
 
 **Creative North Star: "The Commander's Field Desk"**
 
-A campaign map under a single lamp: dark surface, precise instruments, every mark earned. The entire interface is chrome around a sacred map — three steps of ink for depth, bone for text, and three territory colours whose meanings are locked. Nothing decorates; every element is an instrument with a job, labelled in mono, set square. Ceremony is rationed: Archivo display type appears only at moments a Commander should remember (milestones, medals, Legacy Titles), which is precisely what makes those moments land.
+A campaign map under a single lamp: dark surface, precise instruments, every mark earned. The entire interface is chrome around a sacred map — three obsidian steps for depth, warm white for text, and three territory colours whose meanings are locked. Nothing decorates; every element is an instrument with a job, labelled in mono, set square. Titles and place names stand tall in condensed capitals; Signal Lime marks the one thing on screen that is live right now.
+
+The visual system was refined in November 2026; the reference wireframes and component library live in the Figma file "Dominia refined wireframes" (`x4d6znyf2aMOv1UBUMT7G8`). Figma decides content and flow; this document and `lib/theme.js` decide the look.
 
 The system explicitly rejects what PRODUCT.md rejects: no fitness-tracker cheerfulness, no casual-game gloss (CG renders, loot boxes, neon), no wellness softness (pastels, rounded corners, encouraging-friend voice), and no military hardware imagery. It also rejects the default Material 3 vocabulary — Dominia themes Android's OS guarantees (Back gesture, insets, 48dp targets) through its own instruments, not through Material components.
 
 **Key Characteristics:**
 - Dark, flat, and square: 0px radius, no shadows, no gradients, no blur, anywhere.
-- Three typefaces, three jobs: Geist Mono for chrome and data, Instrument Sans for sentences, Archivo for ceremony.
-- Five colours only, meanings locked; Claim Red on at most one element per screen outside the map.
+- Three typefaces, three jobs: Geist Mono for chrome and data, Instrument Sans for sentences, Sofia Sans Extra Condensed (always uppercase) for titles and names.
+- Electric Blue for buttons, Signal Lime for accents, Obsidian background, warm White text; map colours locked to self / alliance / enemy.
 - Depth by tonal ink steps and 0.5px hairlines, never by elevation effects.
 - Motion limited to three durations (120 / 280 / 2000ms) on one curve; type is never animated.
 
 ## 2. Colors
 
-A dark low-chroma field where the three territory colours are the only voices — their rarity is their authority.
+A dark low-chroma field: Obsidian ground, warm White text, one blue for action, one lime for accent, and three territory colours whose meanings are locked.
 
-### Primary
-- **Claim Red** (#D64525): yours. Your territories on the map, active contests, and Claim Red used as text/accent. The most disciplined colour in the system: at most ONE element per screen outside the map. Soft fill `#D6452524` for territory fills.
-- **Claim Red Button** (#B63B1F): the same identity colour, darkened for the single primary CTA per screen. Bone-on-`#D64525` measures 3.83:1 and fails WCAG AA for normal-size text (4.5:1); Bone-on-`#B63B1F` measures ~5.0:1. Button fills only — never the map, never text/accent uses of Claim Red, which need *more* luminance against the ink background, not less.
+### Brand
+- **Electric Blue** (#3155FF): buttons. The primary action on a screen is an Electric Blue fill with a White Geist Mono label (~5.3:1). Also the alliance colour on the map.
+- **Signal Lime** (#C8FF3D): accents. The active tab indicator and icon, the selected-territory outline, the player dot, progress fills, rewards ready to claim, the recenter control, the active segment of a small switch. Text on lime is Obsidian. At most one lime-filled button per screen. Soft fill `#C8FF3D24` for highlighted rows (your leaderboard position).
+- **Obsidian** (#101010): background. Never pure black.
+- **White** (#F5F4EF): all primary text. Warm off-white, never #FFFFFF.
 
-### Secondary
-- **Alliance Green** (#3F8F4E): ours. Alliance-held territories, shields, defensive states. Soft fill `#3F8F4E24`.
-- **Enemy Slate-Blue** (#4A6B8A): theirs. Other players' territories only — never used for buttons or UI states. Soft fill `#4A6B8A24`.
-- **Caution Amber** (#D49A2B): the one sanctioned non-territory signal (adopted 2026-07-20). Warning, paused, and expiring states only — the idle-pause banner, a countdown entering its final minutes. Never on CTAs, never on the map, at most one caution element per screen. It exists so screens stop borrowing territory colours for "warning".
+### Map (territory triad)
+- **Smash Green** (#22D65E): yours — territories you own, your result moments (TAKEN, HELD). Soft fill `#22D65E24`.
+- **Electric Blue** (#3155FF): ours — your alliance's territories, defending states. Soft fill `#3155FF24`.
+- **Vermillion** (#E8432B): theirs — other players' territories. Also the danger colour: errors, destructive actions (cancel attack/defence, leave, delete), LOST, your ground under attack. Soft fill `#E8432B24`.
+- **Caution Amber** (#D49A2B): warning, paused and expiring states only; never on CTAs, never on the map, at most one per screen.
 
 ### Neutral
-- **Ink** (#0E1014): primary background. Never pure black.
-- **Ink 2** (#1A1D24): cards, sheets, elevated surfaces.
-- **Ink 3** (#252932): further elevated surfaces (nested panels, pressed states).
-- **Bone** (#F2EEE6): primary text. Never pure white.
-- **Bone 2** (#E8E3D8): secondary foreground.
-- **Slate** (#5C6068): inactive states, disabled labels.
-- **Slate 2** (#8B8F98): metadata, captions, section labels.
-- **Hairline** (#F2EEE6 at 8%) / **Hairline Strong** (at 16%): the only borders — 0.5px and 1px.
+- **Surface** (#1A1A1A): cards, sheets, tab bar.
+- **Raised** (#242424): tracks, active segments, nested panels, pressed states.
+- **White 2** (#E4E3DE): secondary foreground.
+- **Muted** (#6C6C69, White at 40%): placeholders, inactive tabs, disabled labels.
+- **Muted 2** (#A3A29F, White at 64%): descriptions, metadata, section labels.
+- **Hairline** (White at 8%) / **Hairline Strong** (at 18%): the only borders — 0.5px and 1px.
+
+In code (`lib/theme.js`): `obsidian`, `surface`, `raised`, `white`, `muted`, `muted2`, `action`, `lime`, `onLime`, `self`, `alliance`, `enemy`, `danger`. The pre-refinement names (`ink*`, `bone*`, `slate*`, `claim`, `claimButton`) remain as aliases with the new values; prefer the new names in new code.
 
 ### Named Rules
-**The One Claim Rule.** Claim Red appears on at most one element per screen outside the map. A second red element is a bug, not an emphasis. Territory colours used semantically (a sheet's ownership border, a claimed territory's silhouette) are identity, not accent, and sit outside this count.
+**The Lime Rule.** Signal Lime means "live / selected / ready" and nothing else. One lime-filled button per screen; lime never stands in for a territory colour.
 
-**The Locked Meaning Rule.** The three territory colours mean yours / ours / theirs and nothing else. They are never repurposed for generic success, error, or info states. Caution Amber is the only sanctioned signal outside the territory set; there is no seventh colour.
+**The Locked Meaning Rule.** Smash Green / Electric Blue / Vermillion mean yours / ours / theirs on the map. Off the map, Electric Blue is also the button colour and Vermillion also means danger; Smash Green is never used for generic success.
 
 ## 3. Typography
 
-**Display Font:** Archivo (900 / 800 / 700)
+**Display Font:** Sofia Sans Extra Condensed (800 / 700 / 600), always uppercase
 **Body Font:** Instrument Sans (400 / 500)
-**Label/Mono Font:** Geist Mono (400 / 500 / 300)
+**Label/Mono Font:** Geist Mono (300 / 400 / 500)
 
-**Character:** Instrumental and exact. Mono carries the chrome, Instrument Sans carries the sentences, Archivo carries the ceremony — and the three never trade jobs. When in doubt, Geist Mono.
+**Character:** Instrumental and exact. Mono carries the chrome and the numbers, Instrument Sans carries the sentences, Sofia Sans Extra Condensed carries the names — and the three never trade jobs. When in doubt, Geist Mono.
 
 ### Hierarchy
-- **Display** (Archivo 900, 48px, uppercase): hero numerals and wordmark moments — milestone takeovers, Legacy Titles. Always uppercase above 20pt.
-- **Headline** (Archivo 800, 32px, uppercase): large readouts, alliance names, commander names.
-- **Title** (Archivo 700, 26px): contest screens, streak counter. Italic 700 for milestone subtitles only — italic exists nowhere else.
-- **Body** (Instrument Sans 400, 13px; emphasis Instrument Sans 500): anything a player actually reads — descriptions, chat, prose. Sentence case only; Instrument Sans is never uppercased. Emphasis by weight, never by caps or italic.
-- **Data** (Geist Mono 400, 11–16px): measurements, timers, counts. Real-world case preserved: "km", "×2.50", "9:41".
-- **Label** (Geist Mono 400, 11px, uppercase, 0.12–0.18em tracking): section labels and UI chrome. Slate 2 by default.
+- **Display** (Sofia 800, 48–80px, uppercase): moment words (TAKEN, LOST, HELD), the wordmark, hero place names.
+- **Title** (Sofia 800, 32–36px, uppercase): screen titles.
+- **Section** (Sofia 700, 22–24px, uppercase): section titles, alliance names, large map labels.
+- **Card** (Sofia 600–700, 18–20px, uppercase): card titles, place names in lists.
+- **Body** (Instrument Sans 400, 13–15px; emphasis 500): descriptions, chat, instructions, notifications. Sentence case only; emphasis by weight.
+- **Numerals** (Geist Mono 300 for very large numbers only, 32px and up; 400 below): stats, timers, balances, countdowns.
+- **Data** (Geist Mono 400, 11–16px): measurements, units, counts. Real-world case preserved: "km", "9:41".
+- **Label** (Geist Mono 400–500, 10–11px, uppercase, tracked): section kickers, tags, tab labels, buttons.
 
 ### Named Rules
-**The Controlling Rule.** Measurement, state, label, or readout → Geist Mono. A sentence someone would actually read → Instrument Sans. A ceremonial moment the player should recall → Archivo. When in doubt → Geist Mono.
+**The Controlling Rule.** A number, unit, label, tag, timer, tab or button → Geist Mono. A sentence someone reads → Instrument Sans. A title or a name of a place or alliance → Sofia Sans Extra Condensed, uppercase. When in doubt → Geist Mono.
 
-**The Floor Rule.** Nothing renders below 11px (Apple HIG's Caption 2 minimum). Labels are told apart from metadata by case, tracking and colour, not by shrinking. Where a figure will not fit at 11px, change the format (e.g. `15.2k`), never the size.
+**The Floor Rule.** Nothing renders below 11px except Figma-specified 10px tags and tab labels. Where a figure will not fit, change the format (e.g. `15.2k`), never the size.
 
 **The Still Type Rule.** Type is never animated. Numbers may count up; glyphs never slide, fade, or bounce.
 
 ## 4. Elevation
 
-Flat by doctrine. There are no shadows, glows, blurs, or gradients anywhere in the product — depth is conveyed exclusively by the three-step ink ramp (Ink → Ink 2 → Ink 3) and by hairline borders (0.5px at 8% bone, 1px at 16% for emphasis). A sheet sitting over the map is Ink 2 with a hairline-strong top edge, nothing more.
+Flat by doctrine. There are no shadows, glows, blurs, or gradients anywhere in the product — depth is conveyed exclusively by the three-step obsidian ramp (Obsidian → Surface → Raised) and by hairline borders (0.5px at 8% white, 1px at 18% for emphasis). A sheet sitting over the map is Surface with a hairline-strong top edge, nothing more.
 
 ### Named Rules
-**The Flat Doctrine.** If a surface needs to read as "above", it gets the next ink step and a hairline — never a shadow. This rule has no exceptions in UI chrome and survives all future features.
+**The Flat Doctrine.** If a surface needs to read as "above", it gets the next obsidian step and a hairline — never a shadow. This rule has no exceptions in UI chrome and survives all future features.
 
-**The Map-Layer Exception.** Mapbox data-layer styling (fills, line layers, camera moves) is game-board rendering, not UI chrome. Two named exceptions are sanctioned there and only there: the selected-territory outline (pure white line with `lineBlur` glow — the selection affordance on a dark map, deliberately kept), and Mapbox camera flight durations (tuned per move; the three-duration vocabulary governs UI motion, not camera physics). The basemap is night-preset at all hours by decision — daytime sunlight legibility is solved through text and label contrast, never by lightening the map.
+**The Map-Layer Exception.** Mapbox data-layer styling (fills, line layers, camera moves) is game-board rendering, not UI chrome. Two named exceptions are sanctioned there and only there: the selected-territory outline (Signal Lime line with a soft lime `lineBlur` glow — the selection affordance on a dark map), and Mapbox camera flight durations (tuned per move; the three-duration vocabulary governs UI motion, not camera physics). The basemap is night-preset at all hours by decision — daytime sunlight legibility is solved through text and label contrast, never by lightening the map.
 
 ## 5. Components
 
@@ -181,36 +193,38 @@ Instrumental and exact: every control feels like an instrument on a console — 
 
 ### Buttons
 - **Shape:** hard square (0px radius), full-width in sheets, 48dp minimum touch height.
-- **Primary:** Claim Red Button (#B63B1F) background, Bone Geist Mono uppercase label — this is usually the screen's single permitted red element. Uses the darkened button variant, not the identity #D64525, so the label clears WCAG AA (~5.0:1).
-- **Pressed:** state change in 120ms on cubic-bezier(0.2, 0, 0, 1); no scale bounce, no ripple tinting beyond an ink step.
-- **Secondary:** Ink 2 with hairline-strong border, Bone mono label. Disabled: Slate label, hairline border.
+- **Primary:** Electric Blue (#3155FF) background, White Geist Mono uppercase label (~5.3:1).
+- **Accent:** Signal Lime fill, Obsidian label — rewards and claim moments only, one per screen.
+- **Danger:** transparent with a Vermillion border and label — cancel attack/defence, leave, delete.
+- **Pressed:** state change in 120ms on cubic-bezier(0.2, 0, 0, 1); no scale bounce, no ripple tinting beyond an obsidian step.
+- **Secondary:** Surface with hairline-strong border, White mono label. Disabled: Muted label, hairline border.
 
 ### Cards / Containers
 - **Corner Style:** 0px, always.
-- **Background:** Ink 2; nested panels step to Ink 3 (true nesting is avoided — restructure before stacking cards).
+- **Background:** Surface; nested panels step to Raised (true nesting is avoided — restructure before stacking cards).
 - **Border:** 0.5px hairline; 1px hairline-strong when the card must separate from a busy background.
 - **Internal Padding:** 16px standard, 12px dense.
 
 ### Inputs / Fields
-- **Style:** Ink 2 fill, hairline border, 0px radius, Geist Mono text.
-- **Focus:** border shifts to hairline-strong — no glow, no colour change.
-- **Error:** message set in Instrument Sans below the field; the border never turns red (that would spend the screen's Claim Red).
+- **Style:** Surface fill, hairline-strong border, 0px radius, Geist Mono text.
+- **Focus:** border turns Signal Lime — no glow.
+- **Error:** Vermillion border and an Instrument Sans message below the field.
 
 ### Navigation
-- Bottom tab bar on Ink with hairline top edge; text-only Geist Mono uppercase labels — **no icons in navigation**, per brand. Active tab: Bone at mono 500; inactive: Slate. System Back gesture always honoured.
+- Bottom tab bar on Surface with a hairline top edge; icon over a Geist Mono uppercase label. Active tab: 2px Signal Lime top indicator, lime icon, White label at mono 500; inactive: Muted. System Back gesture always honoured.
 
 ### Resource Pills (signature)
-- The single rounded exception: 4px radius pills in the map bar showing resource counts in mono. Ink 2 fill, hairline border.
+- The single rounded exception: 4px radius pills in the map bar showing resource counts in mono. Surface fill, hairline border.
 
 ### Ceremonial Takeovers (signature)
-- Full-screen Ink moments (milestones, medal earns, streak milestones): Archivo 800–900 uppercase display, a count-up numeral, one hairline rule. The 2000ms ambient duration lives here and in map pulses only.
+- Full-screen Obsidian moments (milestones, medal earns, TAKEN / LOST / HELD): Sofia Sans Extra Condensed 800 uppercase moment word, a Geist Mono count-up numeral, one hairline rule. The 2000ms ambient duration lives here and in map pulses only.
 
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** keep Claim Red to one element per screen outside the map — its rarity is its authority.
-- **Do** set every label, measurement, and readout in Geist Mono; every readable sentence in Instrument Sans; ceremony only in Archivo.
-- **Do** convey depth with ink steps and hairlines only (0.5px at 8%, 1px at 16%).
+- **Do** keep Signal Lime to accents, with at most one lime-filled button per screen.
+- **Do** set every label, number and readout in Geist Mono; every readable sentence in Instrument Sans; titles and names in uppercase Sofia Sans Extra Condensed.
+- **Do** convey depth with obsidian steps and hairlines only (0.5px at 8%, 1px at 18%).
 - **Do** use only the three motion durations — 120ms / 280ms / 2000ms — on cubic-bezier(0.2, 0, 0, 1).
 - **Do** honour Android OS guarantees inside the brand skin: system Back, edge-to-edge insets, 48dp touch targets, sp-scaled text.
 - **Do** write British English, sentence-case Instrument Sans, no exclamation marks, no emoji.
@@ -219,7 +233,7 @@ Instrumental and exact: every control feels like an instrument on a console — 
 - **Don't** use gradients, glows, drop shadows, or blur — anywhere, ever.
 - **Don't** use pure white (#FFFFFF) or pure black (#000000).
 - **Don't** round corners except the app icon and 4px map resource pills.
-- **Don't** introduce a sixth colour, or repurpose Claim / Alliance / Enemy for generic UI states.
-- **Don't** put icons in navigation, or animate type.
+- **Don't** add colours beyond this palette, or use Smash Green for generic success.
+- **Don't** animate type.
 - **Don't** design like a fitness tracker, a casual gamified-exercise app, a glossy conventional mobile game, or a cute wellness brand — and never reach for weapons or armed-forces imagery.
 - **Don't** let copy imply travelling to a territory; the walk counts from anywhere.

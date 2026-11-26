@@ -1,11 +1,11 @@
 // Component: ActivityLogEvent — per-event_type renderer (17 event_types: 8 styled, 10 stubs)
-// Surfaces: transparent rows on Ink #0E1014, 1px hairline-standard divider between rows
+// Surfaces: transparent rows on Ink #101010, 1px hairline-standard divider between rows
 // Typography: Geist Mono 500 10px labels, Instrument Sans 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
 // Territory colors used (one per row max — accent bar only, never fills):
-//   Claim #D64525: contest_won, streak_milestone (Claim underline per brand "Streak display")
-//   Alliance #3F8F4E: contest_held, contest_defended
-//   Enemy #4A6B8A: contest_lost
-//   Slate #5C6068: contest_expired, streak_broken, all stub rows
+//   Claim #22D65E: contest_won, streak_milestone (Claim underline per brand "Streak display")
+//   Alliance #3155FF: contest_held, contest_defended
+//   Enemy #E8432B: contest_lost
+//   Slate #6C6C69: contest_expired, streak_broken, all stub rows
 // Brand rules applied: meaning-locked colors (Claim=yours, Alliance=ours, Enemy=theirs), 0px radius, no icons, type-driven hierarchy, hairlines visible
 
 import React from 'react';
@@ -14,12 +14,12 @@ import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
-const CLAIM = '#D64525';
-const ALLIANCE = '#3F8F4E';
-const ENEMY = '#4A6B8A';
-const SLATE = '#5C6068';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
+const CLAIM = '#22D65E';
+const ALLIANCE = '#3155FF';
+const ENEMY = '#E8432B';
+const SLATE = '#6C6C69';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
 
 function RowHeader({ label, labelColor, event }) {
   return (
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242,238,230,0.08)',
+    borderBottomColor: 'rgba(245,244,239,0.08)',
     paddingVertical: 14,
     paddingRight: 16,
   },
@@ -289,12 +289,13 @@ const styles = StyleSheet.create({
     color: BONE,
   },
   heroNumber: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_300Light',
     fontSize: 32,
     color: BONE,
     letterSpacing: -0.96,
     borderBottomWidth: 2,
     borderBottomColor: CLAIM,
     alignSelf: 'flex-start',
+    textTransform: 'uppercase',
   },
 });

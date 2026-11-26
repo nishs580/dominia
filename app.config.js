@@ -15,7 +15,7 @@ module.exports = {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
       // Ink — matches the first frame so cold launch has no white flash.
-      backgroundColor: '#0E1014',
+      backgroundColor: '#101010',
     },
     ios: {
       // A GPS walking game on iPad is a review/QA surface with zero upside.

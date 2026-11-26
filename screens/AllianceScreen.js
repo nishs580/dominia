@@ -19,17 +19,17 @@ import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { useFlag } from '../lib/flags';
 import ProfileAvatarButton from '../components/ProfileAvatarButton';
 
-const CLAIM = '#D64525';
-const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const INK3 = '#252932';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const ALLIANCE_GREEN = '#3F8F4E';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const CLAIM = '#22D65E';
+const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
+const INK = '#101010';
+const INK2 = '#1A1A1A';
+const INK3 = '#242424';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE2 = '#A3A29F';
+const ALLIANCE_GREEN = '#3155FF';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 function formatAllianceRole(t, role) {
   if (!role) return t('alliance.roleMember');
@@ -1730,7 +1730,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#C8FF3D',
     paddingVertical: 14,
     paddingHorizontal: 24,
     minHeight: 48,
@@ -1740,7 +1740,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: CLAIM,
+    color: '#C8FF3D',
     textTransform: 'uppercase',
   },
   header: {
@@ -1756,7 +1756,7 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 40,
     color: BONE,
     textTransform: 'uppercase',
@@ -1874,20 +1874,24 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   aRowPressed: {
-    backgroundColor: 'rgba(242,238,230,0.03)',
+    backgroundColor: 'rgba(245,244,239,0.03)',
   },
   aInfo: {
     flex: 1,
   },
   aNameLine: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontSize: 20,
     color: BONE,
+    lineHeight: 22,
+    textTransform: 'uppercase',
   },
   aName: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontSize: 20,
     color: BONE,
+    lineHeight: 22,
+    textTransform: 'uppercase',
   },
   aTag: {
     fontFamily: 'GeistMono_500Medium',
@@ -1964,7 +1968,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   confirmTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 32,
     color: BONE,
     textTransform: 'uppercase',
@@ -1998,12 +2002,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   ctaDestructive: {
-    backgroundColor: CLAIM_BUTTON,
+    backgroundColor: '#E8432B',
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#E8432B',
   },
   // Constructive/neutral action (promote, demote, acknowledge) — no red.
   // Red is reserved for destructive actions (kick, transfer, leave, disband).
@@ -2180,7 +2184,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(63,143,78,0.10)',
+    backgroundColor: 'rgba(49,85,255,0.10)',
   },
   commandPostBtnText: {
     fontFamily: 'GeistMono_500Medium',

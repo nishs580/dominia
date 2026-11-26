@@ -12,11 +12,11 @@ import MedalIcon from './MedalIcon';
 import TierBars from './TierBars';
 import { milestoneHaptic } from '../../lib/haptics';
 
-const INK = '#0E1014';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#D64525';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
+const CLAIM = '#22D65E';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 // Reconstruct a minimal medal object from an FCM medal push so MedalIcon /
 // TierBars can render it (the full state lives behind GET /legacy/medals).
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     fontFamily: 'GeistMono_500Medium',
-    color: CLAIM,
+    color: '#C8FF3D',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   name: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     color: BONE,
     fontSize: 40,
     lineHeight: 44,

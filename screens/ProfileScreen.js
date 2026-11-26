@@ -58,19 +58,19 @@ import { navigateTo } from '../lib/navigation';
 // preview EAS environments only, never production.
 const DEBUG_MENU = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_MENU === '1';
 
-const CLAIM = '#D64525';
-const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
-const ALLIANCE = '#3F8F4E';
+const CLAIM = '#22D65E';
+const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
+const ALLIANCE = '#3155FF';
 // The one sanctioned non-territory signal. Used exactly once on this screen.
 const CAUTION = '#D49A2B';
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const INK3 = '#252932';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const INK2 = '#1A1A1A';
+const INK3 = '#242424';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE2 = '#A3A29F';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 // With `legacy_tabs` off Profile is pushed on top of MainTabs in the root
 // stack, so replace would leave MainTabs (signed out) behind SignIn. Clear the
@@ -233,7 +233,7 @@ export function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
       <Text
         style={[
           styles.settingsLabel,
-          { color: enabled ? '#F2EEE6' : '#5C6068' },
+          { color: enabled ? '#F5F4EF' : '#6C6C69' },
         ]}
       >
         {enabled ? t('profile.on') : t('profile.off')}
@@ -1304,10 +1304,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 22,
     color: SLATE2,
     letterSpacing: -0.01,
+    textTransform: 'uppercase',
   },
   avatarEditBadge: {
     position: 'absolute',
@@ -1318,7 +1319,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
   },
@@ -1329,7 +1330,7 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   commanderName: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 32,
     color: BONE,
     textTransform: 'uppercase',
@@ -1446,11 +1447,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   powerValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: 44,
     lineHeight: 50,
     letterSpacing: -0.9,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   powerHeroUnit: {
     fontFamily: 'GeistMono_400Regular',
@@ -1588,10 +1590,11 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   powerRowValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.4,
+    textTransform: 'uppercase',
   },
   // Readings are always Bone. Dimming unearned figures inverted the hierarchy:
   // it made the block that *is* the player's standing the faintest thing on the
@@ -1740,11 +1743,12 @@ const styles = StyleSheet.create({
   },
   recordValue: {
     marginTop: 7,
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 24,
     lineHeight: 29,
     letterSpacing: -0.5,
     color: BONE,
+    textTransform: 'uppercase',
   },
   // Units live here, not inline beside the figure, so the numeral column reads
   // as one clean run of numbers down the table.
@@ -1838,7 +1842,7 @@ const styles = StyleSheet.create({
   // ── Modals ───────────────────────────────────────────────────────────────
   deleteModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(14,16,20,0.9)',
+    backgroundColor: 'rgba(16,16,16,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -1851,7 +1855,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   deleteModalTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 20,
     color: BONE,
     textTransform: 'uppercase',
@@ -1859,7 +1863,7 @@ const styles = StyleSheet.create({
   },
   // Neutral modal title — change-password is a routine action, not destructive.
   modalTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 20,
     color: BONE,
     textTransform: 'uppercase',
@@ -1922,8 +1926,8 @@ const styles = StyleSheet.create({
   deleteModalConfirm: {
     flex: 1,
     borderWidth: 1,
-    borderColor: CLAIM,
-    backgroundColor: 'rgba(214,69,37,0.12)',
+    borderColor: '#E8432B',
+    backgroundColor: 'rgba(232,67,43,0.12)',
     paddingVertical: 12,
     minHeight: 48,
     alignItems: 'center',
@@ -1934,6 +1938,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: CLAIM,
+    color: '#E8432B',
   },
 });

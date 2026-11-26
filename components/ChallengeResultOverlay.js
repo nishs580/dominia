@@ -80,7 +80,7 @@ export default function ChallengeResultOverlay({ result, onContinue, bottomInset
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14,16,20,0.72)', // Ink at 72% — the map stays visible beneath
+    backgroundColor: 'rgba(16,16,16,0.72)', // Ink at 72% — the map stays visible beneath
     justifyContent: 'flex-end',
     paddingHorizontal: 18,
     gap: 12,
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Ceremony moment: Archivo display is sanctioned here.
-  label: { fontFamily: 'Archivo_900Black', fontSize: 48, letterSpacing: -1.4, textTransform: 'uppercase' },
+  label: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 48, letterSpacing: -1.4, textTransform: 'uppercase' },
   title: { fontFamily: 'InstrumentSans_500Medium', color: BONE, fontSize: 15, lineHeight: 21 },
   body: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19 },
   continueBtn: {

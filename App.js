@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from './lib/clerk';
 import { StyleSheet, Text, View } from 'react-native';
+import { colors } from './lib/theme';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ProfileAccordionScreen from './screens/ProfileAccordionScreen';
@@ -61,11 +62,10 @@ import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import {
-  Archivo_700Bold,
-  Archivo_700Bold_Italic,
-  Archivo_800ExtraBold,
-  Archivo_900Black,
-} from '@expo-google-fonts/archivo';
+  SofiaSansExtraCondensed_600SemiBold,
+  SofiaSansExtraCondensed_700Bold,
+  SofiaSansExtraCondensed_800ExtraBold,
+} from '@expo-google-fonts/sofia-sans-extra-condensed';
 import {
   GeistMono_300Light,
   GeistMono_400Regular,
@@ -112,9 +112,24 @@ function OnboardingRoute(props) {
 }
 
 function makeTabOptions(label, Icon) {
+  // Figma tab bar: the active tab gets a 2px Signal Lime top indicator and a
+  // lime icon; its label stays white. Inactive tabs are white at 40%.
   return {
-    tabBarIcon: ({ color }) => <Icon size={20} color={color} />,
-    tabBarLabel: ({ focused, color }) => (
+    tabBarIcon: ({ focused }) => (
+      <View style={{ alignItems: 'center' }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: -10,
+            width: 56,
+            height: 2,
+            backgroundColor: focused ? colors.lime : 'transparent',
+          }}
+        />
+        <Icon size={20} color={focused ? colors.lime : colors.muted} />
+      </View>
+    ),
+    tabBarLabel: ({ focused }) => (
       <Text
         maxFontSizeMultiplier={1.3}
         numberOfLines={1}
@@ -124,7 +139,7 @@ function makeTabOptions(label, Icon) {
           textTransform: 'uppercase',
           letterSpacing: 1.4,
           includeFontPadding: false,
-          color,
+          color: focused ? colors.white : colors.muted,
         }}
       >
         {label}
@@ -161,16 +176,16 @@ const TabNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: '#0E1014',
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(242,238,230,0.16)',
+          borderTopColor: colors.hairline,
           elevation: 0,
           height: 62 + insets.bottom,
           paddingTop: 10,
           paddingBottom: insets.bottom + 10,
         },
-        tabBarActiveTintColor: '#F2EEE6',
-        tabBarInactiveTintColor: '#5C6068',
+        tabBarActiveTintColor: '#F5F4EF',
+        tabBarInactiveTintColor: '#6C6C69',
         headerShown: false,
       }}
     >
@@ -192,10 +207,9 @@ const TabNavigator = () => {
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Archivo_700Bold,
-    Archivo_700Bold_Italic,
-    Archivo_800ExtraBold,
-    Archivo_900Black,
+    SofiaSansExtraCondensed_600SemiBold,
+    SofiaSansExtraCondensed_700Bold,
+    SofiaSansExtraCondensed_800ExtraBold,
     GeistMono_300Light,
     GeistMono_400Regular,
     GeistMono_500Medium,

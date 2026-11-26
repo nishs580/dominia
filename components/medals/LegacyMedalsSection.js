@@ -21,15 +21,15 @@ import {
 import MedalIcon from './MedalIcon';
 import TierBars from './TierBars';
 
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
+const INK = '#101010';
+const INK2 = '#1A1A1A';
+const BONE = '#F5F4EF';
 // Slate 2, not bone-at-45%. The transparent dim landed around 4:1 against Ink,
 // which put every caption in this section — "LIFETIME · PERMANENT", the 0/4
 // counters, the locked medal names — below the readable floor. Slate 2 is the
 // token for metadata and clears 5.9:1 on Ink, 5.2:1 on Ink 2.
-const BONE_DIM = '#8B8F98';
-const HAIRLINE = 'rgba(242,238,230,0.16)'; // hairline-strong token (tile/cell borders)
+const BONE_DIM = '#A3A29F';
+const HAIRLINE = 'rgba(245,244,239,0.16)'; // hairline-strong token (tile/cell borders)
 
 function fmtNum(n) {
   if (n == null) return '';
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 18,
     color: BONE,
     textTransform: 'uppercase',
@@ -295,17 +295,18 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  tileActive: { borderColor: 'rgba(242,238,230,0.4)' },
+  tileActive: { borderColor: 'rgba(245,244,239,0.4)' },
   tileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   tileLabel: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   tileCount: { fontFamily: 'GeistMono_400Regular', fontSize: 11, color: BONE_DIM },
   tileIcons: {
@@ -335,17 +336,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cellName: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.3,
     marginTop: 8,
+    textTransform: 'uppercase',
   },
   cellNameDim: { color: BONE_DIM },
   modalBackdrop: {
     flex: 1,
     // Ink scrim, never pure black (Flat Doctrine / no pure #000).
-    backgroundColor: 'rgba(14,16,20,0.85)',
+    backgroundColor: 'rgba(16,16,16,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -356,13 +358,13 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
     borderRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     padding: 24,
     alignItems: 'center',
   },
   detailIconWrap: { marginBottom: 12 },
   detailName: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 22,
     color: BONE,
     textTransform: 'uppercase',

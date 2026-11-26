@@ -1,5 +1,5 @@
 import { useSignIn, useSignUp, useAuth, useSSO } from '@clerk/clerk-expo';
-import { useFonts, Archivo_900Black } from '@expo-google-fonts/archivo';
+import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/archivo';
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
@@ -53,7 +53,7 @@ export default function SignInScreen({ navigation, route }) {
   const legacyTabs = useFlag('legacy_tabs');
   const figma = usesFigmaOnboarding(() => legacyTabs);
 
-  const [fontsLoaded] = useFonts({ Archivo_900Black, GeistMono_400Regular });
+  const [fontsLoaded] = useFonts({ SofiaSansExtraCondensed_800ExtraBold, GeistMono_400Regular });
   if (!fontsLoaded) return null;
 
   // New accounts (Google or verified email) may still need a username; anyone
@@ -379,7 +379,7 @@ export default function SignInScreen({ navigation, route }) {
           style={styles.input}
           keyboardAppearance="dark"
           placeholder={t('signIn.codePlaceholder')}
-          placeholderTextColor="#6B7280"
+          placeholderTextColor="#6C6C69"
           keyboardType="number-pad"
           autoCapitalize="none"
           textContentType="oneTimeCode"
@@ -443,7 +443,7 @@ export default function SignInScreen({ navigation, route }) {
         style={styles.input}
         keyboardAppearance="dark"
         placeholder={t('signIn.emailPlaceholder')}
-        placeholderTextColor="#6B7280"
+        placeholderTextColor="#6C6C69"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -453,7 +453,7 @@ export default function SignInScreen({ navigation, route }) {
         style={styles.input}
         keyboardAppearance="dark"
         placeholder={t('signIn.passwordPlaceholder')}
-        placeholderTextColor="#6B7280"
+        placeholderTextColor="#6C6C69"
         secureTextEntry
         maxLength={PASSWORD_MAX}
         value={password}
@@ -497,26 +497,26 @@ export default function SignInScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0D0D0D',
+    backgroundColor: '#101010',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   title: {
-    fontFamily: 'Archivo_900Black',
-    color: '#F2F0EB',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    color: '#F5F4EF',
     fontSize: 32,
     letterSpacing: -1,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   claimMark: {
-    color: '#E83B3B',
+    color: '#E8432B',
     fontSize: 11,
   },
   subtitle: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#6B7280',
+    color: '#6C6C69',
     fontSize: 11,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     width: '100%',
-    backgroundColor: '#F2F0EB',
+    backgroundColor: '#F5F4EF',
     borderRadius: 0,
     paddingVertical: 15,
     flexDirection: 'row',
@@ -541,13 +541,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   googleMark: {
-    fontFamily: 'Archivo_900Black',
-    color: '#1C1C1C',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    color: '#1A1A1A',
     fontSize: 16,
+    textTransform: 'uppercase',
   },
   googleButtonText: {
-    fontFamily: 'Archivo_900Black',
-    color: '#1C1C1C',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    color: '#1A1A1A',
     fontSize: 15,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -562,42 +563,42 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#242424',
   },
   dividerText: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#6B7280',
+    color: '#6C6C69',
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   input: {
     width: '100%',
-    backgroundColor: '#1C1C1C',
+    backgroundColor: '#1A1A1A',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
-    color: '#F2F0EB',
+    borderColor: '#242424',
+    color: '#F5F4EF',
     fontSize: 15,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
   },
   error: {
-    color: '#E83B3B',
+    color: '#E8432B',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   button: {
     width: '100%',
-    backgroundColor: '#E83B3B',
+    backgroundColor: '#E8432B',
     borderRadius: 0,
     paddingVertical: 16,
   },
   buttonText: {
-    fontFamily: 'Archivo_900Black',
-    color: '#F2F0EB',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    color: '#F5F4EF',
     fontSize: 15,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -608,19 +609,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   forgotText: {
-    color: '#6B7280',
+    color: '#6C6C69',
     fontSize: 13,
   },
   toggleButton: {
     marginTop: 24,
   },
   toggleText: {
-    color: '#6B7280',
+    color: '#6C6C69',
     fontSize: 13,
   },
   toggleLink: {
-    color: '#E83B3B',
-    fontFamily: 'Archivo_900Black',
+    color: '#E8432B',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    textTransform: 'uppercase',
   },
 });
 
