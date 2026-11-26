@@ -56,7 +56,7 @@ async function currentCoords() {
   return null;
 }
 
-export default function FigmaOnboardingScreen({ navigation }) {
+export default function FigmaOnboardingScreen({ navigation, route }) {
   const { t, i18n } = useTranslation();
   const { userId, getToken, signOut } = useAuth();
   const [state, dispatch] = useReducer(
@@ -99,6 +99,11 @@ export default function FigmaOnboardingScreen({ navigation }) {
       cancelled = true;
     };
   }, [state.step, rewardNonce, getToken, safeDispatch]);
+
+  // Age's ← goes back to choose-name (Updated UX A5), which is its own route.
+  useEffect(() => {
+    if (state.step === STEPS.USERNAME) navigation.replace('Username', { playerId: route?.params?.playerId, editing: true });
+  }, [state.step, navigation, route]);
 
   // Run the effects of the latest transition exactly once.
   useEffect(() => {
@@ -177,7 +182,12 @@ export default function FigmaOnboardingScreen({ navigation }) {
 
   switch (state.step) {
     case STEPS.AGE:
-      return <AgeScreen onNext={(age) => dispatch({ type: 'AGE_SUBMITTED', age })} />;
+      return (
+        <AgeScreen
+          onNext={(age) => dispatch({ type: 'AGE_SUBMITTED', age })}
+          onBack={() => dispatch({ type: 'BACK' })}
+        />
+      );
 
     case STEPS.AGE_BLOCKED:
       return (
@@ -198,7 +208,6 @@ export default function FigmaOnboardingScreen({ navigation }) {
         <DailyRewardView
           status={reward.status}
           reward={reward.reward}
-          background="map"
           onCollect={() => dispatch({ type: 'REWARD_COLLECT' })}
           onRetry={() => setRewardNonce((n) => n + 1)}
           onSkip={() => dispatch({ type: 'REWARD_SKIP' })}
@@ -225,10 +234,11 @@ export default function FigmaOnboardingScreen({ navigation }) {
         />
       );
 
+    case STEPS.USERNAME:
     case STEPS.WELCOME:
     case STEPS.TUTORIAL:
     case STEPS.DONE:
-      // Finished; the map is replacing this screen.
+      // Finished (the map is replacing this screen) or back to choose-name.
       return <View style={styles.blank} />;
 
     case STEPS.LOCATION:

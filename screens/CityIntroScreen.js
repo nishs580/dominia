@@ -1,5 +1,6 @@
-// City intro (plan U10): "{City} Map · Let's start your journey from {City}",
-// the city on a map, NEXT. A step inside FigmaOnboardingScreen.
+// City intro (Updated UX A7): the city on a full-bleed still map, and a bottom
+// panel with "YOUR CITY · {CITY} MAP", the city as the title, "Let’s start
+// your journey from {City}." and CONTINUE. A step inside FigmaOnboardingScreen.
 //
 // With home_bases off the home pin was already saved silently (rounded to
 // about 1 km) when this step opened; the city name comes from the server's
@@ -7,12 +8,13 @@
 // (mode 'setBase'): the player taps the map to place the pin, as in today's
 // OnboardingScreen.
 
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Camera, MapView, MarkerView, setAccessToken } from '@rnmapbox/maps';
 import { colors, fonts } from '../lib/theme';
+import StaticMapBackdrop from '../components/StaticMapBackdrop';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -102,7 +104,6 @@ export default function CityIntroScreen({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef(null);
   const padding = { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 };
 
   if (mode === 'setBase') {
@@ -122,67 +123,84 @@ export default function CityIntroScreen({
   const city = homeCity || t('cityIntro.yourCity', { defaultValue: 'Your city' });
 
   return (
-    <View style={[styles.screen, padding]}>
-      {saving ? (
-        <Text style={styles.kicker}>{t('cityIntro.locating', { defaultValue: 'Locating…' })}</Text>
-      ) : null}
-      <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-        {t('cityIntro.title', { city, defaultValue: '{{city}} Map' })}
-      </Text>
-      <Text style={styles.body}>
-        {t('cityIntro.body', { city, defaultValue: "Let's start your journey from {{city}}" })}
-      </Text>
+    <View style={styles.full}>
+      {pin ? <StaticMapBackdrop centre={pin} zoom={12} /> : <View style={styles.mapPlaceholder} />}
+      <View style={styles.mapScrim} pointerEvents="none" />
+      {!pin ? <ActivityIndicator color={colors.white} style={styles.mapLoading} /> : null}
 
-      <View style={styles.mapBox} importantForAccessibility="no-hide-descendants">
-        {pin ? (
-          <MapView
-            style={StyleSheet.absoluteFill}
-            styleURL="mapbox://styles/mapbox/dark-v11"
-            scrollEnabled={false}
-            zoomEnabled={false}
-            pitchEnabled={false}
-            rotateEnabled={false}
-            logoEnabled={false}
-            scaleBarEnabled={false}
-          >
-            <Camera ref={cameraRef} defaultSettings={{ centerCoordinate: [pin.lng, pin.lat], zoomLevel: 11 }} />
-          </MapView>
-        ) : (
-          <ActivityIndicator color={colors.bone} style={styles.mapLoading} />
-        )}
-      </View>
-
-      {usedFallback ? (
-        <Text style={styles.note}>
-          {t('cityIntro.locationOff', {
-            defaultValue: 'Location is off, so you start from the city centre. You can play from anywhere.',
-          })}
+      <View style={[styles.panel, { paddingBottom: insets.bottom + 24 }]}>
+        <Text style={styles.eyebrow}>
+          {saving
+            ? t('cityIntro.locating', { defaultValue: 'Locating…' })
+            : t('cityIntro.eyebrow', { city, defaultValue: 'Your city · {{city}} map' })}
         </Text>
-      ) : null}
-      {pinStatus === 'failed' ? (
-        <View style={styles.failRow}>
-          <Text style={[styles.note, styles.failText]}>
-            {t('cityIntro.saveFailed', { defaultValue: "Couldn't save your home city." })}
-          </Text>
-          <Pressable accessibilityRole="button" onPress={onRetryPin} hitSlop={8} style={styles.retry}>
-            <Text style={styles.retryText}>{t('common.retry')}</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {claimNote ? <Text style={styles.note}>{claimNote}</Text> : null}
-      {finishError ? <Text style={styles.note}>{t('onboarding.saveFailedBody')}</Text> : null}
+        <Text style={styles.cityTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={2}>
+          {city}
+        </Text>
+        <Text style={styles.panelBody}>
+          {t('cityIntro.body', { city, defaultValue: 'Let’s start your journey from {{city}}.' })}
+        </Text>
 
-      <PrimaryButton
-        label={t('cityIntro.next', { defaultValue: 'NEXT' })}
-        onPress={onNext}
-        disabled={saving || finishing}
-      />
+        {usedFallback ? (
+          <Text style={styles.note}>
+            {t('cityIntro.locationOff', {
+              defaultValue: 'Location is off, so you start from the city centre. You can play from anywhere.',
+            })}
+          </Text>
+        ) : null}
+        {pinStatus === 'failed' ? (
+          <View style={styles.failRow}>
+            <Text style={[styles.note, styles.failText]}>
+              {t('cityIntro.saveFailed', { defaultValue: "Couldn't save your home city." })}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={onRetryPin} hitSlop={8} style={styles.retry}>
+              <Text style={styles.retryText}>{t('common.retry')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {claimNote ? <Text style={styles.note}>{claimNote}</Text> : null}
+        {finishError ? <Text style={styles.note}>{t('onboarding.saveFailedBody')}</Text> : null}
+
+        <PrimaryButton
+          label={t('cityIntro.continue', { defaultValue: 'Continue' })}
+          onPress={onNext}
+          disabled={saving || finishing}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink, paddingHorizontal: 24 },
+  // Updated UX A7: full-bleed map + bottom panel.
+  full: { flex: 1, backgroundColor: colors.obsidian, justifyContent: 'flex-end' },
+  mapPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.surface },
+  mapScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,16,16,0.25)' },
+  panel: {
+    backgroundColor: colors.obsidian,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+  },
+  eyebrow: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.8,
+    color: colors.lime,
+    textTransform: 'uppercase',
+  },
+  cityTitle: {
+    fontFamily: fonts.display,
+    fontSize: 52,
+    lineHeight: 54,
+    letterSpacing: -1,
+    color: colors.white,
+    textTransform: 'uppercase',
+    marginTop: 12,
+  },
+  panelBody: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 12, marginBottom: 16 },
   kicker: {
     fontFamily: fonts.mono,
     fontSize: 11,
@@ -209,7 +227,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     justifyContent: 'center',
   },
-  mapLoading: { alignSelf: 'center' },
+  mapLoading: { position: 'absolute', top: '40%', alignSelf: 'center' },
   mapHint: { position: 'absolute', bottom: 12, alignSelf: 'center' },
   mapHintText: {
     fontFamily: fonts.mono,

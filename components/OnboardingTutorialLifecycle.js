@@ -98,6 +98,7 @@ export default function OnboardingTutorialLifecycle() {
           index={state.tutorialIndex}
           onNext={() => dispatch({ type: 'TUTORIAL_NEXT' })}
           onSkip={() => dispatch({ type: 'TUTORIAL_SKIP' })}
+          onBack={() => dispatch({ type: 'BACK' })}
         />
       )}
     </Modal>

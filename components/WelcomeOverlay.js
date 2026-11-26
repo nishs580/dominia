@@ -1,6 +1,7 @@
-// "WELCOME TO DOMINIA" overlay on the map (plan U10). A full-screen scrim
-// over the map; tapping anywhere continues to the tutorial cards. Rendered by
-// OnboardingTutorialLifecycle, inside its Modal.
+// "WELCOME TO / DOMINIA" overlay on the map (Updated UX A8). A full-screen
+// scrim over the map with a two-line title, the body and a lime bordered
+// "TAP ON THE SCREEN TO CONTINUE" chip; tapping anywhere continues to the
+// tutorial cards. Rendered by OnboardingTutorialLifecycle, inside its Modal.
 
 import React, { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -9,9 +10,11 @@ import { colors, fonts } from '../lib/theme';
 
 export default function WelcomeOverlay({ onContinue }) {
   const { t } = useTranslation();
-  const title = t('welcomeOverlay.title', { defaultValue: 'WELCOME TO DOMINIA' });
-  const body = t('welcomeOverlay.body', { defaultValue: 'Let us start understanding how the Game works' });
-  const hint = t('welcomeOverlay.tapToContinue', { defaultValue: 'Tap on the screen to Continue' });
+  const titleTop = t('welcomeOverlay.titleTop', { defaultValue: 'Welcome to' });
+  const titleMain = t('welcomeOverlay.titleMain', { defaultValue: 'Dominia' });
+  const body = t('welcomeOverlay.body', { defaultValue: 'Let us start understanding how the game works.' });
+  const hint = t('welcomeOverlay.tapToContinue', { defaultValue: 'Tap on the screen to continue' });
+  const title = `${titleTop} ${titleMain}`;
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility?.(`${title}. ${body}`);
@@ -25,13 +28,19 @@ export default function WelcomeOverlay({ onContinue }) {
       style={styles.scrim}
     >
       <View style={styles.center}>
-        <Text style={styles.title} maxFontSizeMultiplier={1.2}>
-          {title}
+        <Text style={styles.titleTop} maxFontSizeMultiplier={1.2}>
+          {titleTop}
         </Text>
-        <View style={styles.rule} />
+        <Text style={styles.titleMain} maxFontSizeMultiplier={1.2}>
+          {titleMain}
+        </Text>
         <Text style={styles.body}>{body}</Text>
+        <View style={styles.chip}>
+          <Text style={styles.chipText} maxFontSizeMultiplier={1.3}>
+            {hint}
+          </Text>
+        </View>
       </View>
-      <Text style={styles.hint}>{hint}</Text>
     </Pressable>
   );
 }
@@ -41,25 +50,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(16,16,16,0.78)',
     paddingHorizontal: 24,
-    paddingBottom: 64,
     justifyContent: 'center',
   },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: {
-    fontFamily: fonts.display,
-    fontSize: 32,
-    letterSpacing: -0.9,
-    color: colors.bone,
+  center: { alignItems: 'center' },
+  titleTop: {
+    fontFamily: fonts.displayBold,
+    fontSize: 24,
+    lineHeight: 26,
+    color: colors.white2,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
-  rule: { width: 48, height: 1, backgroundColor: colors.hairlineStrong, marginVertical: 16 },
-  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.bone, textAlign: 'center' },
-  hint: {
+  titleMain: {
+    fontFamily: fonts.display,
+    fontSize: 52,
+    lineHeight: 54,
+    letterSpacing: -1,
+    color: colors.white,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, textAlign: 'center', marginTop: 16 },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.lime,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  chipText: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.slate2,
+    letterSpacing: 1.4,
+    color: colors.lime,
     textTransform: 'uppercase',
     textAlign: 'center',
   },

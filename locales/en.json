@@ -291,7 +291,11 @@
     "figmaEmailLabel": "Email",
     "figmaPasswordLabel": "Password",
     "figmaNotStarted": "Haven't started yet? ",
-    "figmaSignUpLink": "SIGN UP"
+    "figmaSignUpLink": "SIGN UP",
+    "figmaSignUpSubtitle": "Create your account. You’ll choose your commander name next.",
+    "figmaEmailPlaceholder": "you@domain.com",
+    "figmaPasswordLabelNew": "Password ({{min}}+ characters)",
+    "figmaPasswordHelper": "{{min}}+ characters"
   },
   "welcome": {
     "skipIntro": "Skip intro",
@@ -324,7 +328,11 @@
     "errorTaken": "Name is already taken. Please try a different name.",
     "errorGeneric": "Couldn't save your name. Please try again.",
     "checking": "Checking availability…",
-    "available": "Available ✓"
+    "available": "Available ✓",
+    "figmaSubtitle": "This is how the other Commanders will know you.",
+    "figmaLabel": "Commander name",
+    "figmaHelper": "Names can’t contain symbols.",
+    "figmaNext": "Next"
   },
   "sessionMismatch": {
     "label": "Session error",
@@ -1764,17 +1772,22 @@
     "tagline": "Walk . Claim . Conquer",
     "continueWithGoogle": "Continue with Google",
     "continueWithEmail": "Continue with Email",
-    "terms": "By continuing, you are agreeing to the Terms of Service & Privacy Policy",
-    "alreadyPlaying": "Already Playing? ",
-    "signIn": "SIGN IN"
+    "terms": "By continuing, you agree to our Terms of Service & Privacy Policy.",
+    "alreadyPlaying": "Already playing? ",
+    "signIn": "SIGN IN",
+    "splashTagline": "WALK · CLAIM · CONQUER",
+    "body": "Claim your city one walk at a time. Every block you loop is yours to hold.",
+    "continueWithApple": "Continue with Apple",
+    "appleFailed": "Apple sign-in failed. Try again."
   },
   "age": {
-    "title": "Select your Age",
-    "subtitle": "Select the appropriate option to where your age lies",
+    "title": "Select your age",
+    "subtitle": "Select the option where your age lies.",
     "selectedAge": "Selected age",
     "next": "NEXT",
     "typeLabel": "Or type your age",
-    "typePlaceholder": "Age"
+    "typePlaceholder": "Age",
+    "years": "Years"
   },
   "ageBlocked": {
     "title": "Not yet",
@@ -1789,44 +1802,54 @@
     "collected": "+{{amount}} Gold collected",
     "collectA11y": "Day {{day}}: {{amount}} Gold. Tap to collect",
     "loadFailed": "Couldn't load today's reward.",
-    "skip": "Skip"
+    "skip": "Skip",
+    "eyebrow": "Daily reward",
+    "dayTitle": "Day {{day}}",
+    "gold": "Gold",
+    "comeBack": "Come back tomorrow to collect Day {{day}}."
   },
   "cityIntro": {
     "title": "{{city}} Map",
-    "body": "Let's start your journey from {{city}}",
+    "body": "Let’s start your journey from {{city}}.",
     "yourCity": "Your city",
     "locating": "Locating…",
     "locationOff": "Location is off, so you start from the city centre. You can play from anywhere.",
     "saveFailed": "Couldn't save your home city.",
-    "next": "NEXT"
+    "next": "NEXT",
+    "eyebrow": "Your city · {{city}} map",
+    "continue": "Continue"
   },
   "welcomeOverlay": {
     "title": "WELCOME TO DOMINIA",
-    "body": "Let us start understanding how the Game works",
-    "tapToContinue": "Tap on the screen to Continue"
+    "body": "Let us start understanding how the game works.",
+    "tapToContinue": "Tap on the screen to continue",
+    "titleTop": "Welcome to",
+    "titleMain": "Dominia"
   },
   "tutorialCards": {
     "skip": "SKIP",
-    "next": "NEXT →",
+    "next": "NEXT",
     "territories": {
       "title": "WHAT ARE TERRITORIES?",
       "body": "Territories are areas that players can claim by walking around their perimeter, from anywhere in the world."
     },
     "howToStart": {
       "title": "HOW TO START?",
-      "body": "Click on a territory on the map to view its challenge details, including the steps required and time limit. Start the challenge with gold or iron and complete the challenge to claim the territory."
+      "body": "Tap a territory on the map to see its challenge: the steps required and the time limit. Start with Gold, finish the challenge, and it’s yours."
     },
     "claiming": {
       "title": "CLAIMING TERRITORY",
-      "body": "Walk the required number of steps within the given time limit to claim the territory as your own. If you fail to do so, the territory will remain unclaimed."
+      "body": "Walk the required steps within the time limit to claim the territory. If you don’t make it, the territory stays unclaimed."
     },
     "attackDefend": {
       "title": "ATTACK OR DEFEND",
-      "body": "You can attack other player's territories and make it as your own using Gold and also defend your territory from others attack by bypassing them in the challenge"
+      "body": "Attack other players’ territories with Gold to make them yours, and defend your own by out-walking anyone who attacks."
     },
     "endGoal": {
       "title": "END GOAL",
-      "body": "Claim the most territories before the season ends to top the leaderboard and earn gold."
-    }
+      "body": "Claim the most territories before the season ends to top the leaderboard and earn Gold."
+    },
+    "back": "BACK",
+    "startPlaying": "START PLAYING"
   }
 }
