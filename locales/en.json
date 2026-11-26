@@ -1627,8 +1627,9 @@
     "removePhoto": "Remove photo",
     "openSettings": "Open settings",
     "name": "Name",
-    "save": "Save",
-    "nameSaved": "Name updated"
+    "save": "Save changes",
+    "nameSaved": "Name updated",
+    "nameHelper": "This is the name other players see on the map and leaderboards."
   },
   "allianceFigma": {
     "title": "ALLIANCE",

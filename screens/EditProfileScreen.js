@@ -1,5 +1,6 @@
-// Figma Edit Profile (plan U16): "< Edit Profile", MY DETAILS, photo with
-// CHANGE PHOTO / REMOVE PHOTO, and the NAME field.
+// Figma Edit Profile (plan U16; G5 parity in plan 2026-11-27 U13): "← EDIT
+// PROFILE", MY DETAILS, photo with CHANGE PHOTO / REMOVE PHOTO, the NAME
+// field with its helper line, and SAVE CHANGES pinned to the bottom.
 //
 // Photo upload follows ProfileScreen's flow (Clerk CDN via setProfileImage,
 // then the URL cached into players.avatar_url with PATCH /me). A denied photo
@@ -27,6 +28,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
+import BackTitleHeader from '../components/BackTitleHeader';
 import { checkUsernameAvailable, getMe, patchMe } from '../lib/meApi';
 import { avatarInitials, avatarThumb } from '../lib/avatar';
 import { usernameSaveErrorKey, validateUsername } from '../lib/profile';
@@ -203,20 +205,10 @@ export default function EditProfileScreen() {
   };
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      <Pressable
-        onPress={() => navigation.goBack()}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-        hitSlop={8}
-        style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-      >
-        <Text style={styles.backChevron}>‹</Text>
-      </Pressable>
-      <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
-        {t('editProfile.title', { defaultValue: 'Edit Profile' })}
-      </Text>
-    </View>
+    <BackTitleHeader
+      title={t('editProfile.title', { defaultValue: 'Edit Profile' })}
+      onBack={() => navigation.goBack()}
+    />
   );
 
   if (loading || loadError) {
@@ -253,6 +245,13 @@ export default function EditProfileScreen() {
   else if (nameStatus === 'taken') nameHint = <Text style={styles.error} accessibilityLiveRegion="polite">{t('username.errorTaken')}</Text>;
   else if (nameStatus === 'checking') nameHint = <Text style={styles.helper}>{t('username.checking')}</Text>;
   else if (nameStatus === 'available') nameHint = <Text style={styles.helper}>{t('username.available')}</Text>;
+  else {
+    nameHint = (
+      <Text style={styles.helper}>
+        {t('editProfile.nameHelper', { defaultValue: 'This is the name other players see on the map and leaderboards.' })}
+      </Text>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -262,7 +261,7 @@ export default function EditProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: 32 }]}
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.sectionLabel} accessibilityRole="header">
@@ -307,9 +306,9 @@ export default function EditProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('editProfile.removePhoto', { defaultValue: 'Remove photo' })}
                 accessibilityState={{ disabled: uploading || !avatarUrl }}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed, (uploading || !avatarUrl) && styles.disabled]}
+                style={({ pressed }) => [styles.textButton, pressed && styles.pressed, (uploading || !avatarUrl) && styles.disabled]}
               >
-                <Text style={styles.secondaryButtonText}>
+                <Text style={[styles.secondaryButtonText, styles.textButtonText]}>
                   {t('editProfile.removePhoto', { defaultValue: 'Remove photo' })}
                 </Text>
               </Pressable>
@@ -366,22 +365,25 @@ export default function EditProfileScreen() {
             accessibilityLabelledBy="editProfileNameLabel"
           />
           <View style={styles.hint}>{nameHint}</View>
+        </ScrollView>
 
+        {/* G5: SAVE CHANGES sits pinned above the home indicator. */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable
             onPress={onSaveName}
             disabled={saveDisabled}
             accessibilityRole="button"
-            accessibilityLabel={t('editProfile.save', { defaultValue: 'Save' })}
+            accessibilityLabel={t('editProfile.save', { defaultValue: 'Save changes' })}
             accessibilityState={{ disabled: saveDisabled, busy: savingName }}
             style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed, saveDisabled && styles.disabled]}
           >
             {savingName ? (
               <ActivityIndicator color={colors.bone} />
             ) : (
-              <Text style={styles.primaryButtonText}>{t('editProfile.save', { defaultValue: 'Save' })}</Text>
+              <Text style={styles.primaryButtonText}>{t('editProfile.save', { defaultValue: 'Save changes' })}</Text>
             )}
           </Pressable>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -399,36 +401,13 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
-  },
-  back: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backChevron: {
-    fontFamily: fonts.mono,
-    fontSize: 28,
-    color: colors.bone,
-    lineHeight: 32,
-  },
-  headerTitle: {
-    marginLeft: 8,
-    fontFamily: fonts.display,
-    fontSize: 32,
-    color: colors.bone,
-    lineHeight: 34,
-    textTransform: 'uppercase',
-  },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
   sectionLabel: {
     fontFamily: fonts.mono,
@@ -450,8 +429,8 @@ const styles = StyleSheet.create({
   avatar: {
     width: 96,
     height: 96,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    borderWidth: 2,
+    borderColor: colors.self,
     backgroundColor: colors.ink2,
   },
   avatarPlaceholder: {
@@ -482,6 +461,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink2,
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
+  },
+  // REMOVE PHOTO is a bare text button in G5.
+  textButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textButtonText: {
+    color: colors.muted2,
   },
   secondaryButtonText: {
     fontFamily: fonts.mono,
@@ -528,8 +517,7 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
   primaryButton: {
-    marginTop: 16,
-    minHeight: 48,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.claimButton,
