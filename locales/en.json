@@ -1076,7 +1076,17 @@
     "filtered": "Message blocked by content rules.",
     "roomForbidden": "You no longer have access to this room.",
     "sendFailed": "Send failed. Try again.",
-    "tabGlobal": "GLOBAL"
+    "tabGlobal": "GLOBAL",
+    "figmaTitle": "Chat",
+    "messageRoomPlaceholder": "Message {{room}}…",
+    "soloPlayer": "Solo player",
+    "unknownSender": "Player",
+    "roleCaptain": "Captain",
+    "roleCommander": "Commander",
+    "roleLieutenant": "Lieutenant",
+    "roleTroop": "Troop",
+    "online_one": "{{count}} online",
+    "online_other": "{{count}} online"
   },
   "medal": {
     "viewMedal": "VIEW MEDAL",

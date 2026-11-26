@@ -1058,7 +1058,19 @@
     "filtered": "Сообщение заблокировано правилами.",
     "roomForbidden": "У вас больше нет доступа к этой комнате.",
     "sendFailed": "Отправка не удалась. Попробуйте снова.",
-    "tabGlobal": "ОБЩИЙ"
+    "tabGlobal": "ОБЩИЙ",
+    "figmaTitle": "Чат",
+    "messageRoomPlaceholder": "Сообщение: {{room}}…",
+    "soloPlayer": "Одиночка",
+    "unknownSender": "Игрок",
+    "roleCaptain": "Капитан",
+    "roleCommander": "Командир",
+    "roleLieutenant": "Лейтенант",
+    "roleTroop": "Боец",
+    "online_one": "{{count}} в сети",
+    "online_few": "{{count}} в сети",
+    "online_many": "{{count}} в сети",
+    "online_other": "{{count}} в сети"
   },
   "medal": {
     "viewMedal": "К МЕДАЛИ",
