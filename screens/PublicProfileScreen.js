@@ -394,11 +394,11 @@ export default function PublicProfileScreen() {
                 <>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.streak')}</Text>
-                <Text style={styles.statValue}>{t('profile.daysValue', { n: currentStreak })}</Text>
+                <Text style={styles.statValue}>{t('profile.daysValue', { count: currentStreak })}</Text>
               </View>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
-                <Text style={styles.statValue}>{t('profile.daysValue', { n: longestStreak })}</Text>
+                <Text style={styles.statValue}>{t('profile.daysValue', { count: longestStreak })}</Text>
               </View>
                 </>
               ) : null}
