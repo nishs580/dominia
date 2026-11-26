@@ -13,6 +13,7 @@ import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
 import { useFlag } from '../lib/flags';
 import { usesFigmaOnboarding } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
+import OnboardingHeader from '../components/OnboardingHeader';
 
 // Required for the OAuth redirect to close the in-app browser and hand control
 // back to the app once Google completes.
@@ -245,52 +246,53 @@ export default function SignInScreen({ navigation, route }) {
       : isSignIn
         ? t('signIn.figmaSignBackIn', { defaultValue: 'Sign back in' })
         : t('signIn.figmaSignUp', { defaultValue: 'Sign up' });
-    const googleLabel = oauthLoading
-      ? t('signIn.connecting')
-      : isSignIn
-        ? t('signIn.figmaSignInWithGoogle', { defaultValue: 'Sign in with Google' })
-        : t('signIn.figmaSignUpWithGoogle', { defaultValue: 'Sign up with Google' });
 
+    // Updated UX A3: ← SIGN UP header, subtitle, EMAIL / PASSWORD (8+
+    // CHARACTERS) labels, the 8+ helper and a mono-caps toggle. Email only:
+    // Apple and Google live on the landing, so there is no SSO button here.
     return (
       <KeyboardAvoidingView
-        style={[figmaStyles.screen, screenPadding]}
+        style={[figmaStyles.screen, figmaStyles.formScreen, screenPadding]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          onPress={goBack}
-          style={[figmaStyles.back, { top: Math.max(insets.top, 24) }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={figmaStyles.backText}>{`← ${t('common.back')}`}</Text>
-        </Pressable>
-
-        <Text style={figmaStyles.wordmark} maxFontSizeMultiplier={1.2}>DOMINIA</Text>
-        <Text style={figmaStyles.heading} accessibilityRole="header">
-          {isSignIn
-            ? t('signIn.figmaSignInTitle', { defaultValue: 'Sign in' })
-            : t('signIn.figmaSignUpTitle', { defaultValue: 'Sign up' })}
-        </Text>
+        <OnboardingHeader
+          title={
+            isSignIn
+              ? t('signIn.figmaSignInTitle', { defaultValue: 'Sign in' })
+              : t('signIn.figmaSignUpTitle', { defaultValue: 'Sign up' })
+          }
+          onBack={goBack}
+        />
+        {isSignIn ? null : (
+          <Text style={figmaStyles.subtitle}>
+            {t('signIn.figmaSignUpSubtitle', {
+              defaultValue: 'Create your account. You’ll choose your commander name next.',
+            })}
+          </Text>
+        )}
 
         <Text style={figmaStyles.fieldLabel}>{t('signIn.figmaEmailLabel', { defaultValue: 'Email' })}</Text>
         <TextInput
           style={figmaStyles.input}
           keyboardAppearance="dark"
-          placeholder={t('signIn.emailPlaceholder')}
-          placeholderTextColor={colors.slate}
+          placeholder={t('signIn.figmaEmailPlaceholder', { defaultValue: 'you@domain.com' })}
+          placeholderTextColor={colors.muted}
           autoCapitalize="none"
           keyboardType="email-address"
           textContentType="emailAddress"
           value={email}
           onChangeText={setEmail}
         />
-        <Text style={figmaStyles.fieldLabel}>{t('signIn.figmaPasswordLabel', { defaultValue: 'Password' })}</Text>
+        <Text style={figmaStyles.fieldLabel}>
+          {isSignIn
+            ? t('signIn.figmaPasswordLabel', { defaultValue: 'Password' })
+            : t('signIn.figmaPasswordLabelNew', { min: PASSWORD_MIN, defaultValue: 'Password ({{min}}+ characters)' })}
+        </Text>
         <TextInput
-          style={figmaStyles.input}
+          style={[figmaStyles.input, figmaStyles.inputLast]}
           keyboardAppearance="dark"
-          placeholder={t('signIn.passwordPlaceholder')}
-          placeholderTextColor={colors.slate}
+          placeholder="••••••••"
+          placeholderTextColor={colors.muted}
           secureTextEntry
           textContentType={isSignIn ? 'password' : 'newPassword'}
           maxLength={PASSWORD_MAX}
@@ -307,48 +309,40 @@ export default function SignInScreen({ navigation, route }) {
           >
             <Text style={figmaStyles.forgotText}>{t('signIn.forgotPassword')}</Text>
           </Pressable>
-        ) : null}
+        ) : (
+          <Text style={figmaStyles.helper}>
+            {t('signIn.figmaPasswordHelper', { min: PASSWORD_MIN, defaultValue: '{{min}}+ characters' })}
+          </Text>
+        )}
 
-        {error ? <Text style={figmaStyles.error}>{error}</Text> : null}
+        {error ? <Text style={figmaStyles.formError}>{error}</Text> : null}
 
         <Pressable
           accessibilityRole="button"
-          style={[figmaStyles.primary, loading && figmaStyles.dim]}
+          style={({ pressed }) => [
+            figmaStyles.primary,
+            figmaStyles.primarySpaced,
+            loading && figmaStyles.dim,
+            pressed && !loading && figmaStyles.primaryPressed,
+          ]}
           onPress={isSignIn ? handleSignIn : handleSignUp}
           disabled={loading || oauthLoading}
         >
           <Text style={figmaStyles.primaryText}>{primaryLabel}</Text>
         </Pressable>
 
-        <View style={figmaStyles.divider}>
-          <View style={figmaStyles.dividerLine} />
-          <Text style={figmaStyles.dividerText}>{t('signIn.or')}</Text>
-          <View style={figmaStyles.dividerLine} />
-        </View>
-
         <Pressable
           accessibilityRole="button"
-          style={[figmaStyles.secondary, oauthLoading && figmaStyles.dim]}
-          onPress={handleGoogle}
-          disabled={oauthLoading || loading}
-        >
-          <Text style={figmaStyles.secondaryText}>{googleLabel}</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          style={figmaStyles.toggle}
+          style={figmaStyles.capsToggle}
           onPress={() => { setMode(isSignIn ? 'signup' : 'signin'); setError(''); }}
         >
-          <Text style={figmaStyles.toggleText}>
+          <Text style={figmaStyles.capsToggleText}>
             {isSignIn
               ? t('signIn.figmaNotStarted', { defaultValue: "Haven't started yet? " })
-              : t('landing.alreadyPlaying', { defaultValue: 'Already Playing? ' })}
-            <Text style={figmaStyles.toggleLink}>
-              {isSignIn
-                ? t('signIn.figmaSignUpLink', { defaultValue: 'SIGN UP' })
-                : t('landing.signIn', { defaultValue: 'SIGN IN' })}
-            </Text>
+              : t('landing.alreadyPlaying', { defaultValue: 'Already playing? ' })}
+            {isSignIn
+              ? t('signIn.figmaSignUpLink', { defaultValue: 'SIGN UP' })
+              : t('landing.signIn', { defaultValue: 'SIGN IN' })}
           </Text>
         </Pressable>
       </KeyboardAvoidingView>
@@ -672,7 +666,7 @@ const figmaStyles = StyleSheet.create({
     minHeight: 48,
     marginBottom: 14,
   },
-  forgot: { alignSelf: 'flex-end', marginBottom: 14, marginTop: -4 },
+  forgot: { alignSelf: 'flex-end', marginTop: 12 },
   forgotText: { fontFamily: fonts.body, fontSize: 13, color: colors.slate2 },
   error: { fontFamily: fonts.body, fontSize: 13, color: colors.bone, textAlign: 'center', marginBottom: 12 },
   primary: {
@@ -702,4 +696,20 @@ const figmaStyles = StyleSheet.create({
   toggle: { marginTop: 20, alignItems: 'center', paddingVertical: 6 },
   toggleText: { fontFamily: fonts.body, fontSize: 13, color: colors.slate2, textAlign: 'center' },
   toggleLink: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.4, color: colors.bone },
+  // Updated UX A3 form: top-aligned under the ← title header.
+  formScreen: { justifyContent: 'flex-start' },
+  subtitle: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 4, marginBottom: 16 },
+  inputLast: { marginBottom: 0 },
+  helper: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16 },
+  formError: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 12 },
+  primaryPressed: { backgroundColor: colors.actionPressed },
+  primarySpaced: { marginTop: 16, minHeight: 52 },
+  capsToggle: { marginTop: 16, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  capsToggleText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.8,
+    color: colors.white2,
+    textTransform: 'uppercase',
+  },
 });
