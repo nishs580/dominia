@@ -4,20 +4,36 @@
 // hands it to onSelect, which flies the camera to its bbox.
 // Surface: input per DESIGN.md — Ink 2 fill, hairline border, 0 radius,
 // Geist Mono text; focus shifts the border to hairline-strong. States: idle,
-// loading, results, empty, error with retry.
+// loading, results, empty, error with retry. Updated UX C3 (plan U8): a
+// magnifier, lime focus, and rows with an ownership chip (owner_scope) and
+// the distance from the home pin (distance_m); either hides when absent.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { SEARCH_MAX_LEN, searchTerritories } from '../lib/territorySearchApi';
+import { formatKm } from '../lib/relocate';
 import { colors, fonts } from '../lib/theme';
+import { SearchIcon } from './MapIcons';
+import TagChip from './TagChip';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 2;
 const MAX_ROWS = 6;
 
-export default function TerritorySearch({ onSelect }) {
+// Ownership chip per result (Updated UX C3, plan U4 owner_scope).
+const SCOPE_TAGS = {
+  own: { kind: 'yours', key: 'map.card.tagYours', defaultValue: 'YOURS' },
+  alliance: { kind: 'alliance', key: 'map.card.tagAlliance', defaultValue: 'ALLIANCE' },
+  enemy: { kind: 'enemy', key: 'map.card.tagEnemy', defaultValue: 'ENEMY' },
+  unclaimed: { kind: 'neutral', key: 'map.card.tagUnclaimed', defaultValue: 'UNCLAIMED' },
+};
+
+// onActiveChange(bool): true while the field is focused or holds a query, so
+// MapTopBar can dim the map behind it. A change of dismissKey (the scrim was
+// tapped) clears the search and drops focus.
+export default function TerritorySearch({ onSelect, onActiveChange, dismissKey = 0 }) {
   const { t } = useTranslation();
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
@@ -30,6 +46,21 @@ export default function TerritorySearch({ onSelect }) {
   const [results, setResults] = useState([]);
   const requestSeq = useRef(0);
   const inputRef = useRef(null);
+
+  const active = focused || query.length > 0;
+  useEffect(() => {
+    onActiveChange?.(active);
+  }, [active, onActiveChange]);
+
+  useEffect(() => {
+    if (!dismissKey) return;
+    requestSeq.current += 1;
+    setQuery('');
+    setResults([]);
+    setStatus('idle');
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+  }, [dismissKey]);
 
   const runSearch = useCallback(async (q) => {
     const seq = ++requestSeq.current;
@@ -76,6 +107,7 @@ export default function TerritorySearch({ onSelect }) {
   return (
     <View>
       <View style={[styles.field, focused && styles.fieldFocused]}>
+        <SearchIcon size={16} color={focused ? colors.lime : colors.slate2} />
         <TextInput
           ref={inputRef}
           value={query}
@@ -136,17 +168,29 @@ export default function TerritorySearch({ onSelect }) {
               </Pressable>
             </View>
           ) : null}
-          {(status === 'done' || status === 'loading') && results.map((r, i) => (
-            <Pressable
-              key={String(r.id)}
-              accessibilityRole="button"
-              accessibilityLabel={t('map.search.resultA11y', { defaultValue: 'Show {{name}} on the map', name: r.name })}
-              onPress={() => pick(r)}
-              style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.rowPressed]}
-            >
-              <Text style={styles.rowText} numberOfLines={1} maxFontSizeMultiplier={1.3}>{r.name}</Text>
-            </Pressable>
-          ))}
+          {(status === 'done' || status === 'loading') && results.map((r, i) => {
+            const tag = r.ownerScope ? SCOPE_TAGS[r.ownerScope] : null;
+            const km = r.distanceM != null ? formatKm(r.distanceM) : null;
+            return (
+              <Pressable
+                key={String(r.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t('map.search.resultA11y', { defaultValue: 'Show {{name}} on the map', name: r.name })}
+                onPress={() => pick(r)}
+                style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.rowPressed]}
+              >
+                <Text style={styles.rowText} numberOfLines={1} maxFontSizeMultiplier={1.3}>{r.name}</Text>
+                {tag ? (
+                  <TagChip kind={tag.kind}>{t(tag.key, { defaultValue: tag.defaultValue })}</TagChip>
+                ) : null}
+                {km ? (
+                  <Text style={styles.rowDistance} maxFontSizeMultiplier={1.3}>
+                    {t('map.search.distanceKm', { defaultValue: '{{km}} KM', km })}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
     </View>
@@ -220,9 +264,19 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
   row: {
-    minHeight: 44,
-    justifyContent: 'center',
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 12,
+  },
+  rowDistance: {
+    minWidth: 48,
+    textAlign: 'right',
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.1,
+    color: colors.slate2,
   },
   rowDivider: {
     borderTopWidth: 0.5,
@@ -232,8 +286,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink3,
   },
   rowText: {
-    fontFamily: fonts.mono,
-    fontSize: 13,
+    flex: 1,
+    fontFamily: fonts.displayBold,
+    fontSize: 17,
+    textTransform: 'uppercase',
     color: colors.bone,
   },
 });

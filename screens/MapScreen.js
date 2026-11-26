@@ -50,7 +50,7 @@ import {
 } from '../lib/mapBoard';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
-import { hasFired, markFired } from '../lib/walkthroughFlags';
+import { hasFired, markFired, onWalkthroughFired } from '../lib/walkthroughFlags';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
 import { SPINE_EVENTS, gateSpineState, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
 import { getFlag, useFlag } from '../lib/flags';
@@ -58,7 +58,14 @@ import { navigateTo } from '../lib/navigation';
 import MapTopBar from '../components/MapTopBar';
 import TerritoryCard from '../components/TerritoryCard';
 import DefendPopup, { useDefendPopupFeed } from '../components/DefendPopup';
-import { defendPopupModel } from '../lib/defendPopup';
+import { defendPopupModel, defendStartParams } from '../lib/defendPopup';
+import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
+import RelocateSheet from '../components/RelocateSheet';
+import CoachMark from '../components/CoachMark';
+import { COACH_EVENTS, COACH_FLAG_NAMES, COACH_STEPS, coachReduce, initialCoachState } from '../lib/coachMarks';
+import { TUTORIAL_NAMES } from '../lib/onboardingFlow';
+import { relocateTarget } from '../lib/relocate';
+import { PinIcon } from '../components/MapIcons';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
@@ -1492,8 +1499,50 @@ export default function MapScreen() {
     ];
   }, [myPlayer?.home_city, t, winH, winW, figmaModeEarly]);
 
-  // Tips stay quiet during the Beat 1 flight — nothing may compete with it.
-  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive });
+  // ── Coach marks (Updated UX B1–B3, plan U8), Figma mode only ─────────────
+  // One-shot: side panel → tap the first territory → its card. They run once
+  // after the tutorial cards are finished or skipped, alongside the
+  // first-claim objective, and never during the Beat 1 flight. Progress is
+  // three walkthrough flags (lib/coachMarks COACH_FLAG_NAMES).
+  const [coach, setCoach] = useState(() => initialCoachState());
+  const [coachReady, setCoachReady] = useState(false);
+  const [tutorialDone, setTutorialDone] = useState(false);
+  const dispatchCoach = useCallback((event) => setCoach((s) => coachReduce(s, event)), []);
+  const coachActive = coach.step === COACH_STEPS.SIDE_PANEL
+    || coach.step === COACH_STEPS.TAP_TERRITORY
+    || coach.step === COACH_STEPS.CARD;
+  useEffect(() => {
+    if (!userId || !figmaModeEarly) return undefined;
+    let cancelled = false;
+    const lastTutorial = TUTORIAL_NAMES[TUTORIAL_NAMES.length - 1];
+    (async () => {
+      const [sidePanel, tapTerritory, card, tutorial] = await Promise.all([
+        hasFired(userId, COACH_FLAG_NAMES.sidePanel),
+        hasFired(userId, COACH_FLAG_NAMES.tapTerritory),
+        hasFired(userId, COACH_FLAG_NAMES.card),
+        hasFired(userId, lastTutorial),
+      ]);
+      if (cancelled) return;
+      setCoach(initialCoachState({ sidePanel, tapTerritory, card }));
+      setTutorialDone(tutorial);
+      setCoachReady(true);
+    })();
+    const unsubscribe = onWalkthroughFired(({ userId: who, name }) => {
+      if (who === userId && name === lastTutorial) setTutorialDone(true);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [userId, figmaModeEarly]);
+  useEffect(() => {
+    if (!userId) return;
+    coach.seen.forEach((step) => markFired(userId, COACH_FLAG_NAMES[step]));
+  }, [coach.seen, userId]);
+
+  // Tips stay quiet during the Beat 1 flight — nothing may compete with it —
+  // and while a coach mark is up.
+  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive && !coachActive });
 
   // Beat 2 → Beat 3: the spine advances when the objective's sheet opens.
   useEffect(() => {
@@ -1640,7 +1689,7 @@ export default function MapScreen() {
     // Non-sensitive game state is still readable from the players table…
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_city')
+      .select('id, username, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_city')
       .eq('clerk_id', userId)
       .maybeSingle();
 
@@ -1815,6 +1864,9 @@ export default function MapScreen() {
           name: row.territory_name,
           owner: row.owner_username ?? 'Unclaimed',
           alliance: allianceTag,
+          // Full alliance name for the Figma card's ally explainer, when the
+          // viewport RPC provides it.
+          allianceName: row.alliance_name ?? null,
           tier: row.tier ?? 'Medium',
           level: `D${developmentLevel}`,
           ownerStreak: row.owner_streak_days ?? 0,
@@ -2910,14 +2962,36 @@ export default function MapScreen() {
       challengeActive: defendFeed.challengeActive,
       gold: myPlayer ? (myPlayer.gold ?? 0) : null,
       multiResource: multiResourceOn,
+      selfUsername: myPlayer?.username ?? null,
     })),
     // dismissTick re-runs selection after a dismissal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [defendFeed.attacks, defendFeed.challengeActive, defendFeed.dismissTick, figmaChrome, flightActive, myPlayer?.gold, multiResourceOn],
+    [defendFeed.attacks, defendFeed.challengeActive, defendFeed.dismissTick, figmaChrome, flightActive, myPlayer?.gold, myPlayer?.username, multiResourceOn],
   );
-  const handleDefendFromPopup = useCallback((model) => {
-    navigation.navigate('DefenderAccept', { contestId: model.contestId });
-  }, [navigation]);
+  // Figma mode (D1/D6): DEFEND starts the defence straight from the pop-up,
+  // with the same preview + POST /defend calls DefenderAccept makes (no Stone
+  // boost). Any failure falls back to DefenderAccept, which owns the error and
+  // terminal states (already defended, window closed, insufficient Gold).
+  const handleDefendFromPopup = useCallback(async (model) => {
+    const contestId = model.contestId;
+    const clerkGetToken = () => getTokenRef.current();
+    const fallback = () => navigation.navigate('DefenderAccept', { contestId });
+    try {
+      const preview = await getDefendPreview({ clerkGetToken, contestId });
+      if (!preview.ok || !myPlayer?.id) {
+        fallback();
+        return;
+      }
+      const res = await postDefend({ clerkGetToken, contestId, spendStone: false, defenderStartingWalkM: 0 });
+      if (!res.ok) {
+        fallback();
+        return;
+      }
+      navigation.navigate('ActiveClaim', defendStartParams(preview.data, myPlayer.id));
+    } catch (_) {
+      fallback();
+    }
+  }, [navigation, myPlayer?.id]);
 
   const cardAtCap = useMemo(() => {
     const xp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
@@ -2992,6 +3066,49 @@ export default function MapScreen() {
       pendingFocusIdRef.current = result.id;
     }
   }, [territories.features]);
+
+  // ── Coach marks: when they start and what moves them (Figma mode) ────────
+  const coachSelectedId = selectedFeature?.id ?? selectedFeature?.properties?.id ?? null;
+  const objectiveSelected = coachSelectedId != null && objectiveFeature?.id != null && coachSelectedId === objectiveFeature.id;
+  useEffect(() => {
+    if (!figmaChrome || !coachReady || !tutorialDone) return;
+    if (coach.step !== COACH_STEPS.IDLE) return;
+    if (!objectiveActive || flightActive || spineFlightPending || defendModel) return;
+    dispatchCoach(COACH_EVENTS.START);
+  }, [figmaChrome, coachReady, tutorialDone, coach.step, objectiveActive, flightActive, spineFlightPending, defendModel, dispatchCoach]);
+  useEffect(() => {
+    if (coach.step === COACH_STEPS.TAP_TERRITORY && objectiveSelected) {
+      dispatchCoach(COACH_EVENTS.TERRITORY_SELECTED);
+    } else if (coach.step === COACH_STEPS.CARD && !objectiveSelected) {
+      // The card closed (or another territory replaced it): B3 is over.
+      dispatchCoach(COACH_EVENTS.NEXT);
+    } else if (coach.step === COACH_STEPS.TAP_TERRITORY && !objectiveActive) {
+      // The objective went away (claimed elsewhere): nothing left to point at.
+      dispatchCoach(COACH_EVENTS.SKIP);
+    }
+  }, [coach.step, objectiveSelected, objectiveActive, dispatchCoach]);
+
+  // ── Relocate (Updated UX C9/C10, plan U8), Figma mode only ───────────────
+  const [relocateOpen, setRelocateOpen] = useState(false);
+  const ownFeatures = useMemo(
+    () => (relocateOpen ? territories.features.filter((f) => f.properties?.color === '#22D65E') : []),
+    [relocateOpen, territories.features],
+  );
+  const handleRelocateGo = useCallback((row) => {
+    setRelocateOpen(false);
+    const camera = centredFlightCamera(relocateTarget(row));
+    if (camera && cameraRef.current) {
+      cameraRef.current.setCamera({ ...camera, animationMode: 'flyTo', animationDuration: 800 });
+    }
+  }, []);
+  const handleRelocateFindNearby = () => {
+    setRelocateOpen(false);
+    recenter();
+  };
+  const handleViewAlliance = useCallback(() => {
+    handleSheetClose();
+    navigateTo('Alliance');
+  }, [handleSheetClose]);
 
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
@@ -3303,6 +3420,11 @@ export default function MapScreen() {
       )}
       {legendOpen && !flightActive ? (
         <View style={figmaChrome ? styles.legendPanelFigma : styles.legendPanel}>
+          {figmaChrome ? (
+            <Text style={styles.legendHeaderFigma} accessibilityRole="header">
+              {t('map.legendFigma.header', { defaultValue: 'TERRITORY KEY' })}
+            </Text>
+          ) : null}
           {(figmaChrome
             ? [
                 { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendFigma.yours', { defaultValue: 'Your territory' }) },
@@ -3350,9 +3472,27 @@ export default function MapScreen() {
           onClose={handleSheetClose}
           onStartClaim={handleCardClaim}
           onStartContest={handleCardContest}
+          onViewAlliance={handleViewAlliance}
           firstClaim={objectiveActive && selectedFeature?.id != null && selectedFeature.id === objectiveFeature?.id}
+          onCoachBubblePress={coach.step === COACH_STEPS.CARD && objectiveSelected
+            ? () => dispatchCoach(COACH_EVENTS.NEXT)
+            : null}
         />
       )}
+      {/* Figma C1: RELOCATE (bottom-left) opens the Relocate sheet (C9/C10). */}
+      {figmaChrome && !flightActive && selected == null && !coachActive ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('map.relocate.buttonA11y', { defaultValue: 'Jump the map to one of your territories' })}
+          onPress={() => setRelocateOpen(true)}
+          style={({ pressed }) => [styles.relocateButton, pressed && { opacity: 0.9 }]}
+        >
+          <PinIcon size={16} color="#C8FF3D" />
+          <Text style={styles.relocateText} maxFontSizeMultiplier={1.3}>
+            {t('map.relocate.button', { defaultValue: 'RELOCATE' })}
+          </Text>
+        </Pressable>
+      ) : null}
       {figmaChrome ? (
         <MapSideRail
           figma
@@ -3363,10 +3503,32 @@ export default function MapScreen() {
           keyOpen={legendOpen}
           onToggleKey={() => setLegendOpen((o) => !o)}
           onLocate={recenter}
+          coach={coach.step === COACH_STEPS.SIDE_PANEL}
+          onCoachContinue={() => dispatchCoach(COACH_EVENTS.NEXT)}
         />
       ) : (
         <MapSideRail hidden={selected != null || flightActive} />
       )}
+
+      {figmaChrome ? (
+        <RelocateSheet
+          visible={relocateOpen && !flightActive}
+          playerId={myPlayer?.id ?? null}
+          homePin={homePin}
+          fallbackFeatures={ownFeatures}
+          onClose={() => setRelocateOpen(false)}
+          onGo={handleRelocateGo}
+          onFindNearby={handleRelocateFindNearby}
+        />
+      ) : null}
+
+      {figmaChrome && (coach.step === COACH_STEPS.SIDE_PANEL || coach.step === COACH_STEPS.TAP_TERRITORY) && !defendModel ? (
+        <CoachMark
+          step={coach.step}
+          onContinue={() => dispatchCoach(COACH_EVENTS.NEXT)}
+          onSkip={() => dispatchCoach(COACH_EVENTS.SKIP)}
+        />
+      ) : null}
 
       {defendModel ? (
         <DefendPopup
@@ -3714,6 +3876,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
     zIndex: 11,
+  },
+  // Figma C2 key header.
+  legendHeaderFigma: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: '#A3A29F',
+    letterSpacing: 1.76,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  // Figma C1: RELOCATE, bottom-left above the tab bar.
+  relocateButton: {
+    position: 'absolute',
+    left: 12,
+    bottom: 16,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(16,16,16,0.86)',
+    borderWidth: 1,
+    borderColor: '#C8FF3D',
+    borderRadius: 0,
+    zIndex: 12,
+  },
+  relocateText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.4,
+    color: BONE,
   },
   legendRow: {
     flexDirection: 'row',
