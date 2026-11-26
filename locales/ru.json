@@ -125,7 +125,8 @@
     "kicker": "По всему городу",
     "title": "События",
     "comingSoon": "Скоро",
-    "comingSoonBody": "Здесь появятся события для всего города. Загляните позже."
+    "comingSoonBody": "Здесь появятся сезонные турниры и события для всего города.",
+    "headline": "События скоро появятся"
   },
   "levelTitle": {
     "Scout": "Разведчик",
@@ -964,7 +965,17 @@
     "endOfLog": "КОНЕЦ ЖУРНАЛА",
     "failedToLoad": "Не удалось загрузить журнал активности.",
     "emptyTitle": "ЖУРНАЛ ПУСТ",
-    "emptyBody": "Захватите территорию, чтобы начать."
+    "emptyBody": "Захватите территорию, чтобы начать.",
+    "historyTitle": "История",
+    "today": "СЕГОДНЯ",
+    "yesterday": "ВЧЕРА",
+    "territoryFallback": "Территория",
+    "typeEmptyClaimed": "СВОБОДНАЯ ТЕРРИТОРИЯ ЗАХВАЧЕНА",
+    "typeEnemyClaimed": "ВРАЖЕСКАЯ ТЕРРИТОРИЯ ЗАХВАЧЕНА",
+    "typeDefended": "ТЕРРИТОРИЯ ЗАЩИЩЕНА",
+    "typeDefendFailed": "ЗАЩИТА ТЕРРИТОРИИ ПРОВАЛЕНА",
+    "typeEmptyClaimFailed": "ЗАХВАТ СВОБОДНОЙ ТЕРРИТОРИИ ПРОВАЛЕН",
+    "typeEnemyClaimFailed": "ЗАХВАТ ВРАЖЕСКОЙ ТЕРРИТОРИИ ПРОВАЛЕН"
   },
   "createAlliance": {
     "back": "← НАЗАД",
@@ -1052,7 +1063,13 @@
     "distanceValue": "{{distance}}",
     "place": "{{rank}}-е место",
     "yourPosition": "ВАША ПОЗИЦИЯ",
-    "you": "Вы"
+    "you": "Вы",
+    "terrUnit": "ТЕРР.",
+    "citySeason": "{{city}} · ЭТОТ СЕЗОН",
+    "thisSeason": "ЭТОТ СЕЗОН",
+    "youNamed": "Вы · {{name}}",
+    "yourAlliance": "Ваш альянс",
+    "yourAllianceNamed": "Ваш альянс · {{name}}"
   },
   "wallet": {
     "back": "← ПРОФИЛЬ",
@@ -1120,7 +1137,19 @@
     "filtered": "Сообщение заблокировано правилами.",
     "roomForbidden": "У вас больше нет доступа к этой комнате.",
     "sendFailed": "Отправка не удалась. Попробуйте снова.",
-    "tabGlobal": "ОБЩИЙ"
+    "tabGlobal": "ОБЩИЙ",
+    "figmaTitle": "Чат",
+    "messageRoomPlaceholder": "Сообщение: {{room}}…",
+    "soloPlayer": "Одиночка",
+    "unknownSender": "Игрок",
+    "roleCaptain": "Капитан",
+    "roleCommander": "Командир",
+    "roleLieutenant": "Лейтенант",
+    "roleTroop": "Боец",
+    "online_one": "{{count}} в сети",
+    "online_few": "{{count}} в сети",
+    "online_many": "{{count}} в сети",
+    "online_other": "{{count}} в сети"
   },
   "medal": {
     "viewMedal": "К МЕДАЛИ",
@@ -1662,7 +1691,7 @@
     "activity": "Активность",
     "viewAllActivity": "Вся активность",
     "resources": "Баланс ресурсов",
-    "goldBalance": "Текущий баланс золота",
+    "goldBalance": "Текущее золото",
     "goldUsed": "Всего потрачено золота",
     "settings": "Настройки приложения",
     "units": "Единицы измерения",
@@ -1677,8 +1706,20 @@
     "statWeek": "Эта неделя",
     "statBest": "Рекорд",
     "statDistance": "Расстояние",
-    "statActiveMinutes": "Активные минуты",
-    "statSteps": "Шаги"
+    "statActiveMinutes": "Акт. мин",
+    "statSteps": "Всего шагов",
+    "levelChip": "УР {{level}}",
+    "tileTerritories": "Территории",
+    "tileGold": "Золото",
+    "tileWalked": "Пройдено",
+    "claimed": "Захвачена",
+    "claimedHeld_one": "Захвачена · Удерживается {{count}} день",
+    "claimedHeld_few": "Захвачена · Удерживается {{count}} дня",
+    "claimedHeld_many": "Захвачена · Удерживается {{count}} дней",
+    "claimedHeld_other": "Захвачена · Удерживается {{count}} дня",
+    "goldCopy": "Получайте золото за миссии, ежедневные награды и победы за территории. Тратьте его на захват, атаку и защиту.",
+    "chatPush": "Push-уведомления чата альянса",
+    "statClaims": "Захваты"
   },
   "editProfile": {
     "title": "Редактировать профиль",
@@ -1688,8 +1729,9 @@
     "removePhoto": "Удалить фото",
     "openSettings": "Открыть настройки",
     "name": "Имя",
-    "save": "Сохранить",
-    "nameSaved": "Имя обновлено"
+    "save": "Сохранить изменения",
+    "nameSaved": "Имя обновлено",
+    "nameHelper": "Это имя видят другие игроки на карте и в рейтингах."
   },
   "allianceFigma": {
     "title": "АЛЬЯНСЫ",

@@ -123,7 +123,8 @@
     "kicker": "City-wide",
     "title": "Events",
     "comingSoon": "Coming soon",
-    "comingSoonBody": "Timed events for the whole city will appear here. Check back soon."
+    "comingSoonBody": "Seasonal tournaments and city-wide events will show up here.",
+    "headline": "Events are coming"
   },
   "levelTitle": {
     "Scout": "Scout",
@@ -980,7 +981,17 @@
     "endOfLog": "END OF LOG",
     "failedToLoad": "Failed to load activity log.",
     "emptyTitle": "EMPTY LOG",
-    "emptyBody": "Claim a territory to begin."
+    "emptyBody": "Claim a territory to begin.",
+    "historyTitle": "History",
+    "today": "TODAY",
+    "yesterday": "YESTERDAY",
+    "territoryFallback": "Territory",
+    "typeEmptyClaimed": "EMPTY TERRITORY CLAIMED",
+    "typeEnemyClaimed": "ENEMY TERRITORY CLAIMED",
+    "typeDefended": "TERRITORY DEFENDED",
+    "typeDefendFailed": "TERRITORY DEFENDING FAILED",
+    "typeEmptyClaimFailed": "EMPTY TERRITORY CLAIM FAILED",
+    "typeEnemyClaimFailed": "ENEMY TERRITORY CLAIM FAILED"
   },
   "createAlliance": {
     "back": "← BACK",
@@ -1068,7 +1079,13 @@
     "distanceValue": "{{distance}}",
     "place": "{{ordinal}} Place",
     "yourPosition": "YOUR POSITION",
-    "you": "You"
+    "you": "You",
+    "terrUnit": "TERR.",
+    "citySeason": "{{city}} · THIS SEASON",
+    "thisSeason": "THIS SEASON",
+    "youNamed": "You · {{name}}",
+    "yourAlliance": "Your alliance",
+    "yourAllianceNamed": "Your alliance · {{name}}"
   },
   "wallet": {
     "back": "← PROFILE",
@@ -1136,7 +1153,17 @@
     "filtered": "Message blocked by content rules.",
     "roomForbidden": "You no longer have access to this room.",
     "sendFailed": "Send failed. Try again.",
-    "tabGlobal": "GLOBAL"
+    "tabGlobal": "GLOBAL",
+    "figmaTitle": "Chat",
+    "messageRoomPlaceholder": "Message {{room}}…",
+    "soloPlayer": "Solo player",
+    "unknownSender": "Player",
+    "roleCaptain": "Captain",
+    "roleCommander": "Commander",
+    "roleLieutenant": "Lieutenant",
+    "roleTroop": "Troop",
+    "online_one": "{{count}} online",
+    "online_other": "{{count}} online"
   },
   "medal": {
     "viewMedal": "VIEW MEDAL",
@@ -1678,12 +1705,12 @@
     "activity": "Activity",
     "viewAllActivity": "View all activity",
     "resources": "Resource Balance",
-    "goldBalance": "Current Gold Balance",
+    "goldBalance": "Current Gold",
     "goldUsed": "Total Gold Used",
     "settings": "App Settings",
-    "units": "Units and Measurements",
+    "units": "Units and measurements",
     "unitsHint": "Switches between kilometres and miles",
-    "unitsKilometers": "Kilometers",
+    "unitsKilometers": "Kilometres",
     "unitsMiles": "Miles",
     "unitsFailedTitle": "Units not saved",
     "unitsFailedBody": "Could not update your units. Please try again.",
@@ -1693,8 +1720,18 @@
     "statWeek": "This week",
     "statBest": "Best",
     "statDistance": "Distance",
-    "statActiveMinutes": "Active minutes",
-    "statSteps": "Steps"
+    "statActiveMinutes": "Active min",
+    "statSteps": "Total steps",
+    "levelChip": "LVL {{level}}",
+    "tileTerritories": "Territories",
+    "tileGold": "Gold",
+    "tileWalked": "Walked",
+    "claimed": "Claimed",
+    "claimedHeld_one": "Claimed · Held {{count}} day",
+    "claimedHeld_other": "Claimed · Held {{count}} days",
+    "goldCopy": "Earn Gold from missions, daily rewards and winning territory. Spend it to claim, contest and defend.",
+    "chatPush": "Alliance chat push notifications",
+    "statClaims": "Claims"
   },
   "editProfile": {
     "title": "Edit Profile",
@@ -1704,8 +1741,9 @@
     "removePhoto": "Remove photo",
     "openSettings": "Open settings",
     "name": "Name",
-    "save": "Save",
-    "nameSaved": "Name updated"
+    "save": "Save changes",
+    "nameSaved": "Name updated",
+    "nameHelper": "This is the name other players see on the map and leaderboards."
   },
   "allianceFigma": {
     "title": "ALLIANCES",

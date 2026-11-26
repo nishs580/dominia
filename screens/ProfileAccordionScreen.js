@@ -1,6 +1,8 @@
-// Figma Profile (plan U16): "< Profile" header, identity block with Edit
-// Profile, and five accordion sections — Your Territories, Activity, Resource
-// Balance, App Settings, Statistics. Any number can be open; all start closed.
+// Figma Profile (plan U16; G1–G4 parity in plan 2026-11-27 U13): "← PROFILE"
+// header with the edit pencil, identity block (avatar, name, LVL chip,
+// alliance "NAME [TAG]" chip), TERRITORIES / GOLD / WALKED tiles, and five
+// accordion sections — Your Territories, Activity, Resource Balance, App
+// Settings, Statistics. Any number can be open; all start closed.
 //
 // Mounted by App.js for the Profile route when `power_rank` is off; with it on
 // the route mounts today's ProfileScreen. Settings rows (chat push, change
@@ -14,25 +16,21 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 import Accordion from '../components/Accordion';
-import ActivityLogEvent from '../components/ActivityLogEvent';
+import { HistoryRow } from '../components/ActivityLogEvent';
+import BackTitleHeader from '../components/BackTitleHeader';
+import { GoldGlyph } from '../components/ResourceGlyphs';
 import {
-  ActivityGlyph,
-  BoardsGlyph,
-  GoldGlyph,
-  MapGlyph,
-  ProfileGlyph,
-} from '../components/ResourceGlyphs';
-import {
-  AllianceChatPushToggleRow,
   ChangePasswordSection,
   DeleteAccountSection,
   exitToSignIn,
@@ -40,17 +38,95 @@ import {
 import { supabase } from '../lib/supabase';
 import { getMe, patchMe } from '../lib/meApi';
 import { getActivityLog } from '../lib/activityLogApi';
+import { patchAllianceChatPushEnabled } from '../lib/chatApi';
+import { historyItem, isVisibleInFigma } from '../lib/activityHistory';
 import { fetchActivityBests } from '../lib/activityBestsApi';
 import { clearFcmToken } from '../lib/fcm';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 import { navigateTo } from '../lib/navigation';
 import { useFlag } from '../lib/flags';
 import { formatDistance, saveUnits, setUnits, useUnits } from '../lib/units';
-import { initialSections, optionalCount, toggleSection } from '../lib/profile';
+import { heldDays, initialSections, optionalCount, padCount, toggleSection } from '../lib/profile';
 import { colors, fonts } from '../lib/theme';
 
 const RECENT_ACTIVITY_LIMIT = 5;
-const GLYPH = 18;
+
+function PencilGlyph({ size = 20, color = colors.bone }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20">
+      <Path d="M3 17 L3.6 13.6 L13.4 3.8 L16.2 6.6 L6.4 16.4 Z" stroke={color} strokeWidth={1.6} fill="none" />
+      <Path d="M11.6 5.6 L14.4 8.4" stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
+function FlagGlyph({ size = 18, color = colors.self }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Path d="M4 2 V16" stroke={color} strokeWidth={1.8} />
+      <Path d="M4 3 H13 L11 6 L13 9 H4" stroke={color} strokeWidth={1.8} fill="none" />
+    </Svg>
+  );
+}
+
+// "18 NOV" in the app language.
+function shortDate(iso, locale) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  let month;
+  try {
+    month = d.toLocaleDateString(locale || 'en', { month: 'short' });
+  } catch (_) {
+    month = d.toLocaleDateString('en', { month: 'short' });
+  }
+  return `${d.getDate()} ${String(month).replace(/\.$/, '').toUpperCase()}`;
+}
+
+function StatTile({ label, value, icon, first }) {
+  return (
+    <View style={[styles.tile, !first && styles.tileJoined]} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Text style={styles.tileLabel} maxFontSizeMultiplier={1.3} numberOfLines={1}>{label}</Text>
+      <View style={styles.tileValueRow}>
+        {icon}
+        <Text style={styles.tileValue} maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// G2: "Alliance chat push notifications" with a switch. Same optimistic
+// PATCH as ProfileScreen's on/off text row, reverting on failure.
+function ChatPushSwitchRow({ playerRow, clerkGetToken, label }) {
+  const [enabled, setEnabled] = useState(playerRow?.alliance_chat_push_enabled !== false);
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    if (playerRow != null) setEnabled(playerRow.alliance_chat_push_enabled !== false);
+  }, [playerRow]);
+  const onChange = async (next) => {
+    if (pending) return;
+    setEnabled(next);
+    setPending(true);
+    const result = await patchAllianceChatPushEnabled({ clerkGetToken, enabled: next });
+    if (!result.ok) setEnabled(!next);
+    setPending(false);
+  };
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Switch
+        value={enabled}
+        onValueChange={onChange}
+        disabled={pending}
+        accessibilityLabel={label}
+        trackColor={{ false: colors.raised, true: colors.lime }}
+        thumbColor={enabled ? colors.onLime : colors.muted2}
+        ios_backgroundColor={colors.raised}
+      />
+    </View>
+  );
+}
 
 function Row({ label, value, onPress, a11yLabel, a11yHint, chevron }) {
   const content = (
@@ -124,7 +200,7 @@ function useLazyLoad(open, loader) {
 export default function ProfileAccordionScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { signOut, userId, getToken } = useAuth();
   const legacyTabs = useFlag('legacy_tabs');
   const units = useUnits();
@@ -134,6 +210,9 @@ export default function ProfileAccordionScreen() {
   const [loadError, setLoadError] = useState(false);
   const [playerRow, setPlayerRow] = useState(null);
   const [allianceName, setAllianceName] = useState(null);
+  const [allianceTag, setAllianceTag] = useState(null);
+  const [claimedAt, setClaimedAt] = useState({});
+  const [walkedM, setWalkedM] = useState(null);
   const [territories, setTerritories] = useState([]);
   const [territoriesError, setTerritoriesError] = useState(false);
   const [goldUsed, setGoldUsed] = useState(null);
@@ -153,7 +232,7 @@ export default function ProfileAccordionScreen() {
     const [{ data: player, error }, me] = await Promise.all([
       supabase
         .from('players')
-        .select('id, username, alliance_id, gold, alliance_chat_push_enabled, avatar_url')
+        .select('id, username, level, alliance_id, gold, alliance_chat_push_enabled, avatar_url')
         .eq('clerk_id', userId)
         .maybeSingle(),
       getMe({ clerkGetToken: getToken }),
@@ -172,18 +251,36 @@ export default function ProfileAccordionScreen() {
       const mePlayer = me.data?.player;
       if (mePlayer?.units) setUnits(mePlayer.units);
       setGoldUsed(optionalCount(mePlayer, ['total_gold_used', 'gold_used']));
+      // WALKED tile: lifetime distance once GET /me returns it; a dash until then.
+      setWalkedM(optionalCount(mePlayer, ['total_distance_m', 'lifetime_distance_m']));
     }
 
-    const [allianceRes, territoriesRes] = await Promise.all([
+    const [allianceRes, territoriesRes, historyRes] = await Promise.all([
       player.alliance_id
-        ? supabase.from('alliances').select('name').eq('id', player.alliance_id).maybeSingle()
+        ? supabase.from('alliances').select('name, short_name').eq('id', player.alliance_id).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase
         .from('territories')
         .select('id, territory_name, tier, latitude, longitude')
         .eq('owner_id', player.id),
+      // Open territory_history rows give each held territory's claim time
+      // for "CLAIMED · HELD N DAYS" and the date; rows without one show
+      // CLAIMED alone.
+      supabase
+        .from('territory_history')
+        .select('territory_id, claimed_at')
+        .eq('owner_id', player.id)
+        .is('lost_at', null),
     ]);
     setAllianceName(allianceRes.data?.name ?? null);
+    setAllianceTag(allianceRes.data?.short_name ?? null);
+    const claimed = {};
+    if (!historyRes?.error) {
+      for (const row of historyRes?.data ?? []) {
+        if (row?.territory_id && row.claimed_at) claimed[row.territory_id] = row.claimed_at;
+      }
+    }
+    setClaimedAt(claimed);
     setTerritoriesError(!!territoriesRes.error);
     setTerritories(territoriesRes.error ? [] : territoriesRes.data ?? []);
 
@@ -249,23 +346,23 @@ export default function ProfileAccordionScreen() {
   // With legacy_tabs off Profile is a root stack screen opened from the
   // header avatar and needs its own way back; as a tab it has none.
   const showBack = !legacyTabs && navigation.canGoBack();
+  const editLabel = t('profileAccordion.editProfile', { defaultValue: 'Edit Profile' });
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      {showBack ? (
+    <BackTitleHeader
+      title={t('profileAccordion.title', { defaultValue: 'Profile' })}
+      onBack={showBack ? () => navigation.goBack() : undefined}
+      right={
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('EditProfile')}
           accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
+          accessibilityLabel={editLabel}
           hitSlop={8}
-          style={({ pressed }) => [styles.back, pressed && styles.rowPressed]}
+          style={({ pressed }) => [styles.pencil, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.backChevron}>‹</Text>
+          <PencilGlyph />
         </Pressable>
-      ) : null}
-      <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
-        {t('profileAccordion.title', { defaultValue: 'Profile' })}
-      </Text>
-    </View>
+      }
+    />
   );
 
   if (loading) {
@@ -281,7 +378,15 @@ export default function ProfileAccordionScreen() {
 
   const unitLabel = units === 'mi'
     ? t('profileAccordion.unitsMiles', { defaultValue: 'Miles' })
-    : t('profileAccordion.unitsKilometers', { defaultValue: 'Kilometers' });
+    : t('profileAccordion.unitsKilometers', { defaultValue: 'Kilometres' });
+  const level = playerRow?.level != null && Number.isFinite(Number(playerRow.level)) ? Number(playerRow.level) : null;
+  const allianceChip = allianceName
+    ? `${allianceName}${allianceTag ? ` [${allianceTag}]` : ''}`
+    : null;
+  const walked = walkedM == null ? '—' : formatDistance(walkedM, units).toUpperCase();
+  const territoryCount = territoriesError ? null : padCount(territories.length);
+  const now = new Date();
+  const recentItems = (activity.data?.events ?? []).filter(isVisibleInFigma).map(historyItem);
   const retryLabel = t('common.retry');
   const username = playerRow?.username ?? '—';
   const avatarUrl = playerRow?.avatar_url ?? null;
@@ -298,43 +403,62 @@ export default function ProfileAccordionScreen() {
             retryLabel={retryLabel}
           />
         ) : (
-          <View style={styles.identity}>
-            {avatarUrl ? (
-              <Image
-                source={{ uri: avatarThumb(avatarUrl, 72) }}
-                style={styles.avatar}
-                accessibilityIgnoresInvertColors
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitials}>{avatarInitials(playerRow?.username)}</Text>
-              </View>
-            )}
-            <View style={styles.identityText}>
-              <Text style={styles.username} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                {username}
-              </Text>
-              <Text style={styles.allianceName} numberOfLines={1}>
-                {allianceName ?? t('profileAccordion.noAlliance', { defaultValue: 'No alliance' })}
-              </Text>
-              <Pressable
-                onPress={() => navigation.navigate('EditProfile')}
-                accessibilityRole="link"
-                accessibilityLabel={t('profileAccordion.editProfile', { defaultValue: 'Edit Profile' })}
-                hitSlop={12}
-                style={({ pressed }) => [styles.editLink, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={styles.editLinkText}>
-                  {t('profileAccordion.editProfile', { defaultValue: 'Edit Profile' })}
+          <>
+            <View style={styles.identity}>
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarThumb(avatarUrl, 72) }}
+                  style={styles.avatar}
+                  accessibilityIgnoresInvertColors
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitials}>{avatarInitials(playerRow?.username)}</Text>
+                </View>
+              )}
+              <View style={styles.identityText}>
+                <Text style={styles.username} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {username}
                 </Text>
-              </Pressable>
+                <View style={styles.chips}>
+                  {level != null ? (
+                    <View style={[styles.chip, styles.chipLevel]}>
+                      <Text style={[styles.chipText, styles.chipLevelText]} maxFontSizeMultiplier={1.3}>
+                        {t('profileAccordion.levelChip', { defaultValue: 'LVL {{level}}', level })}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.chip, allianceChip ? styles.chipAlliance : styles.chipNone]}>
+                    <Text style={styles.chipText} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                      {allianceChip ?? t('profileAccordion.noAlliance', { defaultValue: 'No alliance' })}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
-          </View>
+            <View style={styles.tilesWrap}>
+              <View style={styles.tiles}>
+                <StatTile
+                  first
+                  label={t('profileAccordion.tileTerritories', { defaultValue: 'Territories' })}
+                  value={territoryCount ?? '—'}
+                />
+                <StatTile
+                  label={t('profileAccordion.tileGold', { defaultValue: 'Gold' })}
+                  value={gold.toLocaleString()}
+                />
+                <StatTile
+                  label={t('profileAccordion.tileWalked', { defaultValue: 'Walked' })}
+                  value={walked}
+                />
+              </View>
+            </View>
+          </>
         )}
 
         <Accordion
           title={t('profileAccordion.territories', { defaultValue: 'Your Territories' })}
-          icon={<MapGlyph size={GLYPH} color={colors.slate2} />}
+          meta={territoryCount}
           expanded={sections.territories}
           onToggle={() => onToggle('territories')}
         >
@@ -352,20 +476,35 @@ export default function ProfileAccordionScreen() {
               const lng = Number(terr.longitude);
               const canLocate = Number.isFinite(lat) && Number.isFinite(lng);
               const name = terr.territory_name ?? t('common.territoryFallback');
+              const since = claimedAt[terr.id] ?? null;
+              const days = heldDays(since, now);
+              const status = days == null
+                ? t('profileAccordion.claimed', { defaultValue: 'Claimed' })
+                : t('profileAccordion.claimedHeld', { defaultValue: 'Claimed · Held {{count}} days', count: days });
+              const date = shortDate(since, i18n.language);
               return (
                 <React.Fragment key={terr.id ?? `${name}-${index}`}>
                   {index > 0 ? <Divider /> : null}
-                  <Row
-                    label={name}
-                    value={terr.tier ? String(terr.tier).toUpperCase() : '—'}
-                    chevron={canLocate}
-                    a11yLabel={`${name}, ${terr.tier ?? ''}`}
-                    a11yHint={canLocate ? t('profileAccordion.showOnMapHint', { defaultValue: 'Shows this territory on the map' }) : undefined}
-                    onPress={canLocate ? () => navigateTo('Map', {
+                  <Pressable
+                    disabled={!canLocate}
+                    accessibilityRole={canLocate ? 'button' : undefined}
+                    accessibilityLabel={[name, status, date].filter(Boolean).join(', ')}
+                    accessibilityHint={canLocate ? t('profileAccordion.showOnMapHint', { defaultValue: 'Shows this territory on the map' }) : undefined}
+                    onPress={() => navigateTo('Map', {
                       focusTerritory: { id: terr.id, name: terr.territory_name, latitude: lat, longitude: lng },
                       focusNonce: Date.now(),
-                    }) : undefined}
-                  />
+                    })}
+                    style={({ pressed }) => [styles.terrRow, pressed && styles.rowPressed]}
+                  >
+                    <View style={styles.flagTile}>
+                      <FlagGlyph />
+                    </View>
+                    <View style={styles.terrText}>
+                      <Text style={styles.terrName} numberOfLines={1} maxFontSizeMultiplier={1.3}>{name}</Text>
+                      <Text style={styles.terrStatus} numberOfLines={1} maxFontSizeMultiplier={1.3}>{status}</Text>
+                    </View>
+                    {date ? <Text style={styles.terrDate} maxFontSizeMultiplier={1.3}>{date}</Text> : null}
+                  </Pressable>
                 </React.Fragment>
               );
             })
@@ -374,7 +513,6 @@ export default function ProfileAccordionScreen() {
 
         <Accordion
           title={t('profileAccordion.activity', { defaultValue: 'Activity' })}
-          icon={<ActivityGlyph size={GLYPH} color={colors.slate2} />}
           expanded={sections.activity}
           onToggle={() => onToggle('activity')}
         >
@@ -386,13 +524,15 @@ export default function ProfileAccordionScreen() {
               onRetry={reloadActivity}
               retryLabel={retryLabel}
             />
-          ) : (activity.data?.events ?? []).length === 0 ? (
+          ) : recentItems.length === 0 ? (
             <SectionMessage text={t('activityLog.emptyBody')} />
           ) : (
             <>
-              {activity.data.events.map((event, index) => (
-                <ActivityLogEvent key={event.id ?? index} event={event} />
-              ))}
+              <View style={styles.bleed}>
+                {recentItems.map((item) => (
+                  <HistoryRow key={item.id} item={item} />
+                ))}
+              </View>
               <Row
                 label={t('profileAccordion.viewAllActivity', { defaultValue: 'View all activity' })}
                 chevron
@@ -404,37 +544,48 @@ export default function ProfileAccordionScreen() {
 
         <Accordion
           title={t('profileAccordion.resources', { defaultValue: 'Resource Balance' })}
-          icon={<GoldGlyph size={GLYPH} color={colors.slate2} />}
           expanded={sections.resources}
           onToggle={() => onToggle('resources')}
         >
-          <Row
-            label={t('profileAccordion.goldBalance', { defaultValue: 'Current Gold Balance' })}
-            value={gold.toLocaleString()}
-          />
-          <Divider />
-          <Row
-            label={t('profileAccordion.goldUsed', { defaultValue: 'Total Gold Used' })}
-            value={goldUsed == null ? '—' : goldUsed.toLocaleString()}
-          />
+          <View style={styles.tiles}>
+            <StatTile
+              first
+              label={t('profileAccordion.goldBalance', { defaultValue: 'Current Gold' })}
+              value={gold.toLocaleString()}
+              icon={<View style={styles.tileIcon}><GoldGlyph size={18} color={colors.lime} strokeWidth={3} /></View>}
+            />
+            <StatTile
+              label={t('profileAccordion.goldUsed', { defaultValue: 'Total Gold Used' })}
+              value={goldUsed == null ? '—' : goldUsed.toLocaleString()}
+            />
+          </View>
+          <Text style={styles.resourceCopy}>
+            {t('profileAccordion.goldCopy', {
+              defaultValue: 'Earn Gold from missions, daily rewards and winning territory. Spend it to claim, contest and defend.',
+            })}
+          </Text>
         </Accordion>
 
         <Accordion
           title={t('profileAccordion.settings', { defaultValue: 'App Settings' })}
-          icon={<ProfileGlyph size={GLYPH} color={colors.slate2} />}
           expanded={sections.settings}
           onToggle={() => onToggle('settings')}
         >
           {playerRow ? (
             <>
-              <AllianceChatPushToggleRow playerRow={playerRow} clerkGetToken={getToken} />
+              <ChatPushSwitchRow
+                playerRow={playerRow}
+                clerkGetToken={getToken}
+                label={t('profileAccordion.chatPush', { defaultValue: 'Alliance chat push notifications' })}
+              />
               <Divider />
             </>
           ) : null}
           <Row
-            label={t('profileAccordion.units', { defaultValue: 'Units and Measurements' })}
+            label={t('profileAccordion.units', { defaultValue: 'Units and measurements' })}
             value={savingUnits ? '…' : unitLabel}
-            a11yLabel={`${t('profileAccordion.units', { defaultValue: 'Units and Measurements' })}, ${unitLabel}`}
+            chevron
+            a11yLabel={`${t('profileAccordion.units', { defaultValue: 'Units and measurements' })}, ${unitLabel}`}
             a11yHint={t('profileAccordion.unitsHint', { defaultValue: 'Switches between kilometres and miles' })}
             onPress={onUnitsPress}
           />
@@ -442,7 +593,7 @@ export default function ProfileAccordionScreen() {
               itself for SSO-only accounts. */}
           <ChangePasswordSection />
           <Divider />
-          <Row label={t('profile.signOut')} chevron onPress={onSignOut} />
+          <Row label={t('profile.signOut')} onPress={onSignOut} />
           {playerRow ? (
             <>
               <Divider />
@@ -458,7 +609,6 @@ export default function ProfileAccordionScreen() {
 
         <Accordion
           title={t('profileAccordion.statistics', { defaultValue: 'Statistics' })}
-          icon={<BoardsGlyph size={GLYPH} color={colors.slate2} />}
           expanded={sections.statistics}
           onToggle={() => onToggle('statistics')}
         >
@@ -479,9 +629,9 @@ export default function ProfileAccordionScreen() {
   );
 }
 
-// Today / This week / Best for distance, active minutes and steps. GET
-// /me/activity-bests returns today and best for distance and active minutes;
-// week and steps render a dash until the backend adds them.
+// Today / This week / Best for distance, active minutes, steps and claims
+// (G4). GET /me/activity-bests returns today and best for distance and active
+// minutes; week, steps and claims render a dash until the backend adds them.
 function StatsTable({ data, units, t }) {
   const periods = [
     { key: 'today', label: t('profileAccordion.statToday', { defaultValue: 'Today' }) },
@@ -496,7 +646,7 @@ function StatsTable({ data, units, t }) {
     },
     {
       key: 'minutes',
-      label: t('profileAccordion.statActiveMinutes', { defaultValue: 'Active minutes' }),
+      label: t('profileAccordion.statActiveMinutes', { defaultValue: 'Active min' }),
       format: (p) => {
         const n = optionalCount(p, ['active_minutes']);
         return n == null ? '—' : n.toLocaleString();
@@ -504,15 +654,23 @@ function StatsTable({ data, units, t }) {
     },
     {
       key: 'steps',
-      label: t('profileAccordion.statSteps', { defaultValue: 'Steps' }),
+      label: t('profileAccordion.statSteps', { defaultValue: 'Total steps' }),
       format: (p) => {
         const n = optionalCount(p, ['steps']);
         return n == null ? '—' : n.toLocaleString();
       },
     },
+    {
+      key: 'claims',
+      label: t('profileAccordion.statClaims', { defaultValue: 'Claims' }),
+      format: (p) => {
+        const n = optionalCount(p, ['claims', 'claim_count']);
+        return n == null ? '—' : n.toLocaleString();
+      },
+    },
   ];
   return (
-    <View>
+    <View style={styles.statsTable}>
       <View style={styles.statsRow}>
         <View style={styles.statsLabelCell} />
         {periods.map((p) => (
@@ -554,47 +712,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
-  },
-  back: {
+  pencil: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backChevron: {
-    fontFamily: fonts.mono,
-    fontSize: 28,
-    color: colors.bone,
-    lineHeight: 32,
-  },
-  headerTitle: {
-    marginLeft: 8,
-    fontFamily: fonts.display,
-    fontSize: 32,
-    color: colors.bone,
-    lineHeight: 34,
-    textTransform: 'uppercase',
-  },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
+  // Your own avatar wears the self (green) outline, as on the map.
   avatar: {
     width: 72,
     height: 72,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    borderWidth: 2,
+    borderColor: colors.self,
     backgroundColor: colors.ink2,
   },
   avatarPlaceholder: {
@@ -617,25 +754,125 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: colors.bone,
   },
-  allianceName: {
-    marginTop: 2,
-    fontFamily: fonts.displayBold,
-    fontSize: 16,
-    color: colors.slate2,
-    lineHeight: 18,
-    textTransform: 'uppercase',
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
   },
-  editLink: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
+  chip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flexShrink: 1,
   },
-  editLinkText: {
+  chipLevel: {
+    backgroundColor: colors.limeSoft,
+  },
+  chipAlliance: {
+    backgroundColor: 'rgba(49,85,255,0.28)',
+  },
+  chipNone: {
+    backgroundColor: colors.raised,
+  },
+  chipText: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.6,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
+    color: colors.bone2,
+  },
+  chipLevelText: {
+    color: colors.lime,
+  },
+  tilesWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
+  },
+  tiles: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  tile: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  tileJoined: {
+    borderLeftWidth: 1,
+    borderLeftColor: colors.hairlineStrong,
+  },
+  tileLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  tileValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  tileIcon: {
+    marginRight: 6,
+  },
+  tileValue: {
+    flexShrink: 1,
+    fontFamily: fonts.mono,
+    fontSize: 22,
     color: colors.bone,
-    textDecorationLine: 'underline',
+  },
+  resourceCopy: {
+    marginTop: 12,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.muted,
+  },
+  terrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 64,
+    paddingVertical: 10,
+  },
+  flagTile: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34,214,94,0.24)',
+  },
+  terrText: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  terrName: {
+    fontFamily: fonts.displayBold,
+    fontSize: 18,
+    lineHeight: 20,
+    color: colors.bone,
+    textTransform: 'uppercase',
+  },
+  terrStatus: {
+    marginTop: 4,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.self,
+  },
+  terrDate: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: colors.muted2,
+  },
+  // Activity rows carry their own 16px inset; cancel the accordion body's.
+  bleed: {
+    marginHorizontal: -16,
   },
   row: {
     flexDirection: 'row',
@@ -655,8 +892,10 @@ const styles = StyleSheet.create({
   },
   rowValue: {
     fontFamily: fonts.mono,
-    fontSize: 13,
-    color: colors.bone,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted2,
   },
   chevron: {
     fontFamily: fonts.bodyMedium,
@@ -694,34 +933,39 @@ const styles = StyleSheet.create({
   inlineSpinner: {
     paddingVertical: 16,
   },
+  statsTable: {
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 42,
     gap: 8,
+    paddingHorizontal: 10,
   },
   statsLabelCell: {
-    flex: 1.3,
+    flex: 1,
   },
   statsLabel: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: colors.bone,
-  },
-  statsHead: {
-    flex: 1,
-    textAlign: 'right',
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.slate2,
+    color: colors.muted2,
+  },
+  statsHead: {
+    flex: 1,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted2,
   },
   statsValue: {
     flex: 1,
-    textAlign: 'right',
     fontFamily: fonts.mono,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.bone,
   },
 });

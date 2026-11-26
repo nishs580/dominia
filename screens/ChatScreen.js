@@ -3,6 +3,11 @@
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Instrument Sans 400 13px on Claim/red or amber surface
 // Territory colors: delegated to none — chat is a neutral surface
 // Brand rule applied: Send button is the single Claim CTA on the screen. Inverted FlatList for chat-app convention (newest at bottom). KeyboardAvoidingView wraps composer with platform-appropriate behavior.
+//
+// legacy_tabs off (Figma G9/G10, plan 2026-11-27 U13): back arrow + CHAT
+// title, GLOBAL | ALLIANCE segmented tab, "{ROOM} · N ONLINE" subheader, no
+// avatars, sender line "NAME · TAG ROLE" / "SOLO PLAYER" (lib/chatSender)
+// with your name lime and allies blue, "Message {room}…" and a SEND button.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -42,6 +47,11 @@ import {
 import { timeAgo } from '../lib/timeAgo';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 import { useFlag } from '../lib/flags';
+import { supabase } from '../lib/supabase';
+import { chatSenderLine, chatSubheader } from '../lib/chatSender';
+import { formatTime } from '../lib/activityHistory';
+import { colors, fonts } from '../lib/theme';
+import BackTitleHeader from '../components/BackTitleHeader';
 
 const MAX_CONTENT_LENGTH = 500;
 const BANNER_AUTO_DISMISS_MS = 5000;
@@ -61,9 +71,13 @@ export default function ChatScreen() {
   const { userId, getToken } = useAuth();
   // Figma labels the city room "Global"; the room itself stays city-scoped.
   const legacyTabs = useFlag('legacy_tabs');
+  const figma = !legacyTabs;
   const cityTabLabel = legacyTabs
     ? t('chat.tabCity')
     : t('chat.tabGlobal', { defaultValue: 'GLOBAL' });
+  // Figma colours the sender's name by who they are: you (lime), your
+  // alliance (blue). Needs the viewer's player id and alliance tag.
+  const [viewer, setViewer] = useState({ playerId: null, tag: null });
 
   // First-tap tip on the room tabs.
   const walkthroughTabsRef = useRef(null);
@@ -107,6 +121,36 @@ export default function ChatScreen() {
     [rooms],
   );
   const activeRoom = activeTab === 'city' ? cityRoom : allianceRoom;
+
+  useEffect(() => {
+    if (!figma || !userId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: player } = await supabase
+          .from('players')
+          .select('id, alliance_id')
+          .eq('clerk_id', userId)
+          .maybeSingle();
+        if (!player || cancelled) return;
+        let tag = null;
+        if (player.alliance_id) {
+          const { data: alliance } = await supabase
+            .from('alliances')
+            .select('short_name')
+            .eq('id', player.alliance_id)
+            .maybeSingle();
+          tag = alliance?.short_name ?? null;
+        }
+        if (!cancelled) setViewer({ playerId: player.id ?? null, tag });
+      } catch (_) {
+        /* names fall back to neutral; your own optimistic echo still reads YOU */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [figma, userId]);
 
   const lastObservedByRoom = useRef({});
 
@@ -452,7 +496,21 @@ export default function ChatScreen() {
         data={messages || []}
         inverted
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <ChatMessageRow row={item} />}
+        renderItem={({ item }) =>
+          figma ? (
+            <FigmaMessageRow
+              row={item}
+              line={chatSenderLine(item, {
+                channel: activeTab,
+                selfPlayerId: viewer.playerId,
+                selfTag: viewer.tag,
+                t,
+              })}
+            />
+          ) : (
+            <ChatMessageRow row={item} />
+          )
+        }
         onEndReached={() => fetchNextPageForRoom(activeRoom.id)}
         onEndReachedThreshold={0.5}
         refreshControl={
@@ -473,6 +531,11 @@ export default function ChatScreen() {
   };
 
   const canCompose = activeRoom != null;
+  const subheader = figma ? chatSubheader(activeRoom, { t }) : null;
+  const roomName = activeRoom?.display_name || (activeTab === 'city' ? cityTabLabel : t('chat.tabAlliance'));
+  const placeholder = figma
+    ? t('chat.messageRoomPlaceholder', { defaultValue: 'Message {{room}}…', room: roomName })
+    : t('chat.messagePlaceholder');
   const remainingChars = MAX_CONTENT_LENGTH - draft.length;
   const sendDisabled =
     sending || draft.trim().length === 0 || draft.length > MAX_CONTENT_LENGTH;
@@ -483,12 +546,19 @@ export default function ChatScreen() {
       behavior="padding"
       onTouchStart={tips.onTouchStart}
     >
-      <View style={styles.header}>
-        <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
-        <View style={styles.hairlineStrong} />
-      </View>
+      {figma ? (
+        <BackTitleHeader
+          title={t('chat.figmaTitle', { defaultValue: 'Chat' })}
+          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+        />
+      ) : (
+        <View style={styles.header}>
+          <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
+          <View style={styles.hairlineStrong} />
+        </View>
+      )}
 
-      <View ref={walkthroughTabsRef} collapsable={false} style={styles.tabStrip}>
+      <View ref={walkthroughTabsRef} collapsable={false} style={figma ? figmaStyles.tabs : styles.tabStrip}>
         {(
           [
             { key: 'city', label: cityTabLabel, visible: true },
@@ -498,6 +568,24 @@ export default function ChatScreen() {
           .filter((tab) => tab.visible)
           .map(({ key, label }) => {
             const selected = activeTab === key;
+            if (figma) {
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => setActiveTab(key)}
+                  style={({ pressed }) => [figmaStyles.tab, selected && figmaStyles.tabActive, pressed && { opacity: 0.7 }]}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={[figmaStyles.tabText, selected && figmaStyles.tabTextActive]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            }
             return (
               <Pressable
                 key={key}
@@ -519,7 +607,13 @@ export default function ChatScreen() {
             );
           })}
       </View>
-      <View style={styles.hairline} />
+      {figma ? (
+        subheader ? (
+          <Text style={figmaStyles.subheader} numberOfLines={1} maxFontSizeMultiplier={1.3}>{subheader}</Text>
+        ) : null
+      ) : (
+        <View style={styles.hairline} />
+      )}
 
       <View style={{ flex: 1 }}>{renderBody()}</View>
 
@@ -536,7 +630,40 @@ export default function ChatScreen() {
         </View>
       ) : null}
 
-      {canCompose ? (
+      {canCompose && figma ? (
+        <View style={[figmaStyles.composer, { paddingBottom: insets.bottom + 12 }]}>
+          <TextInput
+            style={figmaStyles.input}
+            keyboardAppearance="dark"
+            placeholder={placeholder}
+            placeholderTextColor={colors.muted}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            maxLength={MAX_CONTENT_LENGTH}
+            editable={!sending}
+            accessibilityLabel={placeholder}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.send')}
+            accessibilityState={{ disabled: sendDisabled }}
+            onPress={handleSend}
+            disabled={sendDisabled}
+            style={({ pressed }) => [
+              figmaStyles.sendBtn,
+              sendDisabled && { opacity: 0.4 },
+              pressed && !sendDisabled && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={figmaStyles.sendText} maxFontSizeMultiplier={1.3}>
+              {t('chat.send')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {canCompose && !figma ? (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
           <TextInput
             style={styles.composerInput}
@@ -572,6 +699,43 @@ export default function ChatScreen() {
 
       {tips.tipElement}
     </KeyboardAvoidingView>
+  );
+}
+
+// Figma row: no avatar; the sender line (lime for you, blue for allies) and
+// the 24-hour time over the message. Tapping a real sender's name opens their
+// profile, as the legacy avatar does.
+function FigmaMessageRow({ row, line }) {
+  const navigation = useNavigation();
+  const canOpenProfile = !line.isSelf && !row._optimistic && row.sender_id && row.sender_id !== 'self';
+  const nameColor = line.tone === 'self' ? colors.lime : line.tone === 'ally' ? colors.alliance : colors.muted2;
+  const meta = (
+    <Text style={figmaStyles.meta} numberOfLines={1}>
+      <Text style={{ color: nameColor }}>{line.text}</Text>
+      <Text style={figmaStyles.time}>{`  ${formatTime(row.created_at)}`}</Text>
+    </Text>
+  );
+  return (
+    <View style={[figmaStyles.message, row._optimistic && styles.messageRowPending]}>
+      {canOpenProfile ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            navigation.navigate('PublicProfile', {
+              playerId: row.sender_id,
+              username: row.sender_name,
+              avatarUrl: row.sender_avatar_url,
+            })
+          }
+          style={({ pressed }) => [{ alignSelf: 'flex-start' }, pressed && { opacity: 0.6 }]}
+        >
+          {meta}
+        </Pressable>
+      ) : (
+        meta
+      )}
+      <Text style={figmaStyles.content}>{row.content}</Text>
+    </View>
   );
 }
 
@@ -644,6 +808,108 @@ function ChatMessageRow({ row }) {
     </View>
   );
 }
+
+const figmaStyles = StyleSheet.create({
+  tabs: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    backgroundColor: colors.raised,
+    borderBottomColor: colors.lime,
+  },
+  tabText: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  tabTextActive: {
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
+  },
+  subheader: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  message: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  meta: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  time: {
+    color: colors.muted,
+    letterSpacing: 0.6,
+  },
+  content: {
+    marginTop: 4,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.bone,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: colors.ink,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.bone,
+  },
+  sendBtn: {
+    minHeight: 44,
+    minWidth: 80,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.action,
+  },
+  sendText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.white,
+  },
+});
 
 const styles = StyleSheet.create({
   screen: {
