@@ -984,7 +984,13 @@
     "distanceValue": "{{distance}}",
     "place": "{{rank}}-е место",
     "yourPosition": "ВАША ПОЗИЦИЯ",
-    "you": "Вы"
+    "you": "Вы",
+    "terrUnit": "ТЕРР.",
+    "citySeason": "{{city}} · ЭТОТ СЕЗОН",
+    "thisSeason": "ЭТОТ СЕЗОН",
+    "youNamed": "Вы · {{name}}",
+    "yourAlliance": "Ваш альянс",
+    "yourAllianceNamed": "Ваш альянс · {{name}}"
   },
   "wallet": {
     "back": "← ПРОФИЛЬ",

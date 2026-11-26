@@ -1002,7 +1002,13 @@
     "distanceValue": "{{distance}}",
     "place": "{{ordinal}} Place",
     "yourPosition": "YOUR POSITION",
-    "you": "You"
+    "you": "You",
+    "terrUnit": "TERR.",
+    "citySeason": "{{city}} · THIS SEASON",
+    "thisSeason": "THIS SEASON",
+    "youNamed": "You · {{name}}",
+    "yourAlliance": "Your alliance",
+    "yourAllianceNamed": "Your alliance · {{name}}"
   },
   "wallet": {
     "back": "← PROFILE",

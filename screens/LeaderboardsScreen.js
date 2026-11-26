@@ -4,8 +4,9 @@
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 //
 // legacy_tabs ON (default): the Power / Territory / Battles board above, unchanged.
-// legacy_tabs OFF: the Figma layout (plan U17) — Territories / Distance board
-// dropdown, SOLO / ALLIANCE toggle, top-three podium, list, and a pinned
+// legacy_tabs OFF: the Figma layout (plan U17; G6/G7 parity in plan
+// 2026-11-27 U13) — TERRITORIES | DISTANCE tab, city + season label with the
+// SOLO / ALLIANCE toggle, numbered top-three podium, list, and a pinned
 // "Your position" row from the response's `self`. View logic lives in
 // lib/leaderboardView.js.
 
@@ -25,19 +26,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { getLeaderboard, parseLeaderboard } from '../lib/leaderboardApi';
 import { useFlag } from '../lib/flags';
 import { useUnits } from '../lib/units';
 import {
-  BOARDS,
   SCOPES,
   DEFAULT_BOARD,
   DEFAULT_SCOPE,
   apiParamsFor,
+  boardTabs,
   buildLeaderboardView,
+  seasonLabel,
 } from '../lib/leaderboardView';
 import AllianceEmblem from '../components/AllianceEmblem';
+import BackTitleHeader from '../components/BackTitleHeader';
 import { colors, fonts } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { supabase } from '../lib/supabase';
@@ -394,6 +396,10 @@ function LegacyLeaderboards() {
 }
 
 // ─── Figma layout (legacy_tabs OFF) ───────────────────────────────────────
+// G6 / G7 (plan 2026-11-27 U13): back arrow + LEADERBOARDS, a TERRITORIES |
+// DISTANCE segmented tab, "{CITY} · THIS SEASON" beside the SOLO / ALLIANCE
+// toggle, numbered podium blocks with a lime #1, "04" rows with the value on
+// the right, and the pinned YOUR POSITION row built from `self`.
 
 function tc(t, copy) {
   if (!copy) return '';
@@ -455,50 +461,50 @@ function EntryPressable({ entry, style, accessibilityLabel, children }) {
   );
 }
 
-function CrownGlyph() {
+// "21" in bone + " TERR." / " KM" muted.
+function ValueText({ t, parts, style }) {
+  if (!parts) return null;
+  const unit = tc(t, parts.unit);
   return (
-    <Svg width={22} height={16} viewBox="0 0 22 16" accessibilityElementsHidden importantForAccessibility="no">
-      <Path d="M1 4 L6 9 L11 1 L16 9 L21 4 L19 15 L3 15 Z" fill={colors.bone} />
-    </Svg>
+    <Text style={style} numberOfLines={1}>
+      <Text style={figma.valueNumber}>{parts.number}</Text>
+      {unit ? <Text style={figma.valueUnit}>{` ${unit}`}</Text> : null}
+    </Text>
   );
 }
 
-function MedalGlyph({ slot }) {
-  const fill = slot === 1 ? colors.bone : slot === 2 ? colors.bone2 : colors.slate2;
-  return (
-    <Svg width={20} height={20} viewBox="0 0 20 20" accessibilityElementsHidden importantForAccessibility="no">
-      <Circle cx={10} cy={10} r={9} fill={fill} />
-      <Circle cx={10} cy={10} r={6.5} fill="none" stroke={colors.ink} strokeWidth={1} />
-    </Svg>
-  );
-}
+const PODIUM_BLOCK = { 1: 126, 2: 94, 3: 70 };
 
 function Podium({ t, entries, scope }) {
   return (
     <View style={figma.podium}>
       {entries.map((entry) => {
         const first = entry.slot === 1;
-        const size = first ? 64 : 48;
         return (
           <EntryPressable
             key={entry.key}
             entry={entry}
             accessibilityLabel={entryLine(t, entry)}
-            style={[figma.podiumCol, first && figma.podiumColFirst]}
+            style={figma.podiumCol}
           >
-            <View style={figma.crownSlot}>{first ? <CrownGlyph /> : null}</View>
             <View style={[figma.podiumMarkWrap, entry.isSelf && figma.podiumMarkSelf]}>
-              <EntryMark entry={entry} scope={scope} size={size} />
-            </View>
-            <View style={figma.medalSlot}>
-              <MedalGlyph slot={entry.slot} />
-              <Text style={figma.medalNum}>{entry.slot}</Text>
+              <EntryMark entry={entry} scope={scope} size={first ? 52 : 44} />
             </View>
             <Text style={[figma.podiumName, entry.isSelf && figma.selfText]} numberOfLines={1}>
               {entryName(t, entry)}
             </Text>
-            <Text style={figma.podiumValue} numberOfLines={1}>{tc(t, entry.valueCopy)}</Text>
-            <View style={[figma.podiumBase, { height: first ? 56 : entry.slot === 2 ? 40 : 28 }]} />
+            <ValueText t={t} parts={entry.valueParts} style={figma.podiumValue} />
+            <View
+              style={[
+                figma.podiumBlock,
+                first && figma.podiumBlockFirst,
+                { height: PODIUM_BLOCK[entry.slot] || 70 },
+              ]}
+            >
+              <Text style={[figma.podiumNum, first && figma.podiumNumFirst]} maxFontSizeMultiplier={1.1}>
+                {entry.slot}
+              </Text>
+            </View>
           </EntryPressable>
         );
       })}
@@ -507,30 +513,29 @@ function Podium({ t, entries, scope }) {
 }
 
 function EntryRow({ t, entry, scope, pinned }) {
-  const line = entryLine(t, entry);
+  const self = entry.isSelf || pinned;
+  const name = pinned && entry.youCopy ? tc(t, entry.youCopy) : entryName(t, entry);
   return (
     <EntryPressable
       entry={entry}
-      accessibilityLabel={line}
-      style={[figma.row, (entry.isSelf || pinned) && figma.rowSelf]}
+      accessibilityLabel={entryLine(t, entry)}
+      style={[figma.row, self && figma.rowSelf, pinned && figma.rowPinned]}
     >
-      <EntryMark entry={entry} scope={scope} size={32} />
-      <View style={figma.rowText}>
-        <Text style={figma.rowName} numberOfLines={1}>{entryName(t, entry)}</Text>
-        <Text style={figma.rowMeta} numberOfLines={1}>
-          {[tc(t, entry.tag), tc(t, entry.valueCopy)].filter((p) => p).join(' · ')}
-        </Text>
-      </View>
-      <Text style={figma.rowPlace}>{tc(t, entry.placeCopy)}</Text>
+      <Text style={[figma.rowRank, self && figma.rowRankSelf]} maxFontSizeMultiplier={1.2}>
+        {entry.rankLabel}
+      </Text>
+      <EntryMark entry={entry} scope={scope} size={36} />
+      <Text style={figma.rowName} numberOfLines={2}>{name}</Text>
+      <ValueText t={t} parts={entry.valueParts} style={figma.rowValue} />
     </EntryPressable>
   );
 }
 
 function FigmaLeaderboards() {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { getToken } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { userId, getToken } = useAuth();
   const unit = useUnits();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -538,10 +543,31 @@ function FigmaLeaderboards() {
 
   const [board, setBoard] = useState(DEFAULT_BOARD);
   const [scope, setScope] = useState(DEFAULT_SCOPE);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [status, setStatus] = useState('loading');
   const [data, setData] = useState({ rows: [], self: null });
   const [refreshing, setRefreshing] = useState(false);
+  const [viewer, setViewer] = useState({ username: null, city: null });
+
+  // The caller's name (pinned "You · name") and home city (season label).
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: row } = await supabase
+          .from('players')
+          .select('username, home_city')
+          .eq('clerk_id', userId)
+          .maybeSingle();
+        if (!cancelled && row) setViewer({ username: row.username ?? null, city: row.home_city ?? null });
+      } catch (_) {
+        /* the label falls back to THIS SEASON and the pinned row to "You" */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const fetchBoard = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
@@ -579,17 +605,11 @@ function FigmaLeaderboards() {
   }, [fetchBoard]);
 
   const view = useMemo(
-    () => buildLeaderboardView({ status, rows: data.rows, self: data.self, board, scope, unit }),
-    [status, data, board, scope, unit],
+    () => buildLeaderboardView({
+      status, rows: data.rows, self: data.self, board, scope, unit, selfName: viewer.username,
+    }),
+    [status, data, board, scope, unit, viewer.username],
   );
-
-  const boardDef = BOARDS.find((b) => b.key === board) || BOARDS[0];
-  const boardLabel = t(boardDef.labelKey, { defaultValue: boardDef.labelDefault });
-
-  const selectBoard = (key) => {
-    setMenuOpen(false);
-    if (key !== board) setBoard(key);
-  };
 
   const renderBody = () => {
     if (view.state === 'loading') {
@@ -645,72 +665,54 @@ function FigmaLeaderboards() {
 
   return (
     <View style={styles.screen}>
-      <View style={[figma.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [figma.backBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={figma.backGlyph}>{'<'}</Text>
-        </Pressable>
-        <Text style={figma.title} accessibilityRole="header" numberOfLines={1}>
-          {t('leaderboards.figmaTitle', { defaultValue: 'Leaderboards' })}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('leaderboards.boardPickerA11y', { defaultValue: 'Board: {{board}}', board: boardLabel })}
-          accessibilityState={{ expanded: menuOpen }}
-          onPress={() => setMenuOpen((o) => !o)}
-          style={({ pressed }) => [figma.dropdown, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={figma.dropdownText}>{boardLabel}</Text>
-          <Text style={figma.dropdownCaret}>{'▾'}</Text>
-        </Pressable>
+      <BackTitleHeader
+        title={t('leaderboards.figmaTitle', { defaultValue: 'Leaderboards' })}
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
+
+      <View style={figma.boardTabs} accessibilityRole="tablist">
+        {boardTabs(board).map((tab) => (
+          <Pressable
+            key={tab.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab.active }}
+            onPress={() => {
+              if (!tab.active) setBoard(tab.key);
+            }}
+            style={({ pressed }) => [figma.boardTab, tab.active && figma.boardTabActive, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={[figma.boardTabText, tab.active && figma.boardTabTextActive]} maxFontSizeMultiplier={1.3}>
+              {tc(t, tab.label)}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
-      {menuOpen ? (
-        <View style={[figma.menu, { top: insets.top + 56 }]} accessibilityRole="menu">
-          {BOARDS.map((b) => {
-            const selected = b.key === board;
+      <View style={figma.seasonRow}>
+        <Text style={figma.seasonLabel} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+          {tc(t, seasonLabel(viewer.city))}
+        </Text>
+        <View style={figma.toggle} accessibilityRole="tablist">
+          {SCOPES.map((s) => {
+            const selected = s.key === scope;
             return (
               <Pressable
-                key={b.key}
-                accessibilityRole="menuitem"
+                key={s.key}
+                accessibilityRole="tab"
                 accessibilityState={{ selected }}
-                onPress={() => selectBoard(b.key)}
-                style={({ pressed }) => [figma.menuItem, pressed && { backgroundColor: colors.ink3 }]}
+                hitSlop={{ top: 6, bottom: 6 }}
+                onPress={() => {
+                  if (s.key !== scope) setScope(s.key);
+                }}
+                style={({ pressed }) => [figma.toggleCell, selected && figma.toggleCellActive, pressed && { opacity: 0.7 }]}
               >
-                <Text style={[figma.menuText, selected && figma.menuTextActive]}>
-                  {t(b.labelKey, { defaultValue: b.labelDefault })}
+                <Text style={[figma.toggleText, selected && figma.toggleTextActive]} maxFontSizeMultiplier={1.3}>
+                  {t(s.labelKey, { defaultValue: s.labelDefault })}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-      ) : null}
-
-      <View style={figma.toggle} accessibilityRole="tablist">
-        {SCOPES.map((s) => {
-          const selected = s.key === scope;
-          return (
-            <Pressable
-              key={s.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              onPress={() => {
-                setMenuOpen(false);
-                if (s.key !== scope) setScope(s.key);
-              }}
-              style={({ pressed }) => [figma.toggleCell, selected && figma.toggleCellActive, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={[figma.toggleText, selected && figma.toggleTextActive]}>
-                {t(s.labelKey, { defaultValue: s.labelDefault })}
-              </Text>
-            </Pressable>
-          );
-        })}
       </View>
 
       <View style={{ flex: 1 }}>{renderBody()}</View>
@@ -733,87 +735,61 @@ export default function LeaderboardsScreen() {
 }
 
 const figma = StyleSheet.create({
-  header: {
+  // TERRITORIES | DISTANCE: the active half is raised with a lime underline.
+  boardTabs: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backGlyph: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 20,
-    color: colors.bone,
-  },
-  title: {
+  boardTab: {
     flex: 1,
-    fontFamily: fonts.displayMedium,
-    fontSize: 20,
-    color: colors.bone,
-    textTransform: 'uppercase',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  dropdown: {
+  boardTabActive: {
+    backgroundColor: colors.raised,
+    borderBottomColor: colors.lime,
+  },
+  boardTabText: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  boardTabTextActive: {
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
+  },
+  seasonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    marginHorizontal: 16,
+    marginTop: 14,
+    gap: 12,
   },
-  dropdownText: {
+  seasonLabel: {
+    flex: 1,
     fontFamily: fonts.mono,
-    fontSize: 13,
-    color: colors.bone,
-  },
-  dropdownCaret: {
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    color: colors.slate2,
-    marginLeft: 6,
-  },
-  menu: {
-    position: 'absolute',
-    right: 8,
-    zIndex: 10,
-    elevation: 0,
-    minWidth: 160,
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-  },
-  menuItem: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
-  },
-  menuText: {
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    color: colors.slate2,
-  },
-  menuTextActive: {
-    color: colors.bone,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted2,
   },
   toggle: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 12,
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
   },
   toggleCell: {
-    flex: 1,
-    minHeight: 44,
+    minWidth: 84,
+    minHeight: 32,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -824,9 +800,9 @@ const figma = StyleSheet.create({
   toggleText: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.76,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    color: colors.slate2,
+    color: colors.muted,
   },
   toggleTextActive: {
     fontFamily: fonts.monoMedium,
@@ -838,21 +814,13 @@ const figma = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingTop: 20,
+    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.hairline,
   },
   podiumCol: {
     flex: 1,
-    maxWidth: 120,
     alignItems: 'center',
-  },
-  podiumColFirst: {
-    maxWidth: 136,
-  },
-  crownSlot: {
-    height: 20,
-    justifyContent: 'flex-end',
-    marginBottom: 4,
   },
   podiumMarkWrap: {
     padding: 2,
@@ -862,22 +830,9 @@ const figma = StyleSheet.create({
   podiumMarkSelf: {
     borderColor: colors.lime,
   },
-  medalSlot: {
-    marginTop: -10,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  medalNum: {
-    position: 'absolute',
-    fontFamily: fonts.monoMedium,
-    fontSize: 11,
-    color: colors.ink,
-  },
   podiumName: {
-    marginTop: 6,
-    fontFamily: fonts.bodyMedium,
+    marginTop: 8,
+    fontFamily: fonts.body,
     fontSize: 13,
     color: colors.bone,
   },
@@ -888,20 +843,33 @@ const figma = StyleSheet.create({
     marginTop: 2,
     fontFamily: fonts.mono,
     fontSize: 11,
-    color: colors.slate2,
+    color: colors.muted2,
   },
-  podiumBase: {
+  podiumBlock: {
     alignSelf: 'stretch',
     marginTop: 8,
-    marginHorizontal: 4,
-    backgroundColor: colors.ink2,
-    borderTopWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.raised,
+    borderTopWidth: 2,
     borderTopColor: colors.hairlineStrong,
+  },
+  podiumBlockFirst: {
+    backgroundColor: 'rgba(200,255,61,0.16)',
+    borderTopColor: colors.lime,
+  },
+  podiumNum: {
+    fontFamily: fonts.monoLight,
+    fontSize: 48,
+    color: colors.muted2,
+  },
+  podiumNumFirst: {
+    color: colors.lime,
   },
   avatar: {
     backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    borderWidth: 2,
+    borderColor: colors.self,
   },
   avatarPlaceholder: {
     alignItems: 'center',
@@ -910,56 +878,69 @@ const figma = StyleSheet.create({
   avatarInitials: {
     fontFamily: fonts.monoMedium,
     fontSize: 11,
-    color: colors.slate2,
+    color: colors.bone2,
+    textTransform: 'uppercase',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    paddingVertical: 10,
+    minHeight: 64,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.hairline,
   },
   rowSelf: {
     backgroundColor: colors.limeSoft,
+  },
+  rowPinned: {
     borderLeftWidth: 3,
     borderLeftColor: colors.lime,
+    borderBottomWidth: 0,
   },
-  rowText: {
-    flex: 1,
-    paddingHorizontal: 12,
+  rowRank: {
+    width: 44,
+    fontFamily: fonts.monoLight,
+    fontSize: 22,
+    color: colors.muted2,
+  },
+  rowRankSelf: {
+    color: colors.lime,
   },
   rowName: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
+    flex: 1,
+    paddingHorizontal: 12,
+    fontFamily: fonts.body,
+    fontSize: 15,
     color: colors.bone,
   },
-  rowMeta: {
-    marginTop: 2,
+  rowValue: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+  },
+  valueNumber: {
+    fontFamily: fonts.mono,
+    color: colors.bone,
+  },
+  valueUnit: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    color: colors.slate2,
-  },
-  rowPlace: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    color: colors.bone,
+    color: colors.muted,
   },
   pinned: {
-    backgroundColor: colors.ink2,
+    paddingHorizontal: 16,
+    backgroundColor: colors.ink,
     borderTopWidth: 1,
     borderTopColor: colors.hairlineStrong,
   },
   pinnedLabel: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 2,
+    paddingTop: 12,
+    paddingBottom: 6,
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.76,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: colors.slate2,
+    color: colors.lime,
   },
   retryBtn: {
     backgroundColor: colors.claimButton,
