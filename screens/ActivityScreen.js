@@ -1786,7 +1786,7 @@ const styles = StyleSheet.create({
   },
   commanderName: {
     marginTop: 0,
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     // Was 36. The headline no longer has to out-shout the progression block
     // below it, and it names the day rather than the tab.
     fontSize: 30,
@@ -2148,7 +2148,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   attackDayTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 20,
     color: colors.bone,
     textTransform: 'uppercase',
@@ -2650,7 +2650,7 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     width: '100%',
-    backgroundColor: 'rgba(242,238,230,0.28)',
+    backgroundColor: 'rgba(245,244,239,0.28)',
   },
   chartBarCleared: {
     backgroundColor: colors.bone2,

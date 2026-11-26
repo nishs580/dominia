@@ -14,16 +14,16 @@ import { useTranslation } from 'react-i18next';
 import { getAllianceById } from '../lib/allianceApi';
 import THEME from '../lib/theme';
 
-const INK = '#0E1014';
+const INK = '#101010';
 const BONE = THEME.colors.bone;
-const SLATE = '#5C6068';
-const SLATE_2 = '#8B8F98';
+const SLATE = '#6C6C69';
+const SLATE_2 = '#A3A29F';
 const CLAIM = THEME.colors.claim;
 const CLAIM_BUTTON = THEME.colors.claimButton; // AA-safe button fill under Bone text
-const ALLIANCE = '#3F8F4E';
-const ALLIANCE_RULE = 'rgba(63,143,78,0.4)';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const ALLIANCE = '#3155FF';
+const ALLIANCE_RULE = 'rgba(49,85,255,0.4)';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
@@ -96,7 +96,7 @@ export default function AllianceJoinedScreen() {
   if (loading) {
     return (
       <View style={styles.fullScreenCentered}>
-        <ActivityIndicator size="large" color={CLAIM} />
+        <ActivityIndicator size="large" color={'#C8FF3D'} />
       </View>
     );
   }
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#C8FF3D',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.monoMedium,
     fontSize: 11,
     letterSpacing: 1.6,
-    color: CLAIM,
+    color: '#C8FF3D',
     textTransform: 'uppercase',
   },
   screen: {
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
 
   allianceName: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 36,
     color: BONE,
     textTransform: 'uppercase',
@@ -273,12 +273,13 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    fontFamily: 'Archivo_700Bold_Italic',
+    fontFamily: 'SofiaSansExtraCondensed_600SemiBold',
     fontSize: 16,
     fontStyle: 'italic',
     color: BONE,
     lineHeight: 21,
     marginBottom: 28,
+    textTransform: 'uppercase',
   },
 
   metaGrid: {

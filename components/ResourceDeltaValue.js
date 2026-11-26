@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import CountUpText from './CountUpText';
 
-const BONE = '#F2EEE6';
+const BONE = '#F5F4EF';
 
 export default function ResourceDeltaValue({ value, style }) {
   const settled = value != null;

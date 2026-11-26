@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   contributorRank: {
     fontFamily: fonts.monoMedium,
     fontSize: 11,
-    color: colors.claim,
+    color: colors.lime,
     width: 20,
   },
   contributorName: {

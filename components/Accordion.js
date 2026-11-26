@@ -1,5 +1,6 @@
-// One collapsible section: a full-width header row (optional glyph, mono
-// label, + / − marker) over its content. Sections are independent, so any
+// One collapsible section: a full-width header row (optional glyph, display
+// label, optional right-hand meta such as a count, chevron marker that turns
+// lime when open; Figma G1) over its content. Sections are independent, so any
 // number can be open at once. Starts closed.
 //
 // Controlled when `expanded` is passed (with `onToggle`), otherwise it keeps
@@ -8,9 +9,23 @@
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { colors, fonts } from '../lib/theme';
 
-export default function Accordion({ title, icon, expanded, onToggle, children, testID }) {
+function Chevron({ open }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 16 16">
+      <Polyline
+        points={open ? '3,10.5 8,5.5 13,10.5' : '3,5.5 8,10.5 13,5.5'}
+        stroke={open ? colors.lime : colors.muted2}
+        strokeWidth={1.8}
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
+export default function Accordion({ title, icon, meta, expanded, onToggle, children, testID }) {
   const [ownOpen, setOwnOpen] = useState(false);
   const controlled = typeof expanded === 'boolean';
   const open = controlled ? expanded : ownOpen;
@@ -25,7 +40,7 @@ export default function Accordion({ title, icon, expanded, onToggle, children, t
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
-        accessibilityLabel={title}
+        accessibilityLabel={meta != null && meta !== '' ? `${title}, ${meta}` : title}
         accessibilityState={{ expanded: open }}
         style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
       >
@@ -33,9 +48,14 @@ export default function Accordion({ title, icon, expanded, onToggle, children, t
         <Text style={styles.title} maxFontSizeMultiplier={1.3} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.marker} importantForAccessibility="no" accessibilityElementsHidden>
-          {open ? '−' : '+'}
-        </Text>
+        {meta != null && meta !== '' ? (
+          <Text style={styles.meta} maxFontSizeMultiplier={1.3} importantForAccessibility="no" accessibilityElementsHidden>
+            {meta}
+          </Text>
+        ) : null}
+        <View style={styles.marker} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <Chevron open={open} />
+        </View>
       </Pressable>
       {open ? <View style={styles.body}>{children}</View> : null}
     </View>
@@ -63,18 +83,20 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
+    fontFamily: fonts.displayBold,
+    fontSize: 22,
+    color: colors.bone,
+    lineHeight: 24,
+    textTransform: 'uppercase',
+  },
+  meta: {
     fontFamily: fonts.mono,
     fontSize: 13,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: colors.bone,
+    color: colors.muted2,
   },
   marker: {
-    fontFamily: fonts.mono,
-    fontSize: 20,
-    color: colors.slate2,
     width: 20,
-    textAlign: 'center',
+    alignItems: 'center',
   },
   body: {
     paddingHorizontal: 16,

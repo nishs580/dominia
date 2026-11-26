@@ -50,7 +50,7 @@ import {
 } from '../lib/mapBoard';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import NotifPrimeModal from '../components/NotifPrimeModal';
-import { hasFired, markFired } from '../lib/walkthroughFlags';
+import { hasFired, markFired, onWalkthroughFired } from '../lib/walkthroughFlags';
 import { fetchFirstClaimObjective, formatWalkDistance } from '../lib/firstClaimApi';
 import { SPINE_EVENTS, gateSpineState, isSpineComplete, resumeBeat, spineReduce } from '../lib/firstClaimSpine';
 import { getFlag, useFlag } from '../lib/flags';
@@ -58,10 +58,18 @@ import { navigateTo } from '../lib/navigation';
 import MapTopBar from '../components/MapTopBar';
 import TerritoryCard from '../components/TerritoryCard';
 import DefendPopup, { useDefendPopupFeed } from '../components/DefendPopup';
-import { defendPopupModel } from '../lib/defendPopup';
+import { defendPopupModel, defendStartParams } from '../lib/defendPopup';
+import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
+import RelocateSheet from '../components/RelocateSheet';
+import CoachMark from '../components/CoachMark';
+import { COACH_EVENTS, COACH_FLAG_NAMES, COACH_STEPS, coachReduce, initialCoachState } from '../lib/coachMarks';
+import { TUTORIAL_NAMES } from '../lib/onboardingFlow';
+import { relocateTarget } from '../lib/relocate';
+import { PinIcon } from '../components/MapIcons';
 import { visibleMapLayers } from '../lib/mapLayers';
 import { loadSpineState, saveSpineState } from '../lib/firstClaimSpineStore';
 import { selectFirstClaimTarget } from '../lib/firstClaimTarget';
+import { centredFlightCamera, flightBounds } from '../lib/mapFlight';
 import { loadHomePin, peekHomePin, saveHomePin } from '../lib/homePinCache';
 import { getMe } from '../lib/meApi';
 import {
@@ -122,33 +130,6 @@ const FLIGHT_SETTLE_BUFFER_MS = 250;
 // How long the hold may stretch waiting for the objective to resolve (backend
 // cold starts) before the flight gives up and settles on the home pin alone.
 const FLIGHT_TARGET_TIMEOUT_MS = 10000;
-
-// Bounding box framing the home pin and the objective territory's polygon,
-// for the single flyTo of Beat 1.
-function flightBounds(homeLng, homeLat, target) {
-  let minLng = homeLng;
-  let maxLng = homeLng;
-  let minLat = homeLat;
-  let maxLat = homeLat;
-  const extend = (lng, lat) => {
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  };
-  extend(Number(target?.longitude), Number(target?.latitude));
-  const ring =
-    target?.geojson?.type === 'Polygon'
-      ? target.geojson.coordinates?.[0]
-      : target?.geojson?.type === 'MultiPolygon'
-        ? target.geojson.coordinates?.[0]?.[0]
-        : null;
-  if (Array.isArray(ring)) {
-    for (const vertex of ring) extend(Number(vertex?.[0]), Number(vertex?.[1]));
-  }
-  return { ne: [maxLng, maxLat], sw: [minLng, minLat] };
-}
 
 const INK = colors.ink;
 const INK2 = colors.ink2;
@@ -217,6 +198,9 @@ function contestStartErrorMessage(t, error) {
       return t('map.contestErr.outsideHours');
     case 'insufficient_iron':
       return t('map.contestErr.insufficientIron');
+    case 'insufficient_gold':
+      // Gold-only economy (402): same body and copy as the claim flow.
+      return t('map.startErr.insufficientGold', { n: context.required_gold - context.player_gold });
     default:
       return null;
   }
@@ -278,13 +262,17 @@ async function beginClaim({ territory, name, perimeter, getTokenRef, myPlayer, s
 }
 
 // -> { ok: true } | { ok: false, code, context }
-async function beginContest({ territory, name, getTokenRef, myPlayer, navigation, onClose }) {
+async function beginContest({ territory, name, getTokenRef, myPlayer, setMyPlayer, navigation, onClose }) {
   const result = await startContest({
     clerkGetToken: () => getTokenRef.current(),
     territoryId: territory.id,
   });
   if (!result.ok) return { ok: false, code: result.code, context: result.context };
   const env = result.data;
+  // Gold-only economy: the start charged Gold; the balance after is echoed.
+  if (typeof env?.gold_balance_after === 'number' && Number.isFinite(env.gold_balance_after)) {
+    setMyPlayer?.((prev) => (prev ? { ...prev, gold: env.gold_balance_after } : prev));
+  }
   onClose?.();
   navigation.navigate('ActiveClaim', {
     mode: 'contest',
@@ -295,6 +283,8 @@ async function beginContest({ territory, name, getTokenRef, myPlayer, navigation
     requiredWalkM: env.required_walk_m,
     attackerAllianceId: env.attacker_alliance_id,
     playerId: myPlayer?.id,
+    // A LOST result shows GOLD −n for what the start charged.
+    goldPaid: env.gold_cost_paid,
   });
   return { ok: true };
 }
@@ -387,16 +377,16 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
       ? perimeterDistanceRaw
       : Number(String(perimeterDistanceRaw).replace(/[^\d.]/g, '')) || 0;
 
-  const isYours = territory.properties?.color === '#D64525' || territory.properties?.color === '#3F8F4E';
-  const isOwnTerritory = territory.properties?.color === '#D64525';
-  const isAllianceTerritory = territory.properties?.color === '#3F8F4E';
+  const isYours = territory.properties?.color === '#22D65E' || territory.properties?.color === '#3155FF';
+  const isOwnTerritory = territory.properties?.color === '#22D65E';
+  const isAllianceTerritory = territory.properties?.color === '#3155FF';
   const isOwned = !isUnclaimed;
 
   // Top border colour reflects territory state
-  let topBorderColour = '#5C6068'; // unclaimed default (Slate)
-  if (isOwnTerritory) topBorderColour = '#D64525';
-  else if (isAllianceTerritory) topBorderColour = '#3F8F4E';
-  else if (isOwned) topBorderColour = '#4A6B8A';
+  let topBorderColour = '#6C6C69'; // unclaimed default (Slate)
+  if (isOwnTerritory) topBorderColour = '#22D65E';
+  else if (isAllianceTerritory) topBorderColour = '#3155FF';
+  else if (isOwned) topBorderColour = '#E8432B';
 
   // Label above territory name
   let stateLabel = t('map.stateUnclaimed');
@@ -406,7 +396,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
   const playerXp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
   const cap = territoryCapForLevel(F.calcLevel(playerXp));
-  const heldCount = allFeatures.filter(f => f.properties?.color === '#D64525').length;
+  const heldCount = allFeatures.filter(f => f.properties?.color === '#22D65E').length;
   const isAtCap = heldCount >= cap;
 
   // Owner's streak tier (deterrent signal)
@@ -603,6 +593,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
         name: selectedTerritory.name,
         getTokenRef,
         myPlayer,
+        setMyPlayer,
         navigation,
         onClose,
       });
@@ -707,7 +698,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     <AllianceEmblem
                       emblem={territory.properties?.emblem}
                       size={16}
-                      glyph={isAllianceTerritory ? '#3F8F4E' : '#4A6B8A'}
+                      glyph={isAllianceTerritory ? '#3155FF' : '#E8432B'}
                     />
                   ) : null}
                   <Text style={styles.sheetRowValue}>
@@ -1221,6 +1212,10 @@ function ObjectivePulse() {
 }
 
 export default function MapScreen() {
+  // Read before the flight effects below; mirrors `figmaChrome` further down.
+  const figmaModeEarly = !useFlag('legacy_tabs');
+  const figmaChromeRef = useRef(figmaModeEarly);
+  figmaChromeRef.current = figmaModeEarly;
   const navigation = useNavigation();
   const route = useRoute();
   const { t, i18n } = useTranslation();
@@ -1276,6 +1271,14 @@ export default function MapScreen() {
   const [mapError, setMapError] = useState(false);
   // Colour-key panel toggled from the KEY control beside LOCATE.
   const [legendOpen, setLegendOpen] = useState(false);
+  // While territory search is open its results drop down the right edge, so
+  // the side rail steps aside (it would otherwise sit on top of them).
+  const [searchActive, setSearchActive] = useState(false);
+  // The key is a glance aid: picking a territory closes it so it never sits
+  // over the search bar or the sheet.
+  useEffect(() => {
+    if (selected != null) setLegendOpen(false);
+  }, [selected]);
   // True after a successful fetch that left the feature cache empty — the
   // player is looking at unmapped ground and deserves a line saying so.
   const [emptyViewport, setEmptyViewport] = useState(false);
@@ -1501,12 +1504,58 @@ export default function MapScreen() {
         getRect: mapRect,
       },
       { key: 'colours', text: t('walkthrough.map.colours'), getRect: mapRect },
-      { key: 'card', text: t('walkthrough.map.card'), getRect: mapRect },
+      // Figma mode drops "tap any territory": the objective ring and its card
+      // already say it (review comment on the coach mark).
+      ...(figmaModeEarly
+        ? []
+        : [{ key: 'card', text: t('walkthrough.map.card'), getRect: mapRect }]),
     ];
-  }, [myPlayer?.home_city, t, winH, winW]);
+  }, [myPlayer?.home_city, t, winH, winW, figmaModeEarly]);
 
-  // Tips stay quiet during the Beat 1 flight — nothing may compete with it.
-  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive });
+  // ── Coach marks (Updated UX B1–B3, plan U8), Figma mode only ─────────────
+  // One-shot: side panel → tap the first territory → its card. They run once
+  // after the tutorial cards are finished or skipped, alongside the
+  // first-claim objective, and never during the Beat 1 flight. Progress is
+  // three walkthrough flags (lib/coachMarks COACH_FLAG_NAMES).
+  const [coach, setCoach] = useState(() => initialCoachState());
+  const [coachReady, setCoachReady] = useState(false);
+  const [tutorialDone, setTutorialDone] = useState(false);
+  const dispatchCoach = useCallback((event) => setCoach((s) => coachReduce(s, event)), []);
+  const coachActive = coach.step === COACH_STEPS.SIDE_PANEL
+    || coach.step === COACH_STEPS.TAP_TERRITORY
+    || coach.step === COACH_STEPS.CARD;
+  useEffect(() => {
+    if (!userId || !figmaModeEarly) return undefined;
+    let cancelled = false;
+    const lastTutorial = TUTORIAL_NAMES[TUTORIAL_NAMES.length - 1];
+    (async () => {
+      const [sidePanel, tapTerritory, card, tutorial] = await Promise.all([
+        hasFired(userId, COACH_FLAG_NAMES.sidePanel),
+        hasFired(userId, COACH_FLAG_NAMES.tapTerritory),
+        hasFired(userId, COACH_FLAG_NAMES.card),
+        hasFired(userId, lastTutorial),
+      ]);
+      if (cancelled) return;
+      setCoach(initialCoachState({ sidePanel, tapTerritory, card }));
+      setTutorialDone(tutorial);
+      setCoachReady(true);
+    })();
+    const unsubscribe = onWalkthroughFired(({ userId: who, name }) => {
+      if (who === userId && name === lastTutorial) setTutorialDone(true);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [userId, figmaModeEarly]);
+  useEffect(() => {
+    if (!userId) return;
+    coach.seen.forEach((step) => markFired(userId, COACH_FLAG_NAMES[step]));
+  }, [coach.seen, userId]);
+
+  // Tips stay quiet during the Beat 1 flight — nothing may compete with it —
+  // and while a coach mark is up.
+  const tips = useFirstTapTips({ screenKey: 'map', userId, tips: mapTips, enabled: !flightActive && !coachActive });
 
   // Beat 2 → Beat 3: the spine advances when the objective's sheet opens.
   useEffect(() => {
@@ -1556,11 +1605,11 @@ export default function MapScreen() {
   }, [heldCount, spine, maybeShowNotifPrime, navigation, userId]);
 
   const objectiveFillStyle = useMemo(
-    () => ({ fillColor: CLAIM, fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
+    () => ({ fillColor: '#C8FF3D', fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
     [],
   );
   const objectiveLineStyle = useMemo(
-    () => ({ lineColor: CLAIM, lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
+    () => ({ lineColor: '#C8FF3D', lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
     [],
   );
 
@@ -1653,7 +1702,7 @@ export default function MapScreen() {
     // Non-sensitive game state is still readable from the players table…
     const { data: playerRow } = await supabase
       .from('players')
-      .select('id, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_city')
+      .select('id, username, alliance_id, xp, current_streak, iron, stone, gold, morale, influence, home_city')
       .eq('clerk_id', userId)
       .maybeSingle();
 
@@ -1808,16 +1857,16 @@ export default function MapScreen() {
         lastBattleAt: row.last_battle_at ?? null,
       });
       let battleChip = '';
-      let chipColor = '#8B8F98';
+      let chipColor = '#A3A29F';
       if (chip?.key === 'contested') {
         battleChip = t('map.chip.contested');
-        chipColor = '#D64525';
+        chipColor = '#22D65E';
       } else if (chip) {
         const ago = chip.minutes < 60
           ? t('map.agoMin', { n: chip.minutes })
           : t('map.agoHr', { n: Math.floor(chip.minutes / 60) });
         battleChip = t(chip.key === 'fell' ? 'map.chip.fell' : 'map.chip.held', { ago });
-        chipColor = chip.key === 'fell' ? '#D64525' : '#3F8F4E';
+        chipColor = chip.key === 'fell' ? '#22D65E' : '#3155FF';
       }
 
       return {
@@ -1828,6 +1877,9 @@ export default function MapScreen() {
           name: row.territory_name,
           owner: row.owner_username ?? 'Unclaimed',
           alliance: allianceTag,
+          // Full alliance name for the Figma card's ally explainer, when the
+          // viewport RPC provides it.
+          allianceName: row.alliance_name ?? null,
           tier: row.tier ?? 'Medium',
           level: `D${developmentLevel}`,
           ownerStreak: row.owner_streak_days ?? 0,
@@ -1840,9 +1892,9 @@ export default function MapScreen() {
           battleChip,
           chipColor,
           perimeter: row.perimeter_distance,
-          color: row.owner_clerk_id === userId ? '#D64525' :
-            isOwnAlliance ? '#3F8F4E' :
-            row.owner_id != null ? '#4A6B8A' : 'transparent',
+          color: row.owner_clerk_id === userId ? '#22D65E' :
+            isOwnAlliance ? '#3155FF' :
+            row.owner_id != null ? '#E8432B' : 'transparent',
         },
         // Winding order already normalised server-side via ST_ForcePolygonCCW.
         geometry: row.geojson ?? {
@@ -2023,10 +2075,10 @@ export default function MapScreen() {
               labelSub: labelParts.join(' · '),
               color:
                 payload.owner_clerk_id === userId
-                  ? '#D64525'
+                  ? '#22D65E'
                   : isOwnAlliance
-                    ? '#3F8F4E'
-                    : '#4A6B8A',
+                    ? '#3155FF'
+                    : '#E8432B',
             },
           });
           setTerritories({
@@ -2070,6 +2122,8 @@ export default function MapScreen() {
   const onCameraChanged = useCallback((state) => {
     if (state?.gestures?.isGestureActive === true) {
       userMovedCameraRef.current = true;
+      // Panning the map is a sign the player is done with the colour key.
+      setLegendOpen(false);
       return;
     }
     if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
@@ -2183,6 +2237,12 @@ export default function MapScreen() {
     if (userMovedCameraRef.current) return;
     if (!target || !homePin || !cameraRef.current) return;
     objectiveFramedRef.current = true;
+    // Figma mode centres the objective itself; legacy frames home + objective.
+    const centred = figmaChromeRef.current ? centredFlightCamera(target) : null;
+    if (centred) {
+      cameraRef.current.setCamera({ ...centred, animationMode: 'easeTo', animationDuration: 600 });
+      return;
+    }
     const { ne, sw } = flightBounds(homePin[0], homePin[1], target);
     cameraRef.current.setCamera({
       bounds: { ne, sw },
@@ -2208,7 +2268,10 @@ export default function MapScreen() {
     const home = flightHomeRef.current;
     const fly = (frameTarget) => {
       if (cameraRef.current && home) {
-        if (frameTarget) {
+        const centred = frameTarget && figmaChromeRef.current ? centredFlightCamera(frameTarget) : null;
+        if (centred) {
+          cameraRef.current.setCamera({ ...centred, animationMode: 'flyTo', animationDuration: FLIGHT_MS });
+        } else if (frameTarget) {
           const { ne, sw } = flightBounds(home[0], home[1], frameTarget);
           cameraRef.current.setCamera({
             bounds: { ne, sw },
@@ -2309,9 +2372,9 @@ export default function MapScreen() {
       fillColor: ['get', 'color'],
       fillOpacity: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], 0.60,
-        ['==', ['get', 'color'], '#3F8F4E'], 0.60,
-        ['==', ['get', 'color'], '#4A6B8A'], 0.68,
+        ['==', ['get', 'color'], '#22D65E'], 0.60,
+        ['==', ['get', 'color'], '#3155FF'], 0.60,
+        ['==', ['get', 'color'], '#E8432B'], 0.68,
         0,
       ],
       fillEmissiveStrength: 1.0,
@@ -2379,10 +2442,10 @@ export default function MapScreen() {
     () => ({
       lineColor: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], '#D64525',
-        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
-        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
-        '#5C6068',
+        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
+        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
+        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
+        '#6C6C69',
       ],
       // Border weight encodes the owner's streak band (deterrence at a glance):
       // base <7d, hardened 7–20d, fortified 21+d (which also gets the inner line).
@@ -2490,8 +2553,8 @@ export default function MapScreen() {
   );
 
   // ─── PLAYER PUCK ─────────────────────────────────────────────────────────
-  // The commander is the brightest mark on the board. Bone on an ink seat, so
-  // it can never be mistaken for ground someone owns.
+  // The commander is the brightest mark on the board: Signal Lime on an
+  // obsidian seat, a colour no owner uses, so it can't be mistaken for ground.
   const puckSeatStyle = useMemo(
     () => ({
       circleRadius: 15,
@@ -2509,7 +2572,7 @@ export default function MapScreen() {
   const puckCoreStyle = useMemo(
     () => ({
       circleRadius: 7,
-      circleColor: BONE,
+      circleColor: '#C8FF3D', // Signal Lime: the player dot (Figma)
       circleOpacity: 1,
       circleStrokeColor: INK,
       circleStrokeWidth: 2.5,
@@ -2548,10 +2611,10 @@ export default function MapScreen() {
     () => ({
       lineColor: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], '#D64525',
-        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
-        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
-        '#5C6068',
+        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
+        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
+        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
+        '#6C6C69',
       ],
       lineWidth: 1.2,
       lineOpacity: 0.6,
@@ -2571,10 +2634,10 @@ export default function MapScreen() {
     () => ({
       lineColor: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], '#D64525',
-        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
-        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
-        '#5C6068',
+        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
+        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
+        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
+        '#6C6C69',
       ],
       lineWidth: ['case', ['>=', ['get', 'developmentLevel'], 4], 2.4, 1.4],
       lineOpacity: ['case', ['>=', ['get', 'developmentLevel'], 4], 0.95, 0.65],
@@ -2602,7 +2665,7 @@ export default function MapScreen() {
           '',
           ['concat', '\n', ['to-string', ['get', 'labelSub']]],
         ],
-        { 'font-scale': 0.85, 'text-color': '#8B8F98' },
+        { 'font-scale': 0.85, 'text-color': '#A3A29F' },
       ],
       // Territory names are the only words on the board. Graded by ownership:
       // a held parcel's name is bone, open ground's is slate. Round 1 set them
@@ -2616,10 +2679,10 @@ export default function MapScreen() {
       ],
       textColor: [
         'case',
-        ['==', ['get', 'color'], 'transparent'], '#8B8F98',
-        '#F2EEE6',
+        ['==', ['get', 'color'], 'transparent'], '#A3A29F',
+        '#F5F4EF',
       ],
-      textHaloColor: 'rgba(14,16,20,0.92)',
+      textHaloColor: 'rgba(16,16,16,0.92)',
       textHaloWidth: 1.8,
       textMaxWidth: 8,
       textLineHeight: 1.15,
@@ -2656,10 +2719,10 @@ export default function MapScreen() {
     () => ({
       fillExtrusionColor: [
         'case',
-        ['==', ['get', 'color'], '#D64525'], '#D64525',
-        ['==', ['get', 'color'], '#3F8F4E'], '#3F8F4E',
-        ['==', ['get', 'color'], '#4A6B8A'], '#4A6B8A',
-        '#5C6068',
+        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
+        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
+        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
+        '#6C6C69',
       ],
       fillExtrusionHeight: 14,
       fillExtrusionBase: 0,
@@ -2737,7 +2800,7 @@ export default function MapScreen() {
 
   const contestedLineStyle = useMemo(
     () => ({
-      lineColor: '#D64525',
+      lineColor: '#E8432B',
       lineWidth: 4.6,
       lineOpacity: 1,
       lineDasharray: SIEGE_DASH_SEQUENCE[siegeDashStep],
@@ -2757,7 +2820,7 @@ export default function MapScreen() {
       textField: ['get', 'battleChip'],
       textSize: 9,
       textColor: ['get', 'chipColor'],
-      textHaloColor: 'rgba(14,16,20,0.9)',
+      textHaloColor: 'rgba(16,16,16,0.9)',
       textHaloWidth: 1.5,
       textAnchor: 'top',
       textOffset: [0, 2.4],
@@ -2787,7 +2850,7 @@ export default function MapScreen() {
     () => ({
       fillColor: [
         'case',
-        ['==', ['get', 'color'], 'transparent'], '#F2EEE6',
+        ['==', ['get', 'color'], 'transparent'], '#F5F4EF',
         ['get', 'color'],
       ],
       fillOpacity: [
@@ -2807,9 +2870,9 @@ export default function MapScreen() {
   // clearly against the dark ground (it was washing out on the old light style).
   const selectedGlowStyle = useMemo(
     () => ({
-      lineColor: '#F2EEE6',
+      lineColor: '#C8FF3D',
       lineWidth: 9,
-      lineOpacity: 0.4,
+      lineOpacity: 0.35,
       lineBlur: 6,
       lineEmissiveStrength: 1.0,
     }),
@@ -2817,9 +2880,10 @@ export default function MapScreen() {
   );
 
   // Crisp bright outline on top of the glow.
+  // Signal Lime marks the selected territory (Figma: 3px lime edge).
   const selectedLineStyle = useMemo(
     () => ({
-      lineColor: '#FFFFFF',
+      lineColor: '#C8FF3D',
       lineWidth: 3,
       lineOpacity: 1,
       lineEmissiveStrength: 1.0,
@@ -2911,18 +2975,62 @@ export default function MapScreen() {
       challengeActive: defendFeed.challengeActive,
       gold: myPlayer ? (myPlayer.gold ?? 0) : null,
       multiResource: multiResourceOn,
+      selfUsername: myPlayer?.username ?? null,
     })),
     // dismissTick re-runs selection after a dismissal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [defendFeed.attacks, defendFeed.challengeActive, defendFeed.dismissTick, figmaChrome, flightActive, myPlayer?.gold, multiResourceOn],
+    [defendFeed.attacks, defendFeed.challengeActive, defendFeed.dismissTick, figmaChrome, flightActive, myPlayer?.gold, myPlayer?.username, multiResourceOn],
   );
-  const handleDefendFromPopup = useCallback((model) => {
-    navigation.navigate('DefenderAccept', { contestId: model.contestId });
-  }, [navigation]);
+  // Figma mode (D1/D6): DEFEND starts the defence straight from the pop-up,
+  // with the same preview + POST /defend calls DefenderAccept makes (no Stone
+  // boost). Any failure falls back to DefenderAccept, which owns the error and
+  // terminal states (already defended, window closed, insufficient Gold) —
+  // except a lost response (network error / timeout): POST /defend may have
+  // committed, so the preview is read again and, if the caller is now the
+  // defender, the walk starts anyway.
+  const defendInFlightRef = useRef(false);
+  const handleDefendFromPopup = useCallback(async (model) => {
+    if (defendInFlightRef.current) return;
+    defendInFlightRef.current = true;
+    const contestId = model.contestId;
+    const clerkGetToken = () => getTokenRef.current();
+    const fallback = () => navigation.navigate('DefenderAccept', { contestId });
+    try {
+      const preview = await getDefendPreview({ clerkGetToken, contestId });
+      if (!preview.ok || !myPlayer?.id) {
+        fallback();
+        return;
+      }
+      const res = await postDefend({ clerkGetToken, contestId, spendStone: false, defenderStartingWalkM: 0 });
+      if (!res.ok) {
+        if (res.code === 'network_error') {
+          const again = await getDefendPreview({ clerkGetToken, contestId });
+          if (again.ok && again.data?.defender_player_id != null
+            && String(again.data.defender_player_id) === String(myPlayer.id)) {
+            navigation.navigate('ActiveClaim', defendStartParams(again.data, myPlayer.id));
+            return;
+          }
+        }
+        fallback();
+        return;
+      }
+      const goldSpent = Number(res.data?.goldSpent);
+      if (Number.isFinite(goldSpent) && goldSpent > 0) {
+        setMyPlayer((prev) => (prev && Number.isFinite(Number(prev.gold))
+          ? { ...prev, gold: Math.max(0, Number(prev.gold) - goldSpent) }
+          : prev));
+      }
+      navigation.navigate('ActiveClaim', defendStartParams(preview.data, myPlayer.id, { goldSpent: res.data?.goldSpent }));
+    } catch (_) {
+      fallback();
+    } finally {
+      defendInFlightRef.current = false;
+    }
+  }, [navigation, myPlayer?.id]);
 
   const cardAtCap = useMemo(() => {
     const xp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
-    const held = (selected?.allFeatures ?? []).filter((f) => f.properties?.color === '#D64525').length;
+    const held = (selected?.allFeatures ?? []).filter((f) => f.properties?.color === '#22D65E').length;
     return held >= territoryCapForLevel(F.calcLevel(xp));
   }, [myPlayer?.xp, selected?.allFeatures]);
 
@@ -2955,6 +3063,7 @@ export default function MapScreen() {
       name: model.name ?? t('common.territoryFallback'),
       getTokenRef,
       myPlayer,
+      setMyPlayer,
       navigation,
       onClose: handleSheetClose,
     });
@@ -2994,6 +3103,49 @@ export default function MapScreen() {
     }
   }, [territories.features]);
 
+  // ── Coach marks: when they start and what moves them (Figma mode) ────────
+  const coachSelectedId = selectedFeature?.id ?? selectedFeature?.properties?.id ?? null;
+  const objectiveSelected = coachSelectedId != null && objectiveFeature?.id != null && coachSelectedId === objectiveFeature.id;
+  useEffect(() => {
+    if (!figmaChrome || !coachReady || !tutorialDone) return;
+    if (coach.step !== COACH_STEPS.IDLE) return;
+    if (!objectiveActive || flightActive || spineFlightPending || defendModel) return;
+    dispatchCoach({ type: COACH_EVENTS.START, cardOpen: objectiveSelected });
+  }, [figmaChrome, coachReady, tutorialDone, coach.step, objectiveActive, objectiveSelected, flightActive, spineFlightPending, defendModel, dispatchCoach]);
+  useEffect(() => {
+    if (coach.step === COACH_STEPS.TAP_TERRITORY && objectiveSelected) {
+      dispatchCoach(COACH_EVENTS.TERRITORY_SELECTED);
+    } else if (coach.step === COACH_STEPS.CARD && !objectiveSelected) {
+      // The card closed (or another territory replaced it): B3 is over.
+      dispatchCoach(COACH_EVENTS.NEXT);
+    } else if (coach.step === COACH_STEPS.TAP_TERRITORY && !objectiveActive) {
+      // The objective went away (claimed elsewhere): nothing left to point at.
+      dispatchCoach(COACH_EVENTS.SKIP);
+    }
+  }, [coach.step, objectiveSelected, objectiveActive, dispatchCoach]);
+
+  // ── Relocate (Updated UX C9/C10, plan U8), Figma mode only ───────────────
+  const [relocateOpen, setRelocateOpen] = useState(false);
+  const ownFeatures = useMemo(
+    () => (relocateOpen ? territories.features.filter((f) => f.properties?.color === '#22D65E') : []),
+    [relocateOpen, territories.features],
+  );
+  const handleRelocateGo = useCallback((row) => {
+    setRelocateOpen(false);
+    const camera = centredFlightCamera(relocateTarget(row));
+    if (camera && cameraRef.current) {
+      cameraRef.current.setCamera({ ...camera, animationMode: 'flyTo', animationDuration: 800 });
+    }
+  }, []);
+  const handleRelocateFindNearby = () => {
+    setRelocateOpen(false);
+    recenter();
+  };
+  const handleViewAlliance = useCallback(() => {
+    handleSheetClose();
+    navigateTo('Alliance');
+  }, [handleSheetClose]);
+
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
       {/* Beat 1 suppresses the HUD visually (opacity, not layout — no reflow
@@ -3006,22 +3158,22 @@ export default function MapScreen() {
         style={[styles.resourceBanner, flightActive && { opacity: 0 }]}
       >
         <View style={styles.resourceBannerItem}>
-          <IronGlyph size={12} color="#F2EEE6" />
+          <IronGlyph size={12} color="#F5F4EF" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.iron ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <StoneGlyph size={12} color="#F2EEE6" />
+          <StoneGlyph size={12} color="#F5F4EF" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.stone ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <GoldGlyph size={12} color="#F2EEE6" />
+          <GoldGlyph size={12} color="#F5F4EF" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.gold ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <MoraleGlyph size={12} color="#F2EEE6" />
+          <MoraleGlyph size={12} color="#F5F4EF" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.morale ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
       </View>
@@ -3056,7 +3208,7 @@ export default function MapScreen() {
       {showLoading && !topBannerMessage && !flightActive ? (
         <View pointerEvents="none" style={styles.loadingWrap}>
           <View style={styles.loadingPill}>
-            <ActivityIndicator size="small" color="#F2EEE6" />
+            <ActivityIndicator size="small" color="#F5F4EF" />
             <Text style={styles.loadingText}>{t('map.loadingTerritories')}</Text>
           </View>
         </View>
@@ -3274,6 +3426,7 @@ export default function MapScreen() {
         <MapTopBar
           gold={myPlayer ? (myPlayer.gold ?? 0) : null}
           onSelectSearchResult={handleSearchSelect}
+          onSearchActiveChange={setSearchActive}
         />
       ) : null}
       </View>
@@ -3304,18 +3457,23 @@ export default function MapScreen() {
       )}
       {legendOpen && !flightActive ? (
         <View style={figmaChrome ? styles.legendPanelFigma : styles.legendPanel}>
+          {figmaChrome ? (
+            <Text style={styles.legendHeaderFigma} accessibilityRole="header">
+              {t('map.legendFigma.header', { defaultValue: 'TERRITORY KEY' })}
+            </Text>
+          ) : null}
           {(figmaChrome
             ? [
                 { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendFigma.yours', { defaultValue: 'Your territory' }) },
-                { key: 'alliance', fill: 'rgba(63,143,78,0.14)', border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
-                { key: 'theirs', fill: 'rgba(74,107,138,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
+                { key: 'alliance', fill: 'rgba(49,85,255,0.14)', border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
+                { key: 'theirs', fill: 'rgba(232,67,43,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
               ]
             : [
             { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendYours') },
-            { key: 'alliance', fill: 'rgba(63,143,78,0.14)', border: ALLIANCE, label: t('map.legendAlliance') },
-            { key: 'theirs', fill: 'rgba(74,107,138,0.14)', border: ENEMY, label: t('map.legendTheirs') },
+            { key: 'alliance', fill: 'rgba(49,85,255,0.14)', border: ALLIANCE, label: t('map.legendAlliance') },
+            { key: 'theirs', fill: 'rgba(232,67,43,0.14)', border: ENEMY, label: t('map.legendTheirs') },
             { key: 'unclaimed', fill: 'transparent', border: SLATE, label: t('map.legendUnclaimed') },
-            { key: 'siege', fill: 'transparent', border: CLAIM, label: t('map.legendSiege') },
+            { key: 'siege', fill: 'transparent', border: '#E8432B', label: t('map.legendSiege') },
           ]).map((row) => (
             <View key={row.key} style={styles.legendRow}>
               <View style={[styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
@@ -3351,19 +3509,63 @@ export default function MapScreen() {
           onClose={handleSheetClose}
           onStartClaim={handleCardClaim}
           onStartContest={handleCardContest}
+          onViewAlliance={handleViewAlliance}
+          firstClaim={objectiveActive && selectedFeature?.id != null && selectedFeature.id === objectiveFeature?.id}
+          onCoachBubblePress={coach.step === COACH_STEPS.CARD && objectiveSelected
+            ? () => dispatchCoach(COACH_EVENTS.NEXT)
+            : null}
         />
       )}
+      {/* Figma C1: RELOCATE (bottom-left) opens the Relocate sheet (C9/C10). */}
+      {figmaChrome && !flightActive && selected == null && !coachActive ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('map.relocate.buttonA11y', { defaultValue: 'Jump the map to one of your territories' })}
+          onPress={() => setRelocateOpen(true)}
+          style={({ pressed }) => [styles.relocateButton, pressed && { opacity: 0.9 }]}
+        >
+          <PinIcon size={16} color="#C8FF3D" />
+          <Text style={styles.relocateText} maxFontSizeMultiplier={1.3}>
+            {t('map.relocate.button', { defaultValue: 'RELOCATE' })}
+          </Text>
+        </Pressable>
+      ) : null}
       {figmaChrome ? (
         <MapSideRail
           figma
-          hidden={flightActive}
+          // The full territory sheet grows past the rail when expanded (MORE),
+          // and the rail would cover its close button, so step aside while it
+          // is open. The compact Figma card sits below the rail and keeps it.
+          hidden={flightActive || searchActive || (fullSheetOn && selected != null)}
           keyOpen={legendOpen}
           onToggleKey={() => setLegendOpen((o) => !o)}
           onLocate={recenter}
+          coach={coach.step === COACH_STEPS.SIDE_PANEL}
+          onCoachContinue={() => dispatchCoach(COACH_EVENTS.NEXT)}
         />
       ) : (
         <MapSideRail hidden={selected != null || flightActive} />
       )}
+
+      {figmaChrome ? (
+        <RelocateSheet
+          visible={relocateOpen && !flightActive}
+          playerId={myPlayer?.id ?? null}
+          homePin={homePin}
+          fallbackFeatures={ownFeatures}
+          onClose={() => setRelocateOpen(false)}
+          onGo={handleRelocateGo}
+          onFindNearby={handleRelocateFindNearby}
+        />
+      ) : null}
+
+      {figmaChrome && (coach.step === COACH_STEPS.SIDE_PANEL || coach.step === COACH_STEPS.TAP_TERRITORY) && !defendModel ? (
+        <CoachMark
+          step={coach.step}
+          onContinue={() => dispatchCoach(COACH_EVENTS.NEXT)}
+          onSkip={() => dispatchCoach(COACH_EVENTS.SKIP)}
+        />
+      ) : null}
 
       {defendModel ? (
         <DefendPopup
@@ -3394,7 +3596,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: '#0E1014',
+    backgroundColor: '#101010',
     paddingTop: StatusBar.currentHeight ?? 0,
   },
   map: {
@@ -3412,7 +3614,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
     borderLeftWidth: 2,
-    borderLeftColor: CLAIM,
+    borderLeftColor: '#C8FF3D',
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginHorizontal: 0,
@@ -3436,26 +3638,27 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
   },
   spineHeroLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   spineHeroValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_300Light',
     fontSize: 40,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: -0.4,
+    textTransform: 'uppercase',
   },
   spineSupportLine: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
-    color: 'rgba(242,238,230,0.85)',
+    color: 'rgba(245,244,239,0.85)',
     lineHeight: 19,
     marginTop: 10,
   },
@@ -3480,13 +3683,13 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 2,
-    borderColor: CLAIM,
+    borderColor: '#C8FF3D',
   },
   objectivePulseCore: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: CLAIM,
+    backgroundColor: '#C8FF3D',
   },
 
   topBanner: {
@@ -3564,9 +3767,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0E1014',
+    backgroundColor: '#101010',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242,238,230,0.16)',
+    borderBottomColor: 'rgba(245,244,239,0.16)',
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
@@ -3579,36 +3782,36 @@ const styles = StyleSheet.create({
   resourceBannerDivider: {
     width: 1,
     height: 14,
-    backgroundColor: 'rgba(242,238,230,0.12)',
+    backgroundColor: 'rgba(245,244,239,0.12)',
   },
   resourceBannerValue: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 12,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: 0.5,
   },
   hudLeft: {
     position: 'absolute',
     top: (StatusBar.currentHeight ?? 0) + 76,
     left: 16,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderRadius: 0,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
   },
   hudValue: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 12,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: 0.5,
   },
   hudLabel: {
     marginTop: 2,
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
@@ -3620,8 +3823,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   allianceBadge: {
-    backgroundColor: 'rgba(63,143,78,0.14)',
-    borderColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(49,85,255,0.14)',
+    borderColor: 'rgba(245,244,239,0.16)',
     borderWidth: 1,
     borderRadius: 0,
     paddingHorizontal: 10,
@@ -3630,7 +3833,7 @@ const styles = StyleSheet.create({
   allianceBadgeText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
-    color: '#3F8F4E',
+    color: '#3155FF',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
@@ -3650,16 +3853,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(242,238,230,0.08)',
+    borderColor: 'rgba(245,244,239,0.08)',
   },
   locateIcon: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     fontSize: 14,
   },
   locateText: {
@@ -3678,12 +3881,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(14,16,20,0.86)',
+    backgroundColor: 'rgba(16,16,16,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(242,238,230,0.08)',
+    borderColor: 'rgba(245,244,239,0.08)',
   },
   legendPanel: {
     position: 'absolute',
@@ -3711,6 +3914,39 @@ const styles = StyleSheet.create({
     gap: 8,
     zIndex: 11,
   },
+  // Figma C2 key header.
+  legendHeaderFigma: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    color: '#A3A29F',
+    letterSpacing: 1.76,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  // Figma C1: RELOCATE, bottom-left above the tab bar, lifted clear of the
+  // Mapbox logo and (i) attribution in that corner (both must stay visible
+  // under Mapbox's terms; together they reach ~32pt up).
+  relocateButton: {
+    position: 'absolute',
+    left: 12,
+    bottom: 44,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(16,16,16,0.86)',
+    borderWidth: 1,
+    borderColor: '#C8FF3D',
+    borderRadius: 0,
+    zIndex: 12,
+  },
+  relocateText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.4,
+    color: BONE,
+  },
   legendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3734,12 +3970,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     paddingHorizontal: 16,
     borderTopWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     paddingTop: 12,
     paddingBottom: 24,
   },
@@ -3748,7 +3984,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 1,
     borderRadius: 0,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginBottom: 14,
   },
   sheetTopRow: {
@@ -3760,7 +3996,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: 'InstrumentSans_500Medium',
     fontSize: 20,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: -0.015,
   },
   sheetTitleRow: {
@@ -3771,7 +4007,7 @@ const styles = StyleSheet.create({
   sheetStateLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 4,
@@ -3779,7 +4015,7 @@ const styles = StyleSheet.create({
   sheetTierBadge: {
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginTop: 1,
@@ -3787,34 +4023,34 @@ const styles = StyleSheet.create({
   sheetTierBadgeText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   sheetSubtitle: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     marginTop: 6,
     letterSpacing: 0.5,
   },
   sheetSubtitleStrong: {
     fontFamily: 'GeistMono_500Medium',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   sheetOwnerUnclaimed: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#5C6068',
+    color: '#6C6C69',
   },
   sheetAllianceTag: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   sheetIntelBlock: {
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
   },
   sheetRow: {
     flexDirection: 'row',
@@ -3824,13 +4060,13 @@ const styles = StyleSheet.create({
   sheetRowLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 0.5,
   },
   sheetRowValue: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: 0.5,
   },
   sheetRowValueRow: {
@@ -3843,9 +4079,9 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.16)',
+    borderTopColor: 'rgba(245,244,239,0.16)',
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(242,238,230,0.16)',
+    borderBottomColor: 'rgba(245,244,239,0.16)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -3853,7 +4089,7 @@ const styles = StyleSheet.create({
   sheetInfluenceLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -3861,20 +4097,21 @@ const styles = StyleSheet.create({
   sheetInfluenceSub: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 0.5,
   },
   sheetInfluenceValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 26,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: -0.3,
+    textTransform: 'uppercase',
   },
   sheetExpandedBlock: {
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
   },
   sheetYourWalk: {
     marginTop: 10,
@@ -3895,14 +4132,14 @@ const styles = StyleSheet.create({
   sheetYourWalkValue: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: 0.5,
     marginBottom: 3,
   },
   sheetYourWalkSub: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 0.3,
     lineHeight: 14,
   },
@@ -3910,7 +4147,7 @@ const styles = StyleSheet.create({
   sheetGloss: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     lineHeight: 16,
     marginTop: 2,
   },
@@ -3919,15 +4156,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
   },
-  // Slate 2, not Slate. At 9px/#5C6068 this control was ~2.7:1 on the sheet and
+  // Slate 2, not Slate. At 9px/#6C6C69 this control was ~2.7:1 on the sheet and
   // read as a caption rather than the only way to reach development, legacy and
   // walk detail. It stays text-only per the brand's no-icon rule for toggles.
   sheetToggleText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -3936,19 +4173,19 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetCloseText: {
     fontFamily: 'GeistMono_400Regular',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     fontSize: 20,
     marginTop: -2,
   },
   sheetAction: {
     marginTop: 16,
-    backgroundColor: '#D64525',
+    backgroundColor: '#22D65E',
     borderRadius: 0,
     paddingVertical: 14,
     minHeight: 48,
@@ -3957,10 +4194,10 @@ const styles = StyleSheet.create({
   },
   sheetActionDisabled: {
     marginTop: 16,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3981,7 +4218,7 @@ const styles = StyleSheet.create({
   },
   sheetActionText: {
     fontFamily: 'GeistMono_500Medium',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -3989,14 +4226,14 @@ const styles = StyleSheet.create({
   sheetActionDisabledText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 12,
-    color: '#5C6068',
+    color: '#6C6C69',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sheetActionDisabledSub: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#5C6068',
+    color: '#6C6C69',
     marginTop: 4,
     letterSpacing: 0.5,
   },
@@ -4004,7 +4241,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 16,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
   },
   sheetConfirmDataRow: {
     flexDirection: 'row',
@@ -4020,7 +4257,7 @@ const styles = StyleSheet.create({
   sheetConfirmLabel: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -4028,13 +4265,13 @@ const styles = StyleSheet.create({
     // Measurements and balances — mono per the Controlling Rule.
     fontFamily: 'GeistMono_500Medium',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     letterSpacing: 0.3,
   },
   sheetConfirmHelpText: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
-    color: 'rgba(242,238,230,0.7)',
+    color: 'rgba(245,244,239,0.7)',
     lineHeight: 18,
     marginTop: 6,
   },
@@ -4052,13 +4289,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 16,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(242,238,230,0.08)',
+    borderTopColor: 'rgba(245,244,239,0.08)',
     gap: 12,
   },
   sheetContestActiveText: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
-    color: 'rgba(242,238,230,0.85)',
+    color: 'rgba(245,244,239,0.85)',
     lineHeight: 18,
     textAlign: 'center',
   },
@@ -4067,7 +4304,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     paddingVertical: 13,
     minHeight: 48,
     alignItems: 'center',
@@ -4076,7 +4313,7 @@ const styles = StyleSheet.create({
   sheetCancelText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 12,
-    color: 'rgba(242,238,230,0.6)',
+    color: 'rgba(245,244,239,0.6)',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },

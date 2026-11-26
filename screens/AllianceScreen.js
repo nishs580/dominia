@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AllianceEmblem from '../components/AllianceEmblem';
 import AllianceLogEvent from '../components/AllianceLogEvent';
 import WeeklyTaskCard from '../components/WeeklyTaskCard';
 import WeeklyTopContributors from '../components/WeeklyTopContributors';
-import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder, listAlliances, normalizeAllianceDetail } from '../lib/allianceApi';
-import { ALLIANCE_MAX_MEMBERS, allianceListState, joinErrorKey } from '../lib/allianceValidation';
-import AllianceDetailSheet, { AllianceMemberRow, AllianceStatsRow, allianceBlurb, allianceTitle } from '../components/AllianceDetailSheet';
+import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder, listAlliances, normalizeAllianceDetail, listJoinRequests, acceptJoinRequest, declineJoinRequest } from '../lib/allianceApi';
+import { ALLIANCE_MAX_MEMBERS, allianceListState, joinErrorKey, joinRequestErrorKey } from '../lib/allianceValidation';
+import AllianceDetailSheet, { AllianceEmblemTile, AllianceMemberRow, AllianceStatsGrid, allianceBlurb, allianceName } from '../components/AllianceDetailSheet';
+import { isAllianceLeader } from '../lib/allianceRoles';
+import { memberInitials, normalizeJoinRequests } from '../lib/allianceJoin';
 import FeatureExplainer from '../components/FeatureExplainer';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
@@ -19,17 +23,24 @@ import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { useFlag } from '../lib/flags';
 import ProfileAvatarButton from '../components/ProfileAvatarButton';
 
-const CLAIM = '#D64525';
-const CLAIM_BUTTON = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const INK3 = '#252932';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const ALLIANCE_GREEN = '#3F8F4E';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const CLAIM = '#22D65E';
+const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
+const INK = '#101010';
+const INK2 = '#1A1A1A';
+const INK3 = '#242424';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE2 = '#A3A29F';
+const ALLIANCE_GREEN = '#3155FF';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const LIME = '#C8FF3D';
+const DANGER = '#E8432B';
+
+// Figma line icons (F3 info, F5 settings and messages).
+const INFO_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE}" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v1"/></svg>`;
+const SETTINGS_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${BONE}" stroke-width="1.6"><path d="M3 7h11M18 7h3M3 17h5M12 17h9"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/></svg>`;
+const CHAT_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE2}" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.1-1.1A8 8 0 1 0 12 4z"/></svg>`;
 
 function formatAllianceRole(t, role) {
   if (!role) return t('alliance.roleMember');
@@ -356,9 +367,10 @@ function NonMemberContent({
   );
 }
 
-function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave, figma = false }) {
+function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave, figma = false, territoryCount = null }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   // App-only surfaces (Remote Config). Off leaves a read-only member list
   // with no top contributors, manage tools, Command Post or War Room entry.
   const rosterToolsOn = useFlag('alliance_roster_tools');
@@ -382,12 +394,69 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const [transferConfirmInput, setTransferConfirmInput] = useState('');
   const [transferSaving, setTransferSaving] = useState(false);
   const [transferError, setTransferError] = useState('');
+  // Figma member view: settings sheet and the leader's pending join requests (U6).
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [requestBusy, setRequestBusy] = useState(null); // request id in flight
+  const [requestError, setRequestError] = useState('');
 
   const myMember = roster.find((m) => m.player_id === playerId);
   const myRole = myMember?.role ?? null;
   const myPlayerId = playerId;
   const isFounder = myMember?.role === 'founder';
   const rosterSize = roster.length;
+  const leader = figma && isAllianceLeader(myRole);
+
+  const openChat = useCallback(() => {
+    navigation.navigate('Chat', { initialTab: 'alliance' });
+  }, [navigation]);
+
+  // Any failure (route not deployed yet, 403) reads as "no requests".
+  const loadRequests = useCallback(async () => {
+    if (!leader || !allianceId) {
+      setRequests([]);
+      return;
+    }
+    const res = await listJoinRequests({ clerkGetToken: getToken, allianceId });
+    setRequests(res.ok ? normalizeJoinRequests(res.data) : []);
+  }, [leader, allianceId, getToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRequests();
+    }, [loadRequests]),
+  );
+
+  const resolveRequest = async (request, action) => {
+    if (requestBusy) return;
+    setRequestBusy(request.id);
+    setRequestError('');
+    try {
+      const call = action === 'accept' ? acceptJoinRequest : declineJoinRequest;
+      const res = await call({ clerkGetToken: getToken, allianceId, requestId: request.id });
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== request.id));
+        if (action === 'accept') await onRefreshAfterLeave();
+        return;
+      }
+      // Backend error body is { error: '<code>' }.
+      const errKey = joinRequestErrorKey(res.error);
+      if (errKey === 'allianceFigma.errRequestNotPending') {
+        // Another leader already handled it: drop the stale row.
+        setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      }
+      setRequestError(t(errKey, {
+        defaultValue: errKey === 'allianceFigma.errRequestNotPending'
+          ? 'This request was already handled.'
+          : 'Could not update the request. Try again.',
+      }));
+    } catch (err) {
+      console.error('Resolve join request failed:', err);
+      setRequestError(t('allianceFigma.errRequestAction', { defaultValue: 'Could not update the request. Try again.' }));
+    } finally {
+      setRequestBusy(null);
+    }
+  };
 
   const fetchFirstPage = useCallback(async () => {
     setIsLoading(true);
@@ -780,7 +849,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     );
   }
 
-  if (leaveConfirmCase) {
+  if (leaveConfirmCase && !figma) {
     const allianceName = myAlliance?.name ?? t('alliance.allianceFallback');
     const title =
       leaveConfirmCase === 'blocked'
@@ -847,6 +916,298 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           {leaveError ? <Text style={styles.joinError}>{leaveError}</Text> : null}
         </View>
       </ScrollView>
+    );
+  }
+
+  // Figma member view (F5) with the leave confirm (F8) as a modal over it.
+  if (figma) {
+    const tagText = (myAlliance?.short_name ?? '').toUpperCase();
+    const blurb = allianceBlurb(myAlliance);
+    const fallbackName = myAlliance?.name ?? t('alliance.allianceFallback');
+    const leaveTitleText =
+      leaveConfirmCase === 'blocked'
+        ? t('alliance.cannotLeaveYet')
+        : leaveConfirmCase === 'disband'
+          ? t('alliance.disbandTitle', { name: fallbackName })
+          : t('allianceFigma.leaveTitle', { defaultValue: 'LEAVE ALLIANCE?' });
+    const leaveBodyText =
+      leaveConfirmCase === 'blocked'
+        ? t('alliance.blockedBody')
+        : leaveConfirmCase === 'disband'
+          ? t('alliance.disbandBody')
+          : t('allianceFigma.leaveBody', {
+              defaultValue: "You'll lose alliance missions and alliance chat. You can join or create another alliance later.",
+            });
+    const leaveCtaText =
+      leaveConfirmCase === 'disband'
+        ? t('alliance.disband')
+        : t('allianceFigma.leaveAlliance', { defaultValue: 'LEAVE ALLIANCE' });
+    const leaveLabel = t('allianceFigma.leaveAlliance', { defaultValue: 'LEAVE ALLIANCE' });
+    const openChatLabel = t('allianceFigma.openChat', { defaultValue: 'OPEN CHAT' });
+
+    return (
+      <>
+        <ScrollView
+          style={styles.scroll}
+          // Figma header sits below the status bar (as TabScreenHeader).
+          contentContainerStyle={[styles.figmaMemberContent, { paddingTop: insets.top + 12 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.figmaMemberTitleRow}>
+            <Text
+              style={[styles.headerTitle, styles.figmaMemberTitle]}
+              accessibilityRole="header"
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.65}
+            >
+              {allianceName(myAlliance) || t('alliance.allianceFallback')}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('allianceFigma.settings', { defaultValue: 'Alliance settings' })}
+              onPress={() => setSettingsOpen(true)}
+              hitSlop={10}
+              style={({ pressed }) => [styles.figmaIconBtn, pressed && { opacity: 0.6 }]}
+            >
+              <SvgXml xml={SETTINGS_ICON_XML} width={24} height={24} />
+            </Pressable>
+          </View>
+
+          <View style={styles.figmaIdentityRow}>
+            <AllianceEmblemTile emblem={myAlliance?.emblem} size={48} />
+            <View style={styles.figmaIdentityText}>
+              <Text style={styles.figmaMemberTag}>
+                {t('allianceFigma.youreMember', { tag: tagText, defaultValue: "[{{tag}}] · YOU'RE A MEMBER" })}
+              </Text>
+              {blurb ? <Text style={styles.figmaMemberBlurb}>{blurb}</Text> : null}
+            </View>
+          </View>
+
+          <AllianceStatsGrid
+            location={myAlliance?.city}
+            territories={territoryCount !== null ? territoryCount : '—'}
+            joinType={myAlliance?.join_type}
+            memberCount={roster.length}
+          />
+
+          <Text style={styles.figmaSectionTitle}>
+            {t('allianceFigma.allianceMissions', { defaultValue: 'ALLIANCE MISSIONS' })}
+          </Text>
+          <WeeklyTaskCard allianceId={allianceId} getToken={getToken} />
+
+          <View style={styles.figmaSectionHead}>
+            <Text style={[styles.figmaSectionTitle, styles.figmaSectionTitleInline]}>
+              {t('allianceFigma.allianceMessages', { defaultValue: 'ALLIANCE MESSAGES' })}
+            </Text>
+            <View style={styles.figmaLiveChip}>
+              <View style={styles.figmaLiveDot} />
+              <Text style={styles.figmaLiveText}>{t('allianceFigma.live', { defaultValue: 'LIVE' })}</Text>
+            </View>
+          </View>
+          <View style={styles.figmaMessagesBox}>
+            {events.length > 0 ? (
+              <ScrollView
+                style={styles.figmaWireScroll}
+                onScroll={handleWireScroll}
+                scrollEventThrottle={400}
+                nestedScrollEnabled
+              >
+                {events.map((item) => (
+                  <AllianceLogEvent key={item.id} event={item} />
+                ))}
+                {isLoadingMore ? <ActivityIndicator style={styles.wireLoadingMore} color={SLATE} /> : null}
+              </ScrollView>
+            ) : isLoading ? (
+              <ActivityIndicator color={SLATE2} style={{ marginVertical: 12 }} />
+            ) : (
+              <>
+                <SvgXml xml={CHAT_ICON_XML} width={22} height={22} />
+                <Text style={styles.figmaEmptyMessages}>
+                  {feedError
+                    ? t('alliance.wireLost')
+                    : t('allianceFigma.noTransmissions', { defaultValue: 'No transmissions yet.' })}
+                </Text>
+              </>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={openChat}
+              style={({ pressed }) => [styles.figmaOpenChatBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.figmaOpenChatText}>{openChatLabel}</Text>
+            </Pressable>
+          </View>
+
+          {leader && requests.length > 0 ? (
+            <>
+              <Text style={styles.figmaSectionTitle}>
+                {t('allianceFigma.joinRequests', { defaultValue: 'JOIN REQUESTS' })}
+              </Text>
+              {requests.map((r, i) => {
+                const busy = requestBusy === r.id;
+                return (
+                  <View
+                    key={r.id}
+                    style={[styles.figmaRequestRow, i < requests.length - 1 && styles.figmaRequestRowBorder]}
+                  >
+                    <View style={styles.figmaRequestTile}>
+                      <Text style={styles.figmaRequestInitials}>{memberInitials(r.username)}</Text>
+                    </View>
+                    <Text style={styles.figmaRequestName} numberOfLines={1}>{r.username ?? '—'}</Text>
+                    {busy ? (
+                      <ActivityIndicator color={SLATE2} />
+                    ) : (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t('allianceFigma.decline', { defaultValue: 'DECLINE' })} ${r.username ?? ''}`}
+                          disabled={requestBusy !== null}
+                          onPress={() => resolveRequest(r, 'decline')}
+                          style={({ pressed }) => [styles.figmaRequestBtn, pressed && { opacity: 0.7 }]}
+                        >
+                          <Text style={styles.figmaRequestDeclineText}>
+                            {t('allianceFigma.decline', { defaultValue: 'DECLINE' })}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t('allianceFigma.accept', { defaultValue: 'ACCEPT' })} ${r.username ?? ''}`}
+                          disabled={requestBusy !== null}
+                          onPress={() => resolveRequest(r, 'accept')}
+                          style={({ pressed }) => [styles.figmaRequestBtn, styles.figmaRequestAccept, pressed && { opacity: 0.85 }]}
+                        >
+                          <Text style={styles.figmaRequestAcceptText}>
+                            {t('allianceFigma.accept', { defaultValue: 'ACCEPT' })}
+                          </Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
+              {requestError ? (
+                <Text style={styles.joinError} accessibilityLiveRegion="polite">{requestError}</Text>
+              ) : null}
+            </>
+          ) : null}
+
+          <Text style={styles.figmaSectionTitle}>
+            {t('allianceFigma.allianceMembers', { defaultValue: 'ALLIANCE MEMBERS' })}
+          </Text>
+          {roster.map((m, i) => (
+            <AllianceMemberRow
+              key={m.player_id}
+              rank={i + 1}
+              member={m}
+              showBorder={i < roster.length - 1}
+              onPress={() =>
+                navigation.navigate('PublicProfile', { playerId: m.player_id, username: m.username })
+              }
+            />
+          ))}
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={openLeaveConfirm}
+            style={({ pressed }) => [styles.figmaLeaveBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.figmaLeaveText}>{leaveLabel}</Text>
+          </Pressable>
+        </ScrollView>
+
+        <Modal
+          visible={settingsOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSettingsOpen(false)}
+          statusBarTranslucent
+        >
+          <View style={styles.figmaModalBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setSettingsOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel={t('allianceFigma.close', { defaultValue: 'Close' })}
+            />
+            <View style={styles.figmaModalCard} accessibilityViewIsModal>
+              <Text style={styles.figmaModalTitle} accessibilityRole="header">
+                {t('allianceFigma.settingsTitle', { defaultValue: 'ALLIANCE SETTINGS' })}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setSettingsOpen(false);
+                  openChat();
+                }}
+                style={({ pressed }) => [styles.figmaModalPrimary, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.figmaModalPrimaryText}>{openChatLabel}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setSettingsOpen(false);
+                  openLeaveConfirm();
+                }}
+                style={({ pressed }) => [styles.figmaModalDanger, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.figmaModalDangerText}>{leaveLabel}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={Boolean(leaveConfirmCase)}
+          transparent
+          animationType="fade"
+          onRequestClose={closeLeaveConfirm}
+          statusBarTranslucent
+        >
+          <View style={styles.figmaModalBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={closeLeaveConfirm}
+              accessibilityRole="button"
+              accessibilityLabel={t('allianceFigma.stay', { defaultValue: 'STAY' })}
+            />
+            <View style={styles.figmaModalCard} accessibilityViewIsModal>
+              <Text style={styles.figmaModalTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
+                {leaveTitleText}
+              </Text>
+              <Text style={styles.figmaModalBody}>{leaveBodyText}</Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={leaveSaving}
+                onPress={closeLeaveConfirm}
+                style={({ pressed }) => [styles.figmaModalPrimary, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.figmaModalPrimaryText}>{t('allianceFigma.stay', { defaultValue: 'STAY' })}</Text>
+              </Pressable>
+              {leaveConfirmCase !== 'blocked' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: leaveSaving, busy: leaveSaving }}
+                  disabled={leaveSaving}
+                  onPress={handleLeaveSubmit}
+                  style={({ pressed }) => [styles.figmaModalDanger, pressed && !leaveSaving && { opacity: 0.8 }]}
+                >
+                  {leaveSaving ? (
+                    <ActivityIndicator color={DANGER} />
+                  ) : (
+                    <Text style={styles.figmaModalDangerText}>{leaveCtaText}</Text>
+                  )}
+                </Pressable>
+              ) : null}
+              {leaveError ? (
+                <Text style={styles.joinError} accessibilityLiveRegion="polite">{leaveError}</Text>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+      </>
     );
   }
 
@@ -922,27 +1283,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           </>
         ) : null}
 
-        {figma ? (
-          <>
-            <View style={styles.sectionLabelRow}>
-              <Text style={styles.sectionLabelText}>{t('allianceFigma.allianceMembers', { defaultValue: 'Alliance Members' })}</Text>
-              <Text style={styles.sectionLabelAccent}>{`${roster.length} / ${ALLIANCE_MAX_MEMBERS}`}</Text>
-              <View style={styles.sectionHairline} />
-            </View>
-            {roster.map((m, i) => (
-              <AllianceMemberRow
-                key={m.player_id}
-                rank={i + 1}
-                member={m}
-                showBorder={i < roster.length - 1}
-                onPress={() =>
-                  navigation.navigate('PublicProfile', { playerId: m.player_id, username: m.username })
-                }
-              />
-            ))}
-          </>
-        ) : (
-          <>
+        {/* Legacy roster (the Figma member view returns above). */}
+        <>
         <View style={styles.sectionLabelRow}>
           <Text style={styles.sectionLabelText}>{t('alliance.roster')}</Text>
           <Text style={styles.sectionLabelAccent}>{t('alliance.memberCount', { n: roster.length })}</Text>
@@ -981,8 +1323,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             />
           );
         })}
-          </>
-        )}
+        </>
 
         {isFounder && commandPostOn ? (
           <Pressable
@@ -1023,10 +1364,11 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   );
 }
 
-// Figma browse (alliance_hq_create off): server list and search from
-// GET /alliances?q= (caller's city only), detail pop-up with Join, and
-// "Create your own Alliance" pinned at the bottom.
-function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
+// Figma browse (F3; alliance_hq_create off): server list and search from
+// GET /alliances?q= (caller's city only), "IN {CITY} · N ALLIANCES", rows
+// with tag tile / NAME [TAG] / meta / chevron, the unlock note and a
+// full-width CREATE ALLIANCE under the list. A row opens the F4 detail pop-up.
+function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
@@ -1068,6 +1410,28 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
   const state = allianceListState({ loading, error, alliances, query });
   const goCreate = () => navigation.navigate('CreateAlliance');
 
+  const footer = (
+    <>
+      <View style={styles.figmaNoteRow}>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <SvgXml xml={INFO_ICON_XML} width={16} height={16} />
+        </View>
+        <Text style={styles.figmaNoteText}>
+          {t('allianceFigma.unlockNote', { defaultValue: 'Alliances unlock at level 3. Up to 20 members each.' })}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={goCreate}
+        style={({ pressed }) => [styles.figmaCreateFull, pressed && { opacity: 0.85 }]}
+      >
+        <Text style={styles.figmaCreateBtnText}>
+          {t('allianceFigma.createCta', { defaultValue: 'CREATE ALLIANCE' })}
+        </Text>
+      </Pressable>
+    </>
+  );
+
   let body;
   if (state === 'loading') {
     body = (
@@ -1088,62 +1452,58 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
         </Pressable>
       </View>
     );
-  } else if (state === 'empty') {
-    body = (
-      <View style={styles.figmaCentered}>
-        <Text style={styles.emptyListText}>
-          {t('allianceFigma.emptyCity', { defaultValue: 'No alliances in your city yet' })}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={goCreate}
-          style={({ pressed }) => [styles.figmaCreateBtn, { marginTop: 16 }, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.figmaCreateBtnText}>{t('allianceFigma.create', { defaultValue: 'Create' })}</Text>
-        </Pressable>
-      </View>
-    );
-  } else if (state === 'no_results') {
-    body = (
-      <View style={styles.figmaCentered}>
-        <Text style={styles.emptyListText} accessibilityLiveRegion="polite">
-          {t('allianceFigma.noResults', { defaultValue: 'No alliances match "{{query}}"', query })}
-        </Text>
-      </View>
-    );
   } else {
     body = (
       <ScrollView
         style={styles.figmaListScroll}
-        contentContainerStyle={styles.allianceListContent}
+        contentContainerStyle={styles.figmaListContent}
         keyboardShouldPersistTaps="handled"
       >
-        {alliances.map((a, i) => {
-          const members = `${a.member_count} / ${ALLIANCE_MAX_MEMBERS}`;
-          const terr = t('allianceFigma.territoryCount', {
-            count: a.territory_count,
-            defaultValue: '{{count}} Territories',
-          });
-          return (
-            <Pressable
-              key={a.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${a.name} - ${a.short_name}, ${terr}, ${t('allianceFigma.members', { defaultValue: 'Members' })} ${members}`}
-              onPress={() => setSelected(a)}
-              style={({ pressed }) => [styles.figmaRow, i === 0 && styles.aRowFirst, pressed && styles.aRowPressed]}
-            >
-              <AllianceEmblem emblem={a.emblem} size={36} />
-              <View style={styles.figmaRowInfo}>
-                <Text style={styles.aName} numberOfLines={1}>{`${a.name} - ${a.short_name}`}</Text>
-                <Text style={styles.aMeta}>{terr}</Text>
-              </View>
-              <Text style={styles.aMembers}>{members}</Text>
-            </Pressable>
-          );
-        })}
+        {state === 'empty' ? (
+          <Text style={[styles.emptyListText, styles.figmaEmptyText]}>
+            {t('allianceFigma.emptyCity', { defaultValue: 'No alliances in your city yet' })}
+          </Text>
+        ) : state === 'no_results' ? (
+          <Text style={[styles.emptyListText, styles.figmaEmptyText]} accessibilityLiveRegion="polite">
+            {t('allianceFigma.noResults', { defaultValue: 'No alliances match "{{query}}"', query })}
+          </Text>
+        ) : (
+          alliances.map((a, i) => {
+            const meta = t('allianceFigma.rowMeta', {
+              territories: a.territory_count,
+              members: a.member_count,
+              max: ALLIANCE_MAX_MEMBERS,
+              defaultValue: '{{territories}} TERRITORIES · {{members}}/{{max}} MEMBERS',
+            });
+            return (
+              <Pressable
+                key={a.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${a.name} [${a.short_name}], ${meta}`}
+                onPress={() => setSelected(a)}
+                style={({ pressed }) => [styles.figmaRow, i === alliances.length - 1 && styles.figmaRowLast, pressed && styles.aRowPressed]}
+              >
+                <View style={styles.figmaTagTile}>
+                  <Text style={styles.figmaTagTileText}>{(a.short_name ?? '').toUpperCase()}</Text>
+                </View>
+                <View style={styles.figmaRowInfo}>
+                  <Text style={styles.aNameLine} numberOfLines={1}>
+                    <Text style={styles.aName}>{a.name}</Text>
+                    <Text style={styles.figmaRowTag}>{`  [${(a.short_name ?? '').toUpperCase()}]`}</Text>
+                  </Text>
+                  <Text style={styles.figmaRowMeta} numberOfLines={1}>{meta}</Text>
+                </View>
+                <Text style={styles.figmaChevron}>›</Text>
+              </Pressable>
+            );
+          })
+        )}
+        {footer}
       </ScrollView>
     );
   }
+
+  const count = state === 'list' ? alliances.length : 0;
 
   return (
     <View ref={listWrapRef} collapsable={false} style={styles.scroll}>
@@ -1153,7 +1513,7 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
           value={input}
           onChangeText={onChangeInput}
           onSubmitEditing={submitSearch}
-          placeholder={t('allianceFigma.searchPlaceholder', { defaultValue: 'Alliance name, Alliance tag...' })}
+          placeholder={t('allianceFigma.searchPlaceholder', { defaultValue: 'Alliance name, alliance tag' })}
           placeholderTextColor={SLATE}
           keyboardAppearance="dark"
           returnKeyType="search"
@@ -1171,21 +1531,17 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
         </Pressable>
       </View>
 
-      <View style={{ flex: 1 }}>{body}</View>
-
-      <View style={styles.figmaCreateBar}>
-        <Text style={styles.figmaCreatePrompt}>
-          {t('allianceFigma.createPrompt', { defaultValue: 'Create your own Alliance' })}
+      {state === 'list' || state === 'empty' || state === 'no_results' ? (
+        <Text style={styles.figmaCityLine} numberOfLines={1}>
+          {t('allianceFigma.cityCount', {
+            city: (homeCity ?? '—').toUpperCase(),
+            count,
+            defaultValue: 'IN {{city}} · {{count}} ALLIANCES',
+          })}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('allianceFigma.createPrompt', { defaultValue: 'Create your own Alliance' })}
-          onPress={goCreate}
-          style={({ pressed }) => [styles.figmaCreateBtn, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.figmaCreateBtnText}>{t('allianceFigma.create', { defaultValue: 'Create' })}</Text>
-        </Pressable>
-      </View>
+      ) : null}
+
+      <View style={{ flex: 1 }}>{body}</View>
 
       <AllianceDetailSheet
         alliance={selected}
@@ -1203,9 +1559,14 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
 export default function AllianceScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
-  const { userId, getToken } = useAuth();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  const insets = useSafeAreaInsets();
+  const { userId, getToken: clerkGetToken } = useAuth();
+  const getTokenRef = useRef(clerkGetToken);
+  getTokenRef.current = clerkGetToken;
+  // Clerk's getToken changes identity between renders. Everything below (and
+  // every child that takes it as a prop) uses this stable wrapper, so focus
+  // effects and loaders keyed on it run once per focus instead of looping.
+  const getToken = useCallback((...args) => getTokenRef.current(...args), []);
   const hasLoadedOnceRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -1437,29 +1798,6 @@ export default function AllianceScreen() {
 
   return (
     <View style={styles.screen} onTouchStart={tips.onTouchStart}>
-      {isMember && figma && (
-        <View style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <AllianceEmblem emblem={myAlliance?.emblem} size={40} />
-            <View style={{ flex: 1 }} />
-            <ProfileAvatarButton style={styles.headerAvatar} />
-          </View>
-          <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>
-            {allianceTitle(myAlliance)}
-          </Text>
-          {allianceBlurb(myAlliance) ? (
-            <Text style={styles.figmaDescription}>{allianceBlurb(myAlliance)}</Text>
-          ) : null}
-          <AllianceStatsRow
-            location={myAlliance?.city}
-            territories={territoryCount !== null ? territoryCount : '—'}
-          />
-          <Text style={styles.figmaMemberCount}>
-            {t('allianceFigma.members', { defaultValue: 'Members' })}{' '}
-            <Text style={styles.headerStatValue}>{`${myAlliance?.memberCount ?? '—'} / ${ALLIANCE_MAX_MEMBERS}`}</Text>
-          </Text>
-        </View>
-      )}
       {isMember && !figma && (
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
@@ -1495,15 +1833,10 @@ export default function AllianceScreen() {
         </View>
       )}
       {!isMember && figma && (
-        <View ref={walkthroughHeaderRef} collapsable={false} style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <AllianceEmblem emblem={null} size={32} />
-            <Text style={[styles.headerTitle, styles.figmaHeaderTitle]} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-              {t('allianceFigma.title', { defaultValue: 'ALLIANCE' })}
-            </Text>
-            <View style={{ flex: 1 }} />
-            <ProfileAvatarButton style={styles.headerAvatar} />
-          </View>
+        <View ref={walkthroughHeaderRef} collapsable={false} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
+            {t('allianceFigma.title', { defaultValue: 'ALLIANCES' })}
+          </Text>
         </View>
       )}
       {!isMember && !figma && !confirmAlliance && (
@@ -1538,6 +1871,7 @@ export default function AllianceScreen() {
             getToken={getToken}
             onRefreshAfterLeave={() => fetchAllianceData({ silent: true })}
             figma={figma}
+            territoryCount={territoryCount}
           />
         )
       ) : figma ? (
@@ -1545,6 +1879,7 @@ export default function AllianceScreen() {
           getToken={getToken}
           navigation={navigation}
           listWrapRef={walkthroughListRef}
+          homeCity={playerRow?.home_city}
           onJoined={async (allianceId) => {
             await fetchAllianceData({ silent: true });
             navigation.navigate('AllianceJoined', { allianceId, context: 'joined' });
@@ -1575,13 +1910,13 @@ export default function AllianceScreen() {
             {
               title: t('allianceFigma.explainerWhatTitle', { defaultValue: 'WHAT ARE ALLIANCES?' }),
               body: t('allianceFigma.explainerWhatBody', {
-                defaultValue: 'Alliances are teams where members can work together to claim more territories as a group.',
+                defaultValue: "Alliances are crews of up to 20 players. Ally territory shows in blue on the map, and any member can defend it when it's attacked.",
               }),
             },
             {
               title: t('allianceFigma.explainerJoinTitle', { defaultValue: 'JOIN OR CREATE' }),
               body: t('allianceFigma.explainerJoinBody', {
-                defaultValue: 'Join an existing alliance or create your own and recruit members to work together.',
+                defaultValue: 'Search for an alliance in your city and request to join, or create your own and invite friends. Alliances unlock at level 3.',
               }),
             },
           ]}
@@ -1592,30 +1927,329 @@ export default function AllianceScreen() {
 }
 
 const styles = StyleSheet.create({
-  figmaHeaderTitle: {
-    marginLeft: 10,
+  // ── Figma F3 list ──
+  figmaListContent: {
+    paddingBottom: 28,
+  },
+  figmaCityLine: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    marginBottom: 6,
+  },
+  figmaEmptyText: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  figmaRowLast: {
+    borderBottomWidth: 0,
+  },
+  figmaTagTile: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: ALLIANCE_GREEN,
+    backgroundColor: 'rgba(49,85,255,0.18)',
+  },
+  figmaTagTileText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: BONE,
+  },
+  figmaRowTag: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: SLATE,
+  },
+  figmaRowMeta: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: SLATE2,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  figmaChevron: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 22,
+    color: SLATE2,
+    marginLeft: 8,
+  },
+  figmaNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  figmaNoteText: {
+    flex: 1,
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: SLATE2,
+  },
+  figmaCreateFull: {
+    minHeight: 52,
+    marginHorizontal: 16,
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CLAIM_BUTTON,
+  },
+  // ── Figma F5 member view / F8 leave modal ──
+  figmaMemberContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+  },
+  figmaMemberTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  figmaMemberTitle: {
+    flex: 1,
     marginTop: 0,
-    fontSize: 28,
-    lineHeight: 32,
-    alignSelf: 'center',
+  },
+  figmaIconBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -10,
+  },
+  figmaIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  figmaIdentityText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  figmaMemberTag: {
+    fontFamily: 'GeistMono_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: ALLIANCE_GREEN,
+    textTransform: 'uppercase',
+  },
+  figmaMemberBlurb: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: SLATE2,
+    marginTop: 4,
+  },
+  figmaSectionTitle: {
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontSize: 22,
+    lineHeight: 26,
+    color: BONE,
+    textTransform: 'uppercase',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  figmaSectionTitleInline: {
+    marginTop: 0,
+    marginBottom: 0,
+    flex: 1,
+  },
+  figmaSectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  figmaLiveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(200,255,61,0.14)',
+  },
+  figmaLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: LIME,
+  },
+  figmaLiveText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: LIME,
+  },
+  figmaMessagesBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK2,
+  },
+  figmaWireScroll: {
+    alignSelf: 'stretch',
+    maxHeight: 220,
+  },
+  figmaEmptyMessages: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 15,
+    color: SLATE2,
+    marginTop: 10,
+  },
+  figmaOpenChatBtn: {
+    minHeight: 44,
+    paddingHorizontal: 48,
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK,
+  },
+  figmaOpenChatText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  figmaRequestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  figmaRequestRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+  },
+  figmaRequestTile: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK3,
+    marginRight: 4,
+  },
+  figmaRequestInitials: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    color: BONE,
+  },
+  figmaRequestName: {
+    flex: 1,
+    fontFamily: 'InstrumentSans_500Medium',
+    fontSize: 16,
+    color: BONE,
+  },
+  figmaRequestBtn: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+  },
+  figmaRequestAccept: {
+    backgroundColor: CLAIM_BUTTON,
+    borderColor: CLAIM_BUTTON,
+  },
+  figmaRequestDeclineText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: SLATE2,
+  },
+  figmaRequestAcceptText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: BONE,
+  },
+  figmaLeaveBtn: {
+    minHeight: 52,
+    marginTop: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: DANGER,
+  },
+  figmaLeaveText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: DANGER,
+    textTransform: 'uppercase',
+  },
+  figmaModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(16,16,16,0.82)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  figmaModalCard: {
+    backgroundColor: INK2,
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    padding: 20,
+  },
+  figmaModalTitle: {
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontSize: 32,
+    lineHeight: 36,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  figmaModalBody: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 15,
+    lineHeight: 21,
+    color: SLATE2,
+    marginTop: 10,
+  },
+  figmaModalPrimary: {
+    minHeight: 48,
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CLAIM_BUTTON,
+  },
+  figmaModalPrimaryText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  figmaModalDanger: {
+    minHeight: 48,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: DANGER,
+  },
+  figmaModalDangerText: {
+    fontFamily: 'GeistMono_500Medium',
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: DANGER,
+    textTransform: 'uppercase',
   },
   figmaListScroll: {
     flex: 1,
-  },
-  figmaDescription: {
-    fontFamily: 'InstrumentSans_400Regular',
-    fontSize: 13,
-    lineHeight: 20,
-    color: SLATE2,
-    marginTop: 8,
-  },
-  figmaMemberCount: {
-    fontFamily: 'GeistMono_400Regular',
-    fontSize: 11,
-    letterSpacing: 1.6,
-    color: SLATE2,
-    textTransform: 'uppercase',
-    marginTop: 12,
   },
   figmaSearchRow: {
     flexDirection: 'row',
@@ -1668,27 +2302,6 @@ const styles = StyleSheet.create({
   figmaRowInfo: {
     flex: 1,
   },
-  figmaCreateBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: HAIRLINE_STRONG,
-    backgroundColor: INK,
-  },
-  figmaCreatePrompt: {
-    flex: 1,
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
-    color: BONE,
-  },
-  figmaCreateBtn: {
-    minHeight: 44,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    backgroundColor: CLAIM_BUTTON,
-  },
   figmaCreateBtnText: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 13,
@@ -1730,7 +2343,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#C8FF3D',
     paddingVertical: 14,
     paddingHorizontal: 24,
     minHeight: 48,
@@ -1740,7 +2353,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: CLAIM,
+    color: '#C8FF3D',
     textTransform: 'uppercase',
   },
   header: {
@@ -1756,7 +2369,7 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   headerTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 40,
     color: BONE,
     textTransform: 'uppercase',
@@ -1874,20 +2487,24 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   aRowPressed: {
-    backgroundColor: 'rgba(242,238,230,0.03)',
+    backgroundColor: 'rgba(245,244,239,0.03)',
   },
   aInfo: {
     flex: 1,
   },
   aNameLine: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontSize: 20,
     color: BONE,
+    lineHeight: 22,
+    textTransform: 'uppercase',
   },
   aName: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 15,
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontSize: 20,
     color: BONE,
+    lineHeight: 22,
+    textTransform: 'uppercase',
   },
   aTag: {
     fontFamily: 'GeistMono_500Medium',
@@ -1964,7 +2581,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   confirmTitle: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 32,
     color: BONE,
     textTransform: 'uppercase',
@@ -1998,12 +2615,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   ctaDestructive: {
-    backgroundColor: CLAIM_BUTTON,
+    backgroundColor: '#E8432B',
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: CLAIM,
+    borderColor: '#E8432B',
   },
   // Constructive/neutral action (promote, demote, acknowledge) — no red.
   // Red is reserved for destructive actions (kick, transfer, leave, disband).
@@ -2180,7 +2797,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(63,143,78,0.10)',
+    backgroundColor: 'rgba(49,85,255,0.10)',
   },
   commandPostBtnText: {
     fontFamily: 'GeistMono_500Medium',

@@ -4,12 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 
-const INK = '#0E1014';
-const BONE = '#F2EEE6';
-const SLATE = '#5C6068';
-const SLATE2 = '#8B8F98';
-const CLAIM = '#B63B1F'; // Claim Red darkened for AA contrast under Bone button text
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const INK = '#101010';
+const BONE = '#F5F4EF';
+const SLATE = '#6C6C69';
+const SLATE2 = '#A3A29F';
+const CLAIM = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 export default function SessionMismatchScreen({ navigation }) {
   const { t } = useTranslation();
@@ -39,7 +39,7 @@ export default function SessionMismatchScreen({ navigation }) {
         <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
           {t('sessionMismatch.label')}
         </Text>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>
           {t('sessionMismatch.title')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginTop: 18, marginBottom: 18 }} />
@@ -56,7 +56,7 @@ export default function SessionMismatchScreen({ navigation }) {
           onPress={onSignOut}
           disabled={signingOut}
           style={({ pressed }) => [
-            { backgroundColor: CLAIM, paddingVertical: 14, width: '100%', alignItems: 'center' },
+            { backgroundColor: '#3155FF', paddingVertical: 14, width: '100%', alignItems: 'center' },
             signingOut && { opacity: 0.5 },
             pressed && !signingOut && { opacity: 0.9 },
           ]}

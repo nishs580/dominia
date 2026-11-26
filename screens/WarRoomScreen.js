@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.md,
-    color: colors.claim,
+    color: colors.lime,
     letterSpacing: 1.4,
   },
   headerTitle: {
@@ -533,10 +533,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   influenceValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   influenceSublabel: {
     fontFamily: fonts.mono,
@@ -582,21 +583,22 @@ const styles = StyleSheet.create({
     borderColor: colors.hairlineStrong,
     borderRadius: 0,
     borderLeftWidth: 2,
-    borderLeftColor: colors.claim,
+    borderLeftColor: colors.lime,
     padding: spacing.lg,
   },
   countdownCardLive: {
-    borderLeftColor: colors.claim,
+    borderLeftColor: colors.lime,
     backgroundColor: colors.claimSoft,
   },
   countdownValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: 40,
     color: colors.bone,
     letterSpacing: -0.02,
+    textTransform: 'uppercase',
   },
   countdownValueLive: {
-    color: colors.claim,
+    color: colors.lime,
   },
   countdownDay: {
     fontFamily: fonts.mono,
@@ -623,10 +625,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   warChestMoraleValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: 40,
     color: colors.alliance,
     letterSpacing: -0.02,
+    textTransform: 'uppercase',
   },
   warChestLabel: {
     fontFamily: fonts.mono,

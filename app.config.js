@@ -15,7 +15,7 @@ module.exports = {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
       // Ink — matches the first frame so cold launch has no white flash.
-      backgroundColor: '#0E1014',
+      backgroundColor: '#101010',
     },
     ios: {
       // A GPS walking game on iPad is a review/QA surface with zero upside.
@@ -23,6 +23,9 @@ module.exports = {
       // Android package (com.nish_s.dominia) has an underscore, illegal in an
       // iOS bundle ID — the two never have to match.
       bundleIdentifier: 'com.nishs.dominia',
+      // Sign in with Apple entitlement (plan U14). Only with the button on, so
+      // default builds keep today's entitlements and provisioning profile.
+      ...(process.env.EXPO_PUBLIC_APPLE_SIGNIN === '1' ? { usesAppleSignIn: true } : {}),
       googleServicesFile: process.env.GOOGLE_SERVICES_INFO_PLIST ?? './GoogleService-Info.plist',
       infoPlist: {
         // Location strings come from the expo-location plugin below.

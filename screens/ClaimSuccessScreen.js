@@ -559,12 +559,13 @@ const styles = StyleSheet.create({
   },
 
   rewardValue: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_300Light',
     color: BONE,
     fontSize: 32,
     lineHeight: 34,
     letterSpacing: -0.5,
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
 
   rewardLabel: {
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
   },
 
   territory: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     color: BONE,
     fontSize: 28,
     letterSpacing: 0.5,

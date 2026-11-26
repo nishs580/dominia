@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.md,
-    color: colors.claim,
+    color: colors.lime,
     letterSpacing: 1.4,
   },
   headerTitle: {
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   sectionLabelAccent: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    color: colors.claim,
+    color: colors.lime,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
   },
@@ -532,13 +532,14 @@ const styles = StyleSheet.create({
 
   // lapse radar
   clearBlock: { paddingVertical: spacing.md },
-  clearHeadline: { fontFamily: fonts.displayMedium, fontSize: fontSize.xl, color: colors.alliance },
+  clearHeadline: { fontFamily: fonts.displayMedium, fontSize: fontSize.xl, color: colors.alliance, textTransform: 'uppercase' },
   clearSub: { fontFamily: fonts.body, fontSize: fontSize.md, color: colors.slate2, marginTop: 4 },
   riskHeadline: {
     fontFamily: fonts.displayMedium,
     fontSize: fontSize.xl,
-    color: colors.claim,
+    color: colors.lime,
     marginBottom: spacing.md,
+    textTransform: 'uppercase',
   },
   riskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, gap: spacing.md },
   rowBorder: { borderBottomWidth: 0.5, borderBottomColor: colors.hairline },
@@ -551,7 +552,7 @@ const styles = StyleSheet.create({
   riskName: { fontFamily: fonts.bodyMedium, fontSize: fontSize.base, color: colors.bone, marginBottom: 4 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   reasonChip: { backgroundColor: colors.claimSoft, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  reasonChipText: { fontFamily: fonts.mono, fontSize: fontSize.sm, color: colors.claim, letterSpacing: 0.4 },
+  reasonChipText: { fontFamily: fonts.mono, fontSize: fontSize.sm, color: colors.lime, letterSpacing: 0.4 },
   radarFootnote: { fontFamily: fonts.body, fontSize: fontSize.sm, color: colors.slate, marginTop: spacing.md, fontStyle: 'italic' },
 
   // roster
@@ -589,14 +590,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  orderCardSelected: { borderColor: colors.claim, borderLeftWidth: 2, borderLeftColor: colors.claim },
+  orderCardSelected: { borderColor: colors.lime, borderLeftWidth: 2, borderLeftColor: colors.lime },
   orderBody: { flex: 1 },
   orderTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   orderName: { fontFamily: fonts.bodyMedium, fontSize: fontSize.base, color: colors.bone },
   orderSelectedTag: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.xs,
-    color: colors.claim,
+    color: colors.lime,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
@@ -633,7 +634,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.displayBold, fontSize: fontSize.xl, color: colors.bone, textTransform: 'uppercase', marginTop: 4, marginBottom: spacing.lg },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   statCell: { width: '50%', paddingVertical: spacing.md },
-  statValue: { fontFamily: fonts.displayMedium, fontSize: fontSize.xl2, color: colors.bone },
+  statValue: { fontFamily: 'GeistMono_400Regular', fontSize: fontSize.xl2, color: colors.bone, textTransform: 'uppercase' },
   statLabel: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate2, textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 2 },
   shareBtn: {
     marginTop: spacing.lg,

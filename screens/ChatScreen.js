@@ -1,8 +1,13 @@
 // Screen: ChatScreen — City + Alliance chat (M2: composer + Ably + push deep link + error banner)
-// Surface: Ink #0E1014 background, rows transparent, 1px hairline-standard rgba(242,238,230,0.08) divider
+// Surface: Ink #101010 background, rows transparent, 1px hairline-standard rgba(245,244,239,0.08) divider
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Instrument Sans 400 13px on Claim/red or amber surface
 // Territory colors: delegated to none — chat is a neutral surface
 // Brand rule applied: Send button is the single Claim CTA on the screen. Inverted FlatList for chat-app convention (newest at bottom). KeyboardAvoidingView wraps composer with platform-appropriate behavior.
+//
+// legacy_tabs off (Figma G9/G10, plan 2026-11-27 U13): back arrow + CHAT
+// title, GLOBAL | ALLIANCE segmented tab, "{ROOM} · N ONLINE" subheader, no
+// avatars, sender line "NAME · TAG ROLE" / "SOLO PLAYER" (lib/chatSender)
+// with your name lime and allies blue, "Message {room}…" and a SEND button.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -42,6 +47,11 @@ import {
 import { timeAgo } from '../lib/timeAgo';
 import { avatarThumb, avatarInitials } from '../lib/avatar';
 import { useFlag } from '../lib/flags';
+import { supabase } from '../lib/supabase';
+import { chatSenderLine, chatSubheader } from '../lib/chatSender';
+import { formatTime } from '../lib/activityHistory';
+import { colors, fonts } from '../lib/theme';
+import BackTitleHeader from '../components/BackTitleHeader';
 
 const MAX_CONTENT_LENGTH = 500;
 const BANNER_AUTO_DISMISS_MS = 5000;
@@ -61,9 +71,13 @@ export default function ChatScreen() {
   const { userId, getToken } = useAuth();
   // Figma labels the city room "Global"; the room itself stays city-scoped.
   const legacyTabs = useFlag('legacy_tabs');
+  const figma = !legacyTabs;
   const cityTabLabel = legacyTabs
     ? t('chat.tabCity')
     : t('chat.tabGlobal', { defaultValue: 'GLOBAL' });
+  // Figma colours the sender's name by who they are: you (lime), your
+  // alliance (blue). Needs the viewer's player id and alliance tag.
+  const [viewer, setViewer] = useState({ playerId: null, tag: null });
 
   // First-tap tip on the room tabs.
   const walkthroughTabsRef = useRef(null);
@@ -107,6 +121,36 @@ export default function ChatScreen() {
     [rooms],
   );
   const activeRoom = activeTab === 'city' ? cityRoom : allianceRoom;
+
+  useEffect(() => {
+    if (!figma || !userId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: player } = await supabase
+          .from('players')
+          .select('id, alliance_id')
+          .eq('clerk_id', userId)
+          .maybeSingle();
+        if (!player || cancelled) return;
+        let tag = null;
+        if (player.alliance_id) {
+          const { data: alliance } = await supabase
+            .from('alliances')
+            .select('short_name')
+            .eq('id', player.alliance_id)
+            .maybeSingle();
+          tag = alliance?.short_name ?? null;
+        }
+        if (!cancelled) setViewer({ playerId: player.id ?? null, tag });
+      } catch (_) {
+        /* names fall back to neutral; your own optimistic echo still reads YOU */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [figma, userId]);
 
   const lastObservedByRoom = useRef({});
 
@@ -383,7 +427,7 @@ export default function ChatScreen() {
     if (!roomsLoaded) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator color="#5C6068" />
+          <ActivityIndicator color="#6C6C69" />
         </View>
       );
     }
@@ -433,7 +477,7 @@ export default function ChatScreen() {
     if (isLoadingFirst && messages === undefined) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator color="#5C6068" />
+          <ActivityIndicator color="#6C6C69" />
         </View>
       );
     }
@@ -452,20 +496,34 @@ export default function ChatScreen() {
         data={messages || []}
         inverted
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <ChatMessageRow row={item} />}
+        renderItem={({ item }) =>
+          figma ? (
+            <FigmaMessageRow
+              row={item}
+              line={chatSenderLine(item, {
+                channel: activeTab,
+                selfPlayerId: viewer.playerId,
+                selfTag: viewer.tag,
+                t,
+              })}
+            />
+          ) : (
+            <ChatMessageRow row={item} />
+          )
+        }
         onEndReached={() => fetchNextPageForRoom(activeRoom.id)}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F2EEE6"
-            colors={['#F2EEE6']}
+            tintColor="#F5F4EF"
+            colors={['#F5F4EF']}
           />
         }
         ListFooterComponent={
           isLoadingMore ? (
-            <ActivityIndicator color="#5C6068" style={{ paddingVertical: 12 }} />
+            <ActivityIndicator color="#6C6C69" style={{ paddingVertical: 12 }} />
           ) : null
         }
       />
@@ -473,6 +531,11 @@ export default function ChatScreen() {
   };
 
   const canCompose = activeRoom != null;
+  const subheader = figma ? chatSubheader(activeRoom, { t }) : null;
+  const roomName = activeRoom?.display_name || (activeTab === 'city' ? cityTabLabel : t('chat.tabAlliance'));
+  const placeholder = figma
+    ? t('chat.messageRoomPlaceholder', { defaultValue: 'Message {{room}}…', room: roomName })
+    : t('chat.messagePlaceholder');
   const remainingChars = MAX_CONTENT_LENGTH - draft.length;
   const sendDisabled =
     sending || draft.trim().length === 0 || draft.length > MAX_CONTENT_LENGTH;
@@ -483,12 +546,19 @@ export default function ChatScreen() {
       behavior="padding"
       onTouchStart={tips.onTouchStart}
     >
-      <View style={styles.header}>
-        <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
-        <View style={styles.hairlineStrong} />
-      </View>
+      {figma ? (
+        <BackTitleHeader
+          title={t('chat.figmaTitle', { defaultValue: 'Chat' })}
+          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+        />
+      ) : (
+        <View style={styles.header}>
+          <Text style={styles.sectionLabel}>{t('chat.title')}</Text>
+          <View style={styles.hairlineStrong} />
+        </View>
+      )}
 
-      <View ref={walkthroughTabsRef} collapsable={false} style={styles.tabStrip}>
+      <View ref={walkthroughTabsRef} collapsable={false} style={figma ? figmaStyles.tabs : styles.tabStrip}>
         {(
           [
             { key: 'city', label: cityTabLabel, visible: true },
@@ -498,6 +568,24 @@ export default function ChatScreen() {
           .filter((tab) => tab.visible)
           .map(({ key, label }) => {
             const selected = activeTab === key;
+            if (figma) {
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => setActiveTab(key)}
+                  style={({ pressed }) => [figmaStyles.tab, selected && figmaStyles.tabActive, pressed && { opacity: 0.7 }]}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={[figmaStyles.tabText, selected && figmaStyles.tabTextActive]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            }
             return (
               <Pressable
                 key={key}
@@ -519,7 +607,13 @@ export default function ChatScreen() {
             );
           })}
       </View>
-      <View style={styles.hairline} />
+      {figma ? (
+        subheader ? (
+          <Text style={figmaStyles.subheader} numberOfLines={1} maxFontSizeMultiplier={1.3}>{subheader}</Text>
+        ) : null
+      ) : (
+        <View style={styles.hairline} />
+      )}
 
       <View style={{ flex: 1 }}>{renderBody()}</View>
 
@@ -536,13 +630,46 @@ export default function ChatScreen() {
         </View>
       ) : null}
 
-      {canCompose ? (
+      {canCompose && figma ? (
+        <View style={[figmaStyles.composer, { paddingBottom: insets.bottom + 12 }]}>
+          <TextInput
+            style={figmaStyles.input}
+            keyboardAppearance="dark"
+            placeholder={placeholder}
+            placeholderTextColor={colors.muted}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            maxLength={MAX_CONTENT_LENGTH}
+            editable={!sending}
+            accessibilityLabel={placeholder}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.send')}
+            accessibilityState={{ disabled: sendDisabled }}
+            onPress={handleSend}
+            disabled={sendDisabled}
+            style={({ pressed }) => [
+              figmaStyles.sendBtn,
+              sendDisabled && { opacity: 0.4 },
+              pressed && !sendDisabled && { opacity: 0.7 },
+            ]}
+          >
+            <Text style={figmaStyles.sendText} maxFontSizeMultiplier={1.3}>
+              {t('chat.send')}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {canCompose && !figma ? (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
           <TextInput
             style={styles.composerInput}
             keyboardAppearance="dark"
             placeholder={t('chat.messagePlaceholder')}
-            placeholderTextColor="#5C6068"
+            placeholderTextColor="#6C6C69"
             value={draft}
             onChangeText={setDraft}
             multiline
@@ -563,7 +690,7 @@ export default function ChatScreen() {
               ]}
             >
               <Svg width={18} height={18} viewBox="0 0 24 24">
-                <Path d="M3 20.5v-6l9-2.5-9-2.5v-6l19 8.5-19 8.5z" fill="#F2EEE6" />
+                <Path d="M3 20.5v-6l9-2.5-9-2.5v-6l19 8.5-19 8.5z" fill="#F5F4EF" />
               </Svg>
             </Pressable>
           </View>
@@ -572,6 +699,43 @@ export default function ChatScreen() {
 
       {tips.tipElement}
     </KeyboardAvoidingView>
+  );
+}
+
+// Figma row: no avatar; the sender line (lime for you, blue for allies) and
+// the 24-hour time over the message. Tapping a real sender's name opens their
+// profile, as the legacy avatar does.
+function FigmaMessageRow({ row, line }) {
+  const navigation = useNavigation();
+  const canOpenProfile = !line.isSelf && !row._optimistic && row.sender_id && row.sender_id !== 'self';
+  const nameColor = line.tone === 'self' ? colors.lime : line.tone === 'ally' ? colors.alliance : colors.muted2;
+  const meta = (
+    <Text style={figmaStyles.meta} numberOfLines={1}>
+      <Text style={{ color: nameColor }}>{line.text}</Text>
+      <Text style={figmaStyles.time}>{`  ${formatTime(row.created_at)}`}</Text>
+    </Text>
+  );
+  return (
+    <View style={[figmaStyles.message, row._optimistic && styles.messageRowPending]}>
+      {canOpenProfile ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            navigation.navigate('PublicProfile', {
+              playerId: row.sender_id,
+              username: row.sender_name,
+              avatarUrl: row.sender_avatar_url,
+            })
+          }
+          style={({ pressed }) => [{ alignSelf: 'flex-start' }, pressed && { opacity: 0.6 }]}
+        >
+          {meta}
+        </Pressable>
+      ) : (
+        meta
+      )}
+      <Text style={figmaStyles.content}>{row.content}</Text>
+    </View>
   );
 }
 
@@ -645,10 +809,112 @@ function ChatMessageRow({ row }) {
   );
 }
 
+const figmaStyles = StyleSheet.create({
+  tabs: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    backgroundColor: colors.raised,
+    borderBottomColor: colors.lime,
+  },
+  tabText: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  tabTextActive: {
+    fontFamily: fonts.monoMedium,
+    color: colors.bone,
+  },
+  subheader: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.muted,
+  },
+  message: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  meta: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  time: {
+    color: colors.muted,
+    letterSpacing: 0.6,
+  },
+  content: {
+    marginTop: 4,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.bone,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: colors.ink,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.bone,
+  },
+  sendBtn: {
+    minHeight: 44,
+    minWidth: 80,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.action,
+  },
+  sendText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.white,
+  },
+});
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0E1014',
+    backgroundColor: '#101010',
   },
   centered: {
     flex: 1,
@@ -659,10 +925,10 @@ const styles = StyleSheet.create({
   errorBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   retryBtn: {
-    backgroundColor: '#D64525',
+    backgroundColor: '#3155FF',
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -673,19 +939,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   emptyLabel: {
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   emptyBody: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#E8E3D8',
+    color: '#E4E3DE',
     marginTop: 8,
     textAlign: 'center',
   },
@@ -699,16 +965,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginTop: 4,
   },
   hairline: {
     height: 1,
-    backgroundColor: 'rgba(242,238,230,0.08)',
+    backgroundColor: 'rgba(245,244,239,0.08)',
   },
   tabStrip: {
     flexDirection: 'row',
@@ -725,22 +991,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   tabLabelActive: {
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   tabMarkBoard: {
     height: 1,
     width: 32,
-    backgroundColor: 'rgba(242,238,230,0.16)',
+    backgroundColor: 'rgba(245,244,239,0.16)',
     marginTop: 6,
   },
   messageRow: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242,238,230,0.08)',
+    borderBottomColor: 'rgba(245,244,239,0.08)',
   },
   messageRowInner: {
     flexDirection: 'row',
@@ -754,9 +1020,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 4,
-    backgroundColor: '#1A1D24',
+    backgroundColor: '#1A1A1A',
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
   },
   messageAvatarPlaceholder: {
     alignItems: 'center',
@@ -766,7 +1032,7 @@ const styles = StyleSheet.create({
     fontFamily: 'GeistMono_500Medium',
     fontSize: 11,
     letterSpacing: 0.5,
-    color: '#8B8F98',
+    color: '#A3A29F',
   },
   messageRowPending: {
     opacity: 0.55,
@@ -783,18 +1049,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.32,
     textTransform: 'uppercase',
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   timeText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#8B8F98',
+    color: '#A3A29F',
     marginLeft: 8,
   },
   contentText: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
     lineHeight: 20,
   },
   banner: {
@@ -802,7 +1068,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   bannerRed: {
-    backgroundColor: 'rgba(214,69,37,0.85)',
+    backgroundColor: 'rgba(232,67,43,0.85)',
   },
   bannerAmber: {
     backgroundColor: 'rgba(212,160,40,0.85)',
@@ -810,7 +1076,7 @@ const styles = StyleSheet.create({
   bannerText: {
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 13,
-    color: '#F2EEE6',
+    color: '#F5F4EF',
   },
   composer: {
     flexDirection: 'row',
@@ -818,8 +1084,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(242,238,230,0.16)',
-    backgroundColor: '#1A1D24',
+    borderTopColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: '#1A1A1A',
   },
   composerInput: {
     flex: 1,
@@ -829,10 +1095,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontFamily: 'InstrumentSans_400Regular',
     fontSize: 14,
-    color: '#F2EEE6',
-    backgroundColor: '#0E1014',
+    color: '#F5F4EF',
+    backgroundColor: '#101010',
     borderWidth: 1,
-    borderColor: 'rgba(242,238,230,0.16)',
+    borderColor: 'rgba(245,244,239,0.16)',
     borderRadius: 0,
   },
   composerSideCol: {
@@ -842,11 +1108,11 @@ const styles = StyleSheet.create({
   counterText: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: '#5C6068',
+    color: '#6C6C69',
     marginBottom: 4,
   },
   sendBtn: {
-    backgroundColor: '#D64525',
+    backgroundColor: '#3155FF',
     width: 44,
     height: 40,
     alignItems: 'center',

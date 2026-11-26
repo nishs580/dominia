@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     // The Claim-red rule on the leading edge is the whole signal — no glow.
     borderLeftWidth: 3,
-    borderLeftColor: colors.claim,
+    borderLeftColor: colors.lime,
     borderBottomWidth: 1,
     borderBottomColor: colors.hairlineStrong,
     paddingHorizontal: spacing.lg,
@@ -156,14 +156,14 @@ const styles = StyleSheet.create({
   marker: {
     width: 6,
     height: 6,
-    backgroundColor: colors.claim,
+    backgroundColor: colors.lime,
     marginRight: spacing.sm,
   },
   eyebrow: {
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.md,
     letterSpacing: letterSpacing.wider,
-    color: colors.claim,
+    color: colors.lime,
   },
   title: {
     fontFamily: fonts.bodyMedium,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoMedium,
     fontSize: fontSize.md,
     letterSpacing: letterSpacing.wider,
-    color: colors.claim,
+    color: colors.lime,
   },
   dismissHit: {
     paddingVertical: spacing.xs,

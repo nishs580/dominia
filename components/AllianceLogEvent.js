@@ -5,10 +5,10 @@
 // - 0px corners (no rounded anywhere)
 // - No icons, no shadows
 // Family colors:
-//   CLAIM red   #D64525 → alliance_founded (significant ownership moment)
-//   ALLIANCE_GREEN #3F8F4E → alliance_joined, alliance_promoted (positive)
-//   SLATE       #5C6068 → alliance_left, alliance_demoted (neutral/voluntary)
-//   ENEMY red   #B83E2B → alliance_kicked (involuntary removal)
+//   CLAIM red   #22D65E → alliance_founded (significant ownership moment)
+//   ALLIANCE_GREEN #3155FF → alliance_joined, alliance_promoted (positive)
+//   SLATE       #6C6C69 → alliance_left, alliance_demoted (neutral/voluntary)
+//   ENEMY red   #3155FF → alliance_kicked (involuntary removal)
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -16,12 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
-const CLAIM = '#D64525';
-const ALLIANCE_GREEN = '#3F8F4E';
-const SLATE = '#5C6068';
-const ENEMY = '#B83E2B';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
+const CLAIM = '#22D65E';
+const ALLIANCE_GREEN = '#3155FF';
+const SLATE = '#6C6C69';
+const ENEMY = '#3155FF';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
 
 function subjectName(t, event) {
   return (event.subject_username ?? t('allianceEvent.formerMember')).toUpperCase();
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(242,238,230,0.05)',
+    borderBottomColor: 'rgba(245,244,239,0.05)',
   },
   topRow: {
     flexDirection: 'row',

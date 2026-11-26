@@ -1,13 +1,16 @@
-// Daily Rewards (plan U10, Figma "DAILY REWARDS"): the gold bar, "Day N: 60"
-// and "Tap to Collect" over a dark map.
+// Daily Reward (Updated UX A6): DAILY REWARD eyebrow, DAY n, the gold icon
+// with today's amount and GOLD, the D1–D7 strip with today in lime, "Come
+// back tomorrow to collect Day n+1." and a full-width lime TAP TO COLLECT, on
+// plain Ink. The strip comes from lib/dailyReward (GET ladder → economy
+// daily_reward_ladder → flat daily_reward_gold).
 //
 // Two uses:
 //   - DailyRewardView: a step inside FigmaOnboardingScreen. Collect only
 //     records the intent; the claim is sent after City intro saves the home
 //     pin (lib/onboardingFlow), so the first claim is dated in the player's
 //     real timezone.
-//   - default export: the 'DailyReward' route, a transparent modal over the
-//     map that AuthGate opens for a returning player whose reward for today is
+//   - default export: the 'DailyReward' route, a modal over the map that
+//     AuthGate opens for a returning player whose reward for today is
 //     unclaimed. Collect claims at once.
 // Failures show retry / skip and never block the player.
 
@@ -16,35 +19,25 @@ import { AccessibilityInfo, ActivityIndicator, Pressable, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@clerk/clerk-expo';
-import { Camera, MapView, setAccessToken } from '@rnmapbox/maps';
 import { GoldGlyph } from '../components/ResourceGlyphs';
 import { claimDailyReward, isAlreadyClaimed } from '../lib/dailyRewardApi';
+import { dailyRewardView } from '../lib/dailyReward';
 import { getEconomy } from '../lib/flags';
-import { fallbackCentreForLocale } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
-
-setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
 const CLOSE_AFTER_CLAIM_MS = 1200;
 
-function DarkMapBackground() {
-  const { i18n } = useTranslation();
-  const centre = fallbackCentreForLocale(i18n.language);
+function StripCell({ cell }) {
+  const today = cell.state === 'today';
+  const collected = cell.state === 'collected';
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants">
-      <MapView
-        style={StyleSheet.absoluteFill}
-        styleURL="mapbox://styles/mapbox/dark-v11"
-        scrollEnabled={false}
-        zoomEnabled={false}
-        pitchEnabled={false}
-        rotateEnabled={false}
-        logoEnabled={false}
-        attributionEnabled={false}
-        scaleBarEnabled={false}
-      >
-        <Camera defaultSettings={{ centerCoordinate: [centre.lng, centre.lat], zoomLevel: 11 }} />
-      </MapView>
+    <View style={[styles.cell, today && styles.cellToday, collected && styles.cellCollected]}>
+      <Text style={[styles.cellDay, today && styles.cellDayToday]} maxFontSizeMultiplier={1.2}>
+        {cell.label}
+      </Text>
+      <Text style={[styles.cellAmount, today && styles.cellAmountToday]} maxFontSizeMultiplier={1.2}>
+        {cell.amount}
+      </Text>
     </View>
   );
 }
@@ -52,15 +45,16 @@ function DarkMapBackground() {
 /**
  * @param {object} props
  * @param {'loading'|'ready'|'error'|'claiming'|'claimed'} props.status
- * @param {{day:number, amount:number}|null} props.reward
+ * @param {{day:number, amount:number, ladder?:number[]|null}|null} props.reward
  * @param {number|null} [props.claimedAmount]
- * @param {'map'|'scrim'} [props.background]
+ * @param {string} [props.background] ignored; kept for callers (A6 is plain Ink)
  */
-export function DailyRewardView({ status, reward, claimedAmount = null, onCollect, onRetry, onSkip, background = 'map' }) {
+// eslint-disable-next-line no-unused-vars
+export function DailyRewardView({ status, reward, claimedAmount = null, onCollect, onRetry, onSkip, background }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const day = reward?.day ?? 1;
-  const amount = reward?.amount ?? getEconomy().daily_reward_gold;
+  const view = dailyRewardView({ reward, economy: getEconomy() });
+  const { day, amount, nextDay, strip } = view;
 
   useEffect(() => {
     if (status === 'claimed') {
@@ -71,17 +65,68 @@ export function DailyRewardView({ status, reward, claimedAmount = null, onCollec
   }, [status, claimedAmount, amount, t]);
 
   const canCollect = status === 'ready';
+  const ctaLabel =
+    status === 'claiming'
+      ? t('dailyReward.collecting', { defaultValue: 'Collecting…' })
+      : status === 'claimed'
+        ? t('dailyReward.collected', { amount: claimedAmount ?? amount, defaultValue: '+{{amount}} Gold collected' })
+        : t('dailyReward.tapToCollect', { defaultValue: 'Tap to Collect' });
 
   return (
-    <View style={styles.screen}>
-      {background === 'map' ? <DarkMapBackground /> : null}
-      <View style={[StyleSheet.absoluteFill, styles.scrim]} pointerEvents="none" />
-
-      <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <View style={styles.content}>
+        <Text style={styles.eyebrow}>{t('dailyReward.eyebrow', { defaultValue: 'Daily reward' })}</Text>
         <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-          {t('dailyReward.title', { defaultValue: 'DAILY REWARDS' })}
+          {t('dailyReward.dayTitle', { day, defaultValue: 'Day {{day}}' })}
         </Text>
 
+        {status === 'loading' ? (
+          <ActivityIndicator color={colors.white} style={styles.loading} />
+        ) : status === 'error' ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>
+              {t('dailyReward.loadFailed', { defaultValue: "Couldn't load today's reward." })}
+            </Text>
+            <View style={styles.row}>
+              <Pressable accessibilityRole="button" onPress={onRetry} style={styles.textButton} hitSlop={8}>
+                <Text style={styles.textButtonLabel}>{t('common.retry')}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={onSkip} style={styles.textButton} hitSlop={8}>
+                <Text style={styles.textButtonLabel}>{t('dailyReward.skip', { defaultValue: 'Skip' })}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <>
+            <View
+              style={styles.amountRow}
+              accessible
+              accessibilityLabel={`${amount} ${t('dailyReward.gold', { defaultValue: 'Gold' })}`}
+            >
+              <GoldGlyph size={40} color={colors.lime} strokeWidth={2} />
+              <Text style={styles.amount} maxFontSizeMultiplier={1.2}>
+                {amount}
+              </Text>
+              <Text style={styles.goldLabel}>{t('dailyReward.gold', { defaultValue: 'Gold' })}</Text>
+            </View>
+
+            <View style={styles.strip} importantForAccessibility="no-hide-descendants">
+              {strip.map((cell) => (
+                <StripCell key={cell.day} cell={cell} />
+              ))}
+            </View>
+
+            <Text style={styles.comeBack}>
+              {t('dailyReward.comeBack', {
+                day: nextDay,
+                defaultValue: 'Come back tomorrow to collect Day {{day}}.',
+              })}
+            </Text>
+          </>
+        )}
+      </View>
+
+      {status !== 'error' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('dailyReward.collectA11y', {
@@ -92,47 +137,11 @@ export function DailyRewardView({ status, reward, claimedAmount = null, onCollec
           accessibilityState={{ disabled: !canCollect }}
           disabled={!canCollect}
           onPress={onCollect}
-          style={({ pressed }) => [styles.card, pressed && canCollect && styles.cardPressed]}
+          style={({ pressed }) => [styles.collect, !canCollect && styles.collectDim, pressed && canCollect && styles.collectPressed]}
         >
-          <View style={styles.bar}>
-            <GoldGlyph size={56} color={colors.bone} strokeWidth={2} />
-          </View>
-          {status === 'loading' ? (
-            <ActivityIndicator color={colors.bone} style={styles.loading} />
-          ) : status === 'error' ? (
-            <Text style={styles.errorText}>
-              {t('dailyReward.loadFailed', { defaultValue: "Couldn't load today's reward." })}
-            </Text>
-          ) : (
-            <>
-              <Text style={styles.dayLine} maxFontSizeMultiplier={1.3}>
-                {t('dailyReward.dayAmount', { day, amount, defaultValue: 'Day {{day}}: {{amount}}' })}
-              </Text>
-              <Text style={styles.cta}>
-                {status === 'claiming'
-                  ? t('dailyReward.collecting', { defaultValue: 'Collecting…' })
-                  : status === 'claimed'
-                    ? t('dailyReward.collected', {
-                        amount: claimedAmount ?? amount,
-                        defaultValue: '+{{amount}} Gold collected',
-                      })
-                    : t('dailyReward.tapToCollect', { defaultValue: 'Tap to Collect' })}
-              </Text>
-            </>
-          )}
+          <Text style={styles.collectText}>{ctaLabel}</Text>
         </Pressable>
-
-        {status === 'error' ? (
-          <View style={styles.row}>
-            <Pressable accessibilityRole="button" onPress={onRetry} style={styles.textButton} hitSlop={8}>
-              <Text style={styles.textButtonLabel}>{t('common.retry')}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={onSkip} style={styles.textButton} hitSlop={8}>
-              <Text style={styles.textButtonLabel}>{t('dailyReward.skip', { defaultValue: 'Skip' })}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </View>
+      ) : null}
     </View>
   );
 }
@@ -180,54 +189,76 @@ export default function DailyRewardScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: 'transparent' },
-  scrim: { backgroundColor: 'rgba(14,16,20,0.72)' },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  title: {
-    fontFamily: fonts.display,
-    fontSize: 32,
-    letterSpacing: -0.9,
-    color: colors.bone,
-    textTransform: 'uppercase',
-    marginBottom: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 320,
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  cardPressed: { backgroundColor: colors.ink3 },
-  bar: {
-    width: '100%',
-    height: 88,
-    backgroundColor: colors.ink3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  loading: { marginVertical: 12 },
-  dayLine: { fontFamily: fonts.displayMedium, fontSize: 26, color: colors.bone },
-  cta: {
+  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 24 },
+  content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  eyebrow: {
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.8,
-    color: colors.slate2,
+    color: colors.lime,
     textTransform: 'uppercase',
-    marginTop: 8,
   },
-  errorText: { fontFamily: fonts.body, fontSize: 13, color: colors.bone, textAlign: 'center' },
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 36,
+    lineHeight: 40,
+    letterSpacing: -0.6,
+    color: colors.white,
+    textTransform: 'uppercase',
+    marginTop: 12,
+  },
+  loading: { marginVertical: 48 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
+  amount: { fontFamily: fonts.monoLight, fontSize: 56, lineHeight: 64, letterSpacing: -1.6, color: colors.white },
+  goldLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.8,
+    color: colors.muted2,
+    textTransform: 'uppercase',
+  },
+  strip: { flexDirection: 'row', gap: 6, width: '100%', marginTop: 16 },
+  cell: {
+    flex: 1,
+    minHeight: 52,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  cellToday: { borderColor: colors.lime, backgroundColor: colors.limeSoft },
+  cellCollected: { opacity: 0.5 },
+  cellDay: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.8, color: colors.muted },
+  cellDayToday: { color: colors.lime },
+  cellAmount: { fontFamily: fonts.mono, fontSize: 13, color: colors.muted2, marginTop: 2 },
+  cellAmountToday: { color: colors.white },
+  comeBack: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16, textAlign: 'center' },
+  collect: {
+    backgroundColor: colors.lime,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectDim: { opacity: 0.6 },
+  collectPressed: { opacity: 0.85 },
+  collectText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.8,
+    color: colors.onLime,
+    textTransform: 'uppercase',
+  },
+  errorBox: { alignItems: 'center', marginTop: 24 },
+  errorText: { fontFamily: fonts.body, fontSize: 13, color: colors.white, textAlign: 'center' },
   row: { flexDirection: 'row', gap: 24, marginTop: 16 },
   textButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12 },
   textButtonLabel: {
     fontFamily: fonts.monoMedium,
     fontSize: 11,
     letterSpacing: 1.6,
-    color: colors.bone,
+    color: colors.white,
     textTransform: 'uppercase',
     textDecorationLine: 'underline',
   },

@@ -31,13 +31,13 @@ import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 import { useFlag } from '../lib/flags';
 
-const CLAIM = '#D64525';
-const INK = '#0E1014';
-const INK2 = '#1A1D24';
-const BONE = '#F2EEE6';
-const SLATE2 = '#8B8F98';
-const HAIRLINE = 'rgba(242,238,230,0.08)';
-const HAIRLINE_STRONG = 'rgba(242,238,230,0.16)';
+const CLAIM = '#22D65E';
+const INK = '#101010';
+const INK2 = '#1A1A1A';
+const BONE = '#F5F4EF';
+const SLATE2 = '#A3A29F';
+const HAIRLINE = 'rgba(245,244,239,0.08)';
+const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -394,11 +394,11 @@ export default function PublicProfileScreen() {
                 <>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.streak')}</Text>
-                <Text style={styles.statValue}>{t('profile.daysValue', { n: currentStreak })}</Text>
+                <Text style={styles.statValue}>{t('profile.daysValue', { count: currentStreak })}</Text>
               </View>
               <View style={styles.statCell}>
                 <Text style={styles.statLabel}>{t('profile.bestStreak')}</Text>
-                <Text style={styles.statValue}>{t('profile.daysValue', { n: longestStreak })}</Text>
+                <Text style={styles.statValue}>{t('profile.daysValue', { count: longestStreak })}</Text>
               </View>
                 </>
               ) : null}
@@ -538,10 +538,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'GeistMono_500Medium',
     fontSize: 24,
     color: SLATE2,
     letterSpacing: -0.01,
+    textTransform: 'uppercase',
   },
   commanderLabel: {
     fontFamily: 'GeistMono_400Regular',
@@ -552,7 +553,7 @@ const styles = StyleSheet.create({
   },
   commanderName: {
     marginTop: 0,
-    fontFamily: 'Archivo_900Black',
+    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
     fontSize: 36,
     color: BONE,
     textTransform: 'uppercase',
@@ -566,7 +567,7 @@ const styles = StyleSheet.create({
   rankTitle: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: CLAIM,
+    color: '#C8FF3D',
   },
   rankSeparator: {
     fontFamily: 'GeistMono_400Regular',
@@ -581,7 +582,7 @@ const styles = StyleSheet.create({
   rankAllianceClaim: {
     fontFamily: 'GeistMono_400Regular',
     fontSize: 11,
-    color: CLAIM,
+    color: '#C8FF3D',
   },
   hairlineStrong: {
     marginTop: 14,
@@ -625,7 +626,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: CLAIM,
+    backgroundColor: '#C8FF3D',
   },
   unlockText: {
     marginTop: 8,
@@ -693,10 +694,11 @@ const styles = StyleSheet.create({
   },
   statValue: {
     marginTop: 8,
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'GeistMono_400Regular',
     fontSize: 20,
     color: BONE,
     letterSpacing: -0.02,
+    textTransform: 'uppercase',
   },
   list: {
     marginTop: 12,
@@ -762,10 +764,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   influenceValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   influenceSublabel: {
     fontFamily: fonts.mono,
@@ -787,11 +790,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   powerValue: {
-    fontFamily: fonts.displayMedium,
+    fontFamily: 'GeistMono_300Light',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
     marginBottom: spacing.xs,
+    textTransform: 'uppercase',
   },
   powerHeroDivider: {
     height: 1,
@@ -826,9 +830,10 @@ const styles = StyleSheet.create({
     color: SLATE2,
   },
   powerRowValueLive: {
-    fontFamily: 'Archivo_700Bold',
+    fontFamily: 'SofiaSansExtraCondensed_700Bold',
     fontSize: 20,
     color: BONE,
     letterSpacing: -0.4,
+    textTransform: 'uppercase',
   },
 });

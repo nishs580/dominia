@@ -1,31 +1,35 @@
-// Component: DefendPopup — Figma's in-map defend prompt (parity plan U12,
-// Main · Cases 7 and 8), mounted by MapScreen only with `legacy_tabs` off.
-// Renders the model from lib/defendPopup.js defendPopupModel(); it owns no
-// selection, suppression or Gold logic.
+// Component: DefendPopup — Figma's in-map defend prompt (parity plan U12;
+// Updated UX frames D1, D6, D7, D8, plan U10), mounted by MapScreen only with
+// `legacy_tabs` off. Renders the model from lib/defendPopup.js
+// defendPopupModel(); it owns no selection, suppression or Gold logic.
 //
-//   solo      "CUBBON PARK · Under attack by Mr ABC · Mr ABC started the
-//             attack 3 min ago. Start defending and protect your territory."
-//   alliance  "Your Alliance member's (Moksh) territory is under attack,
-//             defend their territory for them"
-//   already started / window closed: same card, a note, no action.
+//   D1 own      shield · UNDER ATTACK BY MR. ABC / DEFEND INDIRANAGAR /
+//               TIME TO RESPOND 04:52 / 5 GOLD · DEFEND TERRITORY / LET IT GO
+//   D6 ally     JALAHALLI CULT · KORAMANGALA / ALLY UNDER ATTACK /
+//               5 GOLD · DEFEND FOR ALLY / NOT NOW
+//   D7 underway DEFENDED BY RAVI K. / DEFENCE UNDERWAY / disabled
+//               DEFENCE IN PROGRESS
+//   D8 ally on  ALLY DEFENDING · INDIRANAGAR / RAVI K. IS ON IT /
+//               DEFENCE ENDS IN 07:40 / GOT IT
 //
-// Surface: an ink scrim over the map (so it sits above the territory card and
-// search results) and an Ink 2 card with a 1px top edge in the defence colour
-// (Alliance Green), 0 radius. DEFEND TERRITORY is the screen's single Claim
-// Red Button element; below the Gold fee it is disabled with the shortfall.
-// Announced to screen readers when it appears.
+// Surface: an ink scrim over the map (tap it to dismiss) and an Ink 2 card
+// bordered in the defence colour (vermillion for your own ground, electric
+// blue for an ally's), 0 radius. The defend CTA is the screen's single
+// Electric Blue button; below the Gold fee or past the window it is disabled.
+// The countdown ticks every second. Announced to screen readers on appear.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { GoldGlyph } from './ResourceGlyphs';
+import { ShieldIcon } from './MapIcons';
 import { colors, fonts } from '../lib/theme';
 import { getActiveAttacks } from '../lib/activeAttacksApi';
 import { onForegroundMessage } from '../lib/fcm';
 import {
   POLL_INTERVAL_MS,
   dismissContest,
+  formatCountdown,
   isRouteMounted,
   msUntilFetchAllowed,
   nextAttacks,
@@ -78,7 +82,7 @@ export function useDefendPopupFeed({ enabled, getTokenRef }) {
       const result = await getActiveAttacks({ clerkGetToken: () => getTokenRef.current() });
       if (mountedRef.current) setAttacks((prev) => nextAttacks(prev, result));
     } catch (_) {
-      if (mountedRef.current) setAttacks([]);
+      // A thrown fetch is transient: keep the pop-up, as for a 429.
     } finally {
       inFlightRef.current = false;
     }
@@ -143,12 +147,40 @@ function tc(t, copy, params) {
   return t(copy.key, { defaultValue: copy.defaultValue, ...params });
 }
 
+// Ticks the countdown once a second while the pop-up shows. Returns the
+// "mm:ss" text (or "—") and whether the window has passed.
+function useCountdown(countdown) {
+  const endsAt = countdown?.endsAt ?? null;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (endsAt == null) return undefined;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [endsAt]);
+  if (!countdown) return { text: null, expired: false };
+  if (endsAt == null) return { text: countdown.text, expired: false };
+  return { text: formatCountdown(endsAt - now), expired: endsAt <= now };
+}
+
+// Accent per state (Figma): vermillion for your own ground (D1), electric
+// blue for an ally's (D6) and for an ally defending yours (D8), neutral once
+// someone else is defending (D7).
+function accentFor(model) {
+  if (model.state === 'already_started' || model.state === 'closed') return colors.slate2;
+  if (model.state === 'allyDefending' || model.scope === 'alliance') return colors.alliance;
+  return colors.enemy;
+}
+
 export default function DefendPopup({ model, onDefend, onDismiss }) {
   const { t } = useTranslation();
   const contestId = model?.contestId;
   const territoryName = model?.territoryName ?? '';
+  const [busy, setBusy] = useState(false);
+  const { text: countdownText, expired } = useCountdown(model?.countdown);
 
   useEffect(() => {
+    setBusy(false);
     if (!contestId) return;
     AccessibilityInfo.announceForAccessibility?.(
       t('defendPopup.announce', {
@@ -166,33 +198,65 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
   const params = {
     attacker: model.attacker,
     owner: model.owner,
-    defender: model.defender ? `@${model.defender}` : '',
+    alliance: model.alliance,
+    territory: territoryName,
+    defender: model.defender ?? '',
     minutes: model.minutesAgo,
   };
-  const ctaLabel = action ? tc(t, action.label) : '';
+  const accent = accentFor(model);
+  const dismiss = () => onDismiss?.(model.contestId);
+
+  const isDefend = action?.kind === 'defend';
+  const isGotIt = action?.kind === 'gotIt';
+  const disabled = !!action && (action.disabled || (isDefend && expired) || busy);
+  const label = action ? tc(t, action.label) : '';
+  const ctaText = isDefend && action.price != null
+    ? t('defendPopup.ctaPriced', {
+      defaultValue: '{{price}} GOLD · {{label}}',
+      price: action.price,
+      label,
+    })
+    : label;
+
+  const onCta = async () => {
+    if (!action || disabled) return;
+    if (isGotIt) {
+      dismiss();
+      return;
+    }
+    if (!isDefend) return;
+    setBusy(true);
+    try {
+      await onDefend?.(model);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const borderStyle = model.state === 'allyDefending'
+    ? { borderColor: colors.hairlineStrong, borderTopColor: accent, borderTopWidth: 3 }
+    : model.state === 'open'
+      ? { borderColor: accent }
+      : { borderColor: colors.hairlineStrong };
 
   return (
-    <View style={styles.scrim} accessibilityViewIsModal>
-      <View style={styles.card} accessibilityLiveRegion="assertive">
-        <View style={styles.topRow}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.name} numberOfLines={2} maxFontSizeMultiplier={1.3} accessibilityRole="header">
-              {territoryName.toUpperCase()}
-            </Text>
-            <Text style={styles.status} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-              {tc(t, model.status, params)}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('defendPopup.closeA11y', { defaultValue: 'Dismiss defend alert' })}
-            onPress={() => onDismiss?.(model.contestId)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.close}
-          >
-            <Text style={styles.closeText}>×</Text>
-          </Pressable>
+    <Pressable
+      style={styles.scrim}
+      onPress={dismiss}
+      accessibilityViewIsModal
+      accessible={false}
+    >
+      <Pressable style={[styles.card, borderStyle]} accessibilityLiveRegion="assertive" onPress={() => {}}>
+        <View style={styles.eyebrowRow}>
+          <ShieldIcon size={14} color={accent} />
+          <Text style={[styles.eyebrow, { color: accent }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+            {tc(t, model.eyebrow, params)}
+          </Text>
         </View>
+
+        <Text style={styles.title} numberOfLines={2} maxFontSizeMultiplier={1.3} accessibilityRole="header">
+          {tc(t, model.title, params)}
+        </Text>
 
         <Text style={styles.body} maxFontSizeMultiplier={1.3}>{tc(t, model.body, params)}</Text>
 
@@ -200,40 +264,54 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
           <Text style={styles.note} maxFontSizeMultiplier={1.3}>{tc(t, model.note, params)}</Text>
         ) : null}
 
+        {model.countdown ? (
+          <View style={styles.countdownRow}>
+            <Text style={styles.countdownLabel} maxFontSizeMultiplier={1.3}>
+              {tc(t, model.countdown.label)}
+            </Text>
+            <Text style={styles.countdownValue} maxFontSizeMultiplier={1.2}>{countdownText}</Text>
+          </View>
+        ) : null}
+
         {action ? (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={action.price != null
-                ? t('defendPopup.ctaA11y', {
-                  defaultValue: '{{label}}, costs {{price}} Gold',
-                  label: ctaLabel,
-                  price: action.price,
-                })
-                : ctaLabel}
-              accessibilityState={{ disabled: action.disabled }}
-              disabled={action.disabled}
-              onPress={() => onDefend?.(model)}
-              style={({ pressed }) => [
-                styles.cta,
-                action.disabled && styles.ctaDisabled,
-                pressed && !action.disabled && styles.ctaPressed,
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={ctaText}
+            accessibilityState={{ disabled, busy }}
+            disabled={disabled}
+            onPress={onCta}
+            style={({ pressed }) => [
+              isDefend ? styles.cta : styles.ctaOutline,
+              isDefend && disabled && styles.ctaDisabled,
+              pressed && !disabled && styles.ctaPressed,
+            ]}
+          >
+            {busy ? <ActivityIndicator size="small" color={colors.bone} /> : null}
+            <Text
+              style={[
+                styles.ctaText,
+                (action.kind === 'inProgress' || (isDefend && disabled)) && styles.ctaTextDisabled,
               ]}
             >
-              {action.price != null ? (
-                <>
-                  <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{action.price}</Text>
-                  <GoldGlyph size={14} color={action.disabled ? colors.slate2 : colors.bone} />
-                </>
-              ) : null}
-              <Text style={[styles.ctaText, action.disabled && styles.ctaTextDisabled]}>{ctaLabel}</Text>
-            </Pressable>
-            {action.disabled && action.shortfall > 0 ? (
-              <Text style={styles.note} accessibilityLiveRegion="polite">
-                {t('defendPopup.shortfall', { defaultValue: '{{n}} Gold short', n: action.shortfall })}
-              </Text>
-            ) : null}
-          </>
+              {busy ? t('map.card.processing', { defaultValue: 'PROCESSING…' }) : ctaText}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {isDefend && action.shortfall > 0 ? (
+          <Text style={styles.note} accessibilityLiveRegion="polite">
+            {t('defendPopup.shortfall', { defaultValue: '{{n}} Gold short', n: action.shortfall })}
+          </Text>
+        ) : null}
+
+        {model.secondary ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={dismiss}
+            style={({ pressed }) => [styles.secondary, pressed && styles.ctaPressed]}
+          >
+            <Text style={styles.secondaryText}>{tc(t, model.secondary)}</Text>
+          </Pressable>
         ) : null}
 
         {model.moreCount > 0 ? (
@@ -241,80 +319,97 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
             {t('defendPopup.more', { defaultValue: '+{{n}} more', n: model.moreCount })}
           </Text>
         ) : null}
-      </View>
-    </View>
+      </Pressable>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14,16,20,0.6)',
+    backgroundColor: 'rgba(16,16,16,0.6)',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     zIndex: 60,
     elevation: 60,
   },
   card: {
     backgroundColor: colors.ink2,
-    borderTopWidth: 1,
-    borderTopColor: colors.alliance,
-    borderWidth: 0.5,
-    borderColor: colors.hairlineStrong,
+    borderWidth: 1,
     borderRadius: 0,
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    gap: 14,
   },
-  topRow: {
+  eyebrowRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 8,
   },
-  titleBlock: {
+  eyebrow: {
     flex: 1,
-    gap: 4,
-  },
-  name: {
-    fontFamily: fonts.displayMedium,
-    fontSize: 20,
-    color: colors.bone,
-  },
-  status: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.4,
+    letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: colors.slate2,
   },
-  close: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: {
-    fontFamily: fonts.mono,
-    fontSize: 20,
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    lineHeight: 34,
     color: colors.bone,
+    textTransform: 'uppercase',
   },
   body: {
     fontFamily: fonts.body,
-    fontSize: 13,
-    color: colors.bone,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.slate2,
   },
   note: {
     fontFamily: fonts.body,
     fontSize: 13,
     color: colors.bone2,
   },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    paddingTop: 14,
+  },
+  countdownLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.76,
+    textTransform: 'uppercase',
+    color: colors.slate2,
+  },
+  countdownValue: {
+    fontFamily: fonts.mono,
+    fontSize: 22,
+    color: colors.bone,
+  },
   cta: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.claimButton,
+    borderRadius: 0,
+  },
+  ctaOutline: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 24,
-    backgroundColor: colors.claimButton,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
     borderRadius: 0,
   },
   ctaPressed: {
@@ -323,7 +418,7 @@ const styles = StyleSheet.create({
   ctaDisabled: {
     backgroundColor: colors.ink2,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: colors.hairlineStrong,
   },
   ctaText: {
     fontFamily: fonts.monoMedium,
@@ -334,6 +429,18 @@ const styles = StyleSheet.create({
   },
   ctaTextDisabled: {
     color: colors.slate2,
+  },
+  secondary: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryText: {
+    fontFamily: fonts.monoMedium,
+    fontSize: 13,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.bone2,
   },
   more: {
     fontFamily: fonts.mono,

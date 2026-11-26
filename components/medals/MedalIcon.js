@@ -16,11 +16,11 @@ import { MEDAL_BADGE_SVG } from '../../lib/medalBadges';
 // in the engraving — silhouette and structure preserved, no tier colour, and
 // it recedes into the grid instead of competing with it.
 //
-// Every generated badge is one bone plate (#f2eee6) plus accent marks in a
+// Every generated badge is one bone plate (#F5F4EF) plus accent marks in a
 // single category colour (see lib/medalBadges.js), so the mapping is exact.
-const PLATE_HEX = '#f2eee6';
-const LOCKED_PLATE = '#252932'; // Ink 3 — sits just above the card, reads as an empty slot
-const LOCKED_MARK = '#5C6068'; // Slate — the engraving, legible against the dark plate
+const PLATE_HEX = '#F5F4EF';
+const LOCKED_PLATE = '#242424'; // Ink 3 — sits just above the card, reads as an empty slot
+const LOCKED_MARK = '#6C6C69'; // Slate — the engraving, legible against the dark plate
 
 // Badge XML is static per key, so each locked variant is built once.
 const lockedCache = new Map();
