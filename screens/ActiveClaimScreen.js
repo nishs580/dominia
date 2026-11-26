@@ -37,6 +37,7 @@ import {
   challengeHeaderModel,
   progressCaption,
   opponentBars,
+  startsContestWalk,
 } from '../lib/challengeScreen';
 import { challengeResultModel } from '../lib/challengeResult';
 import { useUnits } from '../lib/units';
@@ -1012,7 +1013,7 @@ export default function ActiveClaimScreen() {
   }, [armPhase, playerId, mode, territoryId, perimeterM, territoryName, role]);
 
   useEffect(() => {
-    if (mode !== 'contest' || !contestId || !playerId || requiredWalkM <= 0) return;
+    if (!startsContestWalk({ mode, contestId, playerId, requiredWalkM, role })) return;
 
     const navigateToResult = (env) => {
       navigatingRef.current = true;

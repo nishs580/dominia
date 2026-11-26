@@ -82,7 +82,7 @@ export function useDefendPopupFeed({ enabled, getTokenRef }) {
       const result = await getActiveAttacks({ clerkGetToken: () => getTokenRef.current() });
       if (mountedRef.current) setAttacks((prev) => nextAttacks(prev, result));
     } catch (_) {
-      if (mountedRef.current) setAttacks([]);
+      // A thrown fetch is transient: keep the pop-up, as for a 429.
     } finally {
       inFlightRef.current = false;
     }

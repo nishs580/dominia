@@ -2971,8 +2971,14 @@ export default function MapScreen() {
   // Figma mode (D1/D6): DEFEND starts the defence straight from the pop-up,
   // with the same preview + POST /defend calls DefenderAccept makes (no Stone
   // boost). Any failure falls back to DefenderAccept, which owns the error and
-  // terminal states (already defended, window closed, insufficient Gold).
+  // terminal states (already defended, window closed, insufficient Gold) —
+  // except a lost response (network error / timeout): POST /defend may have
+  // committed, so the preview is read again and, if the caller is now the
+  // defender, the walk starts anyway.
+  const defendInFlightRef = useRef(false);
   const handleDefendFromPopup = useCallback(async (model) => {
+    if (defendInFlightRef.current) return;
+    defendInFlightRef.current = true;
     const contestId = model.contestId;
     const clerkGetToken = () => getTokenRef.current();
     const fallback = () => navigation.navigate('DefenderAccept', { contestId });
@@ -2984,12 +2990,28 @@ export default function MapScreen() {
       }
       const res = await postDefend({ clerkGetToken, contestId, spendStone: false, defenderStartingWalkM: 0 });
       if (!res.ok) {
+        if (res.code === 'network_error') {
+          const again = await getDefendPreview({ clerkGetToken, contestId });
+          if (again.ok && again.data?.defender_player_id != null
+            && String(again.data.defender_player_id) === String(myPlayer.id)) {
+            navigation.navigate('ActiveClaim', defendStartParams(again.data, myPlayer.id));
+            return;
+          }
+        }
         fallback();
         return;
       }
-      navigation.navigate('ActiveClaim', defendStartParams(preview.data, myPlayer.id));
+      const goldSpent = Number(res.data?.goldSpent);
+      if (Number.isFinite(goldSpent) && goldSpent > 0) {
+        setMyPlayer((prev) => (prev && Number.isFinite(Number(prev.gold))
+          ? { ...prev, gold: Math.max(0, Number(prev.gold) - goldSpent) }
+          : prev));
+      }
+      navigation.navigate('ActiveClaim', defendStartParams(preview.data, myPlayer.id, { goldSpent: res.data?.goldSpent }));
     } catch (_) {
       fallback();
+    } finally {
+      defendInFlightRef.current = false;
     }
   }, [navigation, myPlayer?.id]);
 
