@@ -1460,7 +1460,8 @@
       "searching": "Searching…",
       "empty": "No territories match that name",
       "error": "Couldn't search right now",
-      "resultA11y": "Show {{name}} on the map"
+      "resultA11y": "Show {{name}} on the map",
+      "distanceKm": "{{km}} KM"
     },
     "card": {
       "startClaiming": "START CLAIMING",
@@ -1474,7 +1475,25 @@
       "distance": "Distance: {{metres}}m",
       "timeLimit": "Time limit: {{minutes}} min",
       "ctaA11y": "{{label}}, costs {{price}} {{currency}}",
-      "shortfall": "Short by {{n}} {{currency}}"
+      "shortfall": "Short by {{n}} {{currency}}",
+      "tagYours": "YOURS",
+      "tagAlliance": "ALLIANCE",
+      "tagEnemy": "ENEMY",
+      "tagSolo": "SOLO",
+      "tagUnclaimed": "UNCLAIMED",
+      "ownerTitle": "{{owner}}'s territory",
+      "heldFor_one": "{{name}} · held for {{count}} day",
+      "heldFor_other": "{{name}} · held for {{count}} days",
+      "metaLine": "{{distance}} M · {{minutes}} MIN LIMIT",
+      "metaDistance": "{{distance}} M",
+      "metaLimit": "{{minutes}} MIN LIMIT",
+      "enemyExplainer": "{{owner}} will get a chance to defend. Out-walk them before the timer ends to take it.",
+      "allianceExplainer": "Held by your ally in {{alliance}}. You can't claim an ally's territory — help defend it when it's under attack.",
+      "allianceExplainerNoName": "Held by your ally. You can't claim an ally's territory — help defend it when it's under attack.",
+      "viewAlliance": "VIEW ALLIANCE",
+      "ctaPriced": "{{price}} {{currency}} · {{label}}",
+      "goldCaps": "GOLD",
+      "ironCaps": "IRON"
     },
     "rail": {
       "keyA11y": "Territory colours key",
@@ -1483,9 +1502,40 @@
       "chatA11y": "Chat"
     },
     "legendFigma": {
-      "yours": "Your territory",
-      "alliance": "Alliance territory",
-      "enemy": "Enemy territory"
+      "yours": "YOURS",
+      "alliance": "ALLIANCE",
+      "enemy": "ENEMY",
+      "header": "TERRITORY KEY"
+    },
+    "relocate": {
+      "button": "RELOCATE",
+      "buttonA11y": "Jump the map to one of your territories",
+      "title": "RELOCATE",
+      "subtitle": "Jump the map to one of your territories.",
+      "held_one": "HELD {{count}} DAY",
+      "held_other": "HELD {{count}} DAYS",
+      "away": "{{km}} KM AWAY",
+      "go": "GO →",
+      "goA11y": "Go to {{name}}",
+      "emptyBody": "You don't own any territories yet. Claim one and you can jump back to it from here.",
+      "findNearby": "FIND A TERRITORY NEARBY",
+      "closeA11y": "Close relocate",
+      "loadError": "Couldn't load your territories."
+    },
+    "coach": {
+      "railKey": "TERRITORIES COLOURING",
+      "railLocate": "LOCATE ME",
+      "railLeaderboard": "LEADERBOARD",
+      "railLog": "LOG",
+      "railChat": "CHAT",
+      "sidePanelTitle": "THE SIDE PANEL",
+      "sidePanelBody": "Use the side panel to explore territories, find your location, check the leaderboard, view your challenge history, and chat with your alliance members.",
+      "tapToContinue": "TAP TO CONTINUE",
+      "firstTerritoryTitle": "YOUR FIRST TERRITORY",
+      "firstTerritoryBody": "Let's capture your first territory. Tap the highlighted territory to see its details.",
+      "cardBubble": "Tap Start claiming to begin the challenge, or close this to explore the app and other territories.",
+      "skip": "SKIP",
+      "skipA11y": "Skip the map guide"
     }
   },
   "walkthrough": {
