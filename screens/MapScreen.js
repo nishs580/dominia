@@ -3107,8 +3107,8 @@ export default function MapScreen() {
     if (!figmaChrome || !coachReady || !tutorialDone) return;
     if (coach.step !== COACH_STEPS.IDLE) return;
     if (!objectiveActive || flightActive || spineFlightPending || defendModel) return;
-    dispatchCoach(COACH_EVENTS.START);
-  }, [figmaChrome, coachReady, tutorialDone, coach.step, objectiveActive, flightActive, spineFlightPending, defendModel, dispatchCoach]);
+    dispatchCoach({ type: COACH_EVENTS.START, cardOpen: objectiveSelected });
+  }, [figmaChrome, coachReady, tutorialDone, coach.step, objectiveActive, objectiveSelected, flightActive, spineFlightPending, defendModel, dispatchCoach]);
   useEffect(() => {
     if (coach.step === COACH_STEPS.TAP_TERRITORY && objectiveSelected) {
       dispatchCoach(COACH_EVENTS.TERRITORY_SELECTED);
