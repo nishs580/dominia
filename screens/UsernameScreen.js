@@ -10,7 +10,7 @@ import { usernameProblem, visibleProblem } from '../lib/usernameRules';
 import { useFlag } from '../lib/flags';
 import { usesFigmaOnboarding } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
-import OnboardingHeader from '../components/OnboardingHeader';
+import { CutField, SlantButton } from '../components/ui';
 
 // i18n keys for each problem from lib/usernameRules.
 const PROBLEM_KEYS = {
@@ -89,6 +89,7 @@ export default function UsernameScreen({ navigation, route }) {
   if (!fontsLoaded) return null;
 
   const handleConfirm = async () => {
+    if (loading) return;
     const problem = validateUsername(username);
     if (problem) {
       setError(t(`username.${problem}`));
@@ -128,7 +129,8 @@ export default function UsernameScreen({ navigation, route }) {
   // The availability check is advisory — PATCH /me re-checks authoritatively on
   // submit — so a slow or failed check must never hard-block Next. Only an
   // explicit 'taken' (or an invalid shape) disables submission.
-  // A symbol shows the moment it is typed (Figma A4c); NEXT stays disabled.
+  // A symbol shows the moment it is typed (Figma A4c). Legacy NEXT is then
+  // disabled; the Dominia-Temp NEXT stays live and shows the error on press.
   const liveProblem = visibleProblem(username, { touched });
   const showErrorBorder = Boolean(error || liveProblem || status === 'taken');
 
@@ -143,52 +145,40 @@ export default function UsernameScreen({ navigation, route }) {
       || (status === 'taken' ? t('username.errorTaken') : null);
     return (
       <KeyboardAvoidingView
-        style={[figmaStyles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}
+        style={[figmaStyles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <OnboardingHeader title={t('username.title')} />
-        <Text style={figmaStyles.subtitle}>
-          {t('username.figmaSubtitle', { defaultValue: 'This is how the other Commanders will know you.' })}
-        </Text>
-
-        <Text style={figmaStyles.label}>{t('username.figmaLabel', { defaultValue: 'Commander name' })}</Text>
-        <TextInput
-          style={[figmaStyles.input, showErrorBorder && figmaStyles.inputError]}
-          keyboardAppearance="dark"
-          placeholder={t('username.placeholder')}
-          placeholderTextColor={colors.muted}
-          selectionColor={colors.lime}
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={username}
-          onChangeText={(text) => { setUsername(text); setError(''); }}
-          onBlur={() => setTouched(true)}
-          maxLength={20}
-          accessibilityLabel={t('username.figmaLabel', { defaultValue: 'Commander name' })}
-          accessibilityHint={message || undefined}
-        />
-        {message ? (
-          <Text style={figmaStyles.error} accessibilityLiveRegion="polite">{message}</Text>
-        ) : null}
-        <Text style={figmaStyles.helper}>
-          {t('username.figmaHelper', { defaultValue: 'Names can’t contain symbols.' })}
-        </Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled }}
-          onPress={handleConfirm}
-          disabled={disabled}
-          style={({ pressed }) => [
-            figmaStyles.next,
-            disabled && figmaStyles.nextDisabled,
-            pressed && !disabled && figmaStyles.nextPressed,
-          ]}
-        >
-          <Text style={[figmaStyles.nextText, disabled && figmaStyles.nextTextDisabled]}>
-            {t('username.figmaNext', { defaultValue: 'Next' })}
+        <View style={figmaStyles.body}>
+          <Text style={figmaStyles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
+            {t('username.title')}
           </Text>
-        </Pressable>
+          <Text style={figmaStyles.subtitle} maxFontSizeMultiplier={1.4}>
+            {t('username.commanderSubtitle', { defaultValue: 'This is how the other Commanders will know you' })}
+          </Text>
+
+          <CutField
+            containerStyle={figmaStyles.field}
+            keyboardAppearance="dark"
+            placeholder={t('username.figmaLabel', { defaultValue: 'Commander name' })}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={username}
+            onChangeText={(text) => { setUsername(text); setError(''); }}
+            onBlur={() => setTouched(true)}
+            onSubmitEditing={handleConfirm}
+            returnKeyType="next"
+            maxLength={20}
+            accessibilityLabel={t('username.figmaLabel', { defaultValue: 'Commander name' })}
+            error={message || (showErrorBorder ? true : undefined)}
+          />
+
+          <SlantButton
+            label={t('username.figmaNext', { defaultValue: 'Next' })}
+            onPress={handleConfirm}
+            loading={loading}
+            style={figmaStyles.next}
+          />
+        </View>
       </KeyboardAvoidingView>
     );
   }
@@ -326,42 +316,19 @@ const styles = StyleSheet.create({
   },
 });
 
-// Updated UX A4: top-aligned, on lib/theme tokens.
+// Dominia-Temp CHOOSE YOUR NAME (core-loop board): vertically centred, the
+// display title, a lime-tinted subtitle, a CutField and NEXT ».
 const figmaStyles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 24 },
-  subtitle: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 4, marginBottom: 16 },
-  label: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    color: colors.muted2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  input: {
-    width: '100%',
-    minHeight: 48,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 20 },
+  body: { flex: 1, justifyContent: 'center' },
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    lineHeight: 36,
     color: colors.white,
-    fontFamily: fonts.mono,
-    fontSize: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    textTransform: 'uppercase',
   },
-  inputError: { borderColor: colors.danger },
-  error: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 8 },
-  helper: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16 },
-  next: {
-    marginTop: 16,
-    minHeight: 52,
-    backgroundColor: colors.action,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextDisabled: { opacity: 0.45 },
-  nextPressed: { backgroundColor: colors.actionPressed },
-  nextText: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.8, color: colors.white, textTransform: 'uppercase' },
-  nextTextDisabled: { color: colors.muted2 },
+  subtitle: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: 'rgba(132,255,68,0.7)', marginTop: 8 },
+  field: { marginTop: 24 },
+  next: { marginTop: 32 },
 });
