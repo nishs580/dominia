@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { getLeaderboard, parseLeaderboard } from '../lib/leaderboardApi';
+import { getLeaderboard, parseLeaderboard, shouldRetryWithoutQuery } from '../lib/leaderboardApi';
 import { useFlag } from '../lib/flags';
 import { useUnits } from '../lib/units';
 import Svg, { Polygon } from 'react-native-svg';
@@ -605,17 +605,25 @@ function FigmaLeaderboards() {
     };
   }, [userId]);
 
-  // Search is client-side for now: every row the board returns is filtered
-  // by name in buildLeaderboardView. getLeaderboard already takes `q`; U13
-  // sends it once the backend supports it.
+  // Search (plan U13): the trimmed query is debounced 300ms and sent as `q`,
+  // so the server filters the full ranking and keeps true ranks. The view
+  // still filters rows by name, which covers a backend that ignores `q`; a
+  // 400 (old backend rejecting the param) retries once without it.
+  const [searchQ, setSearchQ] = useState('');
+  useEffect(() => {
+    const next = query.trim();
+    const id = setTimeout(() => setSearchQ(next), 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
   const fetchBoard = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
     const { board: apiBoard, subject } = apiParamsFor(board, scope);
-    const result = await getLeaderboard({
-      clerkGetToken: () => getTokenRef.current(),
-      board: apiBoard,
-      subject,
-    });
+    const clerkGetToken = () => getTokenRef.current();
+    let result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject, q: searchQ });
+    if (shouldRetryWithoutQuery(result, searchQ)) {
+      result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject });
+    }
     if (seq !== fetchSeqRef.current) return;
     if (result.ok) {
       setData(parseLeaderboard(result.data));
@@ -625,11 +633,16 @@ function FigmaLeaderboards() {
       setStatus('error');
     }
     setRefreshing(false);
-  }, [board, scope]);
+  }, [board, scope, searchQ]);
 
+  // A board or scope switch clears the list; a search change keeps the
+  // current rows on screen while the filtered set loads.
   useEffect(() => {
     setStatus('loading');
     setData({ rows: [], self: null });
+  }, [board, scope]);
+
+  useEffect(() => {
     fetchBoard();
   }, [fetchBoard]);
 
