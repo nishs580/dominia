@@ -11,7 +11,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { colors } from '../../lib/theme';
 import { parallelogramPoints, slantInset } from '../../lib/slantGeometry';
-import { hitSlopFor, useLayoutSize, warnMissingLabel } from './shared';
+import { hitSlopFor, useLayoutSize, warnMissingLabel, SHAPE_LAYER } from './shared';
 
 const FILLS = {
   solid: colors.surface,
@@ -48,7 +48,7 @@ export default function SlantTile({
     fixedWidth ? { width: fixedWidth } : null,
   ];
   const background = (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
       <Polygon points={parallelogramPoints(box.w, box.h, slant)} fill={fill} />
     </Svg>
   );

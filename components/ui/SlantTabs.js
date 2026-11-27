@@ -11,7 +11,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import { colors, fonts } from '../../lib/theme';
 import { parallelogramPoints } from '../../lib/slantGeometry';
-import { hitSlopFor, useLayoutSize, useSvgId } from './shared';
+import { hitSlopFor, useLayoutSize, useSvgId, SHAPE_LAYER } from './shared';
 
 function Tab({ tab, selected, onPress, height }) {
   const [box, onLayout] = useLayoutSize();
@@ -29,7 +29,7 @@ function Tab({ tab, selected, onPress, height }) {
       testID={tab.testID}
       style={({ pressed }) => [styles.tab, { minHeight: height }, pressed && !selected && styles.pressed]}
     >
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
         <Defs>
           <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
             <Stop offset="0" stopColor="#2F55E8" />

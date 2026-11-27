@@ -20,6 +20,7 @@ import { SlantTile } from './ui';
 import { useLayoutSize } from './ui/shared';
 import { parallelogramPoints } from '../lib/slantGeometry';
 import { colors, fonts } from '../lib/theme';
+import { SHAPE_LAYER } from './ui/shared';
 
 const ICON_SIZE = 14;
 const FIGMA_ICON_SIZE = 18;
@@ -34,7 +35,7 @@ function CoachChip({ label }) {
   const [box, onLayout] = useLayoutSize();
   return (
     <View style={styles.coachChip} onLayout={onLayout} pointerEvents="none">
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
         <Polygon points={parallelogramPoints(box.w, box.h, 14)} fill={colors.white} />
       </Svg>
       <Text style={styles.coachLabelText} numberOfLines={1} maxFontSizeMultiplier={1.2}>

@@ -45,16 +45,18 @@ export default function ChallengeStatusScreen({ name, caption, alert, pulse = tr
 
   return (
     <View style={styles.screen} accessibilityViewIsModal>
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Defs>
-          <LinearGradient id={bgId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#000000" />
-            <Stop offset="0.45" stopColor="#020A2E" />
-            <Stop offset="1" stopColor={colors.actionDeep} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${bgId})`} />
-      </Svg>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg width="100%" height="100%">
+          <Defs>
+            <LinearGradient id={bgId} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#000000" />
+              <Stop offset="0.45" stopColor="#020A2E" />
+              <Stop offset="1" stopColor={colors.actionDeep} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${bgId})`} />
+        </Svg>
+      </View>
       <View style={styles.center} accessibilityLiveRegion="polite">
         <Animated.View style={{ transform: [{ scale }] }}>
           <ChallengeTerritoryTile size={tileSize} variant="blue" />

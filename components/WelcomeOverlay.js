@@ -32,17 +32,19 @@ function ProgressDashes({ active = 0, total = FTUE_STEPS }) {
 // Map stays visible at the top and fades to black behind the copy.
 function BottomFade() {
   return (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        <LinearGradient id="ftueFade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#000000" stopOpacity="0.15" />
-          <Stop offset="0.45" stopColor="#000000" stopOpacity="0.55" />
-          <Stop offset="0.68" stopColor="#000000" stopOpacity="1" />
-          <Stop offset="1" stopColor="#000000" stopOpacity="1" />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill="url(#ftueFade)" />
-    </Svg>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="ftueFade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#000000" stopOpacity="0.15" />
+            <Stop offset="0.45" stopColor="#000000" stopOpacity="0.55" />
+            <Stop offset="0.68" stopColor="#000000" stopOpacity="1" />
+            <Stop offset="1" stopColor="#000000" stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ftueFade)" />
+      </Svg>
+    </View>
   );
 }
 

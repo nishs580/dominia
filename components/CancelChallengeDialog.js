@@ -49,15 +49,17 @@ export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfi
           accessibilityViewIsModal
           accessibilityRole="alert"
         >
-          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-            <Defs>
-              <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={colors.actionDeep} />
-                <Stop offset="1" stopColor="#000000" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradId})`} />
-          </Svg>
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Svg width="100%" height="100%">
+              <Defs>
+                <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={colors.actionDeep} />
+                  <Stop offset="1" stopColor="#000000" />
+                </LinearGradient>
+              </Defs>
+              <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradId})`} />
+            </Svg>
+          </View>
           <Text style={styles.prompt} accessibilityRole="header">{prompt}</Text>
           <View style={styles.row}>
             <SlantButton

@@ -33,3 +33,10 @@ export function warnMissingLabel(component, hasText, accessibilityLabel) {
     console.warn(`${component}: accessibilityLabel is required when there is no text label.`);
   }
 }
+
+/**
+ * Style for an SVG shape background. Size it with the measured box in plain
+ * numbers (width={box.w} height={box.h}): on Android a 100% / absoluteFill SVG
+ * resolves against the parent's content box, so padding shrinks the shape.
+ */
+export const SHAPE_LAYER = { position: 'absolute', top: 0, left: 0 };

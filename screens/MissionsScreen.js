@@ -87,7 +87,7 @@ function ProgressBar({ fraction, label }) {
     <View style={styles.track}>
       {pct > 0 ? (
         <View style={[styles.fillWrap, { width: `${pct}%` }]}>
-          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
             <Defs>
               <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
                 <Stop offset="0" stopColor={colors.actionDeep} />

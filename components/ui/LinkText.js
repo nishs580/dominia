@@ -47,9 +47,9 @@ export default function LinkText({
         style={[styles.text, { color, fontSize: size, lineHeight, letterSpacing: size * 0.04 }, textStyle]}
         maxFontSizeMultiplier={1.4}
       >
-        {chevron === 'left' ? '« ' : ''}
-        {children}
-        {chevron === 'right' ? ' »' : ''}
+        {hasText
+          ? `${chevron === 'left' ? '« ' : ''}${children}${chevron === 'right' ? ' »' : ''}`
+          : children}
       </Text>
     </Pressable>
   );
@@ -62,9 +62,12 @@ const styles = StyleSheet.create({
   dim: {
     opacity: 0.6,
   },
+  // One string child (not nested spans) and a little right padding: Android
+  // measures italic letter-spaced spans too narrow and wraps or clips them.
   text: {
     fontFamily: fonts.action,
     textTransform: 'uppercase',
     includeFontPadding: false,
+    paddingRight: 2,
   },
 });

@@ -32,6 +32,7 @@ import { getTerritoryHistoryStats } from '../lib/territory';
 import { cutCornerPoints } from '../lib/slantGeometry';
 import { colors, fonts } from '../lib/theme';
 import { useLayoutSize } from './ui/shared';
+import { SHAPE_LAYER } from './ui/shared';
 
 const GOLD_ART = require('../assets/figma/gold-biscuits.png');
 
@@ -91,7 +92,7 @@ export function PopupSurface({ children, style }) {
   const [box, onLayout] = useLayoutSize();
   return (
     <View onLayout={onLayout} style={style}>
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
         <Polygon points={cutCornerPoints(box.w, box.h, 8, 'br')} fill={colors.obsidian} />
       </Svg>
       <CutCard padding={16} style={styles.card}>{children}</CutCard>

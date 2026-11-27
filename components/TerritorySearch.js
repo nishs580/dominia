@@ -24,6 +24,7 @@ import TagChip from './TagChip';
 import { CutCard } from './ui';
 import { useLayoutSize } from './ui/shared';
 import { cutCornerPoints } from '../lib/slantGeometry';
+import { SHAPE_LAYER } from './ui/shared';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 2;
@@ -115,7 +116,7 @@ export default function TerritorySearch({ onSelect, onActiveChange, dismissKey =
   return (
     <View>
       <View style={styles.field} onLayout={onFieldLayout}>
-        <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg style={SHAPE_LAYER} width={fieldBox.w || 0} height={fieldBox.h || 0} pointerEvents="none">
           <Polygon
             points={cutCornerPoints(fieldBox.w, fieldBox.h, 10, 'br', 0.5)}
             fill={focused ? 'rgba(7,49,209,0.16)' : 'rgba(20,24,40,0.72)'}

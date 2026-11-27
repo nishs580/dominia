@@ -480,7 +480,7 @@ function EntryPressable({ entry, style, accessibilityLabel, children }) {
 function SlantFrame({ width, height, fill, stroke, children }) {
   return (
     <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Polygon points={parallelogramPoints(width, height, 14, 1)} fill={fill} stroke={stroke} strokeWidth={2} />
       </Svg>
       {children}

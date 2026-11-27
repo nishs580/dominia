@@ -16,7 +16,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import Svg, { Polygon } from 'react-native-svg';
 import { colors, fonts } from '../../lib/theme';
 import { buttonState, parallelogramPoints } from '../../lib/slantGeometry';
-import { hitSlopFor, useLayoutSize, warnMissingLabel } from './shared';
+import { hitSlopFor, useLayoutSize, warnMissingLabel, SHAPE_LAYER } from './shared';
 
 const SIZES = {
   lg: { minHeight: 56, fontSize: 19, letterSpacing: 0.95, chevron: 20, padX: 28, gap: 10 },
@@ -96,7 +96,7 @@ export default function SlantButton({
         const half = pal.strokeWidth / 2;
         return (
           <>
-            <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
               <Polygon
                 points={parallelogramPoints(box.w, box.h, 14, half)}
                 fill={pal.fill}

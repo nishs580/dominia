@@ -16,7 +16,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import { colors } from '../../lib/theme';
 import { cutCornerPoints } from '../../lib/slantGeometry';
-import { useLayoutSize, useSvgId, warnMissingLabel } from './shared';
+import { useLayoutSize, useSvgId, warnMissingLabel, SHAPE_LAYER } from './shared';
 
 const VARIANTS = {
   default: { from: 'rgba(3,20,90,0.55)', to: '#000000', stroke: colors.surfaceLine },
@@ -45,7 +45,7 @@ export default function CutCard({
   const points = cutCornerPoints(box.w, box.h, cut, 'br', 0.5);
 
   const background = (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
       <Defs>
         <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
           <Stop offset="0" stopColor={from ?? v.from} />

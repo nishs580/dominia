@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
 import { colors, fonts } from '../../lib/theme';
 import { cutCornerPoints } from '../../lib/slantGeometry';
-import { useLayoutSize, useSvgId } from './shared';
+import { useLayoutSize, useSvgId, SHAPE_LAYER } from './shared';
 
 const BORDER = 'rgba(253,253,253,0.12)';
 const PLACEHOLDER = 'rgba(253,253,253,0.3)';
@@ -69,7 +69,7 @@ const CutField = forwardRef(function CutField(
         onLayout={onLayout}
         style={[styles.field, editable === false && styles.fieldDisabled]}
       >
-        <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
           <Defs>
             <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor="#0E0E10" />

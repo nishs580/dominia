@@ -15,6 +15,7 @@ import { colors, fonts } from '../lib/theme';
 import { cutCornerPoints } from '../lib/slantGeometry';
 import { SlantTile } from './ui';
 import { useLayoutSize, useSvgId } from './ui/shared';
+import { SHAPE_LAYER } from './ui/shared';
 
 function PlusMinus({ open, color = colors.white }) {
   return (
@@ -39,7 +40,7 @@ export default function Accordion({ title, icon, meta, expanded, onToggle, child
 
   return (
     <View style={[styles.section, style]} testID={testID} onLayout={onLayout}>
-      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
         <Defs>
           <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
             <Stop offset="0" stopColor="rgba(3,20,90,0.55)" />
