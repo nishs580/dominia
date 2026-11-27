@@ -2,18 +2,21 @@ import { useSignIn, useSignUp, useAuth, useSSO } from '@clerk/clerk-expo';
 import { useFonts, Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
 import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans';
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { ensurePlayer } from '../lib/auth';
+import { emptyAuthErrors, mapAuthError } from '../lib/authErrors';
 import { logDebug } from '../lib/debug';
 import { PASSWORD_MIN, PASSWORD_MAX } from '../lib/passwordPolicy';
 import { useFlag } from '../lib/flags';
 import { usesFigmaOnboarding } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
-import OnboardingHeader from '../components/OnboardingHeader';
+import { AuthBackdrop, FormError, GoogleGlyph, OrDivider } from '../components/AuthParts';
+import Wordmark from '../components/Wordmark';
+import { CutField, LinkText, ScreenTitle, SlantButton } from '../components/ui';
 
 // Required for the OAuth redirect to close the in-app browser and hand control
 // back to the app once Google completes.
@@ -39,7 +42,10 @@ export default function SignInScreen({ navigation, route }) {
   const { startSSOFlow } = useSSO();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Legacy layout: one error line. Figma layout: per-field errors routed by
+  // lib/authErrors (plan U3), plus a form-level line above the primary.
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState(emptyAuthErrors);
   // Welcome routes here with mode 'signup' (Get started) or 'signin' (the
   // returning-user shortcut); default to sign-in for any direct entry.
   const [mode, setMode] = useState(route?.params?.mode === 'signup' ? 'signup' : 'signin');
@@ -48,14 +54,46 @@ export default function SignInScreen({ navigation, route }) {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
   const [resending, setResending] = useState(false);
+  const [info, setInfo] = useState('');
   const insets = useSafeAreaInsets();
-  // Figma onboarding (plan U10) restyles this screen; the handlers are shared
-  // and with legacy_tabs on the screen renders exactly as before.
+  // Figma onboarding restyles this screen; the handlers are shared and with
+  // legacy_tabs on the screen renders exactly as before.
   const legacyTabs = useFlag('legacy_tabs');
   const figma = usesFigmaOnboarding(() => legacyTabs);
 
   const [fontsLoaded] = useFonts({ Archivo_900Black_Italic, IBMPlexSans_700Bold });
   if (!fontsLoaded) return null;
+
+  const clearErrors = () => {
+    setError('');
+    setFieldErrors(emptyAuthErrors());
+    setInfo('');
+  };
+
+  // A Clerk failure: the legacy layout keeps Clerk's own message; the Figma
+  // layout puts a translated line on the field it belongs to.
+  const fail = (err, fallbackKey, fallbackDefault) => {
+    if (!figma) {
+      setError(err?.errors?.[0]?.message ?? t(fallbackKey, { defaultValue: fallbackDefault }));
+      return;
+    }
+    const mapped = mapAuthError(err, { fallback: { key: fallbackKey, defaultValue: fallbackDefault } });
+    setFieldErrors({ ...emptyAuthErrors(), [mapped.field]: t(mapped.key, { defaultValue: mapped.defaultValue }) });
+  };
+
+  // A client-side check that failed before any network call.
+  const failLocal = (field, message) => {
+    if (!figma) setError(message);
+    else setFieldErrors({ ...emptyAuthErrors(), [field]: message });
+  };
+
+  // Typing into a field clears its own error and the form-level line.
+  const edit = (field, setter) => (value) => {
+    setter(value);
+    if (fieldErrors[field] || fieldErrors.form) {
+      setFieldErrors((prev) => ({ ...prev, [field]: '', form: '' }));
+    }
+  };
 
   // New accounts (Google or verified email) may still need a username; anyone
   // else goes through AuthGate, which decides Onboarding vs MainTabs.
@@ -71,7 +109,7 @@ export default function SignInScreen({ navigation, route }) {
   const handleGoogle = async () => {
     if (oauthLoading) return;
     setOauthLoading(true);
-    setError('');
+    clearErrors();
     logDebug(getToken, 'onboarding_signup_started', { method: 'google' });
     try {
       // Clerk handles both sign-in and sign-up through one OAuth flow: a new
@@ -88,7 +126,7 @@ export default function SignInScreen({ navigation, route }) {
       // No session and no throw means the user dismissed the browser — stay put,
       // no error.
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? t('signIn.googleFailed'));
+      fail(err, 'signIn.googleFailed', 'Google sign-in failed. Try again.');
     } finally {
       setOauthLoading(false);
     }
@@ -97,11 +135,11 @@ export default function SignInScreen({ navigation, route }) {
   const handleSignIn = async () => {
     if (!signInLoaded) return;
     setLoading(true);
-    setError('');
+    clearErrors();
     try {
-      const result = await signIn.create({ identifier: email, password });
+      const result = await signIn.create({ identifier: email.trim(), password });
       if (result.status !== 'complete') {
-        setError(t('signIn.extraVerification'));
+        failLocal('form', t('signIn.extraVerification'));
         return;
       }
       await setActiveSignIn({ session: result.createdSessionId });
@@ -110,7 +148,7 @@ export default function SignInScreen({ navigation, route }) {
       // Daily Rewards check (and an unfinished one resumes onboarding).
       navigation.replace(needsUsername ? 'Username' : figma ? 'AuthGate' : 'MainTabs');
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? t('signIn.signInFailed'));
+      fail(err, 'signIn.signInFailed', 'Sign in failed. Check your email and password.');
     } finally {
       setLoading(false);
     }
@@ -119,14 +157,14 @@ export default function SignInScreen({ navigation, route }) {
   const handleSignUp = async () => {
     if (!signUpLoaded) return;
     if (password.length < PASSWORD_MIN) {
-      setError(t('signIn.passwordTooShort', { min: PASSWORD_MIN }));
+      failLocal('password', t('signIn.passwordTooShort', { min: PASSWORD_MIN }));
       return;
     }
     setLoading(true);
-    setError('');
+    clearErrors();
     logDebug(getToken, 'onboarding_signup_started', { method: 'email' });
     try {
-      const result = await signUp.create({ emailAddress: email, password });
+      const result = await signUp.create({ emailAddress: email.trim(), password });
       if (result.status === 'complete') {
         // Email verification is disabled on this Clerk instance — straight in.
         await setActiveSignUp({ session: result.createdSessionId });
@@ -140,7 +178,7 @@ export default function SignInScreen({ navigation, route }) {
       logDebug(getToken, 'onboarding_email_verification_sent', {});
       setPendingVerification(true);
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? t('signIn.signUpFailed'));
+      fail(err, 'signIn.signUpFailed', 'Sign up failed. Try a different email.');
     } finally {
       setLoading(false);
     }
@@ -149,22 +187,22 @@ export default function SignInScreen({ navigation, route }) {
   const handleVerify = async () => {
     if (!signUpLoaded) return;
     if (code.trim().length < 6) {
-      setError(t('signIn.codeTooShort'));
+      failLocal('code', t('signIn.codeTooShort'));
       return;
     }
     setLoading(true);
-    setError('');
+    clearErrors();
     try {
       const result = await signUp.attemptEmailAddressVerification({ code: code.trim() });
       if (result.status !== 'complete') {
-        setError(t('signIn.codeFailed'));
+        failLocal('code', t('signIn.codeFailed'));
         return;
       }
       await setActiveSignUp({ session: result.createdSessionId });
       logDebug(getToken, 'onboarding_auth_completed', { method: 'email' });
       await routeAfterAuth();
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? t('signIn.codeFailed'));
+      fail(err, 'signIn.codeFailed', 'That code didn’t work. Check your email and try again.');
     } finally {
       setLoading(false);
     }
@@ -173,11 +211,12 @@ export default function SignInScreen({ navigation, route }) {
   const handleResend = async () => {
     if (!signUpLoaded || resending) return;
     setResending(true);
-    setError('');
+    clearErrors();
     try {
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      if (figma) setInfo(t('forgotPassword.codeResent'));
     } catch (err) {
-      setError(err.errors?.[0]?.message ?? t('signIn.resendFailed'));
+      fail(err, 'signIn.resendFailed', 'Could not resend the code. Try again.');
     } finally {
       setResending(false);
     }
@@ -186,166 +225,209 @@ export default function SignInScreen({ navigation, route }) {
   const resetToForm = () => {
     setPendingVerification(false);
     setCode('');
-    setError('');
+    clearErrors();
   };
 
-  // ---- Figma frames (legacy_tabs off) -------------------------------------
+  // ---- Figma frames (legacy_tabs off; Dominia-Temp boards, plan U3) -------
   function renderFigma() {
+    const scrollProps = {
+      contentContainerStyle: [
+        figmaStyles.content,
+        { paddingTop: Math.max(insets.top, 24) + 24, paddingBottom: Math.max(insets.bottom, 24) + 24 },
+      ],
+      keyboardShouldPersistTaps: 'handled',
+      bounces: false,
+    };
+    const wrap = (children) => (
+      <View style={figmaStyles.screen}>
+        <AuthBackdrop />
+        <KeyboardAvoidingView style={figmaStyles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView {...scrollProps}>{children}</ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    );
+
+    if (pendingVerification) {
+      return wrap(
+        <>
+          <Wordmark size={34} tagline={false} style={figmaStyles.wordmarkSmall} />
+          <ScreenTitle
+            eyebrow={t('auth.accountEyebrow', { defaultValue: 'ACCOUNT' })}
+            title={t('signIn.verifyTitle')}
+            subtitle={email ? t('signIn.codeSentTo', { email: email.trim() }) : t('signIn.codeSent')}
+            align="center"
+            size={28}
+            style={figmaStyles.title}
+          />
+          <CutField
+            label={t('auth.verificationCodeLabel', { defaultValue: 'VERIFICATION CODE' })}
+            placeholder={t('signIn.codePlaceholder')}
+            keyboardType="number-pad"
+            keyboardAppearance="dark"
+            autoCapitalize="none"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChangeText={edit('code', setCode)}
+            error={fieldErrors.code}
+            helper={info}
+            rightAccessory={
+              <LinkText size={12} onPress={handleResend} disabled={resending}>
+                {resending ? t('signIn.sending') : t('auth.resendCode', { defaultValue: 'RESEND CODE' })}
+              </LinkText>
+            }
+            testID="signin-code"
+          />
+          <View style={figmaStyles.primaryBlock}>
+            <FormError>{fieldErrors.form || fieldErrors.email || fieldErrors.password}</FormError>
+            <SlantButton
+              label={t('auth.verify', { defaultValue: 'VERIFY' })}
+              onPress={handleVerify}
+              loading={loading}
+              testID="signin-verify"
+            />
+          </View>
+          <View style={figmaStyles.linkRow}>
+            <LinkText chevron="left" size={13} onPress={resetToForm}>
+              {t('signIn.differentEmail')}
+            </LinkText>
+          </View>
+        </>,
+      );
+    }
+
     const goBack = () => {
       if (navigation.canGoBack()) navigation.goBack();
       else navigation.replace('Welcome');
     };
+    // "SIGN UP »" leads to the sign-up chooser (Google or email).
+    const toChooser = () => {
+      if (typeof navigation.popTo === 'function') navigation.popTo('Welcome');
+      else navigation.navigate('Welcome');
+    };
 
-    if (pendingVerification) {
-      return (
-        <KeyboardAvoidingView
-          style={[figmaStyles.screen, screenPadding]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <Text style={figmaStyles.wordmark} maxFontSizeMultiplier={1.2}>DOMINIA</Text>
-          <Text style={figmaStyles.heading} accessibilityRole="header">{t('signIn.verifyTitle')}</Text>
-          <Text style={figmaStyles.hint}>
-            {email ? t('signIn.codeSentTo', { email }) : t('signIn.codeSent')}
-          </Text>
-          <TextInput
-            style={figmaStyles.input}
-            keyboardAppearance="dark"
-            placeholder={t('signIn.codePlaceholder')}
-            placeholderTextColor={colors.slate}
-            keyboardType="number-pad"
-            autoCapitalize="none"
-            textContentType="oneTimeCode"
-            maxLength={6}
-            value={code}
-            onChangeText={setCode}
-          />
-          {error ? <Text style={figmaStyles.error}>{error}</Text> : null}
-          <Pressable
-            accessibilityRole="button"
-            style={[figmaStyles.primary, loading && figmaStyles.dim]}
-            onPress={handleVerify}
-            disabled={loading}
-          >
-            <Text style={figmaStyles.primaryText}>{loading ? t('signIn.verifying') : t('signIn.verify')}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={figmaStyles.toggle} onPress={handleResend} disabled={resending}>
-            <Text style={figmaStyles.toggleText}>
-              {resending ? t('signIn.sending') : t('signIn.noCode')}
-              {!resending ? <Text style={figmaStyles.toggleLink}>{t('signIn.resendCode')}</Text> : null}
-            </Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={figmaStyles.toggle} onPress={resetToForm}>
-            <Text style={figmaStyles.toggleLink}>{t('signIn.differentEmail')}</Text>
-          </Pressable>
-        </KeyboardAvoidingView>
+    const emailField = (
+      <CutField
+        label={
+          isSignIn
+            ? t('auth.emailLabel', { defaultValue: 'EMAIL' })
+            : t('auth.emailAddressLabel', { defaultValue: 'EMAIL ADDRESS' })
+        }
+        placeholder={
+          isSignIn
+            ? t('auth.emailPlaceholder', { defaultValue: 'Email' })
+            : t('auth.emailAddressPlaceholder', { defaultValue: 'Email address' })
+        }
+        keyboardAppearance="dark"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType={isSignIn ? 'username' : 'emailAddress'}
+        autoComplete="email"
+        value={email}
+        onChangeText={edit('email', setEmail)}
+        error={fieldErrors.email}
+        testID="signin-email"
+      />
+    );
+    const passwordField = (
+      <CutField
+        label={t('auth.passwordLabel', { defaultValue: 'PASSWORD' })}
+        placeholder={
+          isSignIn
+            ? t('auth.passwordPlaceholder', { defaultValue: 'Password' })
+            : t('auth.passwordNewPlaceholder', { min: PASSWORD_MIN, defaultValue: 'Password ({{min}}+ characters)' })
+        }
+        keyboardAppearance="dark"
+        secureTextEntry
+        textContentType={isSignIn ? 'password' : 'newPassword'}
+        autoComplete={isSignIn ? 'current-password' : 'new-password'}
+        maxLength={PASSWORD_MAX}
+        value={password}
+        onChangeText={edit('password', setPassword)}
+        onSubmitEditing={isSignIn ? handleSignIn : handleSignUp}
+        returnKeyType="go"
+        error={fieldErrors.password}
+        containerStyle={figmaStyles.fieldGap}
+        testID="signin-password"
+      />
+    );
+
+    if (!isSignIn) {
+      // Board "Sign up with email": EMAIL ADDRESS, PASSWORD (8+ characters),
+      // SIGN UP », « BACK.
+      return wrap(
+        <>
+          <Wordmark size={40} style={figmaStyles.wordmark} />
+          {emailField}
+          {passwordField}
+          <View style={figmaStyles.primaryBlock}>
+            <FormError>{fieldErrors.form}</FormError>
+            <SlantButton
+              label={t('auth.signUp', { defaultValue: 'SIGN UP' })}
+              onPress={handleSignUp}
+              loading={loading}
+              disabled={oauthLoading}
+              testID="signin-submit"
+            />
+          </View>
+          <View style={figmaStyles.linkRow}>
+            <LinkText chevron="left" size={13} onPress={goBack}>
+              {t('auth.back', { defaultValue: 'BACK' })}
+            </LinkText>
+          </View>
+        </>,
       );
     }
 
-    const primaryLabel = loading
-      ? t('signIn.pleaseWait')
-      : isSignIn
-        ? t('signIn.figmaSignBackIn', { defaultValue: 'Sign back in' })
-        : t('signIn.figmaSignUp', { defaultValue: 'Sign up' });
-
-    // Updated UX A3: ← SIGN UP header, subtitle, EMAIL / PASSWORD (8+
-    // CHARACTERS) labels, the 8+ helper and a mono-caps toggle. Email only:
-    // Apple and Google live on the landing, so there is no SSO button here.
-    return (
-      <KeyboardAvoidingView
-        style={[figmaStyles.screen, figmaStyles.formScreen, screenPadding]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <OnboardingHeader
-          title={
-            isSignIn
-              ? t('signIn.figmaSignInTitle', { defaultValue: 'Sign in' })
-              : t('signIn.figmaSignUpTitle', { defaultValue: 'Sign up' })
-          }
-          onBack={goBack}
-        />
-        {isSignIn ? null : (
-          <Text style={figmaStyles.subtitle}>
-            {t('signIn.figmaSignUpSubtitle', {
-              defaultValue: 'Create your account. You’ll choose your commander name next.',
-            })}
-          </Text>
-        )}
-
-        <Text style={figmaStyles.fieldLabel}>{t('signIn.figmaEmailLabel', { defaultValue: 'Email' })}</Text>
-        <TextInput
-          style={figmaStyles.input}
-          keyboardAppearance="dark"
-          placeholder={t('signIn.figmaEmailPlaceholder', { defaultValue: 'you@domain.com' })}
-          placeholderTextColor={colors.muted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <Text style={figmaStyles.fieldLabel}>
-          {isSignIn
-            ? t('signIn.figmaPasswordLabel', { defaultValue: 'Password' })
-            : t('signIn.figmaPasswordLabelNew', { min: PASSWORD_MIN, defaultValue: 'Password ({{min}}+ characters)' })}
-        </Text>
-        <TextInput
-          style={[figmaStyles.input, figmaStyles.inputLast]}
-          keyboardAppearance="dark"
-          placeholder="••••••••"
-          placeholderTextColor={colors.muted}
-          secureTextEntry
-          textContentType={isSignIn ? 'password' : 'newPassword'}
-          maxLength={PASSWORD_MAX}
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {isSignIn ? (
-          <Pressable
-            accessibilityRole="button"
-            style={figmaStyles.forgot}
-            onPress={() => navigation.navigate('ForgotPassword')}
-            hitSlop={{ top: 8, bottom: 8 }}
-          >
-            <Text style={figmaStyles.forgotText}>{t('signIn.forgotPassword')}</Text>
-          </Pressable>
-        ) : (
-          <Text style={figmaStyles.helper}>
-            {t('signIn.figmaPasswordHelper', { min: PASSWORD_MIN, defaultValue: '{{min}}+ characters' })}
-          </Text>
-        )}
-
-        {error ? <Text style={figmaStyles.formError}>{error}</Text> : null}
-
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            figmaStyles.primary,
-            figmaStyles.primarySpaced,
-            loading && figmaStyles.dim,
-            pressed && !loading && figmaStyles.primaryPressed,
-          ]}
-          onPress={isSignIn ? handleSignIn : handleSignUp}
-          disabled={loading || oauthLoading}
+    // Board "Sign in": EMAIL, PASSWORD, FORGOT PASSWORD?, SIGN IN », OR,
+    // CONTINUE WITH GOOGLE, "Don't have an account? SIGN UP »".
+    return wrap(
+      <>
+        <Wordmark size={40} style={figmaStyles.wordmark} />
+        {emailField}
+        {passwordField}
+        <LinkText
+          tone="muted"
+          size={13}
+          onPress={() => navigation.navigate('ForgotPassword', { email: email.trim() })}
+          style={figmaStyles.forgot}
+          testID="signin-forgot"
         >
-          <Text style={figmaStyles.primaryText}>{primaryLabel}</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          style={figmaStyles.capsToggle}
-          onPress={() => { setMode(isSignIn ? 'signup' : 'signin'); setError(''); }}
-        >
-          <Text style={figmaStyles.capsToggleText}>
-            {isSignIn
-              ? t('signIn.figmaNotStarted', { defaultValue: "Haven't started yet? " })
-              : t('landing.alreadyPlaying', { defaultValue: 'Already playing? ' })}
-            {isSignIn
-              ? t('signIn.figmaSignUpLink', { defaultValue: 'SIGN UP' })
-              : t('landing.signIn', { defaultValue: 'SIGN IN' })}
+          {t('auth.forgotPassword', { defaultValue: 'FORGOT PASSWORD?' })}
+        </LinkText>
+        <View style={figmaStyles.primaryBlockTight}>
+          <FormError>{fieldErrors.form}</FormError>
+          <SlantButton
+            label={t('auth.signIn', { defaultValue: 'SIGN IN' })}
+            onPress={handleSignIn}
+            loading={loading}
+            disabled={oauthLoading}
+            testID="signin-submit"
+          />
+        </View>
+        <OrDivider style={figmaStyles.or} />
+        <SlantButton
+          variant="outline"
+          size="md"
+          label={t('landing.continueWithGoogle', { defaultValue: 'Continue with Google' })}
+          leading={<GoogleGlyph />}
+          trailingChevron={false}
+          loading={oauthLoading}
+          disabled={loading}
+          onPress={handleGoogle}
+          testID="signin-google"
+        />
+        <View style={figmaStyles.promptRow}>
+          <Text style={figmaStyles.prompt} maxFontSizeMultiplier={1.4}>
+            {t('auth.noAccount', { defaultValue: 'Don’t have an account?' })}
           </Text>
-        </Pressable>
-      </KeyboardAvoidingView>
+          <LinkText chevron="right" size={13} onPress={toChooser} testID="signin-to-signup">
+            {t('auth.signUp', { defaultValue: 'SIGN UP' })}
+          </LinkText>
+        </View>
+      </>,
     );
   }
 
@@ -620,96 +702,28 @@ const styles = StyleSheet.create({
   },
 });
 
-// Figma frames (plan U10), on DESIGN.md tokens: square, mono labels, one
-// Claim Red Button per screen.
+// Figma frames (Dominia-Temp auth boards, plan U3). Shapes come from the
+// components/ui primitives; this only lays them out.
 const figmaStyles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.ink, justifyContent: 'center', paddingHorizontal: 24 },
-  back: { position: 'absolute', left: 24, paddingVertical: 8 },
-  backText: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.4, color: colors.slate2, textTransform: 'uppercase' },
-  wordmark: {
-    fontFamily: fonts.display,
-    fontSize: 26,
-    color: colors.bone,
-    letterSpacing: -1,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
-  heading: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.slate2,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 32,
-  },
-  hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.slate2, textAlign: 'center', marginBottom: 20 },
-  fieldLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    color: colors.slate2,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  input: {
-    width: '100%',
-    backgroundColor: colors.ink2,
-    borderWidth: 0.5,
-    borderColor: colors.hairlineStrong,
-    color: colors.bone,
-    fontFamily: fonts.mono,
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 48,
-    marginBottom: 14,
-  },
-  forgot: { alignSelf: 'flex-end', marginTop: 12 },
-  forgotText: { fontFamily: fonts.body, fontSize: 13, color: colors.slate2 },
-  error: { fontFamily: fonts.body, fontSize: 13, color: colors.bone, textAlign: 'center', marginBottom: 12 },
-  primary: {
-    width: '100%',
-    backgroundColor: colors.claimButton,
-    minHeight: 48,
-    paddingVertical: 14,
+  screen: { flex: 1, backgroundColor: colors.obsidian },
+  flex: { flex: 1 },
+  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  wordmark: { marginBottom: 36 },
+  wordmarkSmall: { marginBottom: 28 },
+  title: { marginBottom: 24 },
+  fieldGap: { marginTop: 18 },
+  forgot: { alignSelf: 'flex-end', marginTop: 16 },
+  primaryBlock: { marginTop: 22, alignSelf: 'stretch' },
+  primaryBlockTight: { marginTop: 18, alignSelf: 'stretch' },
+  or: { marginVertical: 16 },
+  linkRow: { marginTop: 20, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  promptRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    minHeight: 44,
   },
-  primaryText: { fontFamily: fonts.monoMedium, fontSize: 14, letterSpacing: 2, color: colors.bone, textTransform: 'uppercase' },
-  secondary: {
-    width: '100%',
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    minHeight: 48,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryText: { fontFamily: fonts.monoMedium, fontSize: 14, letterSpacing: 2, color: colors.bone, textTransform: 'uppercase' },
-  dim: { opacity: 0.7 },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 },
-  dividerLine: { flex: 1, height: 0.5, backgroundColor: colors.hairlineStrong },
-  dividerText: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.6, color: colors.slate2, textTransform: 'uppercase' },
-  toggle: { marginTop: 20, alignItems: 'center', paddingVertical: 6 },
-  toggleText: { fontFamily: fonts.body, fontSize: 13, color: colors.slate2, textAlign: 'center' },
-  toggleLink: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.4, color: colors.bone },
-  // Updated UX A3 form: top-aligned under the ← title header.
-  formScreen: { justifyContent: 'flex-start' },
-  subtitle: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 4, marginBottom: 16 },
-  inputLast: { marginBottom: 0 },
-  helper: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16 },
-  formError: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 12 },
-  primaryPressed: { backgroundColor: colors.actionPressed },
-  primarySpaced: { marginTop: 16, minHeight: 52 },
-  capsToggle: { marginTop: 16, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  capsToggleText: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.8,
-    color: colors.white2,
-    textTransform: 'uppercase',
-  },
+  prompt: { fontFamily: fonts.body, fontSize: 12, color: colors.muted2 },
 });
