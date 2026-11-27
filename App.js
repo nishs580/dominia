@@ -6,6 +6,8 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from './lib/clerk';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from './lib/theme';
+import Svg, { Polygon } from 'react-native-svg';
+import { parallelogramPoints } from './lib/slantGeometry';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ProfileAccordionScreen from './screens/ProfileAccordionScreen';
@@ -104,22 +106,23 @@ function OnboardingRoute(props) {
   return legacyTabs ? <OnboardingScreen {...props} /> : <FigmaOnboardingScreen {...props} />;
 }
 
+// Active-tab tile: a small Dominia-blue parallelogram behind the icon.
+const TAB_TILE_W = 44;
+const TAB_TILE_H = 30;
+const TAB_TILE_POINTS = parallelogramPoints(TAB_TILE_W, TAB_TILE_H);
+
 function makeTabOptions(label, Icon) {
-  // Figma tab bar: the active tab gets a 2px Signal Lime top indicator and a
-  // lime icon; its label stays white. Inactive tabs are white at 40%.
+  // Dominia-Temp tab bar (plan U2): the active tab gets a slanted blue tile
+  // behind a white icon and a white label; inactive tabs are muted.
   return {
     tabBarIcon: ({ focused }) => (
-      <View style={{ alignItems: 'center' }}>
-        <View
-          style={{
-            position: 'absolute',
-            top: -10,
-            width: 56,
-            height: 2,
-            backgroundColor: focused ? colors.lime : 'transparent',
-          }}
-        />
-        <Icon size={20} color={focused ? colors.lime : colors.muted} />
+      <View style={styles.tabTile}>
+        {focused ? (
+          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Polygon points={TAB_TILE_POINTS} fill={colors.action} />
+          </Svg>
+        ) : null}
+        <Icon size={20} color={focused ? colors.white : colors.muted2} />
       </View>
     ),
     tabBarLabel: ({ focused }) => (
@@ -127,12 +130,13 @@ function makeTabOptions(label, Icon) {
         maxFontSizeMultiplier={1.3}
         numberOfLines={1}
         style={{
-          fontFamily: focused ? 'IBMPlexSans_700Bold' : 'IBMPlexSans_600SemiBold',
-          fontSize: 11,
+          fontFamily: 'IBMPlexSans_700Bold',
+          fontSize: 10,
           textTransform: 'uppercase',
-          letterSpacing: 1.4,
+          letterSpacing: 1,
           includeFontPadding: false,
-          color: focused ? colors.white : colors.muted,
+          marginTop: 4,
+          color: focused ? colors.white : colors.muted2,
         }}
       >
         {label}
@@ -169,16 +173,17 @@ const TabNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.obsidian,
           borderTopWidth: 1,
           borderTopColor: colors.hairline,
           elevation: 0,
-          height: 62 + insets.bottom,
-          paddingTop: 10,
-          paddingBottom: insets.bottom + 10,
+          height: 66 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
         },
-        tabBarActiveTintColor: '#FDFDFD',
-        tabBarInactiveTintColor: 'rgba(253,253,253,0.30)',
+        tabBarIconStyle: { width: TAB_TILE_W, height: TAB_TILE_H },
+        tabBarActiveTintColor: colors.white,
+        tabBarInactiveTintColor: colors.muted2,
         headerShown: false,
       }}
     >
@@ -298,6 +303,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  tabTile: {
+    width: TAB_TILE_W,
+    height: TAB_TILE_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: {
     flex: 1,
     backgroundColor: '#fff',

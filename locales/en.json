@@ -9,7 +9,9 @@
     "save": "Save",
     "done": "Done",
     "continue": "Continue",
-    "territoryFallback": "Territory"
+    "territoryFallback": "Territory",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "tabs": {
     "map": "MAP",
