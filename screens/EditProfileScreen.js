@@ -31,8 +31,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 import SlantAvatar from '../components/SlantAvatar';
-import { CutCard, SlantButton, SlantTile } from '../components/ui';
-import { BackRow, ListGlyph } from './ProfileAccordionScreen';
+import { BackHeader, CutCard, SlantButton, SlantTile } from '../components/ui';
+import { ListGlyph } from '../components/ProfileGlyphs';
 import { checkUsernameAvailable, getMe, patchMe } from '../lib/meApi';
 import { avatarThumb, clerkAvatarUrl, updateAvatar } from '../lib/avatar';
 import { usernameSaveErrorKey, validateUsername } from '../lib/profile';
@@ -259,10 +259,11 @@ export default function EditProfileScreen() {
   };
 
   const header = (
-    <BackRow
-      title={t('editProfile.title', { defaultValue: 'Edit Profile' })}
+    <BackHeader
+      label={t('editProfile.title', { defaultValue: 'Edit Profile' })}
       onBack={() => navigation.goBack()}
-      backLabel={t('common.back', { defaultValue: 'Back' })}
+      accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
+      bordered
     />
   );
 
