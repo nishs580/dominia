@@ -2,22 +2,30 @@
 // plan U8), Figma mode only. State lives in lib/coachMarks.js; MapScreen
 // decides when they run and persists them.
 //
-//   sidePanel     B1: dims the map; the side rail (lifted above the scrim by
-//                 MapSideRail `coach`) is framed in lime with labels. A card
-//                 at the bottom: THE SIDE PANEL / body / TAP TO CONTINUE.
-//                 A tap anywhere continues.
-//   tapTerritory  B2: no scrim (the map stays tappable); a card at the bottom:
-//                 YOUR FIRST TERRITORY / "Let's capture your first territory.
-//                 Tap the highlighted territory to see its details."
-//   card          B3: CoachBubble, rendered by TerritoryCard just above it.
+// Dominia-Temp (plan U5, Figma Main screen explanation): a white rectangular
+// bubble with black text and a small pointer, progress dashes bottom-left and
+// a lime "TAP TO CONTINUE »" bottom-right.
 //
-// Every card carries SKIP, which ends the coach marks for good.
-// Surface: Ink 2 card, 2px signal-lime top edge, 0 radius; lime mono kicker.
+//   sidePanel     B1: dims the map; the side rail (lifted above the scrim by
+//                 MapSideRail `coach`) is framed and each tile labelled with a
+//                 white slanted chip. The bubble sits below the rail, its
+//                 pointer up at it. A tap anywhere continues.
+//   tapTerritory  B2: no scrim (the map stays tappable — tapping the
+//                 highlighted territory is how this step advances); the
+//                 bubble and progress dashes only.
+//   card          B3: CoachBubble, rendered by TerritoryCard just above it,
+//                 pointer down at the card.
+//
+// SKIP (bottom-left, after the dashes) ends the coach marks for good.
 
 import React, { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors, fonts } from '../lib/theme';
+
+const STEP_ORDER = ['sidePanel', 'tapTerritory', 'card'];
+const BUBBLE_BG = colors.white;
+const POINTER = 8;
 
 function SkipButton({ onSkip }) {
   const { t } = useTranslation();
@@ -33,42 +41,66 @@ function SkipButton({ onSkip }) {
   );
 }
 
+function ProgressDashes({ step }) {
+  const index = STEP_ORDER.indexOf(step);
+  return (
+    <View style={styles.dashes} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {STEP_ORDER.map((s, i) => (
+        <View key={s} style={[styles.dash, i === index && styles.dashActive]} />
+      ))}
+    </View>
+  );
+}
+
+// White bubble with a pointer: 'up' sits on top (pointing at what is above),
+// 'down' below. `align` places the pointer along the edge.
+function Bubble({ children, pointer = 'up', align = 'right', style }) {
+  const tip = (
+    <View
+      style={[
+        styles.pointer,
+        align === 'right' ? styles.pointerRight : align === 'left' ? styles.pointerLeft : styles.pointerCenter,
+      ]}
+    />
+  );
+  return (
+    <View style={style}>
+      {pointer === 'up' ? tip : null}
+      <View style={styles.bubble}>{children}</View>
+      {pointer === 'down' ? tip : null}
+    </View>
+  );
+}
+
 export default function CoachMark({ step, onContinue, onSkip }) {
   const { t } = useTranslation();
 
-  const copy = step === 'sidePanel'
-    ? {
-      kicker: t('map.coach.sidePanelTitle', { defaultValue: 'THE SIDE PANEL' }),
-      body: t('map.coach.sidePanelBody', {
-        defaultValue: 'Use the side panel to explore territories, find your location, check the leaderboard, view your challenge history, and chat with your alliance members.',
-      }),
-    }
+  const body = step === 'sidePanel'
+    ? t('map.coach.sidePanelBody', {
+      defaultValue: 'Use the side panel to explore territories, find your location, check the leaderboard, view your challenge history, and chat with your alliance members.',
+    })
     : step === 'tapTerritory'
-      ? {
-        kicker: t('map.coach.firstTerritoryTitle', { defaultValue: 'YOUR FIRST TERRITORY' }),
-        body: t('map.coach.firstTerritoryBody', {
-          defaultValue: "Let's capture your first territory. Tap the highlighted territory to see its details.",
-        }),
-      }
+      ? t('map.coach.firstTerritoryBodyTemp', {
+        defaultValue: "Let's capture your first territory. Tap on the territory to see its details.",
+      })
       : null;
 
   useEffect(() => {
-    if (copy) AccessibilityInfo.announceForAccessibility?.(`${copy.kicker}. ${copy.body}`);
+    if (body) AccessibilityInfo.announceForAccessibility?.(body);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  if (!copy) return null;
+  if (!body) return null;
 
-  const card = (
-    <View style={styles.card} accessibilityLiveRegion="polite">
-      <View style={styles.cardHeader}>
-        <Text style={styles.kicker} maxFontSizeMultiplier={1.3}>{copy.kicker}</Text>
+  const footer = (
+    <View style={styles.footer} pointerEvents="box-none">
+      <View style={styles.footerLeft}>
+        <ProgressDashes step={step} />
         <SkipButton onSkip={onSkip} />
       </View>
-      <Text style={styles.body} maxFontSizeMultiplier={1.3}>{copy.body}</Text>
       {step === 'sidePanel' ? (
         <Text style={styles.continue} maxFontSizeMultiplier={1.3}>
-          {t('map.coach.tapToContinue', { defaultValue: 'TAP TO CONTINUE' })}
+          {t('map.coach.tapToContinueTemp', { defaultValue: 'TAP TO CONTINUE »' })}
         </Text>
       ) : null}
     </View>
@@ -82,14 +114,24 @@ export default function CoachMark({ step, onContinue, onSkip }) {
         accessibilityRole="button"
         accessibilityLabel={t('map.coach.tapToContinue', { defaultValue: 'TAP TO CONTINUE' })}
       >
-        {card}
+        <Bubble pointer="up" align="right" style={styles.sidePanelBubble}>
+          <Text style={styles.bubbleText} maxFontSizeMultiplier={1.3} accessibilityLiveRegion="polite">
+            {body}
+          </Text>
+        </Bubble>
+        {footer}
       </Pressable>
     );
   }
 
   return (
     <View style={styles.passThrough} pointerEvents="box-none">
-      {card}
+      <Bubble pointer="up" align="center" style={styles.territoryBubble}>
+        <Text style={styles.bubbleText} maxFontSizeMultiplier={1.3} accessibilityLiveRegion="polite">
+          {body}
+        </Text>
+      </Bubble>
+      {footer}
     </View>
   );
 }
@@ -101,14 +143,16 @@ export function CoachBubble({ onPress }) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={styles.bubble}
+      style={styles.cardBubbleWrap}
       accessibilityLiveRegion="polite"
     >
-      <Text style={styles.bubbleText} maxFontSizeMultiplier={1.3}>
-        {t('map.coach.cardBubble', {
-          defaultValue: 'Tap Start claiming to begin the challenge, or close this to explore the app and other territories.',
-        })}
-      </Text>
+      <Bubble pointer="down" align="center">
+        <Text style={styles.bubbleText} maxFontSizeMultiplier={1.3}>
+          {t('map.coach.cardBubble', {
+            defaultValue: 'Tap Start claiming to begin the challenge, or close this to explore the app and other territories.',
+          })}
+        </Text>
+      </Bubble>
     </Pressable>
   );
 }
@@ -117,75 +161,92 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.72)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
     zIndex: 70,
     elevation: 70,
   },
   passThrough: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
     zIndex: 70,
     elevation: 70,
   },
-  card: {
-    backgroundColor: colors.ink2,
-    borderTopWidth: 2,
-    borderTopColor: colors.lime,
-    borderRadius: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 10,
+  // Below the rail (MapSideRail figma: top 124, five 40pt tiles + gaps).
+  sidePanelBubble: {
+    position: 'absolute',
+    top: 372,
+    left: 16,
+    right: 72,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  kicker: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 11,
-    letterSpacing: 1.76,
-    textTransform: 'uppercase',
-    color: colors.lime,
-  },
-  skip: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.4,
-    color: colors.slate2,
-  },
-  body: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: colors.bone,
-  },
-  continue: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.4,
-    color: colors.lime,
+  territoryBubble: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    bottom: 96,
   },
   bubble: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: '100%',
-    marginBottom: 12,
-    backgroundColor: colors.ink2,
-    borderTopWidth: 2,
-    borderTopColor: colors.lime,
+    backgroundColor: BUBBLE_BG,
+    borderRadius: 0,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   bubbleText: {
     fontFamily: fonts.body,
     fontSize: 13,
-    lineHeight: 19,
-    color: colors.bone,
+    lineHeight: 18,
+    color: colors.obsidian,
+  },
+  pointer: {
+    width: POINTER * 2,
+    height: POINTER,
+    backgroundColor: BUBBLE_BG,
+  },
+  pointerRight: { alignSelf: 'flex-end', marginRight: 16 },
+  pointerLeft: { alignSelf: 'flex-start', marginLeft: 16 },
+  pointerCenter: { alignSelf: 'center' },
+  footer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  dashes: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dash: {
+    width: 8,
+    height: 3,
+    backgroundColor: colors.muted,
+    transform: [{ skewX: '-20deg' }],
+  },
+  dashActive: {
+    width: 22,
+    backgroundColor: colors.action,
+  },
+  skip: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: colors.muted2,
+  },
+  continue: {
+    fontFamily: fonts.action,
+    fontSize: 13,
+    letterSpacing: 0.8,
+    color: colors.lime,
+  },
+  cardBubbleWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: '100%',
+    marginBottom: 12,
   },
 });
