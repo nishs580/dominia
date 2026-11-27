@@ -52,13 +52,13 @@ export default function ChallengeStatusScreen({ title, body, pulse = true, child
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   center: { alignItems: 'center', gap: 14 },
   title: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: colors.bone,
     fontSize: 13,
     letterSpacing: 1.6,
@@ -66,6 +66,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
   },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: colors.slate2, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  body: { fontFamily: 'IBMPlexSans_500Medium', color: colors.slate2, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   actions: { position: 'absolute', left: 24, right: 24, gap: 10 },
 });

@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   eyebrow: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     // Bone label — the ownership colour lives on the mark and the deciding stat,
     // not on the chrome. The mark below already states the outcome in colour.
@@ -327,17 +327,17 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   territoryName: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 29,
     color: BONE,
     letterSpacing: -1,
     textAlign: 'center',
-    lineHeight: 38,
+    lineHeight: 30,
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   headline: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.5,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   perimeter: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1,
@@ -367,27 +367,27 @@ const styles = StyleSheet.create({
     margin: 0.5,
   },
   statLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.4,
     marginBottom: 8,
   },
   statName: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: BONE,
     marginBottom: 12,
   },
   statValue: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 26,
     letterSpacing: -1,
     lineHeight: 26,
     textTransform: 'uppercase',
   },
   statUnit: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 0.6,
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   consequenceText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: BONE,
     lineHeight: 19,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   earnedXpValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 32,
     lineHeight: 34,
     color: BONE,
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   earnedXpLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.6,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   earnedBeat: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: BONE,
     letterSpacing: 1.8,

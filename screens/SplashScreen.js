@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
   bar: { width: 38, height: 4, backgroundColor: colors.lime, marginBottom: 12 },
   wordmark: {
     fontFamily: fonts.display,
-    fontSize: 48,
+    fontSize: 38,
     color: colors.bone,
     letterSpacing: -1.4,
     textTransform: 'uppercase',

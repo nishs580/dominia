@@ -8,7 +8,7 @@ import {
   singularBarLabel,
 } from '../../lib/legacyMedals';
 
-const BONE = '#F5F4EF';
+const BONE = '#FDFDFD';
 // Higher tiers read wider — bar width grows per slot (bronze -> claim).
 const BAR_WIDTHS = [7, 10, 13, 16];
 
@@ -35,7 +35,7 @@ export default function TierBars({ medal, height = 6 }) {
                 borderRadius: 0,
                 backgroundColor: on ? TIER_COLOR[tier] : 'transparent',
                 borderWidth: on ? 0 : StyleSheet.hairlineWidth,
-                borderColor: 'rgba(245,244,239,0.16)',
+                borderColor: 'rgba(253,253,253,0.16)',
               }}
             />
           );
@@ -67,9 +67,9 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   boneText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 0.5,
-    color: '#101010',
+    color: '#000000',
   },
 });

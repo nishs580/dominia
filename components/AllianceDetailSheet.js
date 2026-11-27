@@ -317,7 +317,7 @@ export default function AllianceDetailSheet({ alliance: listItem, getToken, onCl
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.82)',
+    backgroundColor: 'rgba(0,0,0,0.82)',
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 48,
@@ -350,8 +350,8 @@ const styles = StyleSheet.create({
   closeText: { color: colors.slate2, fontSize: 18 },
   title: {
     fontFamily: fonts.display,
-    fontSize: 34,
-    lineHeight: 36,
+    fontSize: 27,
+    lineHeight: 29,
     color: colors.bone,
     textTransform: 'uppercase',
   },

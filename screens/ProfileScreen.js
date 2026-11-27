@@ -58,19 +58,19 @@ import { navigateTo } from '../lib/navigation';
 // preview EAS environments only, never production.
 const DEBUG_MENU = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_MENU === '1';
 
-const CLAIM = '#22D65E';
-const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
-const ALLIANCE = '#3155FF';
+const CLAIM = '#84FF44';
+const CLAIM_BUTTON = colors.action; // primary button blue
+const ALLIANCE = colors.alliance;
 // The one sanctioned non-territory signal. Used exactly once on this screen.
 const CAUTION = '#D49A2B';
-const INK = '#101010';
-const INK2 = '#1A1A1A';
-const INK3 = '#242424';
-const BONE = '#F5F4EF';
-const SLATE = '#6C6C69';
-const SLATE2 = '#A3A29F';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const INK2 = '#0E0E10';
+const INK3 = '#1A1A1D';
+const BONE = '#FDFDFD';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 // With `legacy_tabs` off Profile is pushed on top of MainTabs in the root
 // stack, so replace would leave MainTabs (signed out) behind SignIn. Clear the
@@ -233,7 +233,7 @@ export function AllianceChatPushToggleRow({ playerRow, clerkGetToken }) {
       <Text
         style={[
           styles.settingsLabel,
-          { color: enabled ? '#F5F4EF' : '#6C6C69' },
+          { color: enabled ? '#FDFDFD' : 'rgba(253,253,253,0.30)' },
         ]}
       >
         {enabled ? t('profile.on') : t('profile.off')}
@@ -1304,7 +1304,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 22,
     color: SLATE2,
     letterSpacing: -0.01,
@@ -1319,58 +1319,58 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
   },
   avatarEditBadgeText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
   },
   commanderName: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 32,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 26,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
   },
   rankLine: {
     marginTop: 6,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   rankTitle: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.2,
     // Bone, not red — the rank title is a label, not the screen's one accent.
     color: BONE,
   },
   rankSeparator: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
   // The rank's position on the ladder, sitting with the rank noun rather than
   // 250px lower in another block.
   rankScale: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAlliance: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
   rankAllianceClaim: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     // Alliance Green — the alliance is "ours" (Locked Meaning Rule), never red.
@@ -1390,7 +1390,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -1402,7 +1402,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: BONE,
   },
@@ -1418,7 +1418,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionRuleLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
@@ -1430,7 +1430,7 @@ const styles = StyleSheet.create({
     backgroundColor: HAIRLINE_STRONG,
   },
   sectionRuleRight: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
@@ -1447,7 +1447,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   powerValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 44,
     lineHeight: 50,
     letterSpacing: -0.9,
@@ -1455,7 +1455,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   powerHeroUnit: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
@@ -1515,7 +1515,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   ladderXp: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1523,7 +1523,7 @@ const styles = StyleSheet.create({
   },
   ladderNext: {
     flexShrink: 1,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1531,14 +1531,14 @@ const styles = StyleSheet.create({
   },
   unlockText: {
     marginTop: 8,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 18,
     color: SLATE2,
   },
   // The gate is a measurement, so it is mono while the reward stays Instrument Sans.
   unlockGate: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   powerRowLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1575,7 +1575,7 @@ const styles = StyleSheet.create({
   // most useful thing in the row.
   powerRowReason: {
     marginTop: 5,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 18,
     color: BONE,
@@ -1583,14 +1583,14 @@ const styles = StyleSheet.create({
   // Live state: a readout, so Geist Mono and subdued — the number leads.
   powerRowData: {
     marginTop: 5,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: SLATE2,
   },
   powerRowValue: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.4,
@@ -1601,7 +1601,7 @@ const styles = StyleSheet.create({
   // screen, fainter than its own labels. The scale captions carry the "not yet"
   // instead.
   rowChevron: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 18,
     lineHeight: 20,
     color: SLATE2,
@@ -1626,7 +1626,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK3,
   },
   rowActionText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -1638,13 +1638,13 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   emptyLead: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     color: BONE,
   },
   emptyBody: {
     marginTop: 6,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 19,
     color: SLATE2,
@@ -1668,7 +1668,7 @@ const styles = StyleSheet.create({
   // 15px mono 500 is the theme's CTA step and the largest that still holds
   // "CLAIM YOUR FIRST TERRITORY" on one line at 1.6 tracking.
   primaryCtaText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 15,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1691,12 +1691,12 @@ const styles = StyleSheet.create({
   },
   territoryName: {
     flex: 1,
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     color: BONE,
   },
   territoryTier: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -1706,7 +1706,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK2,
   },
   territoryChevron: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 18,
     lineHeight: 20,
     color: SLATE2,
@@ -1735,7 +1735,7 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   recordLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
@@ -1743,7 +1743,7 @@ const styles = StyleSheet.create({
   },
   recordValue: {
     marginTop: 7,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 24,
     lineHeight: 29,
     letterSpacing: -0.5,
@@ -1754,7 +1754,7 @@ const styles = StyleSheet.create({
   // as one clean run of numbers down the table.
   recordSub: {
     marginTop: 6,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -1783,12 +1783,12 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   walletValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 15,
     color: BONE,
   },
   walletCellLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
@@ -1808,18 +1808,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   settingsLabel: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
   settingsChevron: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 18,
     color: SLATE2,
   },
   // Sign out is a routine action — neutral bone.
   settingsSignOut: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
@@ -1827,12 +1827,12 @@ const styles = StyleSheet.create({
   // screen spends it on the first claim. The permanence is signalled instead by
   // the screen's one sanctioned Caution Amber flag.
   settingsDelete: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
   settingsDeleteFlag: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
@@ -1843,7 +1843,7 @@ const styles = StyleSheet.create({
   // ── Modals ───────────────────────────────────────────────────────────────
   deleteModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.9)',
+    backgroundColor: 'rgba(0,0,0,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -1856,7 +1856,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   deleteModalTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: BONE,
     textTransform: 'uppercase',
@@ -1864,7 +1864,7 @@ const styles = StyleSheet.create({
   },
   // Neutral modal title — change-password is a routine action, not destructive.
   modalTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: BONE,
     textTransform: 'uppercase',
@@ -1872,14 +1872,14 @@ const styles = StyleSheet.create({
   },
   deleteModalBody: {
     marginTop: 12,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 19,
     color: BONE,
   },
   deleteModalPrompt: {
     marginTop: 16,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 0.4,
     color: SLATE2,
@@ -1891,13 +1891,13 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
     color: BONE,
   },
   changePasswordError: {
     marginTop: 12,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     // Errors read in Bone (Instrument Sans sentence), never Claim red (Locked Meaning).
     color: BONE,
@@ -1917,7 +1917,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   deleteModalCancelText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -1927,18 +1927,18 @@ const styles = StyleSheet.create({
   deleteModalConfirm: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E8432B',
-    backgroundColor: 'rgba(232,67,43,0.12)',
+    borderColor: '#E34234',
+    backgroundColor: 'rgba(227,66,52,0.12)',
     paddingVertical: 12,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   deleteModalConfirmText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: '#E8432B',
+    color: '#E34234',
   },
 });

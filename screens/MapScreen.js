@@ -57,6 +57,7 @@ import { getFlag, useFlag } from '../lib/flags';
 import { navigateTo } from '../lib/navigation';
 import MapTopBar from '../components/MapTopBar';
 import TerritoryCard from '../components/TerritoryCard';
+import { territoryOwnership } from '../lib/territoryCard';
 import DefendPopup, { useDefendPopupFeed } from '../components/DefendPopup';
 import { defendPopupModel, defendStartParams } from '../lib/defendPopup';
 import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
@@ -143,6 +144,25 @@ const UNCLAIMED = 'transparent';
 const HAIRLINE = colors.hairline;
 const HAIRLINE_STRONG = colors.hairlineStrong;
 const CLAIM_SOFT = colors.claimSoft;
+
+// Ownership is data, not colour (Dominia-Temp plan U1). Every territory
+// feature carries `ownership` ('yours' | 'alliance' | 'enemy' | 'unclaimed')
+// and its `color` is derived from it here, so retuning the palette can never
+// misclassify ground. Layer expressions read `ownership` too.
+const OWNERSHIP_COLOR = {
+  yours: colors.self,
+  alliance: colors.alliance,
+  enemy: colors.enemy,
+  unclaimed: UNCLAIMED,
+};
+const ownershipColourExpression = (fallback) => [
+  'match',
+  ['get', 'ownership'],
+  'yours', colors.self,
+  'alliance', colors.alliance,
+  'enemy', colors.enemy,
+  fallback,
+];
 
 function liveCountdown(t, expiresAtIso) {
   const remainingMs = Math.max(0, new Date(expiresAtIso).getTime() - Date.now());
@@ -377,16 +397,17 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
       ? perimeterDistanceRaw
       : Number(String(perimeterDistanceRaw).replace(/[^\d.]/g, '')) || 0;
 
-  const isYours = territory.properties?.color === '#22D65E' || territory.properties?.color === '#3155FF';
-  const isOwnTerritory = territory.properties?.color === '#22D65E';
-  const isAllianceTerritory = territory.properties?.color === '#3155FF';
+  const territoryOwner = territoryOwnership(territory.properties);
+  const isYours = territoryOwner === 'yours' || territoryOwner === 'alliance';
+  const isOwnTerritory = territoryOwner === 'yours';
+  const isAllianceTerritory = territoryOwner === 'alliance';
   const isOwned = !isUnclaimed;
 
   // Top border colour reflects territory state
-  let topBorderColour = '#6C6C69'; // unclaimed default (Slate)
-  if (isOwnTerritory) topBorderColour = '#22D65E';
-  else if (isAllianceTerritory) topBorderColour = '#3155FF';
-  else if (isOwned) topBorderColour = '#E8432B';
+  let topBorderColour = 'rgba(253,253,253,0.30)'; // unclaimed default (Slate)
+  if (isOwnTerritory) topBorderColour = colors.self;
+  else if (isAllianceTerritory) topBorderColour = colors.alliance;
+  else if (isOwned) topBorderColour = colors.enemy;
 
   // Label above territory name
   let stateLabel = t('map.stateUnclaimed');
@@ -396,7 +417,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
 
   const playerXp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
   const cap = territoryCapForLevel(F.calcLevel(playerXp));
-  const heldCount = allFeatures.filter(f => f.properties?.color === '#22D65E').length;
+  const heldCount = allFeatures.filter(f => territoryOwnership(f.properties) === 'yours').length;
   const isAtCap = heldCount >= cap;
 
   // Owner's streak tier (deterrent signal)
@@ -698,7 +719,7 @@ function TerritorySheet({ territory, onClose, userId, onTerritoriesRefetched, on
                     <AllianceEmblem
                       emblem={territory.properties?.emblem}
                       size={16}
-                      glyph={isAllianceTerritory ? '#3155FF' : '#E8432B'}
+                      glyph={isAllianceTerritory ? colors.alliance : colors.enemy}
                     />
                   ) : null}
                   <Text style={styles.sheetRowValue}>
@@ -1457,7 +1478,8 @@ export default function MapScreen() {
         battleChip: '',
         chipColor: SLATE2,
         perimeter: target.perimeter_distance,
-        color: 'transparent',
+        ownership: 'unclaimed',
+        color: OWNERSHIP_COLOR.unclaimed,
       },
       geometry: target.geojson,
     };
@@ -1605,11 +1627,11 @@ export default function MapScreen() {
   }, [heldCount, spine, maybeShowNotifPrime, navigation, userId]);
 
   const objectiveFillStyle = useMemo(
-    () => ({ fillColor: '#C8FF3D', fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
+    () => ({ fillColor: '#84FF44', fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
     [],
   );
   const objectiveLineStyle = useMemo(
-    () => ({ lineColor: '#C8FF3D', lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
+    () => ({ lineColor: '#84FF44', lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
     [],
   );
 
@@ -1844,6 +1866,11 @@ export default function MapScreen() {
       const developmentLevel = row.development_level ?? 0;
       const allianceTag = row.alliance_short_name ?? null;
       const isOwnAlliance = Boolean(myPlayer?.alliance_id && row.alliance_id === myPlayer.alliance_id);
+      const ownership =
+        row.owner_clerk_id === userId ? 'yours'
+          : isOwnAlliance ? 'alliance'
+            : row.owner_id != null ? 'enemy'
+              : 'unclaimed';
       // Second label line: development badge + alliance tag ("D3 · [VLK]").
       const labelParts = [];
       if (developmentLevel >= 1) labelParts.push(`D${developmentLevel}`);
@@ -1857,16 +1884,16 @@ export default function MapScreen() {
         lastBattleAt: row.last_battle_at ?? null,
       });
       let battleChip = '';
-      let chipColor = '#A3A29F';
+      let chipColor = 'rgba(253,253,253,0.62)';
       if (chip?.key === 'contested') {
         battleChip = t('map.chip.contested');
-        chipColor = '#22D65E';
+        chipColor = '#84FF44';
       } else if (chip) {
         const ago = chip.minutes < 60
           ? t('map.agoMin', { n: chip.minutes })
           : t('map.agoHr', { n: Math.floor(chip.minutes / 60) });
         battleChip = t(chip.key === 'fell' ? 'map.chip.fell' : 'map.chip.held', { ago });
-        chipColor = chip.key === 'fell' ? '#22D65E' : '#3155FF';
+        chipColor = chip.key === 'fell' ? colors.self : colors.alliance;
       }
 
       return {
@@ -1892,9 +1919,8 @@ export default function MapScreen() {
           battleChip,
           chipColor,
           perimeter: row.perimeter_distance,
-          color: row.owner_clerk_id === userId ? '#22D65E' :
-            isOwnAlliance ? '#3155FF' :
-            row.owner_id != null ? '#E8432B' : 'transparent',
+          ownership,
+          color: OWNERSHIP_COLOR[ownership],
         },
         // Winding order already normalised server-side via ST_ForcePolygonCCW.
         geometry: row.geojson ?? {
@@ -2065,6 +2091,8 @@ export default function MapScreen() {
             labelParts.push(`D${existing.properties.developmentLevel}`);
           }
           if (allianceTag) labelParts.push(`[${allianceTag}]`);
+          const claimedOwnership =
+            payload.owner_clerk_id === userId ? 'yours' : isOwnAlliance ? 'alliance' : 'enemy';
 
           cache.set(id, {
             ...existing,
@@ -2073,12 +2101,8 @@ export default function MapScreen() {
               owner: payload.owner_username ?? existing.properties.owner,
               alliance: allianceTag,
               labelSub: labelParts.join(' · '),
-              color:
-                payload.owner_clerk_id === userId
-                  ? '#22D65E'
-                  : isOwnAlliance
-                    ? '#3155FF'
-                    : '#E8432B',
+              ownership: claimedOwnership,
+              color: OWNERSHIP_COLOR[claimedOwnership],
             },
           });
           setTerritories({
@@ -2357,8 +2381,8 @@ export default function MapScreen() {
   // cased when held, dashed hairline when open, marching red when contested).
   // Any one of the three alone is enough to tell held ground from open ground.
 
-  const claimedFilter = useMemo(() => ['!=', ['get', 'color'], 'transparent'], []);
-  const openFilter = useMemo(() => ['==', ['get', 'color'], 'transparent'], []);
+  const claimedFilter = useMemo(() => ['!=', ['get', 'ownership'], 'unclaimed'], []);
+  const openFilter = useMemo(() => ['==', ['get', 'ownership'], 'unclaimed'], []);
 
   // Held ground is a PLATE of the owner's colour, not a tint over the map.
   // Round 1 kept the fill translucent enough that the parcel read as the
@@ -2372,9 +2396,9 @@ export default function MapScreen() {
       fillColor: ['get', 'color'],
       fillOpacity: [
         'case',
-        ['==', ['get', 'color'], '#22D65E'], 0.60,
-        ['==', ['get', 'color'], '#3155FF'], 0.60,
-        ['==', ['get', 'color'], '#E8432B'], 0.68,
+        ['==', ['get', 'ownership'], 'yours'], 0.60,
+        ['==', ['get', 'ownership'], 'alliance'], 0.60,
+        ['==', ['get', 'ownership'], 'enemy'], 0.68,
         0,
       ],
       fillEmissiveStrength: 1.0,
@@ -2440,13 +2464,7 @@ export default function MapScreen() {
 
   const lineStyle = useMemo(
     () => ({
-      lineColor: [
-        'case',
-        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
-        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
-        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
-        '#6C6C69',
-      ],
+      lineColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
       // Border weight encodes the owner's streak band (deterrence at a glance):
       // base <7d, hardened 7–20d, fortified 21+d (which also gets the inner line).
       // Full opacity and heavy enough that the owner's colour, not the seam
@@ -2572,7 +2590,7 @@ export default function MapScreen() {
   const puckCoreStyle = useMemo(
     () => ({
       circleRadius: 7,
-      circleColor: '#C8FF3D', // Signal Lime: the player dot (Figma)
+      circleColor: '#84FF44', // Signal Lime: the player dot (Figma)
       circleOpacity: 1,
       circleStrokeColor: INK,
       circleStrokeWidth: 2.5,
@@ -2609,13 +2627,7 @@ export default function MapScreen() {
   // Inner second wall for fortified (21+ day streak) owners.
   const streakInnerStyle = useMemo(
     () => ({
-      lineColor: [
-        'case',
-        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
-        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
-        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
-        '#6C6C69',
-      ],
+      lineColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
       lineWidth: 1.2,
       lineOpacity: 0.6,
       lineOffset: 3,
@@ -2632,13 +2644,7 @@ export default function MapScreen() {
   // Development rampart — inset ring for D2+, heavier and brighter at D4.
   const rampartStyle = useMemo(
     () => ({
-      lineColor: [
-        'case',
-        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
-        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
-        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
-        '#6C6C69',
-      ],
+      lineColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
       lineWidth: ['case', ['>=', ['get', 'developmentLevel'], 4], 2.4, 1.4],
       lineOpacity: ['case', ['>=', ['get', 'developmentLevel'], 4], 0.95, 0.65],
       lineOffset: 7,
@@ -2665,7 +2671,7 @@ export default function MapScreen() {
           '',
           ['concat', '\n', ['to-string', ['get', 'labelSub']]],
         ],
-        { 'font-scale': 0.85, 'text-color': '#A3A29F' },
+        { 'font-scale': 0.85, 'text-color': 'rgba(253,253,253,0.62)' },
       ],
       // Territory names are the only words on the board. Graded by ownership:
       // a held parcel's name is bone, open ground's is slate. Round 1 set them
@@ -2679,16 +2685,16 @@ export default function MapScreen() {
       ],
       textColor: [
         'case',
-        ['==', ['get', 'color'], 'transparent'], '#A3A29F',
-        '#F5F4EF',
+        ['==', ['get', 'ownership'], 'unclaimed'], 'rgba(253,253,253,0.62)',
+        '#FDFDFD',
       ],
-      textHaloColor: 'rgba(16,16,16,0.92)',
+      textHaloColor: 'rgba(0,0,0,0.92)',
       textHaloWidth: 1.8,
       textMaxWidth: 8,
       textLineHeight: 1.15,
       textLetterSpacing: 0.02,
       // Held ground wins label collisions against open ground.
-      symbolSortKey: ['case', ['==', ['get', 'color'], 'transparent'], 2, 1],
+      symbolSortKey: ['case', ['==', ['get', 'ownership'], 'unclaimed'], 2, 1],
       textAllowOverlap: false,
       textAnchor: 'center',
       textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
@@ -2717,13 +2723,7 @@ export default function MapScreen() {
   // the Phase 1 rampart line still carries the signal top-down).
   const d4WallStyle = useMemo(
     () => ({
-      fillExtrusionColor: [
-        'case',
-        ['==', ['get', 'color'], '#22D65E'], '#22D65E',
-        ['==', ['get', 'color'], '#3155FF'], '#3155FF',
-        ['==', ['get', 'color'], '#E8432B'], '#E8432B',
-        '#6C6C69',
-      ],
+      fillExtrusionColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
       fillExtrusionHeight: 14,
       fillExtrusionBase: 0,
       fillExtrusionOpacity: 0.55,
@@ -2800,7 +2800,7 @@ export default function MapScreen() {
 
   const contestedLineStyle = useMemo(
     () => ({
-      lineColor: '#E8432B',
+      lineColor: '#E34234',
       lineWidth: 4.6,
       lineOpacity: 1,
       lineDasharray: SIEGE_DASH_SEQUENCE[siegeDashStep],
@@ -2820,7 +2820,7 @@ export default function MapScreen() {
       textField: ['get', 'battleChip'],
       textSize: 9,
       textColor: ['get', 'chipColor'],
-      textHaloColor: 'rgba(16,16,16,0.9)',
+      textHaloColor: 'rgba(0,0,0,0.9)',
       textHaloWidth: 1.5,
       textAnchor: 'top',
       textOffset: [0, 2.4],
@@ -2850,12 +2850,12 @@ export default function MapScreen() {
     () => ({
       fillColor: [
         'case',
-        ['==', ['get', 'color'], 'transparent'], '#F5F4EF',
+        ['==', ['get', 'ownership'], 'unclaimed'], '#FDFDFD',
         ['get', 'color'],
       ],
       fillOpacity: [
         'case',
-        ['==', ['get', 'color'], 'transparent'], 0.12,
+        ['==', ['get', 'ownership'], 'unclaimed'], 0.12,
         // Held ground is flooded but not sealed — the hatch still reads
         // through, so a selected parcel stays part of the same board.
         0.55,
@@ -2870,7 +2870,7 @@ export default function MapScreen() {
   // clearly against the dark ground (it was washing out on the old light style).
   const selectedGlowStyle = useMemo(
     () => ({
-      lineColor: '#C8FF3D',
+      lineColor: '#84FF44',
       lineWidth: 9,
       lineOpacity: 0.35,
       lineBlur: 6,
@@ -2883,7 +2883,7 @@ export default function MapScreen() {
   // Signal Lime marks the selected territory (Figma: 3px lime edge).
   const selectedLineStyle = useMemo(
     () => ({
-      lineColor: '#C8FF3D',
+      lineColor: '#84FF44',
       lineWidth: 3,
       lineOpacity: 1,
       lineEmissiveStrength: 1.0,
@@ -3030,7 +3030,7 @@ export default function MapScreen() {
 
   const cardAtCap = useMemo(() => {
     const xp = Math.max(0, Math.floor(Number(myPlayer?.xp) || 0));
-    const held = (selected?.allFeatures ?? []).filter((f) => f.properties?.color === '#22D65E').length;
+    const held = (selected?.allFeatures ?? []).filter((f) => territoryOwnership(f.properties) === 'yours').length;
     return held >= territoryCapForLevel(F.calcLevel(xp));
   }, [myPlayer?.xp, selected?.allFeatures]);
 
@@ -3127,7 +3127,7 @@ export default function MapScreen() {
   // ── Relocate (Updated UX C9/C10, plan U8), Figma mode only ───────────────
   const [relocateOpen, setRelocateOpen] = useState(false);
   const ownFeatures = useMemo(
-    () => (relocateOpen ? territories.features.filter((f) => f.properties?.color === '#22D65E') : []),
+    () => (relocateOpen ? territories.features.filter((f) => territoryOwnership(f.properties) === 'yours') : []),
     [relocateOpen, territories.features],
   );
   const handleRelocateGo = useCallback((row) => {
@@ -3158,22 +3158,22 @@ export default function MapScreen() {
         style={[styles.resourceBanner, flightActive && { opacity: 0 }]}
       >
         <View style={styles.resourceBannerItem}>
-          <IronGlyph size={12} color="#F5F4EF" />
+          <IronGlyph size={12} color="#FDFDFD" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.iron ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <StoneGlyph size={12} color="#F5F4EF" />
+          <StoneGlyph size={12} color="#FDFDFD" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.stone ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <GoldGlyph size={12} color="#F5F4EF" />
+          <GoldGlyph size={12} color="#FDFDFD" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.gold ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
         <View style={styles.resourceBannerDivider} />
         <View style={styles.resourceBannerItem}>
-          <MoraleGlyph size={12} color="#F5F4EF" />
+          <MoraleGlyph size={12} color="#FDFDFD" />
           <ResourceDeltaValue value={myPlayer ? (myPlayer.morale ?? 0) : null} style={styles.resourceBannerValue} />
         </View>
       </View>
@@ -3208,7 +3208,7 @@ export default function MapScreen() {
       {showLoading && !topBannerMessage && !flightActive ? (
         <View pointerEvents="none" style={styles.loadingWrap}>
           <View style={styles.loadingPill}>
-            <ActivityIndicator size="small" color="#F5F4EF" />
+            <ActivityIndicator size="small" color="#FDFDFD" />
             <Text style={styles.loadingText}>{t('map.loadingTerritories')}</Text>
           </View>
         </View>
@@ -3465,15 +3465,15 @@ export default function MapScreen() {
           {(figmaChrome
             ? [
                 { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendFigma.yours', { defaultValue: 'Your territory' }) },
-                { key: 'alliance', fill: 'rgba(49,85,255,0.14)', border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
-                { key: 'theirs', fill: 'rgba(232,67,43,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
+                { key: 'alliance', fill: colors.allianceSoft, border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
+                { key: 'theirs', fill: 'rgba(227,66,52,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
               ]
             : [
             { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendYours') },
-            { key: 'alliance', fill: 'rgba(49,85,255,0.14)', border: ALLIANCE, label: t('map.legendAlliance') },
-            { key: 'theirs', fill: 'rgba(232,67,43,0.14)', border: ENEMY, label: t('map.legendTheirs') },
+            { key: 'alliance', fill: colors.allianceSoft, border: ALLIANCE, label: t('map.legendAlliance') },
+            { key: 'theirs', fill: 'rgba(227,66,52,0.14)', border: ENEMY, label: t('map.legendTheirs') },
             { key: 'unclaimed', fill: 'transparent', border: SLATE, label: t('map.legendUnclaimed') },
-            { key: 'siege', fill: 'transparent', border: '#E8432B', label: t('map.legendSiege') },
+            { key: 'siege', fill: 'transparent', border: '#E34234', label: t('map.legendSiege') },
           ]).map((row) => (
             <View key={row.key} style={styles.legendRow}>
               <View style={[styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
@@ -3524,7 +3524,7 @@ export default function MapScreen() {
           onPress={() => setRelocateOpen(true)}
           style={({ pressed }) => [styles.relocateButton, pressed && { opacity: 0.9 }]}
         >
-          <PinIcon size={16} color="#C8FF3D" />
+          <PinIcon size={16} color="#84FF44" />
           <Text style={styles.relocateText} maxFontSizeMultiplier={1.3}>
             {t('map.relocate.button', { defaultValue: 'RELOCATE' })}
           </Text>
@@ -3596,7 +3596,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     paddingTop: StatusBar.currentHeight ?? 0,
   },
   map: {
@@ -3614,20 +3614,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
     borderLeftWidth: 2,
-    borderLeftColor: '#C8FF3D',
+    borderLeftColor: '#84FF44',
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginHorizontal: 0,
   },
   objectiveBannerKicker: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     marginBottom: 2,
   },
   objectiveBannerText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.4,
@@ -3638,32 +3638,32 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
   },
   spineHeroLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   spineHeroValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 40,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: -0.4,
     textTransform: 'uppercase',
   },
   spineSupportLine: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
-    color: 'rgba(245,244,239,0.85)',
+    color: 'rgba(253,253,253,0.85)',
     lineHeight: 19,
     marginTop: 10,
   },
   sheetObjectiveHint: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     // Bone, not Claim — the red CLAIM CTA below is this sheet's one red element.
     color: BONE,
@@ -3683,13 +3683,13 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 2,
-    borderColor: '#C8FF3D',
+    borderColor: '#84FF44',
   },
   objectivePulseCore: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
   },
 
   topBanner: {
@@ -3705,7 +3705,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   topBannerText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.5,
@@ -3731,7 +3731,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   loadingText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
@@ -3750,12 +3750,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   mapErrorText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: BONE,
   },
   mapErrorRetry: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
@@ -3767,9 +3767,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.16)',
+    borderBottomColor: 'rgba(253,253,253,0.16)',
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
@@ -3782,36 +3782,36 @@ const styles = StyleSheet.create({
   resourceBannerDivider: {
     width: 1,
     height: 14,
-    backgroundColor: 'rgba(245,244,239,0.12)',
+    backgroundColor: 'rgba(253,253,253,0.12)',
   },
   resourceBannerValue: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 12,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: 0.5,
   },
   hudLeft: {
     position: 'absolute',
     top: (StatusBar.currentHeight ?? 0) + 76,
     left: 16,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderRadius: 0,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
   },
   hudValue: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 12,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: 0.5,
   },
   hudLabel: {
     marginTop: 2,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
@@ -3823,17 +3823,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   allianceBadge: {
-    backgroundColor: 'rgba(49,85,255,0.14)',
-    borderColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: colors.allianceSoft,
+    borderColor: 'rgba(253,253,253,0.16)',
     borderWidth: 1,
     borderRadius: 0,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   allianceBadgeText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
-    color: '#3155FF',
+    color: colors.alliance,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
@@ -3853,20 +3853,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(245,244,239,0.08)',
+    borderColor: 'rgba(253,253,253,0.08)',
   },
   locateIcon: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#F5F4EF',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: '#FDFDFD',
     fontSize: 14,
   },
   locateText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     // Bone, not slate — these controls are read in direct sunlight.
     color: BONE,
@@ -3881,12 +3881,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderRadius: 0,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 0.5,
-    borderColor: 'rgba(245,244,239,0.08)',
+    borderColor: 'rgba(253,253,253,0.08)',
   },
   legendPanel: {
     position: 'absolute',
@@ -3916,9 +3916,9 @@ const styles = StyleSheet.create({
   },
   // Figma C2 key header.
   legendHeaderFigma: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.76,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -3935,14 +3935,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderWidth: 1,
-    borderColor: '#C8FF3D',
+    borderColor: '#84FF44',
     borderRadius: 0,
     zIndex: 12,
   },
   relocateText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.4,
     color: BONE,
@@ -3958,7 +3958,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   legendLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
@@ -3970,12 +3970,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     paddingHorizontal: 16,
     borderTopWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     paddingTop: 12,
     paddingBottom: 24,
   },
@@ -3984,7 +3984,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 1,
     borderRadius: 0,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginBottom: 14,
   },
   sheetTopRow: {
@@ -3994,9 +3994,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetTitle: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 20,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: -0.015,
   },
   sheetTitleRow: {
@@ -4005,9 +4005,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetStateLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 4,
@@ -4015,42 +4015,42 @@ const styles = StyleSheet.create({
   sheetTierBadge: {
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginTop: 1,
   },
   sheetTierBadgeText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   sheetSubtitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 6,
     letterSpacing: 0.5,
   },
   sheetSubtitleStrong: {
-    fontFamily: 'GeistMono_500Medium',
-    color: '#F5F4EF',
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    color: '#FDFDFD',
   },
   sheetOwnerUnclaimed: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#6C6C69',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: 'rgba(253,253,253,0.30)',
   },
   sheetAllianceTag: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#A3A29F',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: 'rgba(253,253,253,0.62)',
   },
   sheetIntelBlock: {
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
   },
   sheetRow: {
     flexDirection: 'row',
@@ -4058,15 +4058,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sheetRowLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 0.5,
   },
   sheetRowValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: 0.5,
   },
   sheetRowValueRow: {
@@ -4079,31 +4079,31 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.16)',
+    borderTopColor: 'rgba(253,253,253,0.16)',
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(245,244,239,0.16)',
+    borderBottomColor: 'rgba(253,253,253,0.16)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   sheetInfluenceLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   sheetInfluenceSub: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 0.5,
   },
   sheetInfluenceValue: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 26,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: -0.3,
     textTransform: 'uppercase',
   },
@@ -4111,7 +4111,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
   },
   sheetYourWalk: {
     marginTop: 10,
@@ -4122,7 +4122,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   sheetYourWalkLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
@@ -4130,24 +4130,24 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   sheetYourWalkValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: 0.5,
     marginBottom: 3,
   },
   sheetYourWalkSub: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 0.3,
     lineHeight: 14,
   },
   // One-line plain-language gloss under a data row — Instrument Sans, quiet but readable.
   sheetGloss: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     lineHeight: 16,
     marginTop: 2,
   },
@@ -4156,15 +4156,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
   },
-  // Slate 2, not Slate. At 9px/#6C6C69 this control was ~2.7:1 on the sheet and
+  // Slate 2, not Slate. At 9px/rgba(253,253,253,0.30) this control was ~2.7:1 on the sheet and
   // read as a caption rather than the only way to reach development, legacy and
   // walk detail. It stays text-only per the brand's no-icon rule for toggles.
   sheetToggleText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
@@ -4173,19 +4173,19 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetCloseText: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#F5F4EF',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: '#FDFDFD',
     fontSize: 20,
     marginTop: -2,
   },
   sheetAction: {
     marginTop: 16,
-    backgroundColor: '#22D65E',
+    backgroundColor: '#84FF44',
     borderRadius: 0,
     paddingVertical: 14,
     minHeight: 48,
@@ -4194,10 +4194,10 @@ const styles = StyleSheet.create({
   },
   sheetActionDisabled: {
     marginTop: 16,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4217,23 +4217,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetActionText: {
-    fontFamily: 'GeistMono_500Medium',
-    color: '#F5F4EF',
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    color: '#FDFDFD',
     fontSize: 12,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sheetActionDisabledText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 12,
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sheetActionDisabledSub: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     marginTop: 4,
     letterSpacing: 0.5,
   },
@@ -4241,7 +4241,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 16,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
   },
   sheetConfirmDataRow: {
     flexDirection: 'row',
@@ -4255,30 +4255,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheetConfirmLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   sheetConfirmValue: {
     // Measurements and balances — mono per the Controlling Rule.
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     letterSpacing: 0.3,
   },
   sheetConfirmHelpText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
-    color: 'rgba(245,244,239,0.7)',
+    color: 'rgba(253,253,253,0.7)',
     lineHeight: 18,
     marginTop: 6,
   },
   // Errors are sentences a player reads — Instrument Sans in Bone, never Claim Red
   // (the Locked Meaning Rule keeps red for "yours").
   sheetConfirmError: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: BONE,
     lineHeight: 18,
@@ -4289,13 +4289,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 16,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(245,244,239,0.08)',
+    borderTopColor: 'rgba(253,253,253,0.08)',
     gap: 12,
   },
   sheetContestActiveText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
-    color: 'rgba(245,244,239,0.85)',
+    color: 'rgba(253,253,253,0.85)',
     lineHeight: 18,
     textAlign: 'center',
   },
@@ -4304,16 +4304,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     paddingVertical: 13,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetCancelText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
-    color: 'rgba(245,244,239,0.6)',
+    color: 'rgba(253,253,253,0.6)',
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },

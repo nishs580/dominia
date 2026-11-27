@@ -200,8 +200,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 36,
-    lineHeight: 40,
+    fontSize: 29,
+    lineHeight: 32,
     letterSpacing: -0.6,
     color: colors.white,
     textTransform: 'uppercase',

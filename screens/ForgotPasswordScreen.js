@@ -1,6 +1,6 @@
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
-import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/sofia-sans-extra-condensed';
-import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
+import { useFonts, Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
+import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +24,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const insets = useSafeAreaInsets();
 
-  const [fontsLoaded] = useFonts({ SofiaSansExtraCondensed_800ExtraBold, GeistMono_400Regular });
+  const [fontsLoaded] = useFonts({ Archivo_900Black_Italic, IBMPlexSans_700Bold });
   if (!fontsLoaded) return null;
 
   const sendCode = async ({ isResend = false } = {}) => {
@@ -91,7 +91,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           style={styles.input}
           keyboardAppearance="dark"
           placeholder={t('signIn.emailPlaceholder')}
-          placeholderTextColor="#6C6C69"
+          placeholderTextColor="rgba(253,253,253,0.30)"
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -103,7 +103,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             style={styles.input}
             keyboardAppearance="dark"
             placeholder={t('forgotPassword.codePlaceholder')}
-            placeholderTextColor="#6C6C69"
+            placeholderTextColor="rgba(253,253,253,0.30)"
             keyboardType="number-pad"
             value={code}
             onChangeText={setCode}
@@ -112,7 +112,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             style={styles.input}
             keyboardAppearance="dark"
             placeholder={t('forgotPassword.newPasswordPlaceholder')}
-            placeholderTextColor="#6C6C69"
+            placeholderTextColor="rgba(253,253,253,0.30)"
             secureTextEntry
             maxLength={PASSWORD_MAX}
             value={password}
@@ -154,22 +154,22 @@ export default function ForgotPasswordScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#F5F4EF',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#FDFDFD',
     fontSize: 24,
     letterSpacing: -1,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   subtitle: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#6C6C69',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 11,
     letterSpacing: 1,
     textAlign: 'center',
@@ -177,37 +177,37 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#242424',
-    color: '#F5F4EF',
+    borderColor: '#1A1A1D',
+    color: '#FDFDFD',
     fontSize: 15,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
   },
   error: {
-    color: '#E8432B',
+    color: '#E34234',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   info: {
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   button: {
     width: '100%',
-    backgroundColor: '#E8432B',
+    backgroundColor: '#E34234',
     borderRadius: 0,
     paddingVertical: 16,
   },
   buttonText: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#F5F4EF',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#FDFDFD',
     fontSize: 15,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   linkText: {
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 13,
   },
 });

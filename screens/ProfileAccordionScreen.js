@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 24,
     color: colors.slate2,
     textTransform: 'uppercase',
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.limeSoft,
   },
   chipAlliance: {
-    backgroundColor: 'rgba(49,85,255,0.28)',
+    backgroundColor: 'rgba(91,123,245,0.28)',
   },
   chipNone: {
     backgroundColor: colors.raised,
@@ -850,7 +850,7 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(34,214,94,0.24)',
+    backgroundColor: 'rgba(132,255,68,0.24)',
   },
   terrText: {
     flex: 1,

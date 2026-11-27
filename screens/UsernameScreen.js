@@ -1,6 +1,5 @@
-import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/sofia-sans-extra-condensed';
-import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
-import { InstrumentSans_400Regular } from '@expo-google-fonts/instrument-sans';
+import { useFonts, Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
+import { IBMPlexSans_700Bold, IBMPlexSans_600SemiBold, IBMPlexSans_500Medium } from '@expo-google-fonts/ibm-plex-sans';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,7 +58,7 @@ export default function UsernameScreen({ navigation, route }) {
   }, [figma, editing, getToken]);
   const keepsSavedName = Boolean(savedName) && username.trim() === savedName;
 
-  const [fontsLoaded] = useFonts({ SofiaSansExtraCondensed_800ExtraBold, GeistMono_400Regular, GeistMono_500Medium, InstrumentSans_400Regular });
+  const [fontsLoaded] = useFonts({ Archivo_900Black_Italic, IBMPlexSans_700Bold, IBMPlexSans_600SemiBold, IBMPlexSans_500Medium });
 
   // Debounced availability check: only fires once the name is well-formed.
   // Advisory only — PATCH /me re-checks authoritatively on submit.
@@ -207,7 +206,7 @@ export default function UsernameScreen({ navigation, route }) {
           style={[styles.input, showErrorBorder && styles.inputError]}
           keyboardAppearance="dark"
           placeholder={t('username.placeholder')}
-          placeholderTextColor="#6C6C69"
+          placeholderTextColor="rgba(253,253,253,0.30)"
           autoCapitalize="none"
           value={username}
           onChangeText={(text) => { setUsername(text); setError(''); }}
@@ -234,7 +233,7 @@ export default function UsernameScreen({ navigation, route }) {
           disabled={disabled}
           style={({ pressed }) => [
             {
-              backgroundColor: '#3155FF',
+              backgroundColor: colors.action,
               paddingVertical: 14,
               width: '100%',
               alignItems: 'center',
@@ -245,10 +244,10 @@ export default function UsernameScreen({ navigation, route }) {
         >
           <Text
             style={{
-              fontFamily: 'GeistMono_500Medium',
+              fontFamily: 'IBMPlexSans_600SemiBold',
               fontSize: 14,
               letterSpacing: 2.4,
-              color: '#F5F4EF',
+              color: '#FDFDFD',
               textTransform: 'uppercase',
             }}
           >
@@ -263,7 +262,7 @@ export default function UsernameScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     paddingHorizontal: 18,
     paddingTop: 48,
     paddingBottom: 24,
@@ -275,8 +274,8 @@ const styles = StyleSheet.create({
   buttonContainer: {
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#F5F4EF',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#FDFDFD',
     fontSize: 24,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -284,8 +283,8 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   subtitle: {
-    fontFamily: 'InstrumentSans_400Regular',
-    color: '#A3A29F',
+    fontFamily: 'IBMPlexSans_500Medium',
+    color: 'rgba(253,253,253,0.62)',
     fontSize: 13,
     marginBottom: 32,
     textAlign: 'left',
@@ -293,33 +292,33 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
-    color: '#F5F4EF',
+    borderColor: 'rgba(253,253,253,0.16)',
+    color: '#FDFDFD',
     fontSize: 15,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
   },
-  inputError: { borderColor: '#E8432B' },
+  inputError: { borderColor: '#E34234' },
   error: {
-    fontFamily: 'InstrumentSans_400Regular',
-    color: '#E8432B',
+    fontFamily: 'IBMPlexSans_500Medium',
+    color: '#E34234',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'left',
   },
   hint: {
-    fontFamily: 'InstrumentSans_400Regular',
-    color: '#A3A29F',
+    fontFamily: 'IBMPlexSans_500Medium',
+    color: 'rgba(253,253,253,0.62)',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'left',
   },
   available: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     color: '#4CAF50',
     fontSize: 13,
     marginBottom: 12,

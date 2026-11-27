@@ -165,7 +165,7 @@ function VictoryDefeatOverlay({ result, onContinue, bottomInset = 0 }) {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.72)', // Ink at 72% — the map stays visible beneath
+    backgroundColor: 'rgba(0,0,0,0.72)', // Ink at 72% — the map stays visible beneath
     justifyContent: 'flex-end',
     paddingHorizontal: 18,
     gap: 12,
@@ -179,9 +179,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Ceremony moment: Archivo display is sanctioned here.
-  label: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 48, letterSpacing: -1.4, textTransform: 'uppercase' },
-  title: { fontFamily: 'InstrumentSans_500Medium', color: BONE, fontSize: 15, lineHeight: 21 },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19 },
+  label: { fontFamily: 'Archivo_900Black_Italic', fontSize: 38, letterSpacing: -1.4, textTransform: 'uppercase' },
+  title: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 15, lineHeight: 21 },
+  body: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 13, lineHeight: 19 },
   continueBtn: {
     backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
@@ -190,25 +190,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  continueText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  continueText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Figma result moment (plan U9): full screen over a dimmed map.
   momentScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.82)',
+    backgroundColor: 'rgba(0,0,0,0.82)',
     paddingHorizontal: 20,
   },
-  momentEyebrow: { fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  momentEyebrow: { fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
   // Ceremony moment: the display face at its largest.
   momentWord: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 72,
-    lineHeight: 76,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 58,
+    lineHeight: 61,
     letterSpacing: -1,
     textTransform: 'uppercase',
     marginTop: 10,
   },
-  momentBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 15, lineHeight: 22, marginTop: 8 },
+  momentBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 15, lineHeight: 22, marginTop: 8 },
   statsRow: {
     flexDirection: 'row',
     marginTop: 16,
@@ -217,6 +217,6 @@ const styles = StyleSheet.create({
   },
   statTile: { flex: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
   statTileDivider: { borderLeftWidth: 1, borderLeftColor: HAIRLINE_STRONG },
-  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  statValue: { fontFamily: 'GeistMono_400Regular', fontSize: 20, letterSpacing: 0.2, textTransform: 'uppercase' },
+  statLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  statValue: { fontFamily: 'IBMPlexSans_700Bold', fontSize: 20, letterSpacing: 0.2, textTransform: 'uppercase' },
 });

@@ -59,7 +59,7 @@ export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfi
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
@@ -72,13 +72,13 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     color: colors.bone,
-    fontSize: 30,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 26,
     textTransform: 'uppercase',
   },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: colors.bone, fontSize: 14, lineHeight: 20 },
+  body: { fontFamily: 'IBMPlexSans_500Medium', color: colors.bone, fontSize: 14, lineHeight: 20 },
   keepBtn: {
     marginTop: 6,
     backgroundColor: colors.action,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  keepText: { fontFamily: 'GeistMono_500Medium', color: colors.bone, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  keepText: { fontFamily: 'IBMPlexSans_600SemiBold', color: colors.bone, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   confirmBtn: {
     borderWidth: 1,
     borderColor: colors.danger,
@@ -94,5 +94,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  confirmText: { fontFamily: 'GeistMono_500Medium', color: colors.danger, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  confirmText: { fontFamily: 'IBMPlexSans_600SemiBold', color: colors.danger, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
 });

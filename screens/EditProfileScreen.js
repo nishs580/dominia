@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 30,
     color: colors.slate2,
     textTransform: 'uppercase',
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16,16,16,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   photoActions: {
     flex: 1,

@@ -61,20 +61,13 @@ import { useFonts } from 'expo-font';
 import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import { Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
 import {
-  SofiaSansExtraCondensed_600SemiBold,
-  SofiaSansExtraCondensed_700Bold,
-  SofiaSansExtraCondensed_800ExtraBold,
-} from '@expo-google-fonts/sofia-sans-extra-condensed';
-import {
-  GeistMono_300Light,
-  GeistMono_400Regular,
-  GeistMono_500Medium,
-} from '@expo-google-fonts/geist-mono';
-import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-} from '@expo-google-fonts/instrument-sans';
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
+} from '@expo-google-fonts/ibm-plex-sans';
+import { IBMPlexSansCondensed_700Bold_Italic } from '@expo-google-fonts/ibm-plex-sans-condensed';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -134,7 +127,7 @@ function makeTabOptions(label, Icon) {
         maxFontSizeMultiplier={1.3}
         numberOfLines={1}
         style={{
-          fontFamily: focused ? 'GeistMono_500Medium' : 'GeistMono_400Regular',
+          fontFamily: focused ? 'IBMPlexSans_700Bold' : 'IBMPlexSans_600SemiBold',
           fontSize: 11,
           textTransform: 'uppercase',
           letterSpacing: 1.4,
@@ -184,8 +177,8 @@ const TabNavigator = () => {
           paddingTop: 10,
           paddingBottom: insets.bottom + 10,
         },
-        tabBarActiveTintColor: '#F5F4EF',
-        tabBarInactiveTintColor: '#6C6C69',
+        tabBarActiveTintColor: '#FDFDFD',
+        tabBarInactiveTintColor: 'rgba(253,253,253,0.30)',
         headerShown: false,
       }}
     >
@@ -207,14 +200,11 @@ const TabNavigator = () => {
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    SofiaSansExtraCondensed_600SemiBold,
-    SofiaSansExtraCondensed_700Bold,
-    SofiaSansExtraCondensed_800ExtraBold,
-    GeistMono_300Light,
-    GeistMono_400Regular,
-    GeistMono_500Medium,
-    InstrumentSans_400Regular,
-    InstrumentSans_500Medium,
+    Archivo_900Black_Italic,
+    IBMPlexSans_500Medium,
+    IBMPlexSans_600SemiBold,
+    IBMPlexSans_700Bold,
+    IBMPlexSansCondensed_700Bold_Italic,
   });
 
   // Start on the last activated flag values so the first frame is already in

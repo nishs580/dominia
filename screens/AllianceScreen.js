@@ -23,19 +23,19 @@ import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { useFlag } from '../lib/flags';
 import ProfileAvatarButton from '../components/ProfileAvatarButton';
 
-const CLAIM = '#22D65E';
-const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
-const INK = '#101010';
-const INK2 = '#1A1A1A';
-const INK3 = '#242424';
-const BONE = '#F5F4EF';
-const SLATE = '#6C6C69';
-const SLATE2 = '#A3A29F';
-const ALLIANCE_GREEN = '#3155FF';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
-const LIME = '#C8FF3D';
-const DANGER = '#E8432B';
+const CLAIM = '#84FF44';
+const CLAIM_BUTTON = '#0731D1'; // = colors.action (primary button blue)
+const INK = '#000000';
+const INK2 = '#0E0E10';
+const INK3 = '#1A1A1D';
+const BONE = '#FDFDFD';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const ALLIANCE_GREEN = '#5B7BF5'; // = colors.alliance
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
+const LIME = '#84FF44';
+const DANGER = '#E34234';
 
 // Figma line icons (F3 info, F5 settings and messages).
 const INFO_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE}" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v1"/></svg>`;
@@ -1932,7 +1932,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   figmaCityLine: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
@@ -1954,22 +1954,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: ALLIANCE_GREEN,
-    backgroundColor: 'rgba(49,85,255,0.18)',
+    backgroundColor: 'rgba(91,123,245,0.18)',
   },
   figmaTagTileText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1,
     color: BONE,
   },
   figmaRowTag: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1,
     color: SLATE,
   },
   figmaRowMeta: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
@@ -1977,7 +1977,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   figmaChevron: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 22,
     color: SLATE2,
     marginLeft: 8,
@@ -1991,7 +1991,7 @@ const styles = StyleSheet.create({
   },
   figmaNoteText: {
     flex: 1,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 18,
     color: SLATE2,
@@ -2034,21 +2034,21 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   figmaMemberTag: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: ALLIANCE_GREEN,
     textTransform: 'uppercase',
   },
   figmaMemberBlurb: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 18,
     color: SLATE2,
     marginTop: 4,
   },
   figmaSectionTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 22,
     lineHeight: 26,
     color: BONE,
@@ -2073,7 +2073,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: 'rgba(200,255,61,0.14)',
+    backgroundColor: 'rgba(132,255,68,0.14)',
   },
   figmaLiveDot: {
     width: 6,
@@ -2082,7 +2082,7 @@ const styles = StyleSheet.create({
     backgroundColor: LIME,
   },
   figmaLiveText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: LIME,
@@ -2100,7 +2100,7 @@ const styles = StyleSheet.create({
     maxHeight: 220,
   },
   figmaEmptyMessages: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 15,
     color: SLATE2,
     marginTop: 10,
@@ -2116,7 +2116,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
   },
   figmaOpenChatText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.6,
     color: BONE,
@@ -2144,13 +2144,13 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   figmaRequestInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
   },
   figmaRequestName: {
     flex: 1,
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     color: BONE,
   },
@@ -2167,13 +2167,13 @@ const styles = StyleSheet.create({
     borderColor: CLAIM_BUTTON,
   },
   figmaRequestDeclineText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: SLATE2,
   },
   figmaRequestAcceptText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.2,
     color: BONE,
@@ -2187,7 +2187,7 @@ const styles = StyleSheet.create({
     borderColor: DANGER,
   },
   figmaLeaveText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.6,
     color: DANGER,
@@ -2195,7 +2195,7 @@ const styles = StyleSheet.create({
   },
   figmaModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.82)',
+    backgroundColor: 'rgba(0,0,0,0.82)',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
@@ -2206,14 +2206,14 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   figmaModalTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 32,
-    lineHeight: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 26,
+    lineHeight: 29,
     color: BONE,
     textTransform: 'uppercase',
   },
   figmaModalBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 15,
     lineHeight: 21,
     color: SLATE2,
@@ -2227,7 +2227,7 @@ const styles = StyleSheet.create({
     backgroundColor: CLAIM_BUTTON,
   },
   figmaModalPrimaryText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.6,
     color: BONE,
@@ -2242,7 +2242,7 @@ const styles = StyleSheet.create({
     borderColor: DANGER,
   },
   figmaModalDangerText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.6,
     color: DANGER,
@@ -2265,7 +2265,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
     paddingHorizontal: 12,
     color: BONE,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 15,
   },
   figmaSearchBtn: {
@@ -2277,7 +2277,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   figmaSearchBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.2,
     color: BONE,
@@ -2303,7 +2303,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   figmaCreateBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 1.4,
     color: BONE,
@@ -2319,7 +2319,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,
@@ -2333,7 +2333,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   errorText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
@@ -2343,17 +2343,17 @@ const styles = StyleSheet.create({
   retryBtn: {
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: '#C8FF3D',
+    borderColor: '#84FF44',
     paddingVertical: 14,
     paddingHorizontal: 24,
     minHeight: 48,
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: '#C8FF3D',
+    color: '#84FF44',
     textTransform: 'uppercase',
   },
   header: {
@@ -2362,20 +2362,20 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerKicker: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
   },
   headerTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 40,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 32,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
     marginTop: 8,
-    lineHeight: 44,
+    lineHeight: 35,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -2394,13 +2394,13 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   shortNameText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
   },
   headerCity: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
@@ -2417,24 +2417,24 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   headerStat: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
   headerStatLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
   },
   headerStatValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
   },
   headerSubtitle: {
     marginTop: 6,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
@@ -2457,7 +2457,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   directiveText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE,
@@ -2487,33 +2487,33 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   aRowPressed: {
-    backgroundColor: 'rgba(245,244,239,0.03)',
+    backgroundColor: 'rgba(253,253,253,0.03)',
   },
   aInfo: {
     flex: 1,
   },
   aNameLine: {
-    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: BONE,
     lineHeight: 22,
     textTransform: 'uppercase',
   },
   aName: {
-    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: BONE,
     lineHeight: 22,
     textTransform: 'uppercase',
   },
   aTag: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: SLATE2,
     letterSpacing: 1,
   },
   aMeta: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE,
     letterSpacing: 1.4,
@@ -2521,13 +2521,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   aMembers: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: BONE,
     marginRight: 8,
   },
   aChev: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 13,
     color: SLATE,
   },
@@ -2545,14 +2545,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createLink: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,
     textTransform: 'uppercase',
   },
   createLinkStrong: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
   },
 
@@ -2562,7 +2562,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyListText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
@@ -2573,7 +2573,7 @@ const styles = StyleSheet.create({
     paddingTop: (StatusBar.currentHeight ?? 0) + 24,
   },
   confirmKicker: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE2,
@@ -2581,16 +2581,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   confirmTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 32,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 26,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.3,
-    lineHeight: 34,
+    lineHeight: 27,
     marginBottom: 6,
   },
   confirmTag: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     letterSpacing: 2,
     color: SLATE2,
@@ -2598,7 +2598,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   confirmBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
     color: SLATE2,
     lineHeight: 21,
@@ -2615,12 +2615,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   ctaDestructive: {
-    backgroundColor: '#E8432B',
+    backgroundColor: '#E34234',
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: '#E8432B',
+    borderColor: '#E34234',
   },
   // Constructive/neutral action (promote, demote, acknowledge) — no red.
   // Red is reserved for destructive actions (kick, transfer, leave, disband).
@@ -2635,7 +2635,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   transferConfirmInput: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     letterSpacing: 1.4,
     color: BONE,
@@ -2647,7 +2647,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   ctaAction: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     letterSpacing: 1.6,
     color: BONE,
@@ -2661,7 +2661,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   cancelLinkText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE,
@@ -2669,7 +2669,7 @@ const styles = StyleSheet.create({
   },
   // Errors read as sentences in Bone (Instrument Sans), never Claim red (Locked Meaning).
   joinError: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: BONE,
     marginTop: 16,
@@ -2684,7 +2684,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   leaveLinkText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE,
@@ -2696,14 +2696,14 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   sectionLabelText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
   sectionLabelAccent: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
@@ -2745,19 +2745,19 @@ const styles = StyleSheet.create({
     height: 32,
   },
   rosterInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.5,
   },
   rosterName: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     color: BONE,
   },
   // Role is a label, not ownership — Slate 2. Founder carries alliance identity.
   rosterRole: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
@@ -2768,7 +2768,7 @@ const styles = StyleSheet.create({
     color: ALLIANCE_GREEN,
   },
   rosterLevel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: BONE,
     letterSpacing: 0.5,
@@ -2783,7 +2783,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rosterManageText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
@@ -2797,10 +2797,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(49,85,255,0.10)',
+    backgroundColor: 'rgba(91,123,245,0.10)',
   },
   commandPostBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: ALLIANCE_GREEN,
     letterSpacing: 1.6,
@@ -2819,7 +2819,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK2,
   },
   warRoomBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: BONE,
     letterSpacing: 1.6,
@@ -2844,7 +2844,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
   },
   wireStatusText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: ALLIANCE_GREEN,
@@ -2859,7 +2859,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wireEmptyText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
@@ -2869,7 +2869,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   wireEndOfList: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE,
@@ -2888,7 +2888,7 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
   },
   wireErrorText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE2,
@@ -2902,7 +2902,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wireRetryText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,

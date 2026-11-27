@@ -48,7 +48,7 @@ export default function WelcomeOverlay({ onContinue }) {
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.78)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
@@ -63,8 +63,8 @@ const styles = StyleSheet.create({
   },
   titleMain: {
     fontFamily: fonts.display,
-    fontSize: 52,
-    lineHeight: 54,
+    fontSize: 42,
+    lineHeight: 43,
     letterSpacing: -1,
     color: colors.white,
     textTransform: 'uppercase',

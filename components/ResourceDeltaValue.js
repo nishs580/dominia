@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import CountUpText from './CountUpText';
 
-const BONE = '#F5F4EF';
+const BONE = '#FDFDFD';
 
 export default function ResourceDeltaValue({ value, style }) {
   const settled = value != null;
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -15,
     alignSelf: 'center',
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     lineHeight: 13,
     letterSpacing: 0.5,

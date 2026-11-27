@@ -1,6 +1,6 @@
 // Component: MapSideRail — unified floating navigation rail on the Map screen
-// Surface: single Ink-2 #1A1A1A segmented control on Map content, square corners
-// Typography: Geist Mono 500, 11px (letterSpacing 1.76 = 11 × 0.16em), uppercase, Bone #F5F4EF
+// Surface: single Ink-2 #0E0E10 segmented control on Map content, square corners
+// Typography: Geist Mono 500, 11px (letterSpacing 1.76 = 11 × 0.16em), uppercase, Bone #FDFDFD
 // Territory colors: none
 // Brand rule applied: Claim red is reserved for the Inspect Sheet primary CTA on Map.
 // The rail uses a neutral Ink-2 surface. Unread counts (Chat, Log) surface inline via the
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     // 110, not 104: labels moved from 10 to 11pt (HIG floor); the extra 6
     // keeps what fit on one line at 10pt fitting at 11.
     width: 110,
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairline,
     borderRadius: 0,
@@ -220,10 +220,10 @@ const styles = StyleSheet.create({
   },
   itemDivider: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(245,244,239,0.10)',
+    borderTopColor: 'rgba(253,253,253,0.10)',
   },
   itemPressed: {
-    backgroundColor: 'rgba(245,244,239,0.06)',
+    backgroundColor: 'rgba(253,253,253,0.06)',
   },
   // Figma rail: icon-only, 44pt square targets (plan Accessibility), sits
   // under the top bar and search field on the right edge.
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     height: FIGMA_TILE,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
     borderRadius: 0,
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     borderColor: colors.lime,
   },
   label: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontWeight: '500',
     fontSize: 11,
     letterSpacing: 1.2,

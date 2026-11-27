@@ -5,10 +5,10 @@
 // - 0px corners (no rounded anywhere)
 // - No icons, no shadows
 // Family colors:
-//   CLAIM red   #22D65E → alliance_founded (significant ownership moment)
-//   ALLIANCE_GREEN #3155FF → alliance_joined, alliance_promoted (positive)
-//   SLATE       #6C6C69 → alliance_left, alliance_demoted (neutral/voluntary)
-//   ENEMY red   #3155FF → alliance_kicked (involuntary removal)
+//   CLAIM red   #84FF44 → alliance_founded (significant ownership moment)
+//   ALLIANCE_GREEN #5B7BF5 (alliance) → alliance_joined, alliance_promoted (positive)
+//   SLATE       rgba(253,253,253,0.30) → alliance_left, alliance_demoted (neutral/voluntary)
+//   ENEMY       #5B7BF5 (alliance) → alliance_kicked (involuntary removal)
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -16,12 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 
-const CLAIM = '#22D65E';
-const ALLIANCE_GREEN = '#3155FF';
-const SLATE = '#6C6C69';
-const ENEMY = '#3155FF';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
+const CLAIM = '#84FF44';
+const ALLIANCE_GREEN = '#5B7BF5'; // = colors.alliance
+const SLATE = 'rgba(253,253,253,0.30)';
+const ENEMY = '#5B7BF5'; // = colors.alliance
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
 
 function subjectName(t, event) {
   return (event.subject_username ?? t('allianceEvent.formerMember')).toUpperCase();
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.05)',
+    borderBottomColor: 'rgba(253,253,253,0.05)',
   },
   topRow: {
     flexDirection: 'row',
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   headline: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 0.8,
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   body: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.2,
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeAgo: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE,
     letterSpacing: 1.4,

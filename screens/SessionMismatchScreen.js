@@ -4,12 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 
-const INK = '#101010';
-const BONE = '#F5F4EF';
-const SLATE = '#6C6C69';
-const SLATE2 = '#A3A29F';
-const CLAIM = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const BONE = '#FDFDFD';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const CLAIM = '#0731D1'; // = colors.action (primary button blue)
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 export default function SessionMismatchScreen({ navigation }) {
   const { t } = useTranslation();
@@ -36,17 +36,17 @@ export default function SessionMismatchScreen({ navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
       <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_700Bold', fontSize: 11, letterSpacing: 1.6, color: SLATE2, textTransform: 'uppercase', marginBottom: 8 }}>
           {t('sessionMismatch.label')}
         </Text>
-        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 32, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 36 }}>
+        <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black_Italic', fontSize: 26, color: BONE, textTransform: 'uppercase', letterSpacing: 0.7, lineHeight: 29 }}>
           {t('sessionMismatch.title')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginTop: 18, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>
           {t('sessionMismatch.body1')}
         </Text>
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 14, color: SLATE2, lineHeight: 22 }}>
           {t('sessionMismatch.body2')}
         </Text>
       </View>
@@ -56,17 +56,17 @@ export default function SessionMismatchScreen({ navigation }) {
           onPress={onSignOut}
           disabled={signingOut}
           style={({ pressed }) => [
-            { backgroundColor: '#3155FF', paddingVertical: 14, width: '100%', alignItems: 'center' },
+            { backgroundColor: '#0731D1', paddingVertical: 14, width: '100%', alignItems: 'center' },
             signingOut && { opacity: 0.5 },
             pressed && !signingOut && { opacity: 0.9 },
           ]}
         >
-          <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 14, letterSpacing: 2.4, color: BONE, textTransform: 'uppercase' }}>
+          <Text style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 14, letterSpacing: 2.4, color: BONE, textTransform: 'uppercase' }}>
             {t('sessionMismatch.signOut')}
           </Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onRetry}>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: SLATE, textTransform: 'uppercase', letterSpacing: 1.4, textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'IBMPlexSans_700Bold', fontSize: 11, color: SLATE, textTransform: 'uppercase', letterSpacing: 1.4, textAlign: 'center' }}>
             {t('common.retry')}
           </Text>
         </Pressable>

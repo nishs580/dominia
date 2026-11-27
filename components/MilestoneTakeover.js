@@ -12,11 +12,11 @@ import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from 'reac
 import { useTranslation } from 'react-i18next';
 import { milestoneHaptic } from '../lib/haptics';
 
-const INK = '#101010';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
-const CLAIM = '#22D65E';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const CLAIM = '#84FF44';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 export default function MilestoneTakeover({ item, onDismiss }) {
   const { t } = useTranslation();
@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   kicker: {
-    fontFamily: 'GeistMono_500Medium',
-    color: '#C8FF3D',
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    color: '#84FF44',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
@@ -87,16 +87,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     color: BONE,
-    fontSize: 48,
-    lineHeight: 52,
+    fontSize: 38,
+    lineHeight: 42,
     letterSpacing: -0.5,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
   body: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     color: SLATE2,
     fontSize: 13,
     lineHeight: 20,
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 12,
     letterSpacing: 1.6,

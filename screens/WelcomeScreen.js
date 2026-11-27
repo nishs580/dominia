@@ -3,12 +3,12 @@ import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-const INK = '#101010';
-const BONE = '#F5F4EF';
-const SLATE = '#6C6C69';
-const SLATE2 = '#A3A29F';
-const CLAIM = '#22D65E';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const BONE = '#FDFDFD';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const CLAIM = '#84FF44';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 function ProgressBar({ step }) {
   return (
@@ -34,14 +34,14 @@ function PrimaryButton({ actionLabel, onPress, disabled }) {
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        { backgroundColor: '#3155FF', paddingVertical: 14, width: '100%', alignItems: 'center' },
+        { backgroundColor: '#0731D1', paddingVertical: 14, width: '100%', alignItems: 'center' },
         disabled && { opacity: 0.5 },
         pressed && !disabled && { opacity: 0.9 },
       ]}
     >
       <Text
         style={{
-          fontFamily: 'GeistMono_500Medium',
+          fontFamily: 'IBMPlexSans_600SemiBold',
           fontSize: 14,
           letterSpacing: 2.4,
           color: BONE,
@@ -59,7 +59,7 @@ function SectionLabel({ label }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
       <Text
         style={{
-          fontFamily: 'GeistMono_400Regular',
+          fontFamily: 'IBMPlexSans_700Bold',
           fontSize: 9,
           letterSpacing: 1.6,
           color: SLATE2,
@@ -86,14 +86,14 @@ function NumberedRow({ num, title, subtitle, last = false }) {
         ...(last ? { borderBottomWidth: 0.5, borderBottomColor: HAIRLINE_STRONG } : {}),
       }}
     >
-      <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 11, color: SLATE2, paddingTop: 2, minWidth: 16 }}>
+      <Text style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, color: SLATE2, paddingTop: 2, minWidth: 16 }}>
         {num}
       </Text>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'InstrumentSans_500Medium', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
           {title}
         </Text>
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
           {subtitle}
         </Text>
       </View>
@@ -190,15 +190,15 @@ export default function WelcomeScreen({ navigation }) {
         <Pressable accessibilityRole="button" accessibilityLabel={t('welcome.skipIntro')} onPress={skipIntro} style={{ flex: 1, justifyContent: 'center' }}>
           <View style={{ paddingHorizontal: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-              <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+              <Text style={{ fontFamily: 'Archivo_900Black_Italic', fontSize: 27, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
                 DOMINIA
               </Text>
-              <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 11, color: '#C8FF3D', marginLeft: 4, marginBottom: 6 }}>▪</Text>
+              <Text style={{ fontFamily: 'Archivo_900Black_Italic', fontSize: 11, color: '#84FF44', marginLeft: 4, marginBottom: 6 }}>▪</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
               <Text
                 style={{
-                  fontFamily: 'GeistMono_400Regular',
+                  fontFamily: 'IBMPlexSans_700Bold',
                   fontSize: 9,
                   letterSpacing: 1.6,
                   color: SLATE2,
@@ -210,7 +210,7 @@ export default function WelcomeScreen({ navigation }) {
               </Text>
               <View style={{ flex: 1, height: 0.5, backgroundColor: HAIRLINE_STRONG }} />
             </View>
-            <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{displayedBody}</Text>
+            <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 16, color: BONE, lineHeight: 24 }}>{displayedBody}</Text>
           </View>
         </Pressable>
       ) : (
@@ -218,7 +218,7 @@ export default function WelcomeScreen({ navigation }) {
           <SectionLabel label={t('onboarding.sectionHowItWorks')} />
           <Text
             style={{
-              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+              fontFamily: 'Archivo_900Black_Italic',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',
@@ -241,7 +241,7 @@ export default function WelcomeScreen({ navigation }) {
           <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => setStep(0)}>
             <Text
               style={{
-                fontFamily: 'GeistMono_400Regular',
+                fontFamily: 'IBMPlexSans_700Bold',
                 fontSize: 11,
                 color: SLATE,
                 textTransform: 'uppercase',
@@ -266,7 +266,7 @@ export default function WelcomeScreen({ navigation }) {
           onPress={() => navigation.replace('SignIn', { mode: 'signin' })}
           style={{ paddingVertical: 6 }}
         >
-          <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: SLATE2, textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 13, color: SLATE2, textAlign: 'center' }}>
             {t('signIn.haveAccount')}<Text style={{ color: BONE }}>{t('welcome.signInLink')}</Text>
           </Text>
         </Pressable>

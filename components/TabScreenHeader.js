@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 4,
     fontFamily: fonts.display,
-    fontSize: 30,
+    fontSize: 24,
     color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,

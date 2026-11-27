@@ -8,7 +8,7 @@ import React from 'react';
 import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 
 const DEFAULT_SIZE = 18;
-const DEFAULT_COLOR = '#F5F4EF';
+const DEFAULT_COLOR = '#FDFDFD';
 const STROKE = 1.75;
 
 function Icon({ size, children }) {

@@ -5,8 +5,8 @@
 import React from 'react';
 import Svg, { Rect } from 'react-native-svg';
 
-const BONE = '#F5F4EF';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.35)';
+const BONE = '#FDFDFD';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.35)';
 
 export default function DevGlyph({ level = 0, height = 14, color = BONE }) {
   const lv = Math.min(4, Math.max(0, Math.round(Number(level) || 0)));

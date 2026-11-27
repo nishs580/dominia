@@ -1,5 +1,5 @@
 // Screen: LeaderboardsScreen — Power, Territory, Battles boards (players + alliances)
-// Surface: Ink #101010 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
+// Surface: Ink #000000 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
 // Typography: Geist Mono 500 11px labels, Instrument Sans 500 14px names — mirrors ActivityLogScreen patterns.
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 //
@@ -272,7 +272,7 @@ function LegacyLeaderboards() {
     if (loading && rows.length === 0) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#6C6C69" />
+          <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
@@ -326,8 +326,8 @@ function LegacyLeaderboards() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F5F4EF"
-            colors={['#F5F4EF']}
+            tintColor="#FDFDFD"
+            colors={['#FDFDFD']}
           />
         }
       />
@@ -856,7 +856,7 @@ const figma = StyleSheet.create({
     borderTopColor: colors.hairlineStrong,
   },
   podiumBlockFirst: {
-    backgroundColor: 'rgba(200,255,61,0.16)',
+    backgroundColor: 'rgba(132,255,68,0.16)',
     borderTopColor: colors.lime,
   },
   podiumNum: {
@@ -955,7 +955,7 @@ const figma = StyleSheet.create({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
   },
   centered: {
     flex: 1,
@@ -963,43 +963,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   retryBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 16,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   emptyLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   emptyBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#E4E3DE',
+    color: 'rgba(253,253,253,0.85)',
     marginTop: 8,
   },
   header: {
@@ -1008,20 +1008,20 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 4,
   },
   hairline: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.08)',
+    backgroundColor: 'rgba(253,253,253,0.08)',
   },
   boardStrip: {
     flexDirection: 'row',
@@ -1038,25 +1038,25 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   tabLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   tabLabelActive: {
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   tabMarkBoard: {
     height: 1,
     width: 32,
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
     marginTop: 6,
   },
   tabMarkSubject: {
     height: 1,
     width: 28,
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
     marginTop: 4,
   },
   row: {
@@ -1065,58 +1065,58 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.08)',
+    borderBottomColor: 'rgba(253,253,253,0.08)',
   },
   rowSelf: {
-    backgroundColor: 'rgba(200,255,61,0.14)',
+    backgroundColor: 'rgba(132,255,68,0.14)',
   },
   rankCell: {
     width: 32,
   },
   rankText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   avatar: {
     width: 28,
     height: 28,
     borderRadius: 4,
     marginLeft: 8,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 0.4,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   nameCell: {
     flex: 1,
     paddingLeft: 12,
   },
   nameText: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   subtitleText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 2,
   },
   valueText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
 });

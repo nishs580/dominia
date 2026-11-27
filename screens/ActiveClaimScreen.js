@@ -1120,7 +1120,7 @@ export default function ActiveClaimScreen() {
           foregroundService: {
             notificationTitle: t('activeClaim.fgServiceTitle'),
             notificationBody: t('activeClaim.fgServiceBody'),
-            notificationColor: '#C8FF3D',
+            notificationColor: '#84FF44',
           },
           pausesUpdatesAutomatically: false,
         });
@@ -2007,7 +2007,7 @@ export default function ActiveClaimScreen() {
               cx={ring.cx}
               cy={ring.cy}
               r={ring.radius}
-              stroke={'#C8FF3D'}
+              stroke={'#84FF44'}
               strokeWidth={ring.strokeWidth}
               fill="none"
               strokeLinecap="butt"
@@ -2176,87 +2176,87 @@ function Banner({ color, label }) {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
-  territoryName: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
+  claimingLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
+  territoryName: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
   // Neutral instrument — the progress ring is this screen's one red element.
   badge: { marginTop: 4, backgroundColor: INK2, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  badgeText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
   ringWrap: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  pctText: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 48, letterSpacing: -1, textTransform: 'uppercase' },
+  pctText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 48, letterSpacing: -1, textTransform: 'uppercase' },
   // Bone, not slate — this is the real number, read mid-walk in direct sun.
-  metresText: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
+  metresText: { fontFamily: 'IBMPlexSans_700Bold', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
 
   // The deadline is a first-class instrument, not a table row.
   timeLeftBlock: { marginTop: 18, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
-  timeLeftLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  timeLeftValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 18, letterSpacing: 1 },
+  timeLeftLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  timeLeftValue: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 18, letterSpacing: 1 },
 
   statsPanel: { marginTop: 24, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
-  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  statValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 14, letterSpacing: 0.2 },
+  statLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  statValue: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 14, letterSpacing: 0.2 },
 
-  firstWalkHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
+  firstWalkHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
   bannerZone: { marginTop: 12, minHeight: 36 },
   banner: { borderWidth: 1, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'transparent' },
-  bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  bannerText: { fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
 
   devBtn: { marginBottom: 8, backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 12, alignItems: 'center' },
-  devBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  devBtnText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  cancelText: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  cancelText: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelConfirmBlock: { gap: 10 },
-  cancelConfirmText: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
+  cancelConfirmText: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
   keepWalkingBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  keepWalkingText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  keepWalkingText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Health-Connect blocking state — the walk cannot count; say so and route out.
   hcBlocked: { marginTop: 32, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
-  hcBlockedTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  hcBlockedBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
+  hcBlockedTitle: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlockedBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19 },
   hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlockedBtnText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Map mode (plan U13): chrome laid over the live challenge map. The map's
   // fill is the one red element; panels are Ink 2 instruments.
   mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 18, paddingBottom: 12, backgroundColor: INK2, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
-  mapFillHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  mapFillHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 13, lineHeight: 19, marginTop: 8 },
   mapFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: INK, borderTopWidth: 1, borderTopColor: HAIRLINE_STRONG },
-  mapHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginBottom: 8 },
+  mapHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 12, textAlign: 'center', marginBottom: 8 },
   bannerZoneMap: { marginBottom: 8 },
   securePanel: { backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
-  secureTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
-  secureBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  secureTitle: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  secureBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
   // Arm gate — fee paid, walk clock not started. The countdown is the one loud
   // element; everything else stays quiet so START WALK is the obvious target.
   armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
-  armCountdown: { fontFamily: 'GeistMono_300Light', color: '#C8FF3D', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
-  armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
-  armTitle: { fontFamily: 'SofiaSansExtraCondensed_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },
-  armBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
-  armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  armError: { fontFamily: 'InstrumentSans_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
+  armCountdown: { fontFamily: 'IBMPlexSans_600SemiBold', color: '#84FF44', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
+  armLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  armTitle: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },
+  armBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 14, lineHeight: 21 },
+  armStake: { fontFamily: 'IBMPlexSans_600SemiBold', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  armError: { fontFamily: 'IBMPlexSans_500Medium', color: AMBER, fontSize: 13, lineHeight: 19 },
   armPrimary: { backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  armPrimaryText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  armPrimaryText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   armSecondary: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  armSecondaryText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  armSecondaryText: { fontFamily: 'IBMPlexSans_600SemiBold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Figma Start walk (plan U9, B4).
   armChip: { alignSelf: 'flex-start', borderWidth: 1, borderColor: HAIRLINE_STRONG, backgroundColor: INK2, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '100%' },
-  armChipText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  armFigmaTitle: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 32, lineHeight: 36, textTransform: 'uppercase', marginTop: 10 },
+  armChipText: { fontFamily: 'IBMPlexSans_600SemiBold', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  armFigmaTitle: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 26, lineHeight: 29, textTransform: 'uppercase', marginTop: 10 },
   armCountdownRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 14 },
-  armFigmaCountdown: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 56, lineHeight: 60, letterSpacing: -1.5 },
-  armFigmaCountdownLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 },
+  armFigmaCountdown: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 56, lineHeight: 60, letterSpacing: -1.5 },
+  armFigmaCountdownLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 },
   armRows: { marginTop: 14, borderBottomWidth: 1, borderBottomColor: colors.hairline },
   armRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 10 },
   armRowDivider: { borderTopWidth: 1, borderTopColor: colors.hairline },
-  armRowText: { flex: 1, fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 20 },
+  armRowText: { flex: 1, fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 14, lineHeight: 20 },
   armFigmaMap: { flex: 1, minHeight: 160, marginTop: 14, overflow: 'hidden' },
   armFigmaSecondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
 
@@ -2264,26 +2264,26 @@ const styles = StyleSheet.create({
   figmaHeaderWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
   figmaHeader: { paddingHorizontal: 18, paddingBottom: 12, backgroundColor: INK, borderBottomWidth: 1.5 },
   figmaEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  figmaEyebrow: { flex: 1, fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  figmaTerritory: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 30, lineHeight: 34, textTransform: 'uppercase' },
+  figmaEyebrow: { flex: 1, fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  figmaTerritory: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 24, lineHeight: 27, textTransform: 'uppercase' },
   figmaFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 16, backgroundColor: INK },
   figmaPctRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  figmaPct: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 52, lineHeight: 56, letterSpacing: -1.5 },
-  figmaCaption: { flexShrink: 1, fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 10 },
+  figmaPct: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 52, lineHeight: 56, letterSpacing: -1.5 },
+  figmaCaption: { flexShrink: 1, fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 10 },
   figmaBars: { gap: 12, marginTop: 8 },
   figmaTiles: { flexDirection: 'row', marginTop: 16, borderWidth: 1, borderColor: HAIRLINE_STRONG, backgroundColor: INK2 },
   figmaTile: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, gap: 6 },
   figmaTileDivider: { borderLeftWidth: 1, borderLeftColor: HAIRLINE_STRONG },
   figmaTileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  figmaTileLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  figmaTileValue: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 20, letterSpacing: 0.2 },
+  figmaTileLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  figmaTileValue: { fontFamily: 'IBMPlexSans_700Bold', color: BONE, fontSize: 20, letterSpacing: 0.2 },
   figmaCancelQuiet: { marginTop: 12, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   figmaCancelOutlined: { marginTop: 14, minHeight: 48, borderWidth: 1, borderColor: colors.enemy, alignItems: 'center', justifyContent: 'center' },
-  figmaCancelText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  figmaCancelText: { fontFamily: 'IBMPlexSans_600SemiBold', color: SLATE2, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   pbWrap: { marginTop: 10, gap: 6 },
   pbLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  pbLabel: { flex: 1, fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  pbValue: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 12 },
+  pbLabel: { flex: 1, fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  pbValue: { fontFamily: 'IBMPlexSans_700Bold', color: BONE, fontSize: 12 },
   pbTrack: { height: 4, backgroundColor: colors.raised },
   pbFill: { height: 4 },
 });

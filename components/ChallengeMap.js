@@ -33,7 +33,7 @@ const FALLBACK_ZOOM = 15;
 // Same values as MapScreen's held-ground styles: Claim Red plate at 0.60, a
 // full-strength owner border over an ink seam.
 const OUTLINE_CASING_STYLE = { lineColor: INK, lineWidth: 5.6, lineOpacity: 0.55, lineEmissiveStrength: 1.0 };
-const OUTLINE_STYLE = { lineColor: '#C8FF3D', lineWidth: 3.2, lineOpacity: 1, lineEmissiveStrength: 1.0 };
+const OUTLINE_STYLE = { lineColor: '#84FF44', lineWidth: 3.2, lineOpacity: 1, lineEmissiveStrength: 1.0 };
 const FILL_STYLE = { fillColor: CLAIM, fillOpacity: 0.6, fillEmissiveStrength: 1.0 };
 const PUCK_SEAT_STYLE = {
   circleRadius: 15,
@@ -47,7 +47,7 @@ const PUCK_SEAT_STYLE = {
 };
 const PUCK_CORE_STYLE = {
   circleRadius: 7,
-  circleColor: '#C8FF3D', // Signal Lime: the player dot
+  circleColor: '#84FF44', // Signal Lime: the player dot
   circleOpacity: 1,
   circleStrokeColor: INK,
   circleStrokeWidth: 2.5,
@@ -236,12 +236,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     // Signal Lime: the recenter control is one of the sanctioned lime accents.
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
     borderRadius: 0,
   },
   recenterText: {
-    fontFamily: 'GeistMono_500Medium',
-    color: '#101010',
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    color: '#000000',
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',

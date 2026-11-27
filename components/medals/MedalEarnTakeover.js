@@ -12,11 +12,11 @@ import MedalIcon from './MedalIcon';
 import TierBars from './TierBars';
 import { milestoneHaptic } from '../../lib/haptics';
 
-const INK = '#101010';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
-const CLAIM = '#22D65E';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const CLAIM = '#84FF44';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 // Reconstruct a minimal medal object from an FCM medal push so MedalIcon /
 // TierBars can render it (the full state lives behind GET /legacy/medals).
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   kicker: {
-    fontFamily: 'GeistMono_500Medium',
-    color: '#C8FF3D',
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    color: '#84FF44',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
@@ -140,16 +140,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   name: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     color: BONE,
-    fontSize: 40,
-    lineHeight: 44,
+    fontSize: 32,
+    lineHeight: 35,
     letterSpacing: -0.5,
     textTransform: 'uppercase',
     textAlign: 'center',
   },
   sub: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: SLATE2,
     fontSize: 12,
     letterSpacing: 1.6,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   body: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     color: SLATE2,
     fontSize: 13,
     lineHeight: 20,
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaPrimaryText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 12,
     letterSpacing: 1.6,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaSecondaryText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.6,

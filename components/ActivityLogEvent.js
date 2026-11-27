@@ -1,11 +1,11 @@
 // Component: ActivityLogEvent — per-event_type renderer (17 event_types: 8 styled, 10 stubs)
-// Surfaces: transparent rows on Ink #101010, 1px hairline-standard divider between rows
+// Surfaces: transparent rows on Ink #000000, 1px hairline-standard divider between rows
 // Typography: Geist Mono 500 10px labels, Instrument Sans 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
 // Territory colors used (one per row max — accent bar only, never fills):
-//   Claim #22D65E: contest_won, streak_milestone (Claim underline per brand "Streak display")
-//   Alliance #3155FF: contest_held, contest_defended
-//   Enemy #E8432B: contest_lost
-//   Slate #6C6C69: contest_expired, streak_broken, all stub rows
+//   Claim #84FF44: contest_won, streak_milestone (Claim underline per brand "Streak display")
+//   Alliance (colors.alliance): contest_held, contest_defended
+//   Enemy #E34234: contest_lost
+//   Slate rgba(253,253,253,0.30): contest_expired, streak_broken, all stub rows
 // Brand rules applied: meaning-locked colors (Claim=yours, Alliance=ours, Enemy=theirs), 0px radius, no icons, type-driven hierarchy, hairlines visible
 //
 // HistoryRow (named export) is the Figma-mode row (legacy_tabs off, G8): icon
@@ -19,12 +19,12 @@ import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 import { colors, fonts } from '../lib/theme';
 
-const CLAIM = '#22D65E';
-const ALLIANCE = '#3155FF';
-const ENEMY = '#E8432B';
-const SLATE = '#6C6C69';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
+const CLAIM = '#84FF44';
+const ALLIANCE = colors.alliance;
+const ENEMY = '#E34234';
+const SLATE = 'rgba(253,253,253,0.30)';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
 
 function RowHeader({ label, labelColor, event }) {
   return (
@@ -232,9 +232,9 @@ export default function ActivityLogEvent({ event }) {
 // lib/activityHistory.historyItem.
 
 const TONES = {
-  self: { fg: colors.self, bg: 'rgba(34,214,94,0.24)' },
-  alliance: { fg: colors.alliance, bg: 'rgba(49,85,255,0.24)' },
-  enemy: { fg: colors.enemy, bg: 'rgba(232,67,43,0.24)' },
+  self: { fg: colors.self, bg: 'rgba(132,255,68,0.24)' },
+  alliance: { fg: colors.alliance, bg: 'rgba(91,123,245,0.24)' },
+  enemy: { fg: colors.enemy, bg: 'rgba(227,66,52,0.24)' },
   neutral: { fg: colors.muted2, bg: colors.raised },
 };
 
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.08)',
+    borderBottomColor: 'rgba(253,253,253,0.08)',
     paddingVertical: 14,
     paddingRight: 16,
   },
@@ -356,13 +356,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   label: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
   },
   timestamp: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.26,
     textTransform: 'uppercase',
@@ -372,13 +372,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   headline: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     color: BONE,
     letterSpacing: -0.24,
   },
   supporting: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 0.22,
     textTransform: 'uppercase',
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   graceDayLine: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
@@ -394,13 +394,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   distanceBody: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 0.26,
     color: BONE,
   },
   heroNumber: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 32,
     color: BONE,
     letterSpacing: -0.96,

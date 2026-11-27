@@ -2,7 +2,7 @@ import React from 'react';
 import Svg, { Circle, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';
 
 const DEFAULT_SIZE = 18;
-const DEFAULT_COLOR = '#F5F4EF';
+const DEFAULT_COLOR = '#FDFDFD';
 const STROKE = 1.5;
 
 export function StoneGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = 4 }) {

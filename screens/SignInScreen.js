@@ -1,6 +1,6 @@
 import { useSignIn, useSignUp, useAuth, useSSO } from '@clerk/clerk-expo';
-import { useFonts, SofiaSansExtraCondensed_800ExtraBold } from '@expo-google-fonts/sofia-sans-extra-condensed';
-import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
+import { useFonts, Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
+import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,7 +54,7 @@ export default function SignInScreen({ navigation, route }) {
   const legacyTabs = useFlag('legacy_tabs');
   const figma = usesFigmaOnboarding(() => legacyTabs);
 
-  const [fontsLoaded] = useFonts({ SofiaSansExtraCondensed_800ExtraBold, GeistMono_400Regular });
+  const [fontsLoaded] = useFonts({ Archivo_900Black_Italic, IBMPlexSans_700Bold });
   if (!fontsLoaded) return null;
 
   // New accounts (Google or verified email) may still need a username; anyone
@@ -373,7 +373,7 @@ export default function SignInScreen({ navigation, route }) {
           style={styles.input}
           keyboardAppearance="dark"
           placeholder={t('signIn.codePlaceholder')}
-          placeholderTextColor="#6C6C69"
+          placeholderTextColor="rgba(253,253,253,0.30)"
           keyboardType="number-pad"
           autoCapitalize="none"
           textContentType="oneTimeCode"
@@ -437,7 +437,7 @@ export default function SignInScreen({ navigation, route }) {
         style={styles.input}
         keyboardAppearance="dark"
         placeholder={t('signIn.emailPlaceholder')}
-        placeholderTextColor="#6C6C69"
+        placeholderTextColor="rgba(253,253,253,0.30)"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -447,7 +447,7 @@ export default function SignInScreen({ navigation, route }) {
         style={styles.input}
         keyboardAppearance="dark"
         placeholder={t('signIn.passwordPlaceholder')}
-        placeholderTextColor="#6C6C69"
+        placeholderTextColor="rgba(253,253,253,0.30)"
         secureTextEntry
         maxLength={PASSWORD_MAX}
         value={password}
@@ -491,33 +491,33 @@ export default function SignInScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#F5F4EF',
-    fontSize: 32,
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#FDFDFD',
+    fontSize: 26,
     letterSpacing: -1,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   claimMark: {
-    color: '#E8432B',
+    color: '#E34234',
     fontSize: 11,
   },
   subtitle: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#6C6C69',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 11,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 48,
   },
   hint: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: '#9CA3AF',
     fontSize: 13,
     lineHeight: 19,
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     width: '100%',
-    backgroundColor: '#F5F4EF',
+    backgroundColor: '#FDFDFD',
     borderRadius: 0,
     paddingVertical: 15,
     flexDirection: 'row',
@@ -535,14 +535,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   googleMark: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#1A1A1A',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#0E0E10',
     fontSize: 16,
     textTransform: 'uppercase',
   },
   googleButtonText: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#1A1A1A',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#0E0E10',
     fontSize: 15,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -557,42 +557,42 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#242424',
+    backgroundColor: '#1A1A1D',
   },
   dividerText: {
-    fontFamily: 'GeistMono_400Regular',
-    color: '#6C6C69',
+    fontFamily: 'IBMPlexSans_700Bold',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   input: {
     width: '100%',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#242424',
-    color: '#F5F4EF',
+    borderColor: '#1A1A1D',
+    color: '#FDFDFD',
     fontSize: 15,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
   },
   error: {
-    color: '#E8432B',
+    color: '#E34234',
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   button: {
     width: '100%',
-    backgroundColor: '#E8432B',
+    backgroundColor: '#E34234',
     borderRadius: 0,
     paddingVertical: 16,
   },
   buttonText: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: '#F5F4EF',
+    fontFamily: 'Archivo_900Black_Italic',
+    color: '#FDFDFD',
     fontSize: 15,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -603,19 +603,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   forgotText: {
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 13,
   },
   toggleButton: {
     marginTop: 24,
   },
   toggleText: {
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     fontSize: 13,
   },
   toggleLink: {
-    color: '#E8432B',
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    color: '#E34234',
+    fontFamily: 'Archivo_900Black_Italic',
     textTransform: 'uppercase',
   },
 });
@@ -628,7 +628,7 @@ const figmaStyles = StyleSheet.create({
   backText: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.4, color: colors.slate2, textTransform: 'uppercase' },
   wordmark: {
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 26,
     color: colors.bone,
     letterSpacing: -1,
     textTransform: 'uppercase',

@@ -14,10 +14,10 @@ import { navigateTo } from '../lib/navigation';
 import { useTranslation } from 'react-i18next';
 import { fetchChallengesToday } from '../lib/challengesTodayApi';
 
-const INK2 = '#1A1A1A';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK2 = '#0E0E10';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 const AT_RISK_HOUR = 17;
 
@@ -137,21 +137,21 @@ const styles = StyleSheet.create({
     backgroundColor: BONE,
   },
   kicker: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   dismiss: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   line: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     lineHeight: 19,
     color: BONE,

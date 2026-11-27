@@ -169,7 +169,7 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.82)', // Ink, dimmed — no blur
+    backgroundColor: 'rgba(0,0,0,0.82)', // Ink, dimmed — no blur
     padding: 24,
   },
   scrimCenter: { justifyContent: 'center' },
@@ -198,9 +198,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 30,
+    fontSize: 24,
     color: colors.bone,
-    lineHeight: 32,
+    lineHeight: 26,
     textTransform: 'uppercase',
   },
   body: {

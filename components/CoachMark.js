@@ -116,7 +116,7 @@ export function CoachBubble({ onPress }) {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingBottom: 16,

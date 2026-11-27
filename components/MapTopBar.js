@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     left: -12,
     right: -12,
     bottom: 0,
-    backgroundColor: 'rgba(16,16,16,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   row: {
     flexDirection: 'row',
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(16,16,16,0.86)',
+    backgroundColor: 'rgba(0,0,0,0.86)',
     borderWidth: 0.5,
     borderColor: colors.hairlineStrong,
     borderRadius: 0,

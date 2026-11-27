@@ -1,5 +1,5 @@
 // Screen: ChatScreen — City + Alliance chat (M2: composer + Ably + push deep link + error banner)
-// Surface: Ink #101010 background, rows transparent, 1px hairline-standard rgba(245,244,239,0.08) divider
+// Surface: Ink #000000 background, rows transparent, 1px hairline-standard rgba(253,253,253,0.08) divider
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2, error banner Instrument Sans 400 13px on Claim/red or amber surface
 // Territory colors: delegated to none — chat is a neutral surface
 // Brand rule applied: Send button is the single Claim CTA on the screen. Inverted FlatList for chat-app convention (newest at bottom). KeyboardAvoidingView wraps composer with platform-appropriate behavior.
@@ -427,7 +427,7 @@ export default function ChatScreen() {
     if (!roomsLoaded) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator color="#6C6C69" />
+          <ActivityIndicator color="rgba(253,253,253,0.30)" />
         </View>
       );
     }
@@ -477,7 +477,7 @@ export default function ChatScreen() {
     if (isLoadingFirst && messages === undefined) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator color="#6C6C69" />
+          <ActivityIndicator color="rgba(253,253,253,0.30)" />
         </View>
       );
     }
@@ -517,13 +517,13 @@ export default function ChatScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F5F4EF"
-            colors={['#F5F4EF']}
+            tintColor="#FDFDFD"
+            colors={['#FDFDFD']}
           />
         }
         ListFooterComponent={
           isLoadingMore ? (
-            <ActivityIndicator color="#6C6C69" style={{ paddingVertical: 12 }} />
+            <ActivityIndicator color="rgba(253,253,253,0.30)" style={{ paddingVertical: 12 }} />
           ) : null
         }
       />
@@ -669,7 +669,7 @@ export default function ChatScreen() {
             style={styles.composerInput}
             keyboardAppearance="dark"
             placeholder={t('chat.messagePlaceholder')}
-            placeholderTextColor="#6C6C69"
+            placeholderTextColor="rgba(253,253,253,0.30)"
             value={draft}
             onChangeText={setDraft}
             multiline
@@ -690,7 +690,7 @@ export default function ChatScreen() {
               ]}
             >
               <Svg width={18} height={18} viewBox="0 0 24 24">
-                <Path d="M3 20.5v-6l9-2.5-9-2.5v-6l19 8.5-19 8.5z" fill="#F5F4EF" />
+                <Path d="M3 20.5v-6l9-2.5-9-2.5v-6l19 8.5-19 8.5z" fill="#FDFDFD" />
               </Svg>
             </Pressable>
           </View>
@@ -914,7 +914,7 @@ const figmaStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
   },
   centered: {
     flex: 1,
@@ -923,35 +923,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   errorBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   retryBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 16,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   emptyLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   emptyBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#E4E3DE',
+    color: 'rgba(253,253,253,0.85)',
     marginTop: 8,
     textAlign: 'center',
   },
@@ -961,20 +961,20 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 4,
   },
   hairline: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.08)',
+    backgroundColor: 'rgba(253,253,253,0.08)',
   },
   tabStrip: {
     flexDirection: 'row',
@@ -987,26 +987,26 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   tabLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   tabLabelActive: {
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   tabMarkBoard: {
     height: 1,
     width: 32,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 6,
   },
   messageRow: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.08)',
+    borderBottomColor: 'rgba(253,253,253,0.08)',
   },
   messageRowInner: {
     flexDirection: 'row',
@@ -1020,19 +1020,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 4,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
   },
   messageAvatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   messageAvatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 0.5,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   messageRowPending: {
     opacity: 0.55,
@@ -1045,22 +1045,22 @@ const styles = StyleSheet.create({
   },
   senderText: {
     flex: 1,
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.32,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   timeText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginLeft: 8,
   },
   contentText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     lineHeight: 20,
   },
   banner: {
@@ -1068,15 +1068,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   bannerRed: {
-    backgroundColor: 'rgba(232,67,43,0.85)',
+    backgroundColor: 'rgba(227,66,52,0.85)',
   },
   bannerAmber: {
     backgroundColor: 'rgba(212,160,40,0.85)',
   },
   bannerText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   composer: {
     flexDirection: 'row',
@@ -1084,8 +1084,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(245,244,239,0.16)',
-    backgroundColor: '#1A1A1A',
+    borderTopColor: 'rgba(253,253,253,0.16)',
+    backgroundColor: '#0E0E10',
   },
   composerInput: {
     flex: 1,
@@ -1093,12 +1093,12 @@ const styles = StyleSheet.create({
     maxHeight: 96,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
-    backgroundColor: '#101010',
+    color: '#FDFDFD',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     borderRadius: 0,
   },
   composerSideCol: {
@@ -1106,13 +1106,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   counterText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#6C6C69',
+    color: 'rgba(253,253,253,0.30)',
     marginBottom: 4,
   },
   sendBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     width: 44,
     height: 40,
     alignItems: 'center',

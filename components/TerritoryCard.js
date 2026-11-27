@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 import TagChip from './TagChip';
 import { CoachBubble } from './CoachMark';
 import { ClockIcon, PinIcon } from './MapIcons';
-import { BUSY_LABEL, CARD_COPY, territoryCardModel } from '../lib/territoryCard';
+import { BUSY_LABEL, CARD_COPY, territoryCardModel, territoryOwnership } from '../lib/territoryCard';
 import { formatWalkDistance } from '../lib/firstClaimApi';
 import { getTerritoryHistoryStats } from '../lib/territory';
 import { colors, fonts } from '../lib/theme';
@@ -64,10 +64,7 @@ export default function TerritoryCard({
 
   const territoryId = territory?.id ?? territory?.properties?.id ?? null;
   const isEnemyGround = !!territory?.properties
-    && territory.properties.owner != null
-    && territory.properties.owner !== 'Unclaimed'
-    && territory.properties.color !== colors.claim
-    && territory.properties.color !== colors.alliance;
+    && territoryOwnership(territory.properties) === 'enemy';
 
   useEffect(() => {
     setBusy(false);

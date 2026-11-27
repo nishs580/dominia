@@ -14,16 +14,16 @@ import { useTranslation } from 'react-i18next';
 import { getAllianceById } from '../lib/allianceApi';
 import THEME from '../lib/theme';
 
-const INK = '#101010';
+const INK = '#000000';
 const BONE = THEME.colors.bone;
-const SLATE = '#6C6C69';
-const SLATE_2 = '#A3A29F';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE_2 = 'rgba(253,253,253,0.62)';
 const CLAIM = THEME.colors.claim;
 const CLAIM_BUTTON = THEME.colors.claimButton; // AA-safe button fill under Bone text
-const ALLIANCE = '#3155FF';
-const ALLIANCE_RULE = 'rgba(49,85,255,0.4)';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const ALLIANCE = THEME.colors.alliance;
+const ALLIANCE_RULE = 'rgba(91,123,245,0.4)';
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 export default function AllianceJoinedScreen() {
   const navigation = useNavigation();
@@ -96,7 +96,7 @@ export default function AllianceJoinedScreen() {
   if (loading) {
     return (
       <View style={styles.fullScreenCentered}>
-        <ActivityIndicator size="large" color={'#C8FF3D'} />
+        <ActivityIndicator size="large" color={'#84FF44'} />
       </View>
     );
   }
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     borderWidth: 1,
-    borderColor: '#C8FF3D',
+    borderColor: '#84FF44',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.monoMedium,
     fontSize: 11,
     letterSpacing: 1.6,
-    color: '#C8FF3D',
+    color: '#84FF44',
     textTransform: 'uppercase',
   },
   screen: {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   kickerText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.8,
     color: ALLIANCE,
@@ -255,16 +255,16 @@ const styles = StyleSheet.create({
   },
 
   allianceName: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 29,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
-    lineHeight: 38,
+    lineHeight: 30,
     marginBottom: 8,
   },
   tag: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     letterSpacing: 3,
     color: ALLIANCE,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    fontFamily: 'SofiaSansExtraCondensed_600SemiBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 16,
     fontStyle: 'italic',
     color: BONE,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
   },
   metaLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE_2,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   metaValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     color: BONE,
   },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     color: SLATE_2,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   bNum: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE,
@@ -361,14 +361,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bTitle: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     color: BONE,
     lineHeight: 18,
     marginBottom: 4,
   },
   bSub: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 12,
     color: SLATE_2,
     lineHeight: 18,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   ctaStep: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: BONE,
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   ctaAction: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     letterSpacing: 1.6,
     color: BONE,

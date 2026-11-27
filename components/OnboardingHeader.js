@@ -37,8 +37,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontFamily: fonts.display,
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 27,
+    lineHeight: 30,
     letterSpacing: -0.6,
     color: colors.white,
     textTransform: 'uppercase',

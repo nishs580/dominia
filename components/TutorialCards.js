@@ -162,7 +162,7 @@ export default function TutorialCards({ index, onNext, onSkip, onBack }) {
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
     padding: 16,
     paddingBottom: 96,
@@ -177,8 +177,8 @@ const styles = StyleSheet.create({
   counter: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.6, color: colors.muted },
   title: {
     fontFamily: fonts.display,
-    fontSize: 34,
-    lineHeight: 36,
+    fontSize: 27,
+    lineHeight: 29,
     color: colors.white,
     textTransform: 'uppercase',
     marginBottom: 12,

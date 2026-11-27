@@ -327,7 +327,7 @@ export default function DefendPopup({ model, onDefend, onDismiss }) {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     paddingHorizontal: 24,
     zIndex: 60,
@@ -355,8 +355,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 32,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 27,
     color: colors.bone,
     textTransform: 'uppercase',
   },

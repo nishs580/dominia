@@ -1,5 +1,5 @@
 // Component: ActivityLogScreen — unified activity feed
-// Surface: Ink #101010 background, rows transparent on Ink, 1px hairline-standard rgba(245,244,239,0.08) divider between rows
+// Surface: Ink #000000 background, rows transparent on Ink, 1px hairline-standard rgba(253,253,253,0.08) divider between rows
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
 // Territory colors: delegated to ActivityLogEvent row accent bars (Claim, Alliance, Enemy, Slate)
 // Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen, end-of-list signaled by hairline + Geist Mono label (grids are visible — brand rule).
@@ -102,7 +102,7 @@ export default function ActivityLogScreen() {
 
   const renderFooter = () => {
     if (loadingMore) {
-      return <ActivityIndicator color="#6C6C69" style={{ paddingVertical: 16 }} />;
+      return <ActivityIndicator color="rgba(253,253,253,0.30)" style={{ paddingVertical: 16 }} />;
     }
     if (endReached && events.length > 0) {
       return (
@@ -135,14 +135,14 @@ export default function ActivityLogScreen() {
     if (figma) {
       return wrapFigma(
         <>
-          <ActivityIndicator size="large" color="#6C6C69" />
+          <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </>,
       );
     }
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator size="large" color="#6C6C69" />
+        <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
@@ -224,8 +224,8 @@ export default function ActivityLogScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#F5F4EF"
-              colors={['#F5F4EF']}
+              tintColor="#FDFDFD"
+              colors={['#FDFDFD']}
             />
           }
         />
@@ -253,8 +253,8 @@ export default function ActivityLogScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F5F4EF"
-            colors={['#F5F4EF']}
+            tintColor="#FDFDFD"
+            colors={['#FDFDFD']}
           />
         }
       />
@@ -267,7 +267,7 @@ export default function ActivityLogScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
   },
   centered: {
     alignItems: 'center',
@@ -287,43 +287,43 @@ const styles = StyleSheet.create({
     color: colors.muted2,
   },
   loadingText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   retryBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 16,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   emptyLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   emptyBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#E4E3DE',
+    color: 'rgba(253,253,253,0.85)',
     marginTop: 8,
   },
   header: {
@@ -332,28 +332,28 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 4,
   },
   endDivider: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginHorizontal: 16,
   },
   endLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     textAlign: 'center',
     paddingVertical: 16,
   },

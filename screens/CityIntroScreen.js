@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   // Updated UX A7: full-bleed map + bottom panel.
   full: { flex: 1, backgroundColor: colors.obsidian, justifyContent: 'flex-end' },
   mapPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.surface },
-  mapScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,16,16,0.25)' },
+  mapScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
   panel: {
     backgroundColor: colors.obsidian,
     borderTopWidth: 1,
@@ -193,8 +193,8 @@ const styles = StyleSheet.create({
   },
   cityTitle: {
     fontFamily: fonts.display,
-    fontSize: 52,
-    lineHeight: 54,
+    fontSize: 42,
+    lineHeight: 43,
     letterSpacing: -1,
     color: colors.white,
     textTransform: 'uppercase',
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 26,
     letterSpacing: -0.9,
     color: colors.bone,
     textTransform: 'uppercase',
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.slate2,
     textTransform: 'uppercase',
-    backgroundColor: 'rgba(16,16,16,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
