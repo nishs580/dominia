@@ -109,7 +109,7 @@ function MissionsTopRow({ gold, level }) {
   const { t } = useTranslation();
   return (
     <View style={styles.topRow}>
-      <ProfileAvatarButton />
+      <ProfileAvatarButton variant="slant" />
       <View style={styles.pills}>
         <SlantTile
           size={36}
