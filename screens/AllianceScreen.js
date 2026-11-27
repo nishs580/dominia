@@ -11,9 +11,10 @@ import WeeklyTaskCard from '../components/WeeklyTaskCard';
 import WeeklyTopContributors from '../components/WeeklyTopContributors';
 import { getAllianceById, getMyAlliance, joinAlliance, leaveAlliance, kickMember, promoteMember, demoteMember, transferFounder, listAlliances, normalizeAllianceDetail, listJoinRequests, acceptJoinRequest, declineJoinRequest } from '../lib/allianceApi';
 import { ALLIANCE_MAX_MEMBERS, allianceListState, joinErrorKey, joinRequestErrorKey } from '../lib/allianceValidation';
-import AllianceDetailSheet, { AllianceEmblemTile, AllianceMemberRow, AllianceStatsGrid, allianceBlurb, allianceName } from '../components/AllianceDetailSheet';
+import AllianceDetailSheet, { AllianceEmblemTile, AllianceMemberRow, AllianceMembersCount, AllianceStatsGrid, allianceBlurb, allianceTitle } from '../components/AllianceDetailSheet';
+import { CutCard, CutField, SlantButton, SlantTile } from '../components/ui';
 import { isAllianceLeader } from '../lib/allianceRoles';
-import { memberInitials, normalizeJoinRequests } from '../lib/allianceJoin';
+import { memberInitials, normalizeJoinRequests, padRank } from '../lib/allianceJoin';
 import FeatureExplainer from '../components/FeatureExplainer';
 import { getAllianceActivityLog, markAllianceActivityLogRead } from '../lib/allianceActivityLogApi';
 import { getAvailableActions } from '../lib/alliancePermissions';
@@ -37,9 +38,12 @@ const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 const LIME = '#84FF44';
 const DANGER = '#E34234';
 
-// Figma line icons (F3 info, F5 settings and messages).
-const INFO_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE}" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v1"/></svg>`;
-const SETTINGS_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${BONE}" stroke-width="1.6"><path d="M3 7h11M18 7h3M3 17h5M12 17h9"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/></svg>`;
+// Dominia-Temp line icons (list header, row chips, footer, member view).
+const INFO_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE2}" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v1"/></svg>`;
+const MEMBERS_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${BONE}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.8 3.1 2.6 3.5 5.2"/></svg>`;
+const MAP_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${BONE}" stroke-width="1.8" stroke-linejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>`;
+const PENCIL_ICON_XML = `<svg viewBox="0 0 16 16" fill="none" stroke="${BONE}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3L5.5 13.5H2.5v-3z"/><path d="M9 4l3 3"/></svg>`;
+const LEAVE_ICON_XML = `<svg viewBox="0 0 16 16" fill="none" stroke="${SLATE2}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5H3v11h3"/><path d="M10 5l-3 3 3 3M7 8h7"/></svg>`;
 const CHAT_ICON_XML = `<svg viewBox="0 0 24 24" fill="none" stroke="${SLATE2}" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.1-1.1A8 8 0 1 0 12 4z"/></svg>`;
 
 function formatAllianceRole(t, role) {
@@ -367,7 +371,7 @@ function NonMemberContent({
   );
 }
 
-function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave, figma = false, territoryCount = null }) {
+function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterLeave, figma = false, territoryCount = null, onInfo = null }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -394,8 +398,7 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   const [transferConfirmInput, setTransferConfirmInput] = useState('');
   const [transferSaving, setTransferSaving] = useState(false);
   const [transferError, setTransferError] = useState('');
-  // Figma member view: settings sheet and the leader's pending join requests (U6).
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Figma member view: the leader's pending join requests (U6).
   const [requests, setRequests] = useState([]);
   const [requestBusy, setRequestBusy] = useState(null); // request id in flight
   const [requestError, setRequestError] = useState('');
@@ -919,9 +922,9 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
     );
   }
 
-  // Figma member view (F5) with the leave confirm (F8) as a modal over it.
+  // Dominia-Temp member view (Alliance case 4) with the leave confirm as a
+  // modal over it.
   if (figma) {
-    const tagText = (myAlliance?.short_name ?? '').toUpperCase();
     const blurb = allianceBlurb(myAlliance);
     const fallbackName = myAlliance?.name ?? t('alliance.allianceFallback');
     const leaveTitleText =
@@ -942,107 +945,97 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
       leaveConfirmCase === 'disband'
         ? t('alliance.disband')
         : t('allianceFigma.leaveAlliance', { defaultValue: 'LEAVE ALLIANCE' });
-    const leaveLabel = t('allianceFigma.leaveAlliance', { defaultValue: 'LEAVE ALLIANCE' });
-    const openChatLabel = t('allianceFigma.openChat', { defaultValue: 'OPEN CHAT' });
+    const chatLabel = t('allianceFigma.chatCta', { defaultValue: 'CHAT' });
+    const latest = events[0] ?? null;
 
     return (
       <>
         <ScrollView
           style={styles.scroll}
-          // Figma header sits below the status bar (as TabScreenHeader).
           contentContainerStyle={[styles.figmaMemberContent, { paddingTop: insets.top + 12 }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.figmaMemberTitleRow}>
-            <Text
-              style={[styles.headerTitle, styles.figmaMemberTitle]}
-              accessibilityRole="header"
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.65}
-            >
-              {allianceName(myAlliance) || t('alliance.allianceFallback')}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('allianceFigma.settings', { defaultValue: 'Alliance settings' })}
-              onPress={() => setSettingsOpen(true)}
-              hitSlop={10}
-              style={({ pressed }) => [styles.figmaIconBtn, pressed && { opacity: 0.6 }]}
-            >
-              <SvgXml xml={SETTINGS_ICON_XML} width={24} height={24} />
-            </Pressable>
-          </View>
-
-          <View style={styles.figmaIdentityRow}>
-            <AllianceEmblemTile emblem={myAlliance?.emblem} size={48} />
-            <View style={styles.figmaIdentityText}>
-              <Text style={styles.figmaMemberTag}>
-                {t('allianceFigma.youreMember', { tag: tagText, defaultValue: "[{{tag}}] · YOU'RE A MEMBER" })}
+          <View style={styles.tempMemberHead}>
+            <AllianceEmblemTile emblem={myAlliance?.emblem} size={56} />
+            <View style={styles.tempMemberHeadText}>
+              <Text
+                style={styles.tempMemberTitle}
+                accessibilityRole="header"
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {(myAlliance ? allianceTitle(myAlliance) : '').toUpperCase() || fallbackName}
               </Text>
-              {blurb ? <Text style={styles.figmaMemberBlurb}>{blurb}</Text> : null}
+              {blurb ? <Text style={styles.tempMemberBlurb}>{blurb}</Text> : null}
             </View>
+            {onInfo ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('allianceFigma.about', { defaultValue: 'About alliances' })}
+                onPress={onInfo}
+                hitSlop={12}
+                style={({ pressed }) => [styles.tempInfoBtn, pressed && { opacity: 0.6 }]}
+              >
+                <SvgXml xml={INFO_ICON_XML} width={18} height={18} />
+              </Pressable>
+            ) : null}
           </View>
 
           <AllianceStatsGrid
             location={myAlliance?.city}
             territories={territoryCount !== null ? territoryCount : '—'}
             joinType={myAlliance?.join_type}
-            memberCount={roster.length}
           />
+          <View style={styles.tempMembersCount}>
+            <AllianceMembersCount count={roster.length} inline />
+          </View>
 
-          <Text style={styles.figmaSectionTitle}>
+          <Text style={styles.tempSectionTitle} accessibilityRole="header">
             {t('allianceFigma.allianceMissions', { defaultValue: 'ALLIANCE MISSIONS' })}
           </Text>
           <WeeklyTaskCard allianceId={allianceId} getToken={getToken} />
 
-          <View style={styles.figmaSectionHead}>
-            <Text style={[styles.figmaSectionTitle, styles.figmaSectionTitleInline]}>
-              {t('allianceFigma.allianceMessages', { defaultValue: 'ALLIANCE MESSAGES' })}
-            </Text>
-            <View style={styles.figmaLiveChip}>
-              <View style={styles.figmaLiveDot} />
-              <Text style={styles.figmaLiveText}>{t('allianceFigma.live', { defaultValue: 'LIVE' })}</Text>
+          <View style={styles.tempDivider} />
+          <Text style={styles.tempSectionTitle} accessibilityRole="header">
+            {t('allianceFigma.allianceMessages', { defaultValue: 'ALLIANCE MESSAGES' })}
+          </Text>
+          <View style={styles.tempMessagesBox}>
+            <View style={styles.tempMessagesHead}>
+              <Text style={styles.tempMessagesLive} maxFontSizeMultiplier={1.3}>
+                {t('allianceFigma.liveTitle', { defaultValue: 'Live' })}
+              </Text>
+              <SlantButton
+                label={chatLabel}
+                onPress={openChat}
+                variant="ghost"
+                size="sm"
+                trailingChevron={false}
+                leading={<SvgXml xml={CHAT_ICON_XML} width={14} height={14} />}
+                accessibilityLabel={t('allianceFigma.openChat', { defaultValue: 'OPEN CHAT' })}
+                style={styles.tempChatBtn}
+              />
             </View>
-          </View>
-          <View style={styles.figmaMessagesBox}>
-            {events.length > 0 ? (
-              <ScrollView
-                style={styles.figmaWireScroll}
-                onScroll={handleWireScroll}
-                scrollEventThrottle={400}
-                nestedScrollEnabled
-              >
-                {events.map((item) => (
-                  <AllianceLogEvent key={item.id} event={item} />
-                ))}
-                {isLoadingMore ? <ActivityIndicator style={styles.wireLoadingMore} color={SLATE} /> : null}
-              </ScrollView>
-            ) : isLoading ? (
-              <ActivityIndicator color={SLATE2} style={{ marginVertical: 12 }} />
-            ) : (
-              <>
-                <SvgXml xml={CHAT_ICON_XML} width={22} height={22} />
-                <Text style={styles.figmaEmptyMessages}>
+            <View style={styles.tempMessagesBody}>
+              {latest ? (
+                <AllianceLogEvent event={latest} />
+              ) : isLoading ? (
+                <ActivityIndicator color={SLATE2} style={{ marginVertical: 4 }} />
+              ) : (
+                <Text style={styles.tempEmptyMessages}>
                   {feedError
                     ? t('alliance.wireLost')
-                    : t('allianceFigma.noTransmissions', { defaultValue: 'No transmissions yet.' })}
+                    : t('allianceFigma.noTransmissionsShort', { defaultValue: 'No transmissions' })}
                 </Text>
-              </>
-            )}
-            <Pressable
-              accessibilityRole="button"
-              onPress={openChat}
-              style={({ pressed }) => [styles.figmaOpenChatBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={styles.figmaOpenChatText}>{openChatLabel}</Text>
-            </Pressable>
+              )}
+            </View>
           </View>
 
           {leader && requests.length > 0 ? (
             <>
-              <Text style={styles.figmaSectionTitle}>
+              <View style={styles.tempDivider} />
+              <Text style={styles.tempSectionTitle} accessibilityRole="header">
                 {t('allianceFigma.joinRequests', { defaultValue: 'JOIN REQUESTS' })}
               </Text>
               {requests.map((r, i) => {
@@ -1060,28 +1053,25 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
                       <ActivityIndicator color={SLATE2} />
                     ) : (
                       <>
-                        <Pressable
-                          accessibilityRole="button"
+                        <SlantButton
+                          label={t('allianceFigma.decline', { defaultValue: 'DECLINE' })}
                           accessibilityLabel={`${t('allianceFigma.decline', { defaultValue: 'DECLINE' })} ${r.username ?? ''}`}
                           disabled={requestBusy !== null}
                           onPress={() => resolveRequest(r, 'decline')}
-                          style={({ pressed }) => [styles.figmaRequestBtn, pressed && { opacity: 0.7 }]}
-                        >
-                          <Text style={styles.figmaRequestDeclineText}>
-                            {t('allianceFigma.decline', { defaultValue: 'DECLINE' })}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
+                          variant="ghost"
+                          size="sm"
+                          trailingChevron={false}
+                          style={styles.tempRequestBtn}
+                        />
+                        <SlantButton
+                          label={t('allianceFigma.accept', { defaultValue: 'ACCEPT' })}
                           accessibilityLabel={`${t('allianceFigma.accept', { defaultValue: 'ACCEPT' })} ${r.username ?? ''}`}
                           disabled={requestBusy !== null}
                           onPress={() => resolveRequest(r, 'accept')}
-                          style={({ pressed }) => [styles.figmaRequestBtn, styles.figmaRequestAccept, pressed && { opacity: 0.85 }]}
-                        >
-                          <Text style={styles.figmaRequestAcceptText}>
-                            {t('allianceFigma.accept', { defaultValue: 'ACCEPT' })}
-                          </Text>
-                        </Pressable>
+                          size="sm"
+                          trailingChevron={false}
+                          style={styles.tempRequestBtn}
+                        />
                       </>
                     )}
                   </View>
@@ -1093,71 +1083,39 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
             </>
           ) : null}
 
-          <Text style={styles.figmaSectionTitle}>
+          <View style={styles.tempDivider} />
+          <Text style={styles.tempSectionTitle} accessibilityRole="header">
             {t('allianceFigma.allianceMembers', { defaultValue: 'ALLIANCE MEMBERS' })}
           </Text>
-          {roster.map((m, i) => (
-            <AllianceMemberRow
-              key={m.player_id}
-              rank={i + 1}
-              member={m}
-              showBorder={i < roster.length - 1}
-              onPress={() =>
-                navigation.navigate('PublicProfile', { playerId: m.player_id, username: m.username })
-              }
-            />
-          ))}
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={openLeaveConfirm}
-            style={({ pressed }) => [styles.figmaLeaveBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={styles.figmaLeaveText}>{leaveLabel}</Text>
-          </Pressable>
-        </ScrollView>
-
-        <Modal
-          visible={settingsOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSettingsOpen(false)}
-          statusBarTranslucent
-        >
-          <View style={styles.figmaModalBackdrop}>
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setSettingsOpen(false)}
-              accessibilityRole="button"
-              accessibilityLabel={t('allianceFigma.close', { defaultValue: 'Close' })}
-            />
-            <View style={styles.figmaModalCard} accessibilityViewIsModal>
-              <Text style={styles.figmaModalTitle} accessibilityRole="header">
-                {t('allianceFigma.settingsTitle', { defaultValue: 'ALLIANCE SETTINGS' })}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setSettingsOpen(false);
-                  openChat();
-                }}
-                style={({ pressed }) => [styles.figmaModalPrimary, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.figmaModalPrimaryText}>{openChatLabel}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setSettingsOpen(false);
-                  openLeaveConfirm();
-                }}
-                style={({ pressed }) => [styles.figmaModalDanger, pressed && { opacity: 0.8 }]}
-              >
-                <Text style={styles.figmaModalDangerText}>{leaveLabel}</Text>
-              </Pressable>
-            </View>
+          <View style={styles.tempMemberList}>
+            {roster.map((m, i) => (
+              <AllianceMemberRow
+                key={m.player_id}
+                rank={i + 1}
+                member={m}
+                onPress={() =>
+                  navigation.navigate('PublicProfile', { playerId: m.player_id, username: m.username })
+                }
+              />
+            ))}
           </View>
-        </Modal>
+
+          <View style={styles.tempLeaveRow}>
+            <Text style={styles.tempLeavePrompt} maxFontSizeMultiplier={1.3}>
+              {t('allianceFigma.leavePrompt', { defaultValue: 'Leave Alliance' })}
+            </Text>
+            <SlantButton
+              label={t('allianceFigma.leaveCta', { defaultValue: 'LEAVE' })}
+              onPress={openLeaveConfirm}
+              variant="ghost"
+              size="md"
+              trailingChevron={false}
+              leading={<SvgXml xml={LEAVE_ICON_XML} width={14} height={14} />}
+              accessibilityLabel={t('allianceFigma.leaveAlliance', { defaultValue: 'LEAVE ALLIANCE' })}
+              style={styles.tempLeaveBtn}
+            />
+          </View>
+        </ScrollView>
 
         <Modal
           visible={Boolean(leaveConfirmCase)}
@@ -1178,28 +1136,24 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
                 {leaveTitleText}
               </Text>
               <Text style={styles.figmaModalBody}>{leaveBodyText}</Text>
-              <Pressable
-                accessibilityRole="button"
-                disabled={leaveSaving}
+              <SlantButton
+                label={t('allianceFigma.stay', { defaultValue: 'STAY' })}
                 onPress={closeLeaveConfirm}
-                style={({ pressed }) => [styles.figmaModalPrimary, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.figmaModalPrimaryText}>{t('allianceFigma.stay', { defaultValue: 'STAY' })}</Text>
-              </Pressable>
+                disabled={leaveSaving}
+                size="md"
+                trailingChevron={false}
+                style={styles.tempModalBtn}
+              />
               {leaveConfirmCase !== 'blocked' ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: leaveSaving, busy: leaveSaving }}
-                  disabled={leaveSaving}
+                <SlantButton
+                  label={leaveCtaText}
                   onPress={handleLeaveSubmit}
-                  style={({ pressed }) => [styles.figmaModalDanger, pressed && !leaveSaving && { opacity: 0.8 }]}
-                >
-                  {leaveSaving ? (
-                    <ActivityIndicator color={DANGER} />
-                  ) : (
-                    <Text style={styles.figmaModalDangerText}>{leaveCtaText}</Text>
-                  )}
-                </Pressable>
+                  loading={leaveSaving}
+                  variant="outline"
+                  size="md"
+                  trailingChevron={false}
+                  style={styles.tempModalBtn}
+                />
               ) : null}
               {leaveError ? (
                 <Text style={styles.joinError} accessibilityLiveRegion="polite">{leaveError}</Text>
@@ -1364,11 +1318,12 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
   );
 }
 
-// Figma browse (F3; alliance_hq_create off): server list and search from
-// GET /alliances?q= (caller's city only), "IN {CITY} · N ALLIANCES", rows
-// with tag tile / NAME [TAG] / meta / chevron, the unlock note and a
-// full-width CREATE ALLIANCE under the list. A row opens the F4 detail pop-up.
-function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) {
+// Dominia-Temp browse (Alliance cases 1–2; alliance_hq_create off): server
+// list and search from GET /alliances?q= (caller's city only). Search row
+// (CutField + SEARCH), CutCard rows with the emblem glyph tile, "Name - TAG",
+// a territories chip and a members chip, and a sticky "Create your own
+// Alliance / CREATE" footer. A row opens the case-3 detail modal.
+function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef }) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
@@ -1409,28 +1364,7 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) 
 
   const state = allianceListState({ loading, error, alliances, query });
   const goCreate = () => navigation.navigate('CreateAlliance');
-
-  const footer = (
-    <>
-      <View style={styles.figmaNoteRow}>
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <SvgXml xml={INFO_ICON_XML} width={16} height={16} />
-        </View>
-        <Text style={styles.figmaNoteText}>
-          {t('allianceFigma.unlockNote', { defaultValue: 'Alliances unlock at level 3. Up to 20 members each.' })}
-        </Text>
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={goCreate}
-        style={({ pressed }) => [styles.figmaCreateFull, pressed && { opacity: 0.85 }]}
-      >
-        <Text style={styles.figmaCreateBtnText}>
-          {t('allianceFigma.createCta', { defaultValue: 'CREATE ALLIANCE' })}
-        </Text>
-      </Pressable>
-    </>
-  );
+  const searchLabel = t('allianceFigma.search', { defaultValue: 'Search' });
 
   let body;
   if (state === 'loading') {
@@ -1443,21 +1377,22 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) 
     body = (
       <View style={styles.figmaCentered}>
         <Text style={styles.errorText}>{t('alliance.couldNotLoad')}</Text>
-        <Pressable
-          accessibilityRole="button"
+        <SlantButton
+          label={t('common.retry')}
           onPress={() => load(query)}
-          style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
-        </Pressable>
+          variant="ghost"
+          size="sm"
+          style={styles.tempRetry}
+        />
       </View>
     );
   } else {
     body = (
       <ScrollView
         style={styles.figmaListScroll}
-        contentContainerStyle={styles.figmaListContent}
+        contentContainerStyle={styles.tempListContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {state === 'empty' ? (
           <Text style={[styles.emptyListText, styles.figmaEmptyText]}>
@@ -1468,80 +1403,86 @@ function FigmaBrowse({ getToken, navigation, onJoined, listWrapRef, homeCity }) 
             {t('allianceFigma.noResults', { defaultValue: 'No alliances match "{{query}}"', query })}
           </Text>
         ) : (
-          alliances.map((a, i) => {
+          alliances.map((a) => {
+            const territories = padRank(a.territory_count ?? 0);
+            const members = `${padRank(a.member_count ?? 0)} / ${ALLIANCE_MAX_MEMBERS}`;
             const meta = t('allianceFigma.rowMeta', {
-              territories: a.territory_count,
-              members: a.member_count,
+              territories: a.territory_count ?? 0,
+              members: a.member_count ?? 0,
               max: ALLIANCE_MAX_MEMBERS,
               defaultValue: '{{territories}} TERRITORIES · {{members}}/{{max}} MEMBERS',
             });
             return (
-              <Pressable
+              <CutCard
                 key={a.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${a.name} [${a.short_name}], ${meta}`}
+                padding={10}
                 onPress={() => setSelected(a)}
-                style={({ pressed }) => [styles.figmaRow, i === alliances.length - 1 && styles.figmaRowLast, pressed && styles.aRowPressed]}
+                accessibilityLabel={`${allianceTitle(a)}, ${meta}`}
               >
-                <View style={styles.figmaTagTile}>
-                  <Text style={styles.figmaTagTileText}>{(a.short_name ?? '').toUpperCase()}</Text>
-                </View>
-                <View style={styles.figmaRowInfo}>
-                  <Text style={styles.aNameLine} numberOfLines={1}>
-                    <Text style={styles.aName}>{a.name}</Text>
-                    <Text style={styles.figmaRowTag}>{`  [${(a.short_name ?? '').toUpperCase()}]`}</Text>
+                <View style={styles.tempRow}>
+                  <SlantTile size={34} square tone="raised" slant={8}>
+                    <AllianceEmblem emblem={a.emblem} variant="glyph" size={16} />
+                  </SlantTile>
+                  <Text style={styles.tempRowName} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+                    {allianceTitle(a)}
                   </Text>
-                  <Text style={styles.figmaRowMeta} numberOfLines={1}>{meta}</Text>
+                  <SlantTile size={26} tone="raised" slant={6} paddingHorizontal={10} style={styles.tempChip}>
+                    <SvgXml xml={MAP_ICON_XML} width={12} height={12} />
+                    <Text style={styles.tempChipText} maxFontSizeMultiplier={1.2}>{territories}</Text>
+                  </SlantTile>
+                  <SlantTile size={26} tone="raised" slant={6} paddingHorizontal={10} style={styles.tempChip}>
+                    <SvgXml xml={MEMBERS_ICON_XML} width={12} height={12} />
+                    <Text style={styles.tempChipText} maxFontSizeMultiplier={1.2}>{members}</Text>
+                  </SlantTile>
                 </View>
-                <Text style={styles.figmaChevron}>›</Text>
-              </Pressable>
+              </CutCard>
             );
           })
         )}
-        {footer}
       </ScrollView>
     );
   }
 
-  const count = state === 'list' ? alliances.length : 0;
-
   return (
     <View ref={listWrapRef} collapsable={false} style={styles.scroll}>
-      <View style={styles.figmaSearchRow}>
-        <TextInput
-          style={styles.figmaSearchInput}
+      <View style={styles.tempSearchRow}>
+        <CutField
           value={input}
           onChangeText={onChangeInput}
           onSubmitEditing={submitSearch}
-          placeholder={t('allianceFigma.searchPlaceholder', { defaultValue: 'Alliance name, alliance tag' })}
-          placeholderTextColor={SLATE}
+          placeholder={t('allianceFigma.searchPlaceholderTemp', { defaultValue: 'Alliance name, Alliance tag...' })}
           keyboardAppearance="dark"
           returnKeyType="search"
           autoCorrect={false}
           maxLength={50}
           accessibilityLabel={t('allianceFigma.searchLabel', { defaultValue: 'Search alliances' })}
+          containerStyle={styles.tempSearchField}
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('allianceFigma.search', { defaultValue: 'Search' })}
+        <SlantButton
+          label={searchLabel}
           onPress={submitSearch}
-          style={({ pressed }) => [styles.figmaSearchBtn, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.figmaSearchBtnText}>{t('allianceFigma.search', { defaultValue: 'Search' })}</Text>
-        </Pressable>
+          variant="ghost"
+          size="lg"
+          trailingChevron={false}
+          style={styles.tempSearchBtn}
+        />
       </View>
 
-      {state === 'list' || state === 'empty' || state === 'no_results' ? (
-        <Text style={styles.figmaCityLine} numberOfLines={1}>
-          {t('allianceFigma.cityCount', {
-            city: (homeCity ?? '—').toUpperCase(),
-            count,
-            defaultValue: 'IN {{city}} · {{count}} ALLIANCES',
-          })}
-        </Text>
-      ) : null}
-
       <View style={{ flex: 1 }}>{body}</View>
+
+      <View style={styles.tempFooter}>
+        <Text style={styles.tempFooterText} maxFontSizeMultiplier={1.3}>
+          {t('allianceFigma.createPrompt', { defaultValue: 'Create your own Alliance' })}
+        </Text>
+        <SlantButton
+          label={t('allianceFigma.create', { defaultValue: 'Create' })}
+          onPress={goCreate}
+          size="md"
+          trailingChevron={false}
+          leading={<SvgXml xml={PENCIL_ICON_XML} width={14} height={14} />}
+          style={styles.tempFooterBtn}
+        />
+      </View>
 
       <AllianceDetailSheet
         alliance={selected}
@@ -1580,6 +1521,9 @@ export default function AllianceScreen() {
   // alliance_hq_create off = Figma alliance screens (server list/search,
   // detail pop-up, header stats, territories per member, explainers).
   const figma = !useFlag('alliance_hq_create');
+  // Bumped by the (i) buttons to show the alliance explainers again.
+  const [explainerReopen, setExplainerReopen] = useState(0);
+  const openExplainer = useCallback(() => setExplainerReopen((n) => n + 1), []);
 
   const loadAllianceList = useCallback(async (playerHomeCity) => {
 
@@ -1833,10 +1777,29 @@ export default function AllianceScreen() {
         </View>
       )}
       {!isMember && figma && (
-        <View ref={walkthroughHeaderRef} collapsable={false} style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={styles.headerTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-            {t('allianceFigma.title', { defaultValue: 'ALLIANCES' })}
-          </Text>
+        <View ref={walkthroughHeaderRef} collapsable={false} style={[styles.tempHeader, { paddingTop: insets.top + 12 }]}>
+          <View style={styles.tempHeaderText}>
+            <Text style={styles.tempHeaderTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
+              {t('allianceFigma.titleSingular', { defaultValue: 'ALLIANCE' })}
+            </Text>
+            <Text style={styles.tempHeaderSubtitle} maxFontSizeMultiplier={1.4}>
+              {t('allianceFigma.subtitle', { defaultValue: 'Join or Create a Alliance to be a part of it.' })}
+            </Text>
+          </View>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <SlantTile size={40} square selected slant={10}>
+              <SvgXml xml={MEMBERS_ICON_XML} width={20} height={20} />
+            </SlantTile>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('allianceFigma.about', { defaultValue: 'About alliances' })}
+            onPress={openExplainer}
+            hitSlop={12}
+            style={({ pressed }) => [styles.tempInfoBtn, pressed && { opacity: 0.6 }]}
+          >
+            <SvgXml xml={INFO_ICON_XML} width={18} height={18} />
+          </Pressable>
         </View>
       )}
       {!isMember && !figma && !confirmAlliance && (
@@ -1872,6 +1835,7 @@ export default function AllianceScreen() {
             onRefreshAfterLeave={() => fetchAllianceData({ silent: true })}
             figma={figma}
             territoryCount={territoryCount}
+            onInfo={openExplainer}
           />
         )
       ) : figma ? (
@@ -1879,7 +1843,6 @@ export default function AllianceScreen() {
           getToken={getToken}
           navigation={navigation}
           listWrapRef={walkthroughListRef}
-          homeCity={playerRow?.home_city}
           onJoined={async (allianceId) => {
             await fetchAllianceData({ silent: true });
             navigation.navigate('AllianceJoined', { allianceId, context: 'joined' });
@@ -1909,17 +1872,19 @@ export default function AllianceScreen() {
           pages={[
             {
               title: t('allianceFigma.explainerWhatTitle', { defaultValue: 'WHAT ARE ALLIANCES?' }),
-              body: t('allianceFigma.explainerWhatBody', {
-                defaultValue: "Alliances are crews of up to 20 players. Ally territory shows in blue on the map, and any member can defend it when it's attacked.",
+              body: t('allianceFigma.explainerWhatBodyTemp', {
+                defaultValue: 'Alliances are teams where members can work together to claim more territories as a group.',
               }),
             },
             {
               title: t('allianceFigma.explainerJoinTitle', { defaultValue: 'JOIN OR CREATE' }),
-              body: t('allianceFigma.explainerJoinBody', {
-                defaultValue: 'Search for an alliance in your city and request to join, or create your own and invite friends. Alliances unlock at level 3.',
+              body: t('allianceFigma.explainerJoinBodyTemp', {
+                defaultValue: 'Join an existing alliance or create your own and recruit members to work together.',
               }),
             },
           ]}
+          reopen={explainerReopen}
+          placement="bottom"
         />
       ) : null}
     </View>
@@ -1927,6 +1892,173 @@ export default function AllianceScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Dominia-Temp list (cases 1–2) ──
+  tempHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    marginHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE_STRONG,
+    marginBottom: 16,
+  },
+  tempHeaderText: { flex: 1 },
+  tempHeaderTitle: {
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 34,
+    lineHeight: 40,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  tempHeaderSubtitle: {
+    fontFamily: 'IBMPlexSans_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: SLATE2,
+    marginTop: 4,
+  },
+  tempInfoBtn: {
+    minWidth: 28,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tempSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  tempSearchField: { flex: 1 },
+  tempSearchBtn: { alignSelf: 'auto', minHeight: 54 },
+  tempListContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  tempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tempRowName: {
+    flex: 1,
+    marginLeft: 4,
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 13,
+    lineHeight: 17,
+    color: BONE,
+  },
+  tempChip: { gap: 5 },
+  tempChipText: {
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 12,
+    color: BONE,
+  },
+  tempRetry: { alignSelf: 'center', marginTop: 12 },
+  tempFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: HAIRLINE,
+    backgroundColor: INK,
+  },
+  tempFooterText: {
+    flex: 1,
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 14,
+    color: BONE,
+  },
+  tempFooterBtn: { alignSelf: 'auto', minWidth: 120 },
+  // ── Dominia-Temp member view (case 4) ──
+  tempMemberHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  tempMemberHeadText: { flex: 1 },
+  tempMemberTitle: {
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 20,
+    lineHeight: 24,
+    color: BONE,
+    textTransform: 'uppercase',
+  },
+  tempMemberBlurb: {
+    fontFamily: 'IBMPlexSans_500Medium',
+    fontSize: 12,
+    lineHeight: 17,
+    color: SLATE2,
+    marginTop: 4,
+  },
+  tempMembersCount: { marginTop: 12 },
+  tempSectionTitle: {
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 15,
+    letterSpacing: 0.6,
+    color: BONE,
+    textTransform: 'uppercase',
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  tempDivider: {
+    height: 1,
+    backgroundColor: HAIRLINE_STRONG,
+    marginTop: 16,
+  },
+  tempMessagesBox: {
+    borderWidth: 1,
+    borderColor: HAIRLINE_STRONG,
+    backgroundColor: INK2,
+  },
+  tempMessagesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE_STRONG,
+  },
+  tempMessagesLive: {
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 13,
+    color: BONE,
+  },
+  tempChatBtn: { alignSelf: 'auto' },
+  tempMessagesBody: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tempEmptyMessages: {
+    fontFamily: 'IBMPlexSans_500Medium',
+    fontSize: 12,
+    color: SLATE2,
+    textAlign: 'center',
+  },
+  tempRequestBtn: { alignSelf: 'auto', marginLeft: 6 },
+  tempMemberList: { gap: 8 },
+  tempLeaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  tempLeavePrompt: {
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 14,
+    color: BONE,
+  },
+  tempLeaveBtn: { alignSelf: 'auto', minWidth: 110 },
+  tempModalBtn: { marginTop: 12 },
   // ── Figma F3 list ──
   figmaListContent: {
     paddingBottom: 28,

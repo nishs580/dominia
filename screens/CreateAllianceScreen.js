@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,16 +17,23 @@ import { useTranslation } from 'react-i18next';
 import { foundAlliance } from '../lib/allianceApi';
 import { supabase } from '../lib/supabase';
 import THEME from '../lib/theme';
+import { SvgXml } from 'react-native-svg';
 import AllianceEmblem from '../components/AllianceEmblem';
-import { ALLIANCE_EMBLEMS, DEFAULT_ALLIANCE_EMBLEM } from '../lib/allianceEmblems';
+import { CutField, ScreenTitle, SlantButton, SlantTile } from '../components/ui';
+import {
+  ALLIANCE_EMBLEM_LABELS,
+  ALLIANCE_LOGO_EMBLEMS,
+  DEFAULT_ALLIANCE_EMBLEM,
+  DEFAULT_ALLIANCE_LOGO,
+  LEGACY_ALLIANCE_EMBLEMS,
+} from '../lib/allianceEmblems';
 import { useFlag } from '../lib/flags';
 import {
   ALLIANCE_NAME_MAX,
   ALLIANCE_TEXT_MAX,
-  createFieldErrorKey,
+  createFieldError,
   foundErrorFields,
   foundSubmitErrorKey,
-  hasFieldErrors,
   sanitizeShortName,
   validateAllianceForm,
 } from '../lib/allianceValidation';
@@ -76,38 +83,46 @@ export default function CreateAllianceScreen() {
 }
 
 function fieldErrorText(t, code) {
-  const key = createFieldErrorKey(code);
-  if (!key) return '';
-  const defaults = {
-    'allianceFigma.errNameRequired': 'Alliance name has to be entered.',
-    'allianceFigma.errName': 'Alliance name must be 3–24 characters',
-    'allianceFigma.errShortName': 'Short name must be exactly 3 letters',
-    'allianceFigma.errShortNameTaken': 'Short name is already taken. Please choose a different name.',
-    'allianceFigma.errRulesLength': 'Rules must be 500 characters or fewer',
-  };
-  return t(key, { defaultValue: defaults[key] ?? '' });
+  const err = createFieldError(code);
+  return err ? t(err.key, { defaultValue: err.defaultValue }) : '';
 }
 
-// Figma create (F6) with inline field errors (F7). Both names are permanent;
-// there is no type picker in Figma, so every alliance is founded Open.
+const PENCIL_XML = `<svg viewBox="0 0 16 16" fill="none" stroke="${BONE}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3L5.5 13.5H2.5v-3z"/><path d="M9 4l3 3"/></svg>`;
+const BACK_ARROW_XML = `<svg viewBox="0 0 16 16" fill="none" stroke="${BONE}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8H3M7 4L3 8l4 4"/></svg>`;
+
+/** "Alliance Full Name ............ 3 - 24 characters" */
+function FieldLabel({ label, hint }) {
+  return (
+    <View style={styles.tempLabelRow}>
+      <Text style={styles.tempLabel} maxFontSizeMultiplier={1.4}>{label}</Text>
+      {hint ? <Text style={styles.tempLabelHint} maxFontSizeMultiplier={1.4}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+// Dominia-Temp create (cases 5–6): BACK, CREATE ALLIANCE / ALLIANCE TYPE,
+// full + short name with inline errors (empty, length, taken), the 10-logo
+// picker and Rules. Both names are permanent; there is no type picker, so
+// every alliance is founded Open.
 function FigmaCreateAllianceScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { getToken: clerkGetToken } = useAuth();
+  // Clerk's getToken is not referentially stable; read it through a ref.
+  const getTokenRef = useRef(clerkGetToken);
+  getTokenRef.current = clerkGetToken;
 
   const [fullName, setFullName] = useState('');
   const [shortName, setShortName] = useState('');
-  const [emblem, setEmblem] = useState(DEFAULT_ALLIANCE_EMBLEM);
+  const [emblem, setEmblem] = useState(DEFAULT_ALLIANCE_LOGO);
   const [rules, setRules] = useState('');
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  const showingErrors = hasFieldErrors(errors);
-
   const handleCreate = async () => {
-    if (saving || showingErrors) return;
+    if (saving) return;
     const v = validateAllianceForm({ fullName, shortName, rules });
     setErrors(v.errors);
     setSubmitError('');
@@ -115,7 +130,7 @@ function FigmaCreateAllianceScreen() {
     setSaving(true);
     try {
       const result = await foundAlliance({
-        clerkGetToken: getToken,
+        clerkGetToken: (...args) => getTokenRef.current(...args),
         fullName: v.values.fullName,
         shortName: v.values.shortName,
         emblem,
@@ -140,144 +155,134 @@ function FigmaCreateAllianceScreen() {
   const nameErr = fieldErrorText(t, errors.fullName);
   const shortErr = fieldErrorText(t, errors.shortName);
   const rulesErr = fieldErrorText(t, errors.rules);
-  const ctaDisabled = saving || showingErrors;
-  const hintTag = shortName.length === 3 ? shortName : 'ABC';
+  const fullNameLabel = t('allianceFigma.fullNameLabel', { defaultValue: 'Alliance Full Name' });
+  const shortNameLabel = t('allianceFigma.shortNameLabel', { defaultValue: 'Alliance Short Name' });
+  const logoLabel = t('allianceFigma.logoLabel', { defaultValue: 'Alliance Logo' });
+  const rulesLabel = t('allianceFigma.rulesLabel', { defaultValue: 'Alliance Rules' });
+  const logoRows = [ALLIANCE_LOGO_EMBLEMS.slice(0, 5), ALLIANCE_LOGO_EMBLEMS.slice(5)];
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={[styles.figmaTitleRow, { paddingTop: insets.top + 16 }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('allianceFigma.back', { defaultValue: 'Back' })}
           onPress={() => navigation.goBack()}
           hitSlop={12}
-          style={({ pressed }) => [styles.figmaBackArrow, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.tempBack, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.figmaBackArrowText}>←</Text>
+          <SvgXml xml={BACK_ARROW_XML} width={14} height={14} />
+          <Text style={styles.tempBackText}>{t('allianceFigma.backCaps', { defaultValue: 'BACK' })}</Text>
         </Pressable>
-        <Text style={styles.figmaTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={1}>
-          {t('allianceFigma.createTitle', { defaultValue: 'CREATE ALLIANCE' })}
-        </Text>
-      </View>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.figmaPermanentNote}>
-          {t('allianceFigma.namesPermanent', {
-            defaultValue: "Both names are permanent. They can't be changed after founding.",
-          })}
-        </Text>
 
-        <Text style={styles.figmaLabel}>{t('allianceFigma.fullName', { defaultValue: 'FULL NAME' })}</Text>
-        <TextInput
-          style={[styles.figmaInput, nameErr && styles.figmaInputError]}
-          keyboardAppearance="dark"
-          placeholderTextColor={SLATE}
-          placeholder={t('createAlliance.namePlaceholder')}
+        <ScreenTitle
+          eyebrow={t('allianceFigma.createTitle', { defaultValue: 'CREATE ALLIANCE' })}
+          title={t('allianceFigma.allianceType', { defaultValue: 'ALLIANCE TYPE' })}
+          subtitle={t('allianceFigma.namesPermanentNote', {
+            defaultValue: "Both names are permanent. The name's cannot be changed after founding.",
+          })}
+          size={32}
+          style={styles.tempTitle}
+        />
+
+        <FieldLabel
+          label={fullNameLabel}
+          hint={t('allianceFigma.fullNameRange', { defaultValue: '3 - 24 characters' })}
+        />
+        <CutField
           value={fullName}
-          maxLength={ALLIANCE_NAME_MAX + 8}
           onChangeText={(v) => {
             setFullName(v);
             if (errors.fullName) setErrors((e) => ({ ...e, fullName: undefined }));
           }}
+          placeholder={t('createAlliance.namePlaceholder', { defaultValue: 'Alliance Name' })}
+          maxLength={ALLIANCE_NAME_MAX + 8}
           autoCapitalize="words"
-          accessibilityLabel={t('allianceFigma.fullName', { defaultValue: 'FULL NAME' })}
-        />
-        {nameErr ? (
-          <Text style={styles.figmaFieldError} accessibilityLiveRegion="polite">{nameErr}</Text>
-        ) : (
-          <Text style={styles.figmaHint}>{t('allianceFigma.fullNameHint', { defaultValue: '3–24 characters' })}</Text>
-        )}
-
-        <Text style={styles.figmaLabel}>{t('allianceFigma.shortName', { defaultValue: 'SHORT NAME' })}</Text>
-        <TextInput
-          style={[styles.figmaInput, styles.figmaInputMono, shortErr && styles.figmaInputError]}
           keyboardAppearance="dark"
-          placeholderTextColor={SLATE}
-          placeholder={t('createAlliance.shortNamePlaceholder')}
+          error={nameErr || undefined}
+          accessibilityLabel={fullNameLabel}
+          containerStyle={styles.tempField}
+        />
+
+        <FieldLabel
+          label={shortNameLabel}
+          hint={t('allianceFigma.shortNameRange', { defaultValue: '3 Letters' })}
+        />
+        <CutField
           value={shortName}
           onChangeText={(v) => {
             setShortName(sanitizeShortName(v));
             if (errors.shortName) setErrors((e) => ({ ...e, shortName: undefined }));
           }}
+          placeholder={t('createAlliance.shortNamePlaceholder', { defaultValue: 'eg. SNW' })}
           autoCapitalize="characters"
           autoCorrect={false}
           maxLength={3}
-          accessibilityLabel={t('allianceFigma.shortName', { defaultValue: 'SHORT NAME' })}
+          keyboardAppearance="dark"
+          error={shortErr || undefined}
+          accessibilityLabel={shortNameLabel}
+          containerStyle={styles.tempField}
         />
-        {shortErr ? (
-          <Text style={styles.figmaFieldError} accessibilityLiveRegion="polite">{shortErr}</Text>
-        ) : (
-          <Text style={styles.figmaHint}>
-            {t('allianceFigma.shortNameHint', { tag: hintTag, defaultValue: 'Exactly 3 letters, shown as [{{tag}}]' })}
-          </Text>
-        )}
 
-        <Text style={styles.figmaLabel}>{t('allianceFigma.logo', { defaultValue: 'LOGO' })}</Text>
-        <View style={styles.figmaEmblemGrid}>
-          {ALLIANCE_EMBLEMS.map((key) => {
-            const isSelected = key === emblem;
-            return (
-              <Pressable
-                key={key}
-                accessibilityRole="button"
-                accessibilityLabel={t(`emblems.${key}`)}
-                accessibilityState={{ selected: isSelected }}
-                onPress={() => setEmblem(key)}
-                style={({ pressed }) => [
-                  styles.figmaEmblemCell,
-                  isSelected && styles.figmaEmblemCellSelected,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <AllianceEmblem emblem={key} size={36} />
-              </Pressable>
-            );
-          })}
+        <FieldLabel label={logoLabel} />
+        <View style={styles.tempLogoGrid} accessibilityRole="radiogroup" accessibilityLabel={logoLabel}>
+          {logoRows.map((row, r) => (
+            <View key={r} style={styles.tempLogoRow}>
+              {row.map((key) => {
+                const isSelected = key === emblem;
+                return (
+                  <SlantTile
+                    key={key}
+                    size={42}
+                    tone="raised"
+                    selected={isSelected}
+                    onPress={() => setEmblem(key)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={t(`emblems.${key}`, { defaultValue: ALLIANCE_EMBLEM_LABELS[key] })}
+                    style={styles.tempLogoTile}
+                  >
+                    <AllianceEmblem emblem={key} variant="glyph" size={20} />
+                  </SlantTile>
+                );
+              })}
+            </View>
+          ))}
         </View>
 
-        <Text style={styles.figmaLabel}>{t('allianceFigma.rules', { defaultValue: 'ALLIANCE RULES' })}</Text>
-        <TextInput
-          style={[styles.figmaInput, styles.textarea, rulesErr && styles.figmaInputError]}
-          keyboardAppearance="dark"
-          placeholderTextColor={SLATE}
-          placeholder={t('allianceFigma.rulesPlaceholder', {
-            defaultValue: 'e.g. Defend allies within 10 minutes. No poaching ally blocks.',
-          })}
+        <FieldLabel label={rulesLabel} />
+        <CutField
           value={rules}
           onChangeText={(v) => {
             setRules(v);
             if (errors.rules) setErrors((e) => ({ ...e, rules: undefined }));
           }}
+          placeholder={t('allianceFigma.rulesPlaceholderTemp', { defaultValue: 'Custom alliance rule 1' })}
           multiline
           textAlignVertical="top"
           maxLength={ALLIANCE_TEXT_MAX}
-          accessibilityLabel={t('allianceFigma.rules', { defaultValue: 'ALLIANCE RULES' })}
+          keyboardAppearance="dark"
+          error={rulesErr || undefined}
+          accessibilityLabel={rulesLabel}
+          style={styles.tempTextarea}
+          containerStyle={styles.tempField}
         />
-        {rulesErr ? <Text style={styles.figmaFieldError}>{rulesErr}</Text> : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: ctaDisabled, busy: saving }}
-          disabled={ctaDisabled}
+        <SlantButton
+          label={t('allianceFigma.createCta', { defaultValue: 'CREATE ALLIANCE' })}
           onPress={handleCreate}
-          style={({ pressed }) => [
-            styles.figmaCta,
-            showingErrors && styles.figmaCtaDimmed,
-            pressed && !ctaDisabled && { opacity: 0.9 },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color={BONE} />
-          ) : (
-            <Text style={[styles.figmaCtaText, showingErrors && styles.figmaCtaTextDimmed]}>
-              {t('allianceFigma.createCta', { defaultValue: 'CREATE ALLIANCE' })}
-            </Text>
-          )}
-        </Pressable>
+          loading={saving}
+          trailingChevron={false}
+          leading={<SvgXml xml={PENCIL_XML} width={16} height={16} />}
+          style={styles.tempCta}
+        />
         {submitError ? (
           <Text style={styles.submitError} accessibilityLiveRegion="polite">{submitError}</Text>
         ) : null}
@@ -535,7 +540,7 @@ function LegacyCreateAllianceScreen() {
             <Text style={styles.labelHint}>{t('createAlliance.emblemHint')}</Text>
           </View>
           <View style={styles.emblemGrid}>
-            {ALLIANCE_EMBLEMS.map((key) => {
+            {LEGACY_ALLIANCE_EMBLEMS.map((key) => {
               const isSelected = key === emblem;
               return (
                 <Pressable
@@ -724,120 +729,61 @@ function LegacyCreateAllianceScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ── Figma create (F6 / F7) ──
-  figmaTitleRow: {
+  // ── Dominia-Temp create (cases 5–6) ──
+  tempBack: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  figmaBackArrow: {
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-    marginLeft: -8,
-    paddingLeft: 8,
-  },
-  figmaBackArrowText: {
-    fontSize: 24,
-    color: BONE,
-  },
-  figmaTitle: {
-    flex: 1,
-    fontFamily: 'Archivo_900Black_Italic',
-    fontSize: 27,
-    lineHeight: 30,
-    color: BONE,
-    textTransform: 'uppercase',
-  },
-  figmaPermanentNote: {
-    fontFamily: 'IBMPlexSans_500Medium',
-    fontSize: 15,
-    lineHeight: 20,
-    color: THEME.colors.lime,
-    marginBottom: 16,
-  },
-  figmaLabel: {
-    fontFamily: 'IBMPlexSans_700Bold',
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: SLATE_2,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  figmaInput: {
-    backgroundColor: INK_2,
-    borderRadius: 0,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: BONE,
-    fontFamily: 'IBMPlexSans_600SemiBold',
-    fontSize: 16,
-  },
-  figmaInputMono: {
-    fontFamily: 'IBMPlexSans_600SemiBold',
-    letterSpacing: 4,
-  },
-  figmaInputError: {
-    borderColor: THEME.colors.danger,
-  },
-  figmaHint: {
-    fontFamily: 'IBMPlexSans_500Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: SLATE_2,
-    marginTop: 10,
-    marginBottom: 16,
-  },
-  figmaFieldError: {
-    fontFamily: 'IBMPlexSans_500Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: THEME.colors.danger,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  figmaEmblemGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  figmaEmblemCell: {
-    width: '23.5%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: INK_2,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    alignSelf: 'flex-start',
+    gap: 8,
+    minHeight: 32,
     marginBottom: 8,
   },
-  figmaEmblemCellSelected: {
-    borderColor: THEME.colors.lime,
-    backgroundColor: 'rgba(7,49,209,0.28)',
-  },
-  figmaCta: {
-    minHeight: 52,
-    marginTop: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: CLAIM_BUTTON,
-  },
-  figmaCtaDimmed: {
-    backgroundColor: 'rgba(7,49,209,0.35)',
-  },
-  figmaCtaText: {
-    fontFamily: 'IBMPlexSans_600SemiBold',
-    fontSize: 13,
-    letterSpacing: 1.6,
+  tempBackText: {
+    fontFamily: THEME.fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.8,
     color: BONE,
-    textTransform: 'uppercase',
   },
-  figmaCtaTextDimmed: {
+  tempTitle: {
+    marginBottom: 16,
+  },
+  tempLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  tempLabel: {
+    flexShrink: 1,
+    fontFamily: THEME.fonts.bodyMedium,
+    fontSize: 14,
+    color: BONE,
+  },
+  tempLabelHint: {
+    fontFamily: THEME.fonts.body,
+    fontSize: 12,
     color: SLATE_2,
+    marginLeft: 12,
+  },
+  tempField: {
+    marginBottom: 14,
+  },
+  tempLogoGrid: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  tempLogoRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tempLogoTile: {
+    flex: 1,
+  },
+  tempTextarea: {
+    minHeight: 140,
+  },
+  tempCta: {
+    marginTop: 12,
   },
   textarea: {
     minHeight: 120,
