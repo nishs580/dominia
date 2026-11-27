@@ -4,6 +4,10 @@
 //
 // Square per DESIGN.md (0 radius): Clerk picture, or two-letter Geist Mono
 // initials on Ink 2. 36pt visual, 44pt touch target via hitSlop.
+//
+// variant="slant" (Dominia-Temp map header, plan U5): a slanted tile with
+// the player's two-letter initials in Archivo Black Italic, no picture.
+// `name` overrides the Clerk username (MapScreen passes the game username).
 
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -12,12 +16,14 @@ import { useTranslation } from 'react-i18next';
 import { useFlag } from '../lib/flags';
 import { navigateTo } from '../lib/navigation';
 import { avatarInitials, avatarThumb } from '../lib/avatar';
+import { mapInitials } from '../lib/mapTopBar';
 import { colors, fonts } from '../lib/theme';
+import { SlantTile } from './ui';
 
 const SIZE = 36;
 const HIT = (44 - SIZE) / 2;
 
-export default function ProfileAvatarButton({ style }) {
+export default function ProfileAvatarButton({ style, variant = 'square', name: nameOverride }) {
   const legacyTabs = useFlag('legacy_tabs');
   const { t } = useTranslation();
   const { user } = useUser();
@@ -25,6 +31,23 @@ export default function ProfileAvatarButton({ style }) {
 
   const url = avatarThumb(user?.imageUrl, SIZE);
   const name = user?.username || user?.firstName || '';
+
+  if (variant === 'slant') {
+    return (
+      <SlantTile
+        size={SIZE}
+        width={52}
+        tone="raised"
+        onPress={() => navigateTo('Profile')}
+        accessibilityLabel={t('nav.openProfileA11y')}
+        style={style}
+      >
+        <Text style={styles.slantInitials} maxFontSizeMultiplier={1.2}>
+          {mapInitials(nameOverride || name)}
+        </Text>
+      </SlantTile>
+    );
+  }
 
   return (
     <Pressable
@@ -67,6 +90,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  slantInitials: {
+    fontFamily: fonts.display,
+    fontSize: 15,
+    color: colors.white,
   },
   initials: {
     fontFamily: fonts.monoMedium,

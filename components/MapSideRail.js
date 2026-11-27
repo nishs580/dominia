@@ -14,14 +14,35 @@ import { useTranslation } from 'react-i18next';
 import { getRooms } from '../lib/chatApi';
 import { getActivityLog } from '../lib/activityLogApi';
 import { ChatGlyph, BoardsGlyph, LogGlyph } from './ResourceGlyphs';
-import { BubbleIcon, CrosshairIcon, LayersIcon, ListIcon, TrophyIcon } from './MapIcons';
+import Svg, { Polygon } from 'react-native-svg';
+import { HistoryIcon, LayersIcon, MessageSquareIcon, NavigateIcon, TrophyIcon } from './MapIcons';
+import { SlantTile } from './ui';
+import { useLayoutSize } from './ui/shared';
+import { parallelogramPoints } from '../lib/slantGeometry';
 import { colors, fonts } from '../lib/theme';
 
 const ICON_SIZE = 14;
 const FIGMA_ICON_SIZE = 18;
 // Figma C1: five separate square tiles stacked with a gap.
-const FIGMA_TILE = 44;
+// Dominia-Temp (plan U5): slanted SlantTiles; the key tile fills Dominia
+// blue (selected) while the key is open.
+const FIGMA_TILE = 40;
 const FIGMA_GAP = 8;
+
+// White slanted chip naming a rail tile during the side-panel coach mark.
+function CoachChip({ label }) {
+  const [box, onLayout] = useLayoutSize();
+  return (
+    <View style={styles.coachChip} onLayout={onLayout} pointerEvents="none">
+      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Polygon points={parallelogramPoints(box.w, box.h, 14)} fill={colors.white} />
+      </Svg>
+      <Text style={styles.coachLabelText} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 function withCount(base, count) {
   if (count == null || count === 0) return base;
@@ -31,12 +52,13 @@ function withCount(base, count) {
 
 // figma (legacy_tabs off, plan U11; Updated UX C1/C2, plan U8): five
 // separate square tiles — Territories key (layers) · Locate me (crosshair) ·
-// Leaderboard (trophy) · Log (list) · Chat (bubble) — under the top bar. The
-// key tile wears a lime border while the key is open. Key and Locate act on
+// Leaderboard (trophy) · Log (history) · Chat (bubble) — under the top bar,
+// as Dominia-Temp SlantTiles (plan U5). The key tile fills Dominia blue
+// (selected) while the key is open. Key and Locate act on
 // the map, so MapScreen passes their handlers in.
 //
 // coach (B1 side-panel coach mark): the rail lifts above the coach scrim,
-// gains a lime frame and a label beside each tile, and any tile tap just
+// gains a white frame and a white slanted chip beside each tile, and any tile tap just
 // continues the coach mark (onCoachContinue) instead of navigating.
 // Without `figma` the rail renders exactly as before.
 export default function MapSideRail({
@@ -93,7 +115,7 @@ export default function MapSideRail({
       },
       {
         key: 'locate',
-        Icon: CrosshairIcon,
+        Icon: NavigateIcon,
         label: t('map.locateMe'),
         coachLabel: t('map.coach.railLocate', { defaultValue: 'LOCATE ME' }),
         onPress: onLocate,
@@ -107,7 +129,7 @@ export default function MapSideRail({
       },
       {
         key: 'log',
-        Icon: ListIcon,
+        Icon: HistoryIcon,
         label: withCount(t('map.rail.logA11y', { defaultValue: 'Log' }), logUnread),
         coachLabel: t('map.coach.railLog', { defaultValue: 'LOG' }),
         count: logUnread,
@@ -115,7 +137,7 @@ export default function MapSideRail({
       },
       {
         key: 'chat',
-        Icon: BubbleIcon,
+        Icon: MessageSquareIcon,
         label: withCount(t('map.rail.chatA11y', { defaultValue: 'Chat' }), chatUnread),
         coachLabel: t('map.coach.railChat', { defaultValue: 'CHAT' }),
         count: chatUnread,
@@ -127,24 +149,20 @@ export default function MapSideRail({
         {figmaItems.map((item) => (
           <View key={item.key} style={styles.figmaRow} pointerEvents="box-none">
             {coach ? (
-              <View style={styles.coachLabel} pointerEvents="none">
-                <Text style={styles.coachLabelText} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-                  {item.coachLabel}
-                </Text>
+              <View style={styles.coachLabelRow} pointerEvents="none">
+                <CoachChip label={item.coachLabel} />
+                <View style={styles.coachDash} />
               </View>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
+            <SlantTile
+              size={FIGMA_TILE}
+              square
+              tone="solid"
+              selected={!!item.expanded && !coach}
               accessibilityLabel={item.label}
-              accessibilityState={item.expanded != null ? { expanded: item.expanded } : undefined}
               onPress={coach ? onCoachContinue : item.onPress}
-              style={({ pressed }) => [
-                styles.figmaItem,
-                item.expanded && !coach && styles.figmaItemActive,
-                pressed && styles.itemPressed,
-              ]}
             >
-              <item.Icon size={FIGMA_ICON_SIZE} color={colors.bone} />
+              <item.Icon size={FIGMA_ICON_SIZE} color={colors.white} />
               {item.count && !coach ? (
                 <View style={styles.figmaCountBadge} pointerEvents="none">
                   <Text style={styles.figmaCount} maxFontSizeMultiplier={1.2}>
@@ -152,7 +170,7 @@ export default function MapSideRail({
                   </Text>
                 </View>
               ) : null}
-            </Pressable>
+            </SlantTile>
           </View>
         ))}
         {coach ? <View style={styles.coachFrame} pointerEvents="none" /> : null}
@@ -229,8 +247,8 @@ const styles = StyleSheet.create({
   // under the top bar and search field on the right edge.
   figmaContainer: {
     position: 'absolute',
-    right: 12,
-    top: 112,
+    right: 16,
+    top: 124,
     alignItems: 'flex-end',
     gap: FIGMA_GAP,
     zIndex: 10,
@@ -245,19 +263,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  figmaItem: {
-    width: FIGMA_TILE,
-    height: FIGMA_TILE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.86)',
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
-  },
-  figmaItemActive: {
-    borderColor: colors.lime,
   },
   // Inside the tile's top-right corner, clear of the centred icon and the map.
   figmaCountBadge: {
@@ -276,28 +281,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.bone,
   },
-  coachLabel: {
-    backgroundColor: colors.ink2,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  coachLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  coachChip: {
+    minHeight: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
   },
   coachLabelText: {
-    fontFamily: fonts.monoMedium,
+    fontFamily: fonts.display,
     fontSize: 11,
-    letterSpacing: 1.4,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: colors.bone,
+    color: colors.obsidian,
+  },
+  coachDash: {
+    width: 10,
+    height: 1.5,
+    backgroundColor: colors.white,
   },
   coachFrame: {
     position: 'absolute',
-    top: -5,
-    bottom: -5,
-    right: -5,
-    width: FIGMA_TILE + 10,
-    borderWidth: 2,
-    borderColor: colors.lime,
+    top: -6,
+    bottom: -6,
+    right: -6,
+    width: Math.round(FIGMA_TILE * 1.25) + 12,
+    borderWidth: 1,
+    borderColor: colors.white,
   },
   label: {
     fontFamily: 'IBMPlexSans_600SemiBold',

@@ -46,6 +46,9 @@ import {
   PUCK_HEADING_IMAGE,
   PUCK_HEADING_SIZE,
   puckHeadingXml,
+  TERRITORY_FLAG_ICONS,
+  TERRITORY_FLAG_SIZE,
+  territoryMarkerIcon,
   territoryNodeFeatures,
 } from '../lib/mapBoard';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
@@ -1627,11 +1630,11 @@ export default function MapScreen() {
   }, [heldCount, spine, maybeShowNotifPrime, navigation, userId]);
 
   const objectiveFillStyle = useMemo(
-    () => ({ fillColor: '#84FF44', fillOpacity: 0.16, fillEmissiveStrength: 1.0 }),
+    () => ({ fillColor: '#FDFDFD', fillOpacity: 0.06, fillEmissiveStrength: 1.0 }),
     [],
   );
   const objectiveLineStyle = useMemo(
-    () => ({ lineColor: '#84FF44', lineWidth: 3, lineDasharray: [2, 1.2], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
+    () => ({ lineColor: '#FDFDFD', lineWidth: 2.6, lineDasharray: [2, 1.6], lineOpacity: 1, lineEmissiveStrength: 1.0 }),
     [],
   );
 
@@ -1750,7 +1753,10 @@ export default function MapScreen() {
       const cached = cachedHomePinRef.current ?? (await loadHomePin(userId));
       if (cached) homePinFields = { home_pin_lat: cached[1], home_pin_lng: cached[0] };
     }
-    const merged = playerRow ? { ...playerRow, ...homePinFields } : playerRow;
+    // Level pill in the map header (plan U5): /me's level when it has one;
+    // null hides the pill (lib/mapTopBar showLevelPill).
+    const meLevelFields = meRes.ok ? { level: meRes.data?.player?.level ?? null } : {};
+    const merged = playerRow ? { ...playerRow, ...homePinFields, ...meLevelFields } : playerRow;
     setMyPlayer(merged);
 
     if (playerRow?.alliance_id) {
@@ -1914,7 +1920,12 @@ export default function MapScreen() {
           emblem: row.alliance_emblem ?? null,
           developmentLevel,
           labelSub: labelParts.join(' · '),
-          emblemIcon: row.alliance_id != null ? emblemIconName(row.alliance_emblem, isOwnAlliance) : '',
+          // Centre marker (plan U5): a flag on solo-held ground (yours /
+          // an enemy's), the alliance emblem on your alliance's ground.
+          emblemIcon: territoryMarkerIcon(
+            ownership,
+            row.alliance_id != null ? emblemIconName(row.alliance_emblem, true) : '',
+          ),
           contested,
           battleChip,
           chipColor,
@@ -2103,6 +2114,12 @@ export default function MapScreen() {
               labelSub: labelParts.join(' · '),
               ownership: claimedOwnership,
               color: OWNERSHIP_COLOR[claimedOwnership],
+              emblemIcon: territoryMarkerIcon(
+                claimedOwnership,
+                payload.alliance_id != null
+                  ? emblemIconName(payload.alliance_emblem ?? existing.properties.emblem, true)
+                  : '',
+              ),
             },
           });
           setTerritories({
@@ -2394,11 +2411,14 @@ export default function MapScreen() {
   const fillStyle = useMemo(
     () => ({
       fillColor: ['get', 'color'],
+      // Dominia-Temp (plan U5): a tinted pane, not a solid plate — the
+      // owner-coloured outline and its inner glow carry the identity, as on
+      // the Figma Main screen.
       fillOpacity: [
         'case',
-        ['==', ['get', 'ownership'], 'yours'], 0.60,
-        ['==', ['get', 'ownership'], 'alliance'], 0.60,
-        ['==', ['get', 'ownership'], 'enemy'], 0.68,
+        ['==', ['get', 'ownership'], 'yours'], 0.22,
+        ['==', ['get', 'ownership'], 'alliance'], 0.24,
+        ['==', ['get', 'ownership'], 'enemy'], 0.24,
         0,
       ],
       fillEmissiveStrength: 1.0,
@@ -2462,6 +2482,19 @@ export default function MapScreen() {
     [],
   );
 
+  // Soft owner-coloured glow along held edges (plan U5): wide and blurred
+  // under the crisp outline, so a held territory reads as lit from within.
+  const ownedGlowStyle = useMemo(
+    () => ({
+      lineColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
+      lineWidth: 12,
+      lineBlur: 9,
+      lineOpacity: 0.45,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+
   const lineStyle = useMemo(
     () => ({
       lineColor: ownershipColourExpression('rgba(253,253,253,0.30)'),
@@ -2471,9 +2504,9 @@ export default function MapScreen() {
       // beneath it, is what you see at the parcel's edge.
       lineWidth: [
         'match', ['get', 'streakBand'],
-        'hardened', 4.2,
-        'fortified', 4.2,
-        3.2,
+        'hardened', 3.4,
+        'fortified', 3.4,
+        2.6,
       ],
       lineOpacity: 1,
       lineEmissiveStrength: 1.0,
@@ -2702,14 +2735,21 @@ export default function MapScreen() {
     [],
   );
 
-  // Alliance emblem shields above alliance-held territories (zoom-gated).
+  // Centre marker on held ground (plan U5): owner-coloured flag on solo-held
+  // territory, the alliance emblem on your alliance's. Shown from city scale
+  // (z11), where held fills read, growing with the zoom.
   const emblemStyle = useMemo(
     () => ({
       iconImage: ['get', 'emblemIcon'],
-      iconSize: 0.5,
+      iconSize: [
+        'interpolate', ['linear'], ['zoom'],
+        11, 0.32,
+        14, 0.5,
+        17, 0.62,
+      ],
       iconAllowOverlap: false,
-      iconOffset: [0, -30],
       iconOpacity: 0.95,
+      iconEmissiveStrength: 1.0,
     }),
     [],
   );
@@ -2855,7 +2895,7 @@ export default function MapScreen() {
       ],
       fillOpacity: [
         'case',
-        ['==', ['get', 'ownership'], 'unclaimed'], 0.12,
+        ['==', ['get', 'ownership'], 'unclaimed'], 0.06,
         // Held ground is flooded but not sealed — the hatch still reads
         // through, so a selected parcel stays part of the same board.
         0.55,
@@ -2870,25 +2910,44 @@ export default function MapScreen() {
   // clearly against the dark ground (it was washing out on the old light style).
   const selectedGlowStyle = useMemo(
     () => ({
-      lineColor: '#84FF44',
+      lineColor: ownershipColourExpression('#FDFDFD'),
       lineWidth: 9,
-      lineOpacity: 0.35,
+      lineOpacity: ['case', ['==', ['get', 'ownership'], 'unclaimed'], 0.12, 0.45],
       lineBlur: 6,
       lineEmissiveStrength: 1.0,
     }),
     [],
   );
 
-  // Crisp bright outline on top of the glow.
-  // Signal Lime marks the selected territory (Figma: 3px lime edge).
+  // Crisp bright outline on top of the glow. Dominia-Temp (plan U5): held
+  // ground keeps its owner colour, open ground gets a dashed white edge
+  // (Figma Main screen). Dash arrays are not data-driven, hence two layers.
   const selectedLineStyle = useMemo(
     () => ({
-      lineColor: '#84FF44',
-      lineWidth: 3,
+      lineColor: ownershipColourExpression('#FDFDFD'),
+      lineWidth: 3.2,
       lineOpacity: 1,
       lineEmissiveStrength: 1.0,
     }),
     [],
+  );
+  const selectedOpenLineStyle = useMemo(
+    () => ({
+      lineColor: '#FDFDFD',
+      lineWidth: 2.4,
+      lineDasharray: [2, 1.6],
+      lineOpacity: 1,
+      lineEmissiveStrength: 1.0,
+    }),
+    [],
+  );
+  const selectedHeldFilter = useMemo(
+    () => ['all', highlightFilter, claimedFilter],
+    [highlightFilter, claimedFilter],
+  );
+  const selectedOpenFilter = useMemo(
+    () => ['all', highlightFilter, openFilter],
+    [highlightFilter, openFilter],
   );
 
   // D6 — the couch close. Any dismissal of the Beat 3 sheet without claiming
@@ -3303,6 +3362,13 @@ export default function MapScreen() {
               </View>
             </MapboxGL.Image>,
           ])}
+          {TERRITORY_FLAG_ICONS.map(({ name, xml }) => (
+            <MapboxGL.Image key={name} name={name}>
+              <View style={{ width: TERRITORY_FLAG_SIZE, height: TERRITORY_FLAG_SIZE }} collapsable={false}>
+                <SvgXml xml={xml} width={TERRITORY_FLAG_SIZE} height={TERRITORY_FLAG_SIZE} />
+              </View>
+            </MapboxGL.Image>
+          ))}
           {ALLIANCE_EMBLEMS.concat('unknown').flatMap((key) => [
             <MapboxGL.Image key={`${key}-ally`} name={`emblem-${key}-ally`}>
               <View style={{ width: 40, height: 40 }} collapsable={false}>
@@ -3343,6 +3409,7 @@ export default function MapScreen() {
             <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
           ) : null}
           <MapboxGL.LineLayer id="territories-casing" filter={claimedFilter} style={casingStyle} />
+          <MapboxGL.LineLayer id="territories-glow" filter={claimedFilter} style={ownedGlowStyle} />
           <MapboxGL.LineLayer id="territories-line" filter={claimedFilter} style={lineStyle} />
           <MapboxGL.LineLayer id="territories-open" filter={openFilter} style={unclaimedLineStyle} />
           {mapLayers.has('territories-streak-inner') ? (
@@ -3355,7 +3422,8 @@ export default function MapScreen() {
           <MapboxGL.LineLayer id="territories-contested" filter={contestedFilter} style={contestedLineStyle} />
           <MapboxGL.FillLayer id="territories-selected-fill" filter={highlightFilter} style={selectedFillStyle} />
           <MapboxGL.LineLayer id="territories-selected-glow" filter={highlightFilter} style={selectedGlowStyle} />
-          <MapboxGL.LineLayer id="territories-selected-line" filter={highlightFilter} style={selectedLineStyle} />
+          <MapboxGL.LineLayer id="territories-selected-line" filter={selectedHeldFilter} style={selectedLineStyle} />
+          <MapboxGL.LineLayer id="territories-selected-open-line" filter={selectedOpenFilter} style={selectedOpenLineStyle} />
           {/* No `slot` on these. A slotted layer is placed inside the basemap
               import, which puts it BELOW our own unslotted fills — measured on
               the round-1 capture, the held parcel's name came back as bone
@@ -3365,7 +3433,7 @@ export default function MapScreen() {
               names sit on top of their plate, where they belong. The slot was
               only ever there to clear Mapbox's own labels, which are now off. */}
           <MapboxGL.SymbolLayer id="territories-labels" style={labelStyle} />
-          <MapboxGL.SymbolLayer id="territories-emblems" minZoomLevel={13} filter={emblemFilter} style={emblemStyle} />
+          <MapboxGL.SymbolLayer id="territories-emblems" minZoomLevel={11} filter={emblemFilter} style={emblemStyle} />
           {mapLayers.has('territories-battle-chips') ? (
             <MapboxGL.SymbolLayer id="territories-battle-chips" minZoomLevel={12} filter={chipFilter} style={chipStyle} />
           ) : null}
@@ -3425,6 +3493,8 @@ export default function MapScreen() {
       {figmaChrome && !flightActive ? (
         <MapTopBar
           gold={myPlayer ? (myPlayer.gold ?? 0) : null}
+          level={myPlayer?.level ?? null}
+          playerName={myPlayer?.username ?? ''}
           onSelectSearchResult={handleSearchSelect}
           onSearchActiveChange={setSearchActive}
         />
@@ -3457,16 +3527,13 @@ export default function MapScreen() {
       )}
       {legendOpen && !flightActive ? (
         <View style={figmaChrome ? styles.legendPanelFigma : styles.legendPanel}>
-          {figmaChrome ? (
-            <Text style={styles.legendHeaderFigma} accessibilityRole="header">
-              {t('map.legendFigma.header', { defaultValue: 'TERRITORY KEY' })}
-            </Text>
-          ) : null}
           {(figmaChrome
+            // Dominia-Temp key (plan U5, Figma case 6): outlined squares,
+            // no header.
             ? [
-                { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendFigma.yours', { defaultValue: 'Your territory' }) },
-                { key: 'alliance', fill: colors.allianceSoft, border: ALLIANCE, label: t('map.legendFigma.alliance', { defaultValue: 'Alliance territory' }) },
-                { key: 'theirs', fill: 'rgba(227,66,52,0.14)', border: ENEMY, label: t('map.legendFigma.enemy', { defaultValue: 'Enemy territory' }) },
+                { key: 'yours', fill: 'transparent', border: colors.self, label: t('map.legendTemp.yours', { defaultValue: 'Your Territory' }) },
+                { key: 'alliance', fill: 'transparent', border: colors.alliance, label: t('map.legendTemp.alliance', { defaultValue: 'Alliance Territory' }) },
+                { key: 'theirs', fill: 'transparent', border: colors.enemy, label: t('map.legendTemp.enemy', { defaultValue: "Enemy's Territory" }) },
               ]
             : [
             { key: 'yours', fill: CLAIM_SOFT, border: CLAIM, label: t('map.legendYours') },
@@ -3476,8 +3543,8 @@ export default function MapScreen() {
             { key: 'siege', fill: 'transparent', border: '#E34234', label: t('map.legendSiege') },
           ]).map((row) => (
             <View key={row.key} style={styles.legendRow}>
-              <View style={[styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
-              <Text style={styles.legendLabel}>{row.label}</Text>
+              <View style={[figmaChrome ? styles.legendSwatchFigma : styles.legendSwatch, { backgroundColor: row.fill, borderColor: row.border }]} />
+              <Text style={figmaChrome ? styles.legendLabelFigma : styles.legendLabel}>{row.label}</Text>
             </View>
           ))}
         </View>
@@ -3901,18 +3968,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Figma mode: the key opens beside the rail's Key control, top right.
+  // Dominia-Temp key (plan U5): a dark card left of the rail's key tile
+  // (MapSideRail figma: right 16, top 124, tiles ~50pt wide).
   legendPanelFigma: {
     position: 'absolute',
-    right: 64,
-    top: 112,
-    backgroundColor: INK2,
+    right: 74,
+    top: 116,
+    backgroundColor: 'rgba(14,14,16,0.94)',
     borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+    borderColor: colors.surfaceLine,
     borderRadius: 0,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 10,
     zIndex: 11,
+  },
+  legendSwatchFigma: {
+    width: 14,
+    height: 14,
+    borderWidth: 2,
+  },
+  legendLabelFigma: {
+    fontFamily: 'IBMPlexSans_600SemiBold',
+    fontSize: 13,
+    color: BONE,
   },
   // Figma C2 key header.
   legendHeaderFigma: {
