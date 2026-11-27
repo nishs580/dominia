@@ -61,7 +61,7 @@
     "lockConfirmCancel": "Cancel",
     "lockConfirmOk": "Lock",
     "lock": "Lock",
-    "lockA11y": "Lock {{type}} as today's mission type",
+    "lockA11y": "Lock {{type}} as today’s mission type",
     "allianceMissions": "Alliance Missions",
     "allianceError": "Could not load alliance missions.",
     "joinPrompt": "Join or create an alliance to be part of alliance missions.",
@@ -119,6 +119,34 @@
       "not_yet": "Progress is still syncing. Try again in a minute.",
       "axis_locked": "Today is locked to another mission type.",
       "server": "Something went wrong. Try again."
+    },
+    "allianceCardA11yV2": "{{name}}{{alliance}}. {{goal}} {{resets}}. {{metric}} {{progress}}. {{teammatesLabel}} {{teammates}}, {{yoursLabel}} {{yours}}. {{half}}.",
+    "allianceHalf": "Half reward at {{half}}",
+    "allianceTeammates": "Teammates contribution",
+    "allianceYours": "Your contribution",
+    "claimAllA11y": "Claim {{count}} completed missions",
+    "claimNoneA11y": "Claim, no completed missions yet",
+    "explainerBodyV2": "You can lock a mission type for the day. Once locked, it cannot be changed until the next day. Each type represents a different category of missions.",
+    "explainerTypesTitle": "MARCH & RANGE",
+    "goldA11y": "Gold balance: {{n}}",
+    "goldLoadingA11y": "Gold balance loading",
+    "joinPromptLine": "--- Join or Create an alliance to be a part of alliance missions ---",
+    "levelA11y": "Level {{n}}",
+    "levelLoadingA11y": "Level loading",
+    "refreshesInLabel": "Refreshes in:",
+    "securedShort": "DONE",
+    "tabLockedA11yV2": "{{type}}, locked for today",
+    "countdownHoursMinutes": "{{hours}}h {{minutes}} min",
+    "countdownMinutes": "{{minutes}} min",
+    "progressSteps": "{{current}} / {{target}} steps",
+    "progressRange": "{{current}} / {{target}}",
+    "allianceMetric": {
+      "m": "DISTANCE TRAVELED",
+      "steps": "STEPS WALKED",
+      "kcal": "CALORIES BURNED",
+      "days": "ACTIVE DAYS",
+      "claims": "TERRITORIES CLAIMED",
+      "default": "PROGRESS"
     }
   },
   "events": {
@@ -298,7 +326,17 @@
     "figmaSignUpSubtitle": "Create your account. You’ll choose your commander name next.",
     "figmaEmailPlaceholder": "you@domain.com",
     "figmaPasswordLabelNew": "Password ({{min}}+ characters)",
-    "figmaPasswordHelper": "{{min}}+ characters"
+    "figmaPasswordHelper": "{{min}}+ characters",
+    "errors": {
+      "wrongPassword": "Incorrect password. Try again.",
+      "noAccount": "No account found with this email.",
+      "emailTaken": "An account with this email already exists.",
+      "passwordPwned": "This password has appeared in a data breach. Choose another.",
+      "passwordTooShort": "Password must be at least 8 characters.",
+      "invalidEmail": "Enter a valid email address.",
+      "emailRequired": "Enter your email.",
+      "passwordRequired": "Enter your password."
+    }
   },
   "welcome": {
     "skipIntro": "Skip intro",
@@ -335,7 +373,8 @@
     "figmaSubtitle": "This is how the other Commanders will know you.",
     "figmaLabel": "Commander name",
     "figmaHelper": "Names can’t contain symbols.",
-    "figmaNext": "Next"
+    "figmaNext": "Next",
+    "commanderSubtitle": "This is how the other Commanders will know you"
   },
   "sessionMismatch": {
     "label": "Session error",
@@ -487,7 +526,27 @@
       "armWalk": "Walk {{metres}} m to claim it",
       "armWindow": "Start when you're ready to move. You get {{minutes}} minutes — walk anywhere",
       "armWindowNone": "Start when you're ready to move. Walk anywhere",
-      "armStake": "{{gold}} Gold is used once you start"
+      "armStake": "{{gold}} Gold is used once you start",
+      "eyebrowClaiming": "CLAIMING",
+      "eyebrowAttacking": "ATTACKING",
+      "eyebrowDefending": "DEFENDING",
+      "inProgressChip": "IN PROGRESS",
+      "fillHint": "Walk anywhere, The territory fills as your distance adds up",
+      "cancelPromptClaim": "Are you sure that you want to cancel the claim?",
+      "cancelPromptAttack": "Are you sure that you want to cancel the attack?",
+      "cancelPromptDefend": "Are you sure that you want to cancel the defend?",
+      "cancellingClaimLine": "Cancelling the Claim…",
+      "cancellingAttackLine": "Cancelling the Attack…",
+      "cancellingDefendLine": "Cancelling the Defend…",
+      "securingLine": "Securing the Claim…",
+      "progressCaption": "{{walked}} / {{required}}m",
+      "readyTitle": "WALK {{metres}}M TO CLAIM IT.",
+      "readyBody": "Start when you are ready to move. You get {{minutes}} minutes to cover it, walk anywhere",
+      "readyBodyNoWindow": "Start when you are ready to move. Walk anywhere",
+      "readyStake": "{{gold}} Gold is used once you start",
+      "startWalk": "START WALK",
+      "notYet": "NOT YET",
+      "notEnoughGold": "Not enough gold"
     }
   },
   "claimSuccess": {
@@ -993,7 +1052,15 @@
     "typeDefended": "TERRITORY DEFENDED",
     "typeDefendFailed": "TERRITORY DEFENDING FAILED",
     "typeEmptyClaimFailed": "EMPTY TERRITORY CLAIM FAILED",
-    "typeEnemyClaimFailed": "ENEMY TERRITORY CLAIM FAILED"
+    "typeEnemyClaimFailed": "ENEMY TERRITORY CLAIM FAILED",
+    "historyHeading": "HISTORY",
+    "logBack": "Log",
+    "eventEmptyClaimed": "Empty territory claimed",
+    "eventEmptyClaimFailed": "Empty territory claim failed",
+    "eventEnemyClaimed": "Enemy territory claimed",
+    "eventEnemyClaimFailed": "Enemy territory claim failed",
+    "eventDefended": "Territory defended",
+    "eventDefendFailed": "Territory defending failed"
   },
   "createAlliance": {
     "back": "← BACK",
@@ -1002,10 +1069,10 @@
     "step1Body": "Both names are permanent. The short name cannot be changed after founding.",
     "fullName": "Full name",
     "fullNameHint": "3–24 characters",
-    "namePlaceholder": "Alliance name",
+    "namePlaceholder": "Alliance Name",
     "shortName": "Short name",
     "shortNameHint": "3 letters · used in [TAG]",
-    "shortNamePlaceholder": "e.g. SNW",
+    "shortNamePlaceholder": "eg. SNW",
     "displayedInBrackets": "Displayed in brackets — [{{code}}]",
     "emblem": "Emblem",
     "emblemHint": "Chosen once · shown on the map",
@@ -1052,7 +1119,17 @@
     "wayfinder": "Wayfinder",
     "ember": "Ember",
     "forge": "Forge",
-    "banner": "Banner"
+    "banner": "Banner",
+    "glyph_maze": "Maze",
+    "glyph_flask": "Flask",
+    "glyph_bolt": "Bolt",
+    "glyph_target": "Target",
+    "glyph_quad": "Quad",
+    "glyph_peak": "Peak",
+    "glyph_eye": "Eye",
+    "glyph_pulse": "Pulse",
+    "glyph_cube": "Cube",
+    "glyph_slash": "Slash"
   },
   "leaderboards": {
     "title": "LEADERBOARDS",
@@ -1087,7 +1164,12 @@
     "thisSeason": "THIS SEASON",
     "youNamed": "You · {{name}}",
     "yourAlliance": "Your alliance",
-    "yourAllianceNamed": "Your alliance · {{name}}"
+    "yourAllianceNamed": "Your alliance · {{name}}",
+    "boardPicker": "Board: {{board}}",
+    "closeSearch": "Close search",
+    "noResults": "No results",
+    "search": "Search",
+    "kindAlliance": "Alliance"
   },
   "wallet": {
     "back": "← PROFILE",
@@ -1165,7 +1247,16 @@
     "roleLieutenant": "Lieutenant",
     "roleTroop": "Troop",
     "online_one": "{{count}} online",
-    "online_other": "{{count}} online"
+    "online_other": "{{count}} online",
+    "createAlliance": "Create one",
+    "findAlliance": "Find an alliance",
+    "globalComingSoon": "Global chat is coming soon.",
+    "noAllianceJoinBody": "Join or create an alliance to chat with your allies.",
+    "soloPlayerTag": "Solo Player",
+    "agoNow": "now",
+    "agoMinutes": "{{n}}M ago",
+    "agoHours": "{{n}}H ago",
+    "agoDays": "{{n}}D ago"
   },
   "medal": {
     "viewMedal": "VIEW MEDAL",
@@ -1557,7 +1648,8 @@
     },
     "topBar": {
       "goldA11y": "Gold balance: {{n}}",
-      "goldLoadingA11y": "Gold balance loading"
+      "goldLoadingA11y": "Gold balance loading",
+      "levelA11y": "Level {{n}}"
     },
     "search": {
       "placeholder": "Search territories",
@@ -1567,7 +1659,8 @@
       "empty": "No territories match that name",
       "error": "Couldn't search right now",
       "resultA11y": "Show {{name}} on the map",
-      "distanceKm": "{{km}} KM"
+      "distanceKm": "{{km}} KM",
+      "placeholderAll": "Search places, runners, alliances"
     },
     "card": {
       "startClaiming": "START CLAIMING",
@@ -1599,7 +1692,23 @@
       "viewAlliance": "VIEW ALLIANCE",
       "ctaPriced": "{{price}} {{currency}} · {{label}}",
       "goldCaps": "GOLD",
-      "ironCaps": "IRON"
+      "ironCaps": "IRON",
+      "attack": "ATTACK",
+      "eyebrowClaimed": "CLAIMED!",
+      "eyebrowOwner": "{{owner}} TERRITORY",
+      "eyebrowEnemy": "ENEMY TERRITORY!",
+      "eyebrowAlliance": "ALLIANCE TERRITORY - {{tag}}",
+      "eyebrowAllianceNoTag": "ALLIANCE TERRITORY",
+      "statDistance": "DISTANCE",
+      "statTimeLimit": "TIME LIMIT",
+      "statEntry": "ENTRY",
+      "statDistanceValue": "{{distance}} m",
+      "statTimeValue": "{{minutes}} min",
+      "statEntryGold": "{{price}} gold",
+      "statEntryIron": "{{price}} iron",
+      "ok": "OK",
+      "notEnoughGold": "Not enough gold",
+      "notEnoughIron": "Not enough iron"
     },
     "rail": {
       "keyA11y": "Territory colours key",
@@ -1626,7 +1735,8 @@
       "emptyBody": "You don't own any territories yet. Claim one and you can jump back to it from here.",
       "findNearby": "FIND A TERRITORY NEARBY",
       "closeA11y": "Close relocate",
-      "loadError": "Couldn't load your territories."
+      "loadError": "Couldn't load your territories.",
+      "held": "HELD {{count}} DAYS"
     },
     "coach": {
       "railKey": "TERRITORIES COLOURING",
@@ -1641,7 +1751,14 @@
       "firstTerritoryBody": "Let's capture your first territory. Tap the highlighted territory to see its details.",
       "cardBubble": "Tap Start claiming to begin the challenge, or close this to explore the app and other territories.",
       "skip": "SKIP",
-      "skipA11y": "Skip the map guide"
+      "skipA11y": "Skip the map guide",
+      "firstTerritoryBodyTemp": "Let's capture your first territory. Tap on the territory to see its details.",
+      "tapToContinueTemp": "TAP TO CONTINUE »"
+    },
+    "legendTemp": {
+      "alliance": "Alliance Territory",
+      "enemy": "Enemy's Territory",
+      "yours": "Your Territory"
     }
   },
   "walkthrough": {
@@ -1746,7 +1863,20 @@
     "statGold": "GOLD",
     "statOpponent": "{{name}}",
     "free": "FREE",
-    "backToMap": "BACK TO MAP"
+    "backToMap": "BACK TO MAP",
+    "figma": {
+      "claimWonTitle": "Territory claimed",
+      "claimWonBody": "{{territory}} is yours now",
+      "attackWonTitle": "Attack won, territory is yours",
+      "attackWonBody": "{{territory}} now belongs to you",
+      "attackLostTitle": "Attack lost, better luck next time!",
+      "attackLostBody": "{{territory}} stays with {{owner}}",
+      "defendWonTitle": "Defend won, territory is saved",
+      "defendWonBody": "{{territory}} territory stays with you",
+      "defendLostTitle": "Defend lost, better luck next time!",
+      "defendLostBody": "{{territory}} now belongs to {{owner}}",
+      "tapToContinue": "TAP TO CONTINUE"
+    }
   },
   "profileAccordion": {
     "title": "Profile",
@@ -1783,7 +1913,13 @@
     "claimedHeld_other": "Claimed · Held {{count}} days",
     "goldCopy": "Earn Gold from missions, daily rewards and winning territory. Spend it to claim, contest and defend.",
     "chatPush": "Alliance chat push notifications",
-    "statClaims": "Claims"
+    "statClaims": "Claims",
+    "chatPushRow": "Alliance Chat Push Notifications",
+    "claimedHeld": "Claimed · Held {{count}} days",
+    "goldBalanceRow": "Current Gold Balance",
+    "off": "OFF",
+    "on": "ON",
+    "unitsRow": "Units and Measurements"
   },
   "editProfile": {
     "title": "Edit Profile",
@@ -1866,15 +2002,45 @@
     "explainerWhatTitle": "WHAT ARE ALLIANCES?",
     "explainerWhatBody": "Alliances are crews of up to 20 players. Ally territory shows in blue on the map, and any member can defend it when it's attacked.",
     "explainerJoinTitle": "JOIN OR CREATE",
-    "explainerJoinBody": "Search for an alliance in your city and request to join, or create your own and invite friends. Alliances unlock at level 3."
+    "explainerJoinBody": "Search for an alliance in your city and request to join, or create your own and invite friends. Alliances unlock at level 3.",
+    "about": "About alliances",
+    "backCaps": "BACK",
+    "chatCta": "CHAT",
+    "detailTitle": "ALLIANCE",
+    "explainerJoinBodyTemp": "Join an existing alliance or create your own and recruit members to work together.",
+    "explainerWhatBodyTemp": "Alliances are teams where members can work together to claim more territories as a group.",
+    "fullNameLabel": "Alliance Full Name",
+    "fullNameRange": "3 - 24 characters",
+    "leaveCta": "LEAVE",
+    "leavePrompt": "Leave Alliance",
+    "liveTitle": "Live",
+    "logoLabel": "Alliance Logo",
+    "namesPermanentNote": "Both names are permanent. The name's cannot be changed after founding.",
+    "noTransmissionsShort": "No transmissions",
+    "rulesLabel": "Alliance Rules",
+    "rulesPlaceholderTemp": "Custom alliance rule 1",
+    "searchPlaceholderTemp": "Alliance name, Alliance tag...",
+    "shortNameLabel": "Alliance Short Name",
+    "shortNameRange": "3 Letters",
+    "subtitle": "Join or Create a Alliance to be a part of it.",
+    "titleSingular": "ALLIANCE",
+    "typeInviteOnlyTitle": "Invite Only",
+    "typeOpenTitle": "Open",
+    "errAllianceNameRequired": "Alliance name has to be entered",
+    "errAllianceNameTaken": "Alliance name is already taken. Please choose a different name.",
+    "errAllianceShortNameTaken": "Alliance short name is already taken. Please choose a different name.",
+    "roleNameCaptain": "Captain",
+    "roleNameCommander": "Commander",
+    "roleNameLieutenant": "Lieutenant",
+    "roleNameTroop": "Troop"
   },
   "explainer": {
-    "skip": "Skip",
+    "skip": "SKIP",
     "skipA11y": "Skip explanation",
-    "next": "Next",
+    "next": "NEXT",
     "nextA11y": "Next",
     "pager": "{{n}} / {{total}}",
-    "gotIt": "Got it",
+    "gotIt": "GOT IT",
     "gotItA11y": "Got it, close explanation",
     "pagerA11y": "Page {{n}} of {{total}}"
   },
@@ -1906,7 +2072,10 @@
     "letItGo": "LET IT GO",
     "notNow": "NOT NOW",
     "gotIt": "GOT IT",
-    "ctaPriced": "{{price}} GOLD · {{label}}"
+    "ctaPriced": "{{price}} GOLD · {{label}}",
+    "soloBodyAgo": "{{attacker}} started the attack {{minutes}} min ago. Start defending and protect your territory",
+    "allianceBodyMember": "Your Alliance member's [{{owner}}] territory is under attack, defend their territory for them",
+    "notEnoughGold": "Not enough gold"
   },
   "landing": {
     "tagline": "Walk . Claim . Conquer",
@@ -1927,7 +2096,10 @@
     "next": "NEXT",
     "typeLabel": "Or type your age",
     "typePlaceholder": "Age",
-    "years": "Years"
+    "years": "Years",
+    "figmaSubtitle": "Select the appropriate option to where your age lies",
+    "notSet": "not set",
+    "selectedAgeLabel": "Selected age:"
   },
   "ageBlocked": {
     "title": "Not yet",
@@ -1957,14 +2129,16 @@
     "saveFailed": "Couldn't save your home city.",
     "next": "NEXT",
     "eyebrow": "Your city · {{city}} map",
-    "continue": "Continue"
+    "continue": "Continue",
+    "journey": "Let’s start your journey from {{city}}"
   },
   "welcomeOverlay": {
     "title": "WELCOME TO DOMINIA",
     "body": "Let us start understanding how the game works.",
     "tapToContinue": "Tap on the screen to continue",
     "titleTop": "Welcome to",
-    "titleMain": "Dominia"
+    "titleMain": "Dominia",
+    "lead": "Let us start understanding how the game works"
   },
   "tutorialCards": {
     "skip": "SKIP",
@@ -1975,21 +2149,82 @@
     },
     "howToStart": {
       "title": "HOW TO START?",
-      "body": "Tap a territory on the map to see its challenge: the steps required and the time limit. Start with Gold, finish the challenge, and it’s yours."
+      "body": "Tap a territory on the map to see its challenge: the steps required and the time limit. Start with Gold, finish the challenge, and it’s yours.",
+      "text": "Click on a territory on the map to view its challenge details, including the steps required and time limit. Start the challenge with gold or iron and complete the challenge to claim the territory."
     },
     "claiming": {
       "title": "CLAIMING TERRITORY",
-      "body": "Walk the required steps within the time limit to claim the territory. If you don’t make it, the territory stays unclaimed."
+      "body": "Walk the required steps within the time limit to claim the territory. If you don’t make it, the territory stays unclaimed.",
+      "text": "Walk the required number of steps within the given time limit to claim the territory as your own. If you fail to do so, the territory will remain unclaimed."
     },
     "attackDefend": {
       "title": "ATTACK OR DEFEND",
-      "body": "Attack other players’ territories with Gold to make them yours, and defend your own by out-walking anyone who attacks."
+      "body": "Attack other players’ territories with Gold to make them yours, and defend your own by out-walking anyone who attacks.",
+      "text": "You can attack other player’s territories and make it as your own using Gold and also defend your territory from others attack by bypassing them in the challenge"
     },
     "endGoal": {
       "title": "END GOAL",
-      "body": "Claim the most territories before the season ends to top the leaderboard and earn Gold."
+      "body": "Claim the most territories before the season ends to top the leaderboard and earn Gold.",
+      "text": "Claim the most territories before the season ends to top the leaderboard and earn gold."
     },
     "back": "BACK",
     "startPlaying": "START PLAYING"
+  },
+  "auth": {
+    "accountEyebrow": "ACCOUNT",
+    "alreadyPlaying": "Already playing?",
+    "back": "BACK",
+    "backToSignIn": "BACK TO SIGN IN",
+    "emailAddressLabel": "EMAIL ADDRESS",
+    "emailAddressPlaceholder": "Email address",
+    "emailLabel": "EMAIL",
+    "emailPlaceholder": "Email",
+    "findingGround": "Finding your ground…",
+    "forgotPassword": "FORGOT PASSWORD?",
+    "noAccount": "Don’t have an account?",
+    "or": "OR",
+    "passwordLabel": "PASSWORD",
+    "passwordNewPlaceholder": "Password ({{min}}+ characters)",
+    "passwordPlaceholder": "Password",
+    "privacyPolicy": "Privacy Policy",
+    "resendCode": "RESEND CODE",
+    "signIn": "SIGN IN",
+    "signUp": "SIGN UP",
+    "tagline": "WALK. CLAIM. CONQUER. DEFEND.",
+    "termsAnd": " & ",
+    "termsLead": "By continuing, you are agreeing to our ",
+    "termsOfService": "Terms of Service",
+    "termsTail": ".",
+    "verificationCodeLabel": "VERIFICATION CODE",
+    "verify": "VERIFY",
+    "errors": {
+      "generic": "Something went wrong. Try again.",
+      "network": "No connection. Check your network and try again.",
+      "tooManyAttempts": "Too many attempts. Wait a moment and try again."
+    }
+  },
+  "ftue": {
+    "body": "Every block of {{city}} is territory. Walk its distance within the time window and the block is yours — until someone walks it back.",
+    "cityFallback": "your city",
+    "eyebrow": "Welcome, {{name}} · FTUE 1 of 4",
+    "letsGo": "Let’s go",
+    "nameFallback": "Commander",
+    "skip": "Skip",
+    "title": "Walk it\nto own it."
+  },
+  "reset": {
+    "codePlaceholder": "Verification code",
+    "createNewPassword": "CREATE NEW PASSWORD",
+    "getBackInSubtitle": "Enter your code. Set a new password.",
+    "getBackInTitle": "GET BACK IN",
+    "lockedOutTitle": "LOCKED OUT?",
+    "newPasswordLabel": "NEW PASSWORD",
+    "newPasswordPlaceholder": "New password ({{min}}+ characters)",
+    "sendLink": "SEND RESET LINK",
+    "errors": {
+      "wrongCode": "Incorrect code. Check your email and try again.",
+      "codeExpired": "That code has expired. Send a new one.",
+      "codeRequired": "Enter the code from your email."
+    }
   }
 }
