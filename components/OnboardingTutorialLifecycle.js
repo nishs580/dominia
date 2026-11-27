@@ -1,21 +1,24 @@
-// Welcome overlay + five tutorial cards over the map (plan U10).
+// FTUE welcome + core-loop explainer deck over the map (plan U4).
 //
 // Mounted once in App.js (like NotificationCard) so MapScreen needs no change.
 // Shows only when all of these hold:
 //   - Figma onboarding is on (legacy_tabs off),
 //   - this player finished Figma onboarding on this device
 //     (TUTORIAL_PENDING_FLAG, set by FigmaOnboardingScreen),
-//   - the tutorial has not been finished or skipped (last card's name unset),
+//   - the deck has not been finished or skipped (last card's name unset),
 //   - the root route is MainTabs (so never over Daily Rewards or a challenge).
-// Progress is driven by lib/onboardingFlow; Skip or Next on the last card
-// marks all five cards seen.
+//
+// Order (lib/onboardingFlow): FTUE welcome "WALK IT TO OWN IT." → "WELCOME TO
+// DOMINIA" (tap to continue) → five core-loop cards. SKIP anywhere, or NEXT on
+// the last card, marks all five cards seen.
 
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Modal } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import WelcomeOverlay from './WelcomeOverlay';
+import WelcomeOverlay, { FtueWelcome } from './WelcomeOverlay';
 import TutorialCards from './TutorialCards';
 import { useFlag } from '../lib/flags';
+import { getMe } from '../lib/meApi';
 import { navigationRef } from '../lib/navigation';
 import { hasFired, markFired, onWalkthroughFired } from '../lib/walkthroughFlags';
 import {
@@ -33,11 +36,17 @@ function onMainTabs() {
 }
 
 export default function OnboardingTutorialLifecycle() {
-  const { isSignedIn, userId } = useAuth();
+  const { isSignedIn, userId, getToken } = useAuth();
+  // Clerk's getToken is not referentially stable: keep it behind a ref.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const stableGetToken = useCallback((...args) => getTokenRef.current(...args), []);
+
   const legacyTabs = useFlag('legacy_tabs');
   const [eligible, setEligible] = useState(false);
   const [atMap, setAtMap] = useState(onMainTabs());
-  const [state, dispatch] = useReducer(onboardingReducer, undefined, () => initialState({ entry: STEPS.WELCOME }));
+  const [me, setMe] = useState({ name: null, city: null });
+  const [state, dispatch] = useReducer(onboardingReducer, undefined, () => initialState({ entry: STEPS.FTUE }));
   const ranSeq = useRef(state.seq);
 
   const checkEligible = useCallback(async () => {
@@ -58,6 +67,20 @@ export default function OnboardingTutorialLifecycle() {
       if (who === userId && name === TUTORIAL_PENDING_FLAG) checkEligible();
     });
   }, [checkEligible, userId]);
+
+  // The FTUE welcome names the player and their home city.
+  useEffect(() => {
+    if (!eligible) return undefined;
+    let cancelled = false;
+    getMe({ clerkGetToken: stableGetToken }).then((res) => {
+      if (cancelled || !res.ok) return;
+      const player = res.data?.player;
+      setMe({ name: player?.username ?? null, city: player?.home_city ?? null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eligible, stableGetToken]);
 
   useEffect(() => {
     const listener = () => setAtMap(onMainTabs());
@@ -80,27 +103,25 @@ export default function OnboardingTutorialLifecycle() {
     }
   }, [state.seq, state.effects, userId]);
 
-  const visible = eligible && atMap && (state.step === STEPS.WELCOME || state.step === STEPS.TUTORIAL);
-  if (!visible) return null;
+  const showing = state.step === STEPS.FTUE || state.step === STEPS.WELCOME || state.step === STEPS.TUTORIAL;
+  if (!(eligible && atMap && showing)) return null;
+
+  const skip = () => dispatch({ type: 'TUTORIAL_SKIP' });
+
+  let content;
+  if (state.step === STEPS.FTUE) {
+    content = <FtueWelcome name={me.name} city={me.city} onGo={() => dispatch({ type: 'FTUE_GO' })} onSkip={skip} />;
+  } else if (state.step === STEPS.WELCOME) {
+    content = <WelcomeOverlay onContinue={() => dispatch({ type: 'WELCOME_TAP' })} />;
+  } else {
+    content = (
+      <TutorialCards index={state.tutorialIndex} onNext={() => dispatch({ type: 'TUTORIAL_NEXT' })} onSkip={skip} />
+    );
+  }
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => dispatch({ type: 'TUTORIAL_SKIP' })}
-    >
-      {state.step === STEPS.WELCOME ? (
-        <WelcomeOverlay onContinue={() => dispatch({ type: 'WELCOME_TAP' })} />
-      ) : (
-        <TutorialCards
-          index={state.tutorialIndex}
-          onNext={() => dispatch({ type: 'TUTORIAL_NEXT' })}
-          onSkip={() => dispatch({ type: 'TUTORIAL_SKIP' })}
-          onBack={() => dispatch({ type: 'BACK' })}
-        />
-      )}
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={skip}>
+      {content}
     </Modal>
   );
 }

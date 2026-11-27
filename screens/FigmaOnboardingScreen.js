@@ -2,7 +2,7 @@
 // lib/onboardingFlow — age → daily rewards → location permission → city
 // intro (silent home pin, or set-your-base with home_bases on) — then marks
 // the player onboarded and opens the map, where OnboardingTutorialLifecycle
-// shows the welcome overlay and the five tutorial cards.
+// shows the FTUE welcome, the WELCOME TO DOMINIA card and the core-loop cards.
 //
 // Mounted by the 'Onboarding' route when legacy_tabs is off (App.js
 // OnboardingRoute); with it on, today's OnboardingScreen mounts unchanged.
@@ -59,6 +59,10 @@ async function currentCoords() {
 export default function FigmaOnboardingScreen({ navigation, route }) {
   const { t, i18n } = useTranslation();
   const { userId, getToken, signOut } = useAuth();
+  // Clerk's getToken is not referentially stable: keep it out of effect deps.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const stableGetToken = useCallback((...args) => getTokenRef.current(...args), []);
   const [state, dispatch] = useReducer(
     onboardingReducer,
     undefined,
@@ -85,7 +89,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
     if (state.step !== STEPS.DAILY_REWARD) return undefined;
     let cancelled = false;
     setReward({ status: 'loading', reward: null });
-    getDailyReward({ clerkGetToken: getToken }).then((res) => {
+    getDailyReward({ clerkGetToken: stableGetToken }).then((res) => {
       if (cancelled) return;
       if (res.ok && res.data.available) {
         setReward({ status: 'ready', reward: res.data });
@@ -98,7 +102,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [state.step, rewardNonce, getToken, safeDispatch]);
+  }, [state.step, rewardNonce, stableGetToken, safeDispatch]);
 
   // Age's ← goes back to choose-name (Updated UX A5), which is its own route.
   useEffect(() => {
@@ -113,7 +117,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
       switch (fx.type) {
         case 'patchAge':
           // Never blocks onboarding; the band is re-askable later if lost.
-          setAgeBand({ clerkGetToken: getToken, ageBand: fx.ageBand }).then((res) => {
+          setAgeBand({ clerkGetToken: stableGetToken, ageBand: fx.ageBand }).then((res) => {
             if (!res.ok) console.log('[figmaOnboarding] age band not saved', res.status);
           });
           break;
@@ -133,7 +137,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
           break;
 
         case 'saveHomePin':
-          setHomePin({ clerkGetToken: getToken, lat: fx.lat, lng: fx.lng }).then((res) => {
+          setHomePin({ clerkGetToken: stableGetToken, lat: fx.lat, lng: fx.lng }).then((res) => {
             if (!res.ok) {
               console.log('[figmaOnboarding] home pin save failed', res.status, res.error);
               safeDispatch({ type: 'PIN_SAVE_FAILED' });
@@ -145,7 +149,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
           break;
 
         case 'claimReward':
-          claimDailyReward({ clerkGetToken: getToken }).then((res) => {
+          claimDailyReward({ clerkGetToken: stableGetToken }).then((res) => {
             if (res.ok && mounted.current) {
               setClaimNote(
                 t('dailyReward.collected', {
@@ -161,13 +165,13 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
           break;
 
         case 'finishOnboarding':
-          patchMe({ clerkGetToken: getToken, fields: { has_onboarded: true } }).then(async (res) => {
+          patchMe({ clerkGetToken: stableGetToken, fields: { has_onboarded: true } }).then(async (res) => {
             if (!res.ok) {
               console.log('[figmaOnboarding] finish failed', res.status);
               safeDispatch({ type: 'FINISH_FAILED' });
               return;
             }
-            logDebug(getToken, 'onboarding_completed', { flow: 'figma' });
+            logDebug(stableGetToken, 'onboarding_completed', { flow: 'figma' });
             await markFired(userId, TUTORIAL_PENDING_FLAG);
             safeDispatch({ type: 'FINISHED' });
             navigation.replace('MainTabs');
@@ -178,7 +182,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
           break;
       }
     }
-  }, [state.seq, state.effects, getToken, userId, i18n.language, navigation, safeDispatch, t]);
+  }, [state.seq, state.effects, stableGetToken, userId, i18n.language, navigation, safeDispatch, t]);
 
   switch (state.step) {
     case STEPS.AGE:
@@ -235,6 +239,7 @@ export default function FigmaOnboardingScreen({ navigation, route }) {
       );
 
     case STEPS.USERNAME:
+    case STEPS.FTUE:
     case STEPS.WELCOME:
     case STEPS.TUTORIAL:
     case STEPS.DONE:
