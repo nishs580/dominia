@@ -6,7 +6,7 @@ import { colors, fonts } from '../lib/theme';
 import { getWeeklyTask } from '../lib/weeklyTaskApi';
 import { formatInt, formatTaskValue as formatValue, rewardLine } from '../lib/weeklyTaskFormat';
 import { allianceCardModel } from '../lib/missions';
-import { GoldGlyph } from './ResourceGlyphs';
+import { CutCard } from './ui';
 
 /**
  * Alliance Weekly Task card — the member-facing two-bar surface.
@@ -18,9 +18,10 @@ import { GoldGlyph } from './ResourceGlyphs';
  * At 100% of quota the personal bar collapses to "your part is done". No
  * formula, snapshot or scaling rule is ever explained in-product.
  *
- * variant="mission" is the Figma Missions-tab card (E1): task name, the
- * alliance name tag, a one-line goal, one alliance bar, "128 / 200 KM" and
- * the shared Gold reward. Same API data; only the presentation differs.
+ * variant="mission" is the Missions-tab card (Dominia-Temp board 30): task
+ * name, RESETS IN, the goal line, "12 km / 100 km" and one two-tone bar
+ * splitting the alliance total into teammates and you. Same API data; only
+ * the presentation differs.
  */
 
 function pct(part, whole) {
@@ -39,63 +40,90 @@ function Bar({ fillPct, markerPct, fillColor }) {
   );
 }
 
-/** Progress figure without its unit ("128"), matching formatValue's scale. */
+/** Progress figure without its unit ("12"), matching formatValue's scale. */
 function progressFigure(unit, value) {
   if (unit === 'm') return String(Math.round((value / 1000) * 10) / 10);
   return formatInt(value);
 }
 
+function MissionShell({ children, accessibilityLabel }) {
+  return (
+    <CutCard padding={0} accessibilityLabel={accessibilityLabel} style={styles.missionShell}>
+      <View style={styles.missionRule} />
+      <View style={styles.missionInner}>{children}</View>
+    </CutCard>
+  );
+}
+
+// Board 30: lime left rule, task name + RESETS IN, goal line, metric label
+// with "12 km / 100 km", a two-tone bar (teammates grey, you lime) and the
+// legend. Teammates = total_progress − personal.contribution.
 function MissionCard({ t, data, allianceName }) {
   const m = allianceCardModel(data);
   if (m.state !== 'active') {
     return (
-      <View style={[styles.card, styles.missionCard]}>
+      <MissionShell>
         <Text style={styles.pendingText}>{t('weeklyTask.ordersPending')}</Text>
-      </View>
+      </MissionShell>
     );
   }
   const name = t(`weeklyTask.name.${m.taskType}`);
   const target = formatValue(t, m.unit, m.target);
-  const progress = `${progressFigure(m.unit, m.progress)} / ${target}`;
-  const goal = t(`missions.allianceGoal.${m.taskType}`, {
-    defaultValue: t('missions.allianceGoal.default', {
-      defaultValue: 'Reach {{target}} together as an alliance this week.',
-      target,
-    }),
-    target,
+  const goal = t('weeklyTask.goalLine', { target });
+  const resets = t('weeklyTask.daysLeft', { count: m.daysLeft });
+  const metric = t(m.metric.key, { defaultValue: m.metric.defaultValue });
+  const half = t('missions.allianceHalf', {
+    defaultValue: 'Half reward at {{half}}',
+    half: formatValue(t, m.unit, m.halfTarget),
   });
-  const reward = m.sharedGold > 0
-    ? t('missions.allianceShared', { defaultValue: '{{n}} SHARED', n: m.sharedGold })
-    : rewardLine(t, data.task.personal_payout ?? {});
+  const teammatesLabel = t('missions.allianceTeammates', { defaultValue: 'Teammates contribution' });
+  const yoursLabel = t('missions.allianceYours', { defaultValue: 'Your contribution' });
+  const progressText = `${progressFigure(m.unit, m.progress)} / ${target}`;
   return (
-    <View
-      style={[styles.card, styles.missionCard]}
-      accessible
-      accessibilityLabel={t('missions.allianceCardA11y', {
-        defaultValue: '{{name}}, {{alliance}}. {{goal}} Progress {{progress}}. Reward {{reward}}.',
-        name, alliance: allianceName ?? '', goal, progress, reward,
+    <MissionShell
+      accessibilityLabel={t('missions.allianceCardA11yV2', {
+        defaultValue: '{{name}}{{alliance}}. {{goal}} {{resets}}. {{metric}} {{progress}}. {{teammatesLabel}} {{teammates}}, {{yoursLabel}} {{yours}}. {{half}}.',
+        name,
+        alliance: allianceName ? `, ${allianceName}` : '',
+        goal,
+        resets,
+        metric,
+        progress: progressText,
+        teammatesLabel,
+        teammates: formatValue(t, m.unit, m.teammates),
+        yoursLabel,
+        yours: formatValue(t, m.unit, m.yours),
+        half,
       })}
     >
       <View style={styles.missionHead}>
         <Text style={styles.missionTitle} maxFontSizeMultiplier={1.3} numberOfLines={2}>{name}</Text>
-        {allianceName ? (
-          <View style={styles.tag}>
-            <Text style={styles.tagText} maxFontSizeMultiplier={1.3} numberOfLines={1}>{allianceName}</Text>
-          </View>
-        ) : null}
+        <Text style={styles.missionResets} maxFontSizeMultiplier={1.3}>{resets}</Text>
       </View>
-      <Text style={styles.missionGoal}>{goal}</Text>
-      <View style={styles.missionTrack}>
-        <View style={[styles.fill, { width: `${Math.round(m.fraction * 100)}%`, backgroundColor: colors.lime }]} />
+      <Text style={styles.missionGoal} maxFontSizeMultiplier={1.4}>{goal}</Text>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel} maxFontSizeMultiplier={1.3}>{metric}</Text>
+        <Text style={styles.metricValue} maxFontSizeMultiplier={1.3}>
+          {formatValue(t, m.unit, m.progress)}
+          <Text style={styles.metricTotal}>{` / ${target}`}</Text>
+        </Text>
       </View>
-      <View style={styles.missionFoot}>
-        <Text style={styles.missionProgress} maxFontSizeMultiplier={1.3}>{progress}</Text>
-        <View style={styles.missionReward}>
-          {m.sharedGold > 0 ? <GoldGlyph size={12} color={colors.lime} strokeWidth={3} /> : null}
-          <Text style={styles.missionRewardText} maxFontSizeMultiplier={1.3}>{reward}</Text>
+      <View style={styles.splitTrack}>
+        <View style={[styles.splitTeam, { width: `${m.teammatesFraction * 100}%` }]} />
+        <View style={[styles.splitYours, { width: `${m.yoursFraction * 100}%` }]} />
+      </View>
+      <View style={styles.legend}>
+        <Text style={styles.legendText} maxFontSizeMultiplier={1.3}>{half}</Text>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendText} maxFontSizeMultiplier={1.3}>{teammatesLabel}</Text>
+          <View style={[styles.swatch, styles.swatchTeam]} />
+        </View>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendText} maxFontSizeMultiplier={1.3}>{yoursLabel}</Text>
+          <View style={[styles.swatch, styles.swatchYours]} />
         </View>
       </View>
-    </View>
+    </MissionShell>
   );
 }
 
@@ -132,22 +160,25 @@ export default function WeeklyTaskCard({ allianceId, getToken, variant, alliance
     }, [fetchCard]),
   );
 
+  const Shell = variant === 'mission' ? MissionShell : View;
+  const shellProps = variant === 'mission' ? {} : { style: styles.card };
+
   if (loading) {
     return (
-      <View style={styles.card}>
+      <Shell {...shellProps}>
         <ActivityIndicator color={colors.slate2} />
-      </View>
+      </Shell>
     );
   }
 
   if (error || !data) {
     return (
-      <View style={styles.card}>
+      <Shell {...shellProps}>
         <Text style={styles.pendingText}>{t('weeklyTask.loadFailed')}</Text>
-        <Pressable onPress={fetchCard} hitSlop={8}>
+        <Pressable onPress={fetchCard} hitSlop={8} accessibilityRole="button">
           <Text style={styles.retryText}>{t('common.retry')}</Text>
         </Pressable>
-      </View>
+      </Shell>
     );
   }
 
@@ -401,49 +432,64 @@ const styles = StyleSheet.create({
   },
   lastWeekText: { fontFamily: fonts.body, fontSize: 11, color: colors.slate2, lineHeight: 16 },
 
-  // ── variant="mission" (Figma E1) ──
-  missionCard: { marginTop: 0, borderLeftWidth: 3, padding: 20 },
-  missionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  // ── variant="mission" (Dominia-Temp board 30) ──
+  missionShell: { flexDirection: 'row' },
+  missionRule: { width: 3, backgroundColor: colors.lime },
+  missionInner: { flex: 1, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
+  missionHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   missionTitle: {
     flexShrink: 1,
-    fontFamily: fonts.display,
-    fontSize: 22,
-    lineHeight: 26,
-    color: colors.bone,
-    textTransform: 'uppercase',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.white,
   },
-  tag: {
-    flexShrink: 0,
-    maxWidth: '50%',
-    backgroundColor: colors.allianceSoft,
-    borderWidth: 1,
-    borderColor: colors.alliance,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  tagText: {
+  missionResets: {
+    marginTop: 3,
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: colors.bone,
+    color: colors.muted2,
   },
-  missionGoal: { marginTop: 12, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.bone2 },
-  missionTrack: { marginTop: 14, height: 4, backgroundColor: colors.ink3, overflow: 'hidden' },
-  missionFoot: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  missionProgress: {
+  missionGoal: { marginTop: 4, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted2 },
+  metricRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  metricLabel: {
+    flexShrink: 1,
     fontFamily: fonts.mono,
-    fontSize: 13,
-    letterSpacing: 1.0,
+    fontSize: 11,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: colors.slate2,
+    color: colors.muted2,
   },
-  missionReward: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  missionRewardText: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
-    color: colors.bone,
+  metricValue: { fontFamily: fonts.mono, fontSize: 18, color: colors.white },
+  metricTotal: { fontFamily: fonts.body, fontSize: 13, color: colors.muted2 },
+  splitTrack: {
+    marginTop: 10,
+    height: 8,
+    flexDirection: 'row',
+    backgroundColor: colors.raised,
+    overflow: 'hidden',
   },
+  splitTeam: { height: '100%', backgroundColor: 'rgba(253,253,253,0.7)' },
+  splitYours: { height: '100%', backgroundColor: colors.lime },
+  legend: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 12,
+    rowGap: 4,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontFamily: fonts.body, fontSize: 11, color: colors.muted2 },
+  swatch: { width: 8, height: 8 },
+  swatchTeam: { backgroundColor: 'rgba(253,253,253,0.7)' },
+  swatchYours: { backgroundColor: colors.lime },
 });

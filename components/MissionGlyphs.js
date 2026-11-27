@@ -1,6 +1,7 @@
 // Line glyphs for the Figma Missions tab and its explainer (E1–E5): clock
 // (refresh line), lock (locked tab and banner), footsteps (MARCH), map pin
-// (RANGE) and the circled (i). Same 18-unit grid as ResourceGlyphs.
+// (RANGE), the level bolt and the circled (i). Same 18-unit grid as
+// ResourceGlyphs.
 
 import React from 'react';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
@@ -49,6 +50,21 @@ export function PinGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWid
         strokeLinejoin="round"
       />
       <Circle cx="9" cy="7.5" r="2" stroke={color} strokeWidth={strokeWidth} fill="none" />
+    </Svg>
+  );
+}
+
+// Level pill in the Missions header (board 16): a lightning bolt.
+export function BoltGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Path
+        d="M10 1.75 L3.75 10.25 H8.75 L8 16.25 L14.25 7.75 H9.25 Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
