@@ -1999,6 +1999,7 @@
     "errShortName": "Short name must be exactly 3 letters",
     "errRulesLength": "Rules must be 500 characters or fewer",
     "errFiltered": "Blocked by content rules. Change the wording and try again.",
+    "errNoHomeCity": "Set your home city before founding an alliance.",
     "explainerWhatTitle": "WHAT ARE ALLIANCES?",
     "explainerWhatBody": "Alliances are crews of up to 20 players. Ally territory shows in blue on the map, and any member can defend it when it's attacked.",
     "explainerJoinTitle": "JOIN OR CREATE",

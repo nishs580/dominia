@@ -621,12 +621,15 @@ function FigmaLeaderboards() {
     const { board: apiBoard, subject } = apiParamsFor(board, scope);
     const clerkGetToken = () => getTokenRef.current();
     let result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject, q: searchQ });
+    // The q the returned rows were filtered by ('' after the no-q retry).
+    let rowsQ = searchQ;
     if (shouldRetryWithoutQuery(result, searchQ)) {
       result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject });
+      rowsQ = '';
     }
     if (seq !== fetchSeqRef.current) return;
     if (result.ok) {
-      setData(parseLeaderboard(result.data));
+      setData({ ...parseLeaderboard(result.data), q: rowsQ });
       setStatus('ready');
     } else {
       setData({ rows: [], self: null });
@@ -656,16 +659,26 @@ function FigmaLeaderboards() {
     fetchBoard();
   }, [fetchBoard]);
 
+  // Closing search drops the server-filtered rows at once and shows loading
+  // until the unfiltered board arrives, so they never fill the podium.
   const closeSearch = useCallback(() => {
     setQuery('');
     setSearchOpen(false);
-  }, []);
+    if (searchQ) {
+      setSearchQ('');
+      setStatus('loading');
+      setData({ rows: [], self: null });
+    }
+  }, [searchQ]);
 
+  // While the rows on screen still belong to a non-empty q (e.g. the field
+  // was just cleared and the debounce has not fired), stay in search mode.
+  const viewQuery = query.trim() !== '' ? query : (data.q || '');
   const view = useMemo(
     () => buildLeaderboardView({
-      status, rows: data.rows, self: data.self, board, scope, unit, selfName, query,
+      status, rows: data.rows, self: data.self, board, scope, unit, selfName, query: viewQuery,
     }),
-    [status, data, board, scope, unit, selfName, query],
+    [status, data, board, scope, unit, selfName, viewQuery],
   );
 
   const boardOptions = boardTabs(board);

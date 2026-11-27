@@ -60,7 +60,7 @@ import { getFlag, useFlag } from '../lib/flags';
 import { navigateTo } from '../lib/navigation';
 import MapTopBar from '../components/MapTopBar';
 import TerritoryCard from '../components/TerritoryCard';
-import { territoryOwnership } from '../lib/territoryCard';
+import { territoryOwnership, territoryOwnershipFor } from '../lib/territoryCard';
 import DefendPopup, { useDefendPopupFeed } from '../components/DefendPopup';
 import { defendPopupModel, defendStartParams } from '../lib/defendPopup';
 import { getDefendPreview, postDefend } from '../lib/contestDefendApi';
@@ -1871,12 +1871,10 @@ export default function MapScreen() {
     const features = rows.map((row) => {
       const developmentLevel = row.development_level ?? 0;
       const allianceTag = row.alliance_short_name ?? null;
-      const isOwnAlliance = Boolean(myPlayer?.alliance_id && row.alliance_id === myPlayer.alliance_id);
-      const ownership =
-        row.owner_clerk_id === userId ? 'yours'
-          : isOwnAlliance ? 'alliance'
-            : row.owner_id != null ? 'enemy'
-              : 'unclaimed';
+      const ownership = territoryOwnershipFor(
+        { ownerClerkId: row.owner_clerk_id, ownerId: row.owner_id, allianceId: row.alliance_id },
+        { userId, myAllianceId: myPlayer?.alliance_id ?? null },
+      );
       // Second label line: development badge + alliance tag ("D3 · [VLK]").
       const labelParts = [];
       if (developmentLevel >= 1) labelParts.push(`D${developmentLevel}`);
@@ -2093,17 +2091,17 @@ export default function MapScreen() {
           // outside the viewport will arrive complete on its next fetch.
           if (!existing) return;
 
-          const isOwnAlliance = Boolean(
-            myPlayer?.alliance_id && payload.alliance_id === myPlayer.alliance_id,
-          );
           const allianceTag = payload.alliance_short_name ?? null;
           const labelParts = [];
           if (existing.properties.developmentLevel >= 1) {
             labelParts.push(`D${existing.properties.developmentLevel}`);
           }
           if (allianceTag) labelParts.push(`[${allianceTag}]`);
-          const claimedOwnership =
-            payload.owner_clerk_id === userId ? 'yours' : isOwnAlliance ? 'alliance' : 'enemy';
+          // A territory_claimed event always has an owner, so never 'unclaimed'.
+          const claimedOwnership = territoryOwnershipFor(
+            { ownerClerkId: payload.owner_clerk_id, ownerId: payload.owner_id, allianceId: payload.alliance_id, claimed: true },
+            { userId, myAllianceId: myPlayer?.alliance_id ?? null },
+          );
 
           cache.set(id, {
             ...existing,

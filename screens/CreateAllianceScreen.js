@@ -34,6 +34,7 @@ import {
   createFieldError,
   foundErrorFields,
   foundSubmitErrorKey,
+  FOUND_SUBMIT_ERROR_DEFAULTS,
   sanitizeShortName,
   validateAllianceForm,
 } from '../lib/allianceValidation';
@@ -51,7 +52,7 @@ const HAIRLINE_STRONG = THEME.colors.hairlineStrong;
 
 function mapFoundAllianceError(t, error) {
   const submitKey = foundSubmitErrorKey(error);
-  if (submitKey) return t(submitKey);
+  if (submitKey) return t(submitKey, { defaultValue: FOUND_SUBMIT_ERROR_DEFAULTS[submitKey] });
   const code = error?.code ?? error?.error ?? null;
   switch (code) {
     case 'short_name_taken':
