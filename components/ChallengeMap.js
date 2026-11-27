@@ -5,6 +5,14 @@
 // that rises with walk progress (lib/challengeFill.js), the player dot with
 // its ring, and a recenter control that appears once the player pans away.
 //
+// `trace` (Dominia-Temp, plan 2026-11-28 U7; Challenge cases 1–5) swaps the
+// rising fill for the board's language: a blue territory plate, the player's
+// progress drawn along the perimeter in lime with a lime dot at its head, the
+// opponent's progress (attack/defend, only when known) in red just inside
+// it, and an always-on slanted recenter tile. The territory alone is framed;
+// `onPannedChange` tells the screen when the player has moved the camera so
+// the centred percentage can hide (case 5).
+//
 // Borrows MapScreen's board language (basemap config, ink scrim, owner plate
 // opacity, puck seat/core) rather than mounting MapScreen, which is built for
 // a whole city of parcels.
@@ -13,18 +21,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapboxGL from '@rnmapbox/maps';
 import * as Location from 'expo-location';
+import Svg, { Circle, Line } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { BOARD_BASEMAP_CONFIG, BOARD_SCRIM_STYLE } from '../lib/mapBoard';
 import { challengeFill, geometryBounds } from '../lib/challengeFill';
+import { perimeterTrace } from '../lib/challengeScreen';
 import { colors } from '../lib/theme';
+import { SlantTile } from './ui';
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
 const INK = colors.ink;
-const INK2 = colors.ink2;
 const BONE = colors.bone;
 const CLAIM = colors.claim;
-const HAIRLINE_STRONG = colors.hairlineStrong;
 
 const FIT_PADDING = 56;
 const FIT_DURATION_MS = 280; // sanctioned UI-transition duration
@@ -56,6 +65,47 @@ const PUCK_CORE_STYLE = {
   circleEmissiveStrength: 1.0,
 };
 
+// Trace mode (Dominia-Temp boards).
+const TRACE_PLATE_STYLE = { fillColor: colors.action, fillOpacity: 0.32, fillEmissiveStrength: 1.0 };
+const TRACE_EDGE_STYLE = { lineColor: BONE, lineWidth: 1, lineOpacity: 0.35, lineEmissiveStrength: 1.0 };
+const TRACE_MINE_STYLE = {
+  lineColor: colors.lime,
+  lineWidth: 4,
+  lineCap: 'round',
+  lineJoin: 'miter',
+  lineEmissiveStrength: 1.0,
+};
+const TRACE_HEAD_HALO_STYLE = {
+  circleRadius: 12,
+  circleColor: colors.lime,
+  circleOpacity: 0.22,
+  circlePitchAlignment: 'map',
+  circleEmissiveStrength: 1.0,
+};
+const TRACE_HEAD_STYLE = {
+  circleRadius: 6.5,
+  circleColor: colors.lime,
+  circleStrokeColor: INK,
+  circleStrokeWidth: 1.5,
+  circlePitchAlignment: 'map',
+  circleEmissiveStrength: 1.0,
+};
+const TRACE_THEIRS_STYLE = {
+  lineColor: colors.enemy,
+  lineWidth: 3,
+  lineCap: 'round',
+  lineEmissiveStrength: 1.0,
+};
+const OPPONENT_INSET = 0.9; // fraction of the way from centre to perimeter
+const TRACE_OPP_HEAD_STYLE = {
+  circleRadius: 4.5,
+  circleColor: colors.enemy,
+  circleStrokeColor: INK,
+  circleStrokeWidth: 1,
+  circlePitchAlignment: 'map',
+  circleEmissiveStrength: 1.0,
+};
+
 function feature(geometry) {
   return { type: 'Feature', properties: {}, geometry };
 }
@@ -72,22 +122,54 @@ function frameBounds(geometry, coord) {
   return { ne: [maxLng, maxLat], sw: [minLng, minLat] };
 }
 
+// Crosshair glyph for the recenter tile.
+function RecenterGlyph({ size = 16, color = BONE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16">
+      <Circle cx="8" cy="8" r="4.5" stroke={color} strokeWidth="1.4" fill="none" />
+      <Circle cx="8" cy="8" r="1.4" fill={color} />
+      <Line x1="8" y1="0.5" x2="8" y2="3" stroke={color} strokeWidth="1.4" />
+      <Line x1="8" y1="13" x2="8" y2="15.5" stroke={color} strokeWidth="1.4" />
+      <Line x1="0.5" y1="8" x2="3" y2="8" stroke={color} strokeWidth="1.4" />
+      <Line x1="13" y1="8" x2="15.5" y2="8" stroke={color} strokeWidth="1.4" />
+    </Svg>
+  );
+}
+
 /**
  * @param {object}  props
  * @param {object}  props.geometry   Territory Polygon/MultiPolygon (route's territoryGeojson).
  * @param {number}  props.progress   0..1 walk fraction; values outside clamp.
  * @param {number}  [props.bottomInset]  Space the overlaid chrome takes at the bottom.
  * @param {number}  [props.topInset]     Space the overlaid header takes at the top.
+ * @param {boolean} [props.trace]        Dominia-Temp perimeter-trace drawing.
+ * @param {number|null} [props.opponentProgress]  0..1 opponent fraction (trace only); null hides it.
+ * @param {Function} [props.onPannedChange]  (panned: boolean) => void.
  */
-export default function ChallengeMap({ geometry, progress, topInset = 0, bottomInset = 0 }) {
+export default function ChallengeMap({
+  geometry,
+  progress,
+  topInset = 0,
+  bottomInset = 0,
+  trace = false,
+  opponentProgress = null,
+  onPannedChange,
+}) {
   const { t } = useTranslation();
   const cameraRef = useRef(null);
   const [coord, setCoord] = useState(null);
   const [panned, setPanned] = useState(false);
 
+  useEffect(() => {
+    onPannedChange?.(panned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panned]);
+
   // Foreground position for the player dot. ActiveClaim's background task owns
   // the walk's GPS; this watch is display-only and stops with the screen.
+  // Trace mode draws progress on the perimeter instead, so it needs no watch.
   useEffect(() => {
+    if (trace) return undefined;
     let sub = null;
     let cancelled = false;
     (async () => {
@@ -110,19 +192,42 @@ export default function ChallengeMap({ geometry, progress, topInset = 0, bottomI
       cancelled = true;
       if (sub) sub.remove();
     };
-  }, []);
+  }, [trace]);
 
-  // Fill geometry is recomputed only when the displayed percentage moves.
+  // Geometry is recomputed only when the displayed percentage moves.
   const pctStep = Math.round(Math.max(0, Math.min(1, Number(progress) || 0)) * 100);
+  const oppStep = opponentProgress == null
+    ? null
+    : Math.round(Math.max(0, Math.min(1, Number(opponentProgress) || 0)) * 100);
   const fillShape = useMemo(() => {
+    if (trace) return null;
     const g = challengeFill(geometry, pctStep / 100);
     return g ? feature(g) : null;
-  }, [geometry, pctStep]);
+  }, [geometry, pctStep, trace]);
   const outlineShape = useMemo(() => (geometry ? feature(geometry) : null), [geometry]);
   const playerShape = useMemo(
     () => (coord ? feature({ type: 'Point', coordinates: coord }) : null),
     [coord],
   );
+  const mine = useMemo(
+    () => (trace ? perimeterTrace(geometry, pctStep / 100) : null),
+    [trace, geometry, pctStep],
+  );
+  // The opponent's line runs just inside the player's: the trace is pulled
+  // a little toward the territory's centre so line and dot stay together.
+  const theirs = useMemo(() => {
+    if (!trace || oppStep == null || oppStep <= 0) return null;
+    const tr = perimeterTrace(geometry, oppStep / 100);
+    const b = geometryBounds(geometry);
+    if (!tr.line || !b) return tr;
+    const cx = (b[0][0] + b[1][0]) / 2;
+    const cy = (b[0][1] + b[1][1]) / 2;
+    const pull = ([x, y]) => [cx + (x - cx) * OPPONENT_INSET, cy + (y - cy) * OPPONENT_INSET];
+    return {
+      line: { type: 'LineString', coordinates: tr.line.coordinates.map(pull) },
+      head: pull(tr.head),
+    };
+  }, [trace, geometry, oppStep]);
 
   const padding = useMemo(() => ({
     paddingTop: FIT_PADDING + topInset,
@@ -131,8 +236,9 @@ export default function ChallengeMap({ geometry, progress, topInset = 0, bottomI
     paddingRight: FIT_PADDING,
   }), [topInset, bottomInset]);
 
+  const framedCoord = trace ? null : coord;
   const frame = useCallback((animated) => {
-    const b = frameBounds(geometry, coord);
+    const b = frameBounds(geometry, framedCoord);
     if (!b || !cameraRef.current) return;
     cameraRef.current.setCamera({
       bounds: { ne: b.ne, sw: b.sw },
@@ -140,7 +246,7 @@ export default function ChallengeMap({ geometry, progress, topInset = 0, bottomI
       animationDuration: animated ? FIT_DURATION_MS : 0,
       animationMode: animated ? 'easeTo' : 'none',
     });
-  }, [geometry, coord, padding]);
+  }, [geometry, framedCoord, padding]);
 
   // Keep the territory and the player in frame until the player takes the
   // camera; after a pan, only the recenter control brings it back.
@@ -189,14 +295,50 @@ export default function ChallengeMap({ geometry, progress, topInset = 0, bottomI
           </MapboxGL.ShapeSource>
         ) : null}
 
-        {outlineShape ? (
+        {outlineShape && trace ? (
+          <MapboxGL.ShapeSource id="challenge-outline" shape={outlineShape}>
+            <MapboxGL.FillLayer id="challenge-trace-plate" style={TRACE_PLATE_STYLE} />
+            <MapboxGL.LineLayer id="challenge-trace-edge" style={TRACE_EDGE_STYLE} />
+          </MapboxGL.ShapeSource>
+        ) : null}
+
+        {outlineShape && !trace ? (
           <MapboxGL.ShapeSource id="challenge-outline" shape={outlineShape}>
             <MapboxGL.LineLayer id="challenge-outline-casing" style={OUTLINE_CASING_STYLE} />
             <MapboxGL.LineLayer id="challenge-outline-line" style={OUTLINE_STYLE} />
           </MapboxGL.ShapeSource>
         ) : null}
 
-        {playerShape ? (
+        {theirs?.line ? (
+          <MapboxGL.ShapeSource id="challenge-trace-theirs" shape={feature(theirs.line)}>
+            <MapboxGL.LineLayer
+              id="challenge-trace-theirs-line"
+              style={TRACE_THEIRS_STYLE}
+            />
+          </MapboxGL.ShapeSource>
+        ) : null}
+        {theirs?.head && theirs.line ? (
+          <MapboxGL.ShapeSource id="challenge-trace-theirs-head" shape={feature({ type: 'Point', coordinates: theirs.head })}>
+            <MapboxGL.CircleLayer
+              id="challenge-trace-theirs-dot"
+              style={TRACE_OPP_HEAD_STYLE}
+            />
+          </MapboxGL.ShapeSource>
+        ) : null}
+
+        {mine?.line ? (
+          <MapboxGL.ShapeSource id="challenge-trace-mine" shape={feature(mine.line)}>
+            <MapboxGL.LineLayer id="challenge-trace-mine-line" style={TRACE_MINE_STYLE} />
+          </MapboxGL.ShapeSource>
+        ) : null}
+        {mine?.head ? (
+          <MapboxGL.ShapeSource id="challenge-trace-head" shape={feature({ type: 'Point', coordinates: mine.head })}>
+            <MapboxGL.CircleLayer id="challenge-trace-head-halo" style={TRACE_HEAD_HALO_STYLE} />
+            <MapboxGL.CircleLayer id="challenge-trace-head-dot" style={TRACE_HEAD_STYLE} />
+          </MapboxGL.ShapeSource>
+        ) : null}
+
+        {playerShape && !trace ? (
           <MapboxGL.ShapeSource id="challenge-player" shape={playerShape}>
             <MapboxGL.CircleLayer id="challenge-player-seat" style={PUCK_SEAT_STYLE} />
             <MapboxGL.CircleLayer id="challenge-player-core" style={PUCK_CORE_STYLE} />
@@ -204,7 +346,20 @@ export default function ChallengeMap({ geometry, progress, topInset = 0, bottomI
         ) : null}
       </MapboxGL.MapView>
 
-      {panned ? (
+      {trace ? (
+        <SlantTile
+          size={36}
+          square
+          tone="solid"
+          onPress={recenter}
+          accessibilityLabel={t('activeClaim.recenter', { defaultValue: 'Recenter map' })}
+          style={[styles.recenterTile, { top: topInset + 16 }]}
+        >
+          <RecenterGlyph />
+        </SlantTile>
+      ) : null}
+
+      {!trace && panned ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('activeClaim.recenter', { defaultValue: 'Recenter map' })}
@@ -246,4 +401,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  recenterTile: { position: 'absolute', right: 16 },
 });
