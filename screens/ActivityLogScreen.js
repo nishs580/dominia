@@ -21,8 +21,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import ActivityLogEvent, { HistoryRow } from '../components/ActivityLogEvent';
-import { BackLinkHeader } from '../components/SocialGlyphs';
-import { ScreenTitle, SlantButton } from '../components/ui';
+import { BackHeader, ScreenTitle, SlantButton } from '../components/ui';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
 import { buildHistoryRows } from '../lib/activityHistory';
 import { useFlag } from '../lib/flags';
@@ -124,9 +123,9 @@ export default function ActivityLogScreen() {
 
   const figmaHeader = (
     <>
-      <BackLinkHeader
+      <BackHeader
         label={t('activityLog.logBack', { defaultValue: 'Log' })}
-        backLabel={t('common.back', { defaultValue: 'Back' })}
+        accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
         bordered
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
       />

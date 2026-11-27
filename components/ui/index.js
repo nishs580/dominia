@@ -8,3 +8,4 @@ export { default as SlantTile } from './SlantTile';
 export { default as SlantTabs } from './SlantTabs';
 export { default as ScreenTitle } from './ScreenTitle';
 export { default as LinkText } from './LinkText';
+export { default as BackHeader } from './BackHeader';

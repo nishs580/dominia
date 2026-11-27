@@ -6,6 +6,9 @@
 //   selected  Dominia-blue border, stronger blue gradient
 //   danger    red border over a faint red tint
 //
+// `stroke` and `from` override the variant's border colour and gradient start
+// (the gold / bronze / silver leaderboard rows, the lime @mention chat row).
+//
 // Static by default; pass `onPress` to make the whole card a button.
 
 import React from 'react';
@@ -25,6 +28,8 @@ export default function CutCard({
   variant = 'default',
   padding = 16,
   cut = 8,
+  stroke,
+  from,
   onPress,
   disabled = false,
   style,
@@ -43,11 +48,11 @@ export default function CutCard({
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
         <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
-          <Stop offset="0" stopColor={v.from} />
+          <Stop offset="0" stopColor={from ?? v.from} />
           <Stop offset="1" stopColor={v.to} />
         </LinearGradient>
       </Defs>
-      <Polygon points={points} fill={`url(#${gradId})`} stroke={v.stroke} strokeWidth={1} />
+      <Polygon points={points} fill={`url(#${gradId})`} stroke={stroke ?? v.stroke} strokeWidth={1} />
     </Svg>
   );
 

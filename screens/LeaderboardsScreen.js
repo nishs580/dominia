@@ -39,15 +39,13 @@ import {
 } from '../lib/leaderboardView';
 import AllianceEmblem from '../components/AllianceEmblem';
 import {
-  BackLinkHeader,
   ChevronDownGlyph,
   CrownGlyph,
   PeopleGlyph,
   PersonGlyph,
   SearchGlyph,
-  ToneCutCard,
 } from '../components/SocialGlyphs';
-import { CutField, SlantButton, SlantTabs, SlantTile } from '../components/ui';
+import { BackHeader, CutCard, CutField, SlantButton, SlantTabs, SlantTile } from '../components/ui';
 import { parallelogramPoints } from '../lib/slantGeometry';
 import { colors, fonts } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
@@ -538,7 +536,8 @@ function EntryRow({ t, entry, scope }) {
   const tone = RANK_TONES[entry.isSelf && entry.key === 'self' ? 'self' : entry.tone] || RANK_TONES.neutral;
   return (
     <EntryPressable entry={entry} accessibilityLabel={entryLine(t, entry)} style={figma.rowWrap}>
-      <ToneCutCard
+      <CutCard
+        padding={0}
         stroke={tone.border}
         from={tone === RANK_TONES.self ? 'rgba(7,49,209,0.35)' : undefined}
         style={figma.rowCard}
@@ -559,7 +558,7 @@ function EntryRow({ t, entry, scope }) {
           <Text style={figma.rowValue} numberOfLines={1} maxFontSizeMultiplier={1.3}>{tc(t, entry.valueCopy)}</Text>
           <Text style={figma.rowSub} numberOfLines={1} maxFontSizeMultiplier={1.3}>{tc(t, entry.placeCopy)}</Text>
         </View>
-      </ToneCutCard>
+      </CutCard>
     </EntryPressable>
   );
 }
@@ -746,9 +745,9 @@ function FigmaLeaderboards() {
 
   return (
     <View style={styles.screen}>
-      <BackLinkHeader
+      <BackHeader
         label={t('leaderboards.figmaTitle', { defaultValue: 'Leaderboards' })}
-        backLabel={t('common.back', { defaultValue: 'Back' })}
+        accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
         right={(
           <SlantTile

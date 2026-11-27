@@ -54,14 +54,12 @@ import { useFlag } from '../lib/flags';
 import { supabase } from '../lib/supabase';
 import { chatAgo, chatSenderParts, defaultChatTab, mentionsName } from '../lib/chatSender';
 import { colors, fonts } from '../lib/theme';
-import { CutField, LinkText, SlantButton, SlantTabs, SlantTile } from '../components/ui';
+import { BackHeader, CutCard, CutField, LinkText, SlantButton, SlantTabs, SlantTile } from '../components/ui';
 import {
-  BackLinkHeader,
   GlobeGlyph,
   PeopleGlyph,
   PersonGlyph,
   SendGlyph,
-  ToneCutCard,
 } from '../components/SocialGlyphs';
 
 const MAX_CONTENT_LENGTH = 500;
@@ -610,9 +608,9 @@ export default function ChatScreen() {
       onTouchStart={tips.onTouchStart}
     >
       {figma ? (
-        <BackLinkHeader
+        <BackHeader
           label={t('chat.figmaTitle', { defaultValue: 'Chat' })}
-          backLabel={t('common.back', { defaultValue: 'Back' })}
+          accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
           onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
         />
       ) : (
@@ -785,7 +783,8 @@ function FigmaMessageRow({ row, t, parts, mentioned }) {
     </SlantTile>
   );
   return (
-    <ToneCutCard
+    <CutCard
+      padding={0}
       stroke={lime ? colors.lime : colors.surfaceLine}
       from={lime ? 'rgba(132,255,68,0.08)' : undefined}
       style={[figmaStyles.message, row._optimistic && styles.messageRowPending]}
@@ -816,7 +815,7 @@ function FigmaMessageRow({ row, t, parts, mentioned }) {
         </View>
         <Text style={[figmaStyles.content, lime && figmaStyles.contentLime]}>{row.content}</Text>
       </View>
-    </ToneCutCard>
+    </CutCard>
   );
 }
 
