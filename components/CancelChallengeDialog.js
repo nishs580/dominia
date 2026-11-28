@@ -65,7 +65,7 @@ export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfi
             <SlantButton
               label={keep}
               variant="primary"
-              size="md"
+              size="sm"
               trailingChevron={false}
               onPress={onKeep}
               style={styles.btn}
@@ -73,7 +73,7 @@ export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfi
             <SlantButton
               label={confirm}
               variant="ghost"
-              size="md"
+              size="sm"
               onPress={onConfirm}
               style={styles.btn}
             />
@@ -104,5 +104,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   row: { flexDirection: 'row', gap: 10 },
-  btn: { flex: 1 },
+  // Two buttons share the row: the small label size keeps "CONTINUE
+  // CHALLENGE" on one line at a readable size; Figma height kept.
+  btn: { flex: 1, minHeight: 48 },
 });
