@@ -57,8 +57,9 @@ export default function LinkText({
 
 const styles = StyleSheet.create({
   // No alignSelf here: the parent row (or a style prop) decides placement, so
-  // centred link rows on the auth screens stay centred.
-  base: {},
+  // centred link rows on the auth screens stay centred. Never shrink: a
+  // squeezed italic link wraps mid-word on Android ("SIGN" / "IN »").
+  base: { flexShrink: 0 },
   dim: {
     opacity: 0.6,
   },
