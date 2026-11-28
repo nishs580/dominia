@@ -2894,13 +2894,13 @@ export default function MapScreen() {
       fillOpacity: [
         'case',
         ['==', ['get', 'ownership'], 'unclaimed'], 0.06,
-        // Held ground is flooded but not sealed — the hatch still reads
-        // through, so a selected parcel stays part of the same board.
-        0.55,
+        // Dominia-Temp pop-up states: the selected parcel keeps a light
+        // tint and is carried by its glowing outline, not a flood fill.
+        figmaModeEarly ? 0.12 : 0.55,
       ],
       fillEmissiveStrength: 1.0,
     }),
-    [],
+    [figmaModeEarly],
   );
 
   // Soft bone halo rendered under the crisp outline for a glow / pop-out effect.
