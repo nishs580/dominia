@@ -232,3 +232,39 @@ export function InfluenceGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }) {
     </Svg>
   );
 }
+
+// Dominia-Temp tab bar (Figma Main screen): Missions target, Alliance shield,
+// Events calendar.
+export function TargetGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Circle cx="9" cy="9" r="6.75" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Circle cx="9" cy="9" r="2.6" stroke={color} strokeWidth={strokeWidth} fill="none" />
+    </Svg>
+  );
+}
+
+export function TabShieldGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Path
+        d="M9 1.8 L15 4.2 L15 8.6 C15 12.3 12.5 14.9 9 16.2 C5.5 14.9 3 12.3 3 8.6 L3 4.2 Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function CalendarGlyph({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18">
+      <Rect x="2.5" y="3.5" width="13" height="12" stroke={color} strokeWidth={strokeWidth} fill="none" />
+      <Line x1="2.5" y1="7.2" x2="15.5" y2="7.2" stroke={color} strokeWidth={strokeWidth} />
+      <Line x1="6" y1="1.8" x2="6" y2="5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Line x1="12" y1="1.8" x2="12" y2="5" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}

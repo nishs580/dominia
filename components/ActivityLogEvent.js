@@ -255,7 +255,10 @@ function TileGlyph({ icon, color }) {
 export function HistoryRow({ item }) {
   const { t } = useTranslation();
   const color = TONES[item.label.tone] || TONES.neutral;
-  const label = t(item.label.key, { defaultValue: item.label.defaultValue });
+  const raw = t(item.label.key, { defaultValue: item.label.defaultValue });
+  // Legacy stub copy is shouted ("TERRITORY DEVELOPED"); the Figma history
+  // rows are sentence case.
+  const label = raw === raw.toUpperCase() ? raw.charAt(0) + raw.slice(1).toLowerCase() : raw;
   const headline = item.headline || t('activityLog.territoryFallback', { defaultValue: 'Territory' });
   return (
     <CutCard

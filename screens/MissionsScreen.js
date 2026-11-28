@@ -26,6 +26,7 @@ import { useSvgId } from '../components/ui/shared';
 import { fetchChallengesToday } from '../lib/challengesTodayApi';
 import { getAllianceById, getMyAlliance } from '../lib/allianceApi';
 import { getMe } from '../lib/meApi';
+import { supabase } from '../lib/supabase';
 import { navigateTo } from '../lib/navigation';
 import * as activityProducer from '../lib/activity';
 import { formatDistance, useUnits } from '../lib/units';
@@ -105,11 +106,11 @@ function ProgressBar({ fraction, label }) {
 
 // Header row as on the map (board 16): the shared avatar / initials tile
 // (ProfileAvatarButton, restyled with the map chrome), Gold pill, level pill.
-function MissionsTopRow({ gold, level }) {
+function MissionsTopRow({ gold, level, name }) {
   const { t } = useTranslation();
   return (
     <View style={styles.topRow}>
-      <ProfileAvatarButton variant="slant" />
+      <ProfileAvatarButton variant="slant" name={name} />
       <View style={styles.pills}>
         <SlantTile
           size={36}
@@ -150,18 +151,26 @@ export default function MissionsScreen() {
   const tokenFn = useCallback(() => getTokenRef.current(), []);
 
   // ── Header: Gold and level from /me ─────────────────────────────────────
-  const [me, setMe] = useState({ gold: null, level: null });
+  const [me, setMe] = useState({ gold: null, level: null, name: '' });
   const loadMe = useCallback(async () => {
     const res = await getMe({ clerkGetToken: tokenFn });
     if (!res.ok) return;
     const p = res.data?.player ?? {};
     const gold = Number(p.gold);
     const level = Number(p.level);
+    // /me carries no gold; read it from the players row as the map does.
+    let goldValue = p.gold != null && Number.isFinite(gold) ? gold : null;
+    if (goldValue == null && userId) {
+      const { data } = await supabase.from('players').select('gold').eq('clerk_id', userId).maybeSingle();
+      const g = Number(data?.gold);
+      goldValue = data && Number.isFinite(g) ? g : data ? 0 : null;
+    }
     setMe({
-      gold: Number.isFinite(gold) ? gold : null,
+      gold: goldValue,
       level: Number.isFinite(level) ? level : null,
+      name: p.username ?? '',
     });
-  }, [tokenFn]);
+  }, [tokenFn, userId]);
   useFocusEffect(useCallback(() => { loadMe(); }, [loadMe]));
 
   // ── Today ───────────────────────────────────────────────────────────────
@@ -490,7 +499,7 @@ export default function MissionsScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.body, { paddingTop: insets.top + 12 }]}>
-        <MissionsTopRow gold={me.gold} level={me.level} />
+        <MissionsTopRow gold={me.gold} level={me.level} name={me.name} />
 
         <View style={styles.titleRow}>
           <Text

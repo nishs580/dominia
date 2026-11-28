@@ -55,6 +55,9 @@ import {
   AllianceGlyph,
   ProfileGlyph,
   BoardsGlyph,
+  TargetGlyph,
+  TabShieldGlyph,
+  CalendarGlyph,
 } from './components/ResourceGlyphs';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
@@ -151,11 +154,11 @@ function makeTabOptions(label, Icon) {
 const TAB_SCREENS = {
   Map: { component: MapScreen, labelKey: 'tabs.map', Icon: MapGlyph },
   Activity: { component: ActivityScreen, labelKey: 'tabs.activity', Icon: ActivityGlyph },
-  Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph },
+  Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph, FigmaIcon: TabShieldGlyph },
   Profile: { component: ProfileRoute, labelKey: 'tabs.profile', Icon: ProfileGlyph },
-  // Tab icons stay for now; DESIGN.md's no-icons rule is deferred (plan U9).
-  Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: ActivityGlyph },
-  Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: BoardsGlyph },
+  // Dominia-Temp tab icons (Figma Main screen): target, shield, calendar.
+  Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: TargetGlyph },
+  Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: CalendarGlyph },
 };
 
 // Root stack screens that only exist in one layout. With `legacy_tabs` off,
@@ -188,12 +191,12 @@ const TabNavigator = () => {
       }}
     >
       {tabsFor(legacyTabs).map((name) => {
-        const { component, labelKey, Icon } = TAB_SCREENS[name];
+        const { component, labelKey, Icon, FigmaIcon } = TAB_SCREENS[name];
         return (
           <Tab.Screen
             key={name}
             name={name}
-            options={makeTabOptions(t(labelKey), Icon)}
+            options={makeTabOptions(t(labelKey), (!legacyTabs && FigmaIcon) || Icon)}
             component={component}
           />
         );

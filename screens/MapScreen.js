@@ -2414,9 +2414,9 @@ export default function MapScreen() {
       // the Figma Main screen.
       fillOpacity: [
         'case',
-        ['==', ['get', 'ownership'], 'yours'], 0.22,
-        ['==', ['get', 'ownership'], 'alliance'], 0.24,
-        ['==', ['get', 'ownership'], 'enemy'], 0.24,
+        ['==', ['get', 'ownership'], 'yours'], 0.16,
+        ['==', ['get', 'ownership'], 'alliance'], 0.16,
+        ['==', ['get', 'ownership'], 'enemy'], 0.16,
         0,
       ],
       fillEmissiveStrength: 1.0,
@@ -3000,8 +3000,9 @@ export default function MapScreen() {
       streaks: streaksOn,
       territory_development: developmentOn,
       first_claim_objective: firstClaimObjectiveOn,
+      legacy_tabs: !figmaModeEarly,
     })),
-    [battleChipsOn, homeBasesOn, streaksOn, developmentOn, firstClaimObjectiveOn],
+    [battleChipsOn, homeBasesOn, streaksOn, developmentOn, firstClaimObjectiveOn, figmaModeEarly],
   );
 
   const recenter = () => {
@@ -3402,7 +3403,9 @@ export default function MapScreen() {
               not an object sitting on it. */}
           <MapboxGL.FillLayer id="territories-open-fill" filter={openFilter} style={openFillStyle} />
           <MapboxGL.FillLayer id="territories-fill" style={fillStyle} />
-          <MapboxGL.FillLayer id="territories-hatch" filter={claimedFilter} style={hatchStyle} />
+          {mapLayers.has('territories-hatch') ? (
+            <MapboxGL.FillLayer id="territories-hatch" filter={claimedFilter} style={hatchStyle} />
+          ) : null}
           {mapLayers.has('territories-d4-walls') ? (
             <MapboxGL.FillExtrusionLayer id="territories-d4-walls" filter={d4WallFilter} style={d4WallStyle} />
           ) : null}

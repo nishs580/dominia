@@ -43,7 +43,7 @@ export default function Accordion({ title, icon, meta, expanded, onToggle, child
       <Svg style={SHAPE_LAYER} width={box.w || 0} height={box.h || 0} pointerEvents="none">
         <Defs>
           <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor="rgba(3,20,90,0.55)" />
+            <Stop offset="0" stopColor={colors.actionDeep} stopOpacity={0.55} />
             <Stop offset="1" stopColor="#000000" />
           </LinearGradient>
         </Defs>

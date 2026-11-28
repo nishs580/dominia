@@ -995,7 +995,8 @@ function MemberContent({ myAlliance, playerId, roster, getToken, onRefreshAfterL
           <Text style={styles.tempSectionTitle} accessibilityRole="header">
             {t('allianceFigma.allianceMissions', { defaultValue: 'ALLIANCE MISSIONS' })}
           </Text>
-          <WeeklyTaskCard allianceId={allianceId} getToken={getToken} />
+          {/* Dominia-Temp board 23 case 4: the compact one-bar mission card. */}
+          <WeeklyTaskCard variant="mission" allianceId={allianceId} allianceName={myAlliance?.name} getToken={getToken} />
 
           <View style={styles.tempDivider} />
           <Text style={styles.tempSectionTitle} accessibilityRole="header">

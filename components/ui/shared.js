@@ -40,3 +40,11 @@ export function warnMissingLabel(component, hasText, accessibilityLabel) {
  * resolves against the parent's content box, so padding shrinks the shape.
  */
 export const SHAPE_LAYER = { position: 'absolute', top: 0, left: 0 };
+
+// Android's react-native-svg ignores the alpha of an rgba() stopColor, so a
+// faint tint renders as a solid plate. Split it into stopColor + stopOpacity.
+export function stopPaint(color) {
+  const m = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i.exec(String(color));
+  if (!m) return { stopColor: color, stopOpacity: 1 };
+  return { stopColor: `rgb(${m[1]},${m[2]},${m[3]})`, stopOpacity: Number(m[4]) };
+}
