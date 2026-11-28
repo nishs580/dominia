@@ -4,7 +4,7 @@
 //
 //   primary  #0731D1 fill, white label (SIGN IN »)
 //   outline  2pt white border, no fill (CONTINUE WITH GOOGLE)
-//   ghost    dark #1A1A1D fill, muted label (NOT YET, CANCEL CLAIM, LOCK)
+//   ghost    dark #1A1A1D fill, white label (NOT YET, CANCEL CLAIM, LOCK)
 //
 // `loading` keeps the label, swaps the "»" for a spinner, blocks presses and
 // reports busy. `disabled` blocks presses and dims (primary turns deep blue).
@@ -39,7 +39,7 @@ function paletteFor(variant, { disabled, pressed }) {
         fill: pressed ? '#232327' : colors.raised,
         stroke: null,
         strokeWidth: 0,
-        text: colors.muted2,
+        text: colors.white,
         opacity: disabled ? 0.45 : 1,
       };
     case 'primary':
@@ -114,7 +114,11 @@ export default function SlantButton({
                     { fontSize: dims.fontSize, letterSpacing: dims.letterSpacing, color: pal.text },
                   ]}
                   maxFontSizeMultiplier={1.4}
-                  numberOfLines={2}
+                  // One line, as in every Figma button: shrink rather than
+                  // wrap ("CONTINUE / CHALLENGE" in the cancel dialog).
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                 >
                   {label}
                 </Text>
@@ -157,6 +161,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
     includeFontPadding: false,
+    paddingRight: 2,
     flexShrink: 1,
   },
   chevron: {

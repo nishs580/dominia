@@ -623,6 +623,7 @@ export default function ActiveClaimScreen() {
     armExpiresAt = null,
     walkWindowMinutes = null,
     contestId,
+    contestExpiresAt = null,
     requiredWalkM: requiredWalkMParam,
     attackerAllianceId,
     role = 'attacker',
@@ -705,11 +706,14 @@ export default function ActiveClaimScreen() {
 
   // Claim-window countdown (claim mode only). One second tick — the GPS watch
   // already runs at 1s, so this adds no meaningful battery cost.
+  // A contest counts down to its own expiry (Figma challenge cases 3–4:
+  // TIME LEFT under the fill hint).
   const expiryMs = useMemo(() => {
-    if (mode !== 'claim' || !windowExpiresAt) return null;
-    const ms = new Date(windowExpiresAt).getTime();
+    const at = mode === 'claim' ? windowExpiresAt : mode === 'contest' ? contestExpiresAt : null;
+    if (!at) return null;
+    const ms = new Date(at).getTime();
     return Number.isFinite(ms) ? ms : null;
-  }, [mode, windowExpiresAt]);
+  }, [mode, windowExpiresAt, contestExpiresAt]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (expiryMs == null && armExpiryMs == null) return undefined;

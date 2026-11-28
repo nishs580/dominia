@@ -303,6 +303,7 @@ async function beginContest({ territory, name, getTokenRef, myPlayer, setMyPlaye
     territoryId: territory.id,
     territoryGeojson: territory?.geometry ?? null,
     contestId: env.contest_id,
+    contestExpiresAt: env.expires_at ?? null,
     requiredWalkM: env.required_walk_m,
     attackerAllianceId: env.attacker_alliance_id,
     playerId: myPlayer?.id,
