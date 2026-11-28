@@ -566,6 +566,20 @@ function runCalibrationWindow(now) {
   calibrationWindowStart = { steps: countedSessionSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
 }
 
+// Step tracking blocked (Health Connect / activity permission denied):
+// Dominia-Temp danger card with slanted actions.
+function HcBlockedCard({ flush = false, onBack }) {
+  const { t } = useTranslation();
+  return (
+    <CutCard variant="danger" padding={16} style={[styles.hcBlocked, flush && { marginTop: 0 }]}>
+      <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
+      <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
+      <SlantButton label={t('activeClaim.hcOpenSettings')} variant="primary" size="md" onPress={() => Linking.openSettings()} />
+      <SlantButton label={t('activeClaim.hcBack')} variant="ghost" size="md" onPress={onBack} />
+    </CutCard>
+  );
+}
+
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -1538,24 +1552,7 @@ export default function ActiveClaimScreen() {
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#traceFade)" />
           </Svg>
           {hcDenied ? (
-            <View style={[styles.hcBlocked, { marginTop: 0 }]}>
-              <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-              <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => Linking.openSettings()}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={exitClaim}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-              </Pressable>
-            </View>
+            <HcBlockedCard flush onBack={exitClaim} />
           ) : (
             <>
               <View style={styles.bannerZoneMap}>
@@ -1797,24 +1794,7 @@ export default function ActiveClaimScreen() {
               )}
             </View>
           ) : hcDenied ? (
-            <View style={[styles.hcBlocked, { marginTop: 0 }]}>
-              <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-              <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => Linking.openSettings()}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={exitClaim}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-              </Pressable>
-            </View>
+            <HcBlockedCard flush onBack={exitClaim} />
           ) : (
             <>
               <View style={styles.bannerZoneMap}>
@@ -1937,24 +1917,7 @@ export default function ActiveClaimScreen() {
       </View>
 
       {hcDenied ? (
-        <View style={styles.hcBlocked}>
-          <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-          <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => Linking.openSettings()}
-            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={exitClaim}
-            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-          </Pressable>
-        </View>
+        <HcBlockedCard onBack={exitClaim} />
       ) : (
       <>
       <View style={styles.ringWrap}>
@@ -2181,11 +2144,9 @@ const styles = StyleSheet.create({
   keepWalkingText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Health-Connect blocking state — the walk cannot count; say so and route out.
-  hcBlocked: { marginTop: 32, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
-  hcBlockedTitle: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlocked: { marginTop: 32, gap: 12 },
+  hcBlockedTitle: { fontFamily: 'IBMPlexSans_700Bold', color: '#E34234', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
   hcBlockedBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19 },
-  hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  hcBlockedBtnText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Map mode (plan U13): chrome laid over the live challenge map. The map's
   // fill is the one red element; panels are Ink 2 instruments.
