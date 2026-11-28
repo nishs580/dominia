@@ -1,7 +1,8 @@
-// Feature explainer card (Figma E2, F1, F2): a once-per-player modal card
-// with a lime top edge, a display title, body copy, optional detail rows and
-// footer, and a blue primary button. Used for "Missions type" on Missions and
-// the alliance explainers.
+// Feature explainer (Dominia-Temp board 17, "MISSIONS TYPE"): a once-per-player
+// bottom sheet over the dimmed screen. Blue-to-black sheet, centred Archivo
+// title, centred body, optional detail rows and footer, then SKIP beside a
+// slanted blue NEXT ». Used for "Missions type" on Missions and the alliance
+// explainers.
 //
 // Usage:
 //   <FeatureExplainer
@@ -10,24 +11,26 @@
 //     pages={[{
 //       title: 'MISSIONS TYPE',
 //       body: '...',
-//       icon: <AllianceGlyph />,               // optional, top-left (F1/F2)
-//       rows: [{ icon, title: 'MARCH', body: '...' }],   // optional (E2)
-//       footer: '...',                         // optional (E2)
+//       icon: <AllianceGlyph />,               // optional, top-left
+//       rows: [{ icon, title: 'MARCH', body: '...' }],   // optional
+//       footer: '...',                         // optional
 //     }]}
 //     reopen={infoTapCount}                    // bump to show it again
-//     placement="center"                       // or 'bottom'; default: one page
-//                                              // centred, several at the bottom
+//     placement="bottom"                       // default; 'center' floats a card
 //   />
 //
-// Buttons: the primary (blue) reads NEXT on every page but the last, which
-// reads GOT IT. Multi-page explainers add a SKIP text button and a "01 / 02"
-// counter top-right (F1/F2); a one-page explainer is GOT IT alone (E2).
-// It shows on first mount for a player who has not seen it. SKIP, or GOT IT,
-// closes it and marks it fired (lib/walkthroughFlags.js).
+// Buttons: the primary reads NEXT » on every page but the last, which reads
+// GOT IT. Multi-page explainers add SKIP and a "01 / 02" counter; a one-page
+// explainer is GOT IT alone. It shows on first mount for a player who has not
+// seen it. SKIP, GOT IT or the back gesture closes it and marks it fired
+// (lib/walkthroughFlags.js).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { SlantButton } from './ui';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { colors, fonts } from '../lib/theme';
 
@@ -35,8 +38,25 @@ function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
-export default function FeatureExplainer({ userId, name, pages, reopen = 0, onClose, placement }) {
+function SheetBackground() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="explainerSheet" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={colors.actionDeep} stopOpacity="0.95" />
+            <Stop offset="0.55" stopColor={colors.obsidian} stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#explainerSheet)" />
+      </Svg>
+    </View>
+  );
+}
+
+export default function FeatureExplainer({ userId, name, pages, reopen = 0, onClose, placement = 'bottom' }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [index, setIndex] = useState(0);
   const firstReopen = useRef(reopen);
@@ -67,7 +87,7 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
   const total = pages?.length ?? 0;
   const multi = total > 1;
   const isLast = index >= total - 1;
-  const where = placement ?? (multi ? 'bottom' : 'center');
+  const bottom = placement !== 'center';
 
   useEffect(() => {
     if (visible && page) {
@@ -96,8 +116,12 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
-      <View style={[styles.scrim, where === 'bottom' ? styles.scrimBottom : styles.scrimCenter]}>
-        <View style={styles.card} accessibilityViewIsModal>
+      <View style={[styles.scrim, bottom ? styles.scrimBottom : styles.scrimCenter]}>
+        <View
+          style={[styles.sheet, bottom ? { paddingBottom: Math.max(insets.bottom, 16) + 8 } : styles.card]}
+          accessibilityViewIsModal
+        >
+          <SheetBackground />
           {page.icon || multi ? (
             <View style={styles.headRow}>
               <View>{page.icon ?? null}</View>
@@ -119,7 +143,7 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
           <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
             {page.title}
           </Text>
-          {page.body ? <Text style={styles.body}>{page.body}</Text> : null}
+          {page.body ? <Text style={styles.body} maxFontSizeMultiplier={1.5}>{page.body}</Text> : null}
           {page.rows?.length ? (
             <View style={styles.rows}>
               {page.rows.map((row, i) => (
@@ -127,38 +151,38 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
                   <View style={styles.rowIcon}>{row.icon ?? null}</View>
                   <View style={styles.rowText}>
                     <Text style={styles.rowTitle} maxFontSizeMultiplier={1.3}>{row.title}</Text>
-                    <Text style={styles.rowBody}>{row.body}</Text>
+                    <Text style={styles.rowBody} maxFontSizeMultiplier={1.5}>{row.body}</Text>
                   </View>
                 </View>
               ))}
             </View>
           ) : null}
-          {page.footer ? <Text style={styles.footer}>{page.footer}</Text> : null}
+          {page.footer ? <Text style={styles.footer} maxFontSizeMultiplier={1.5}>{page.footer}</Text> : null}
           <View style={styles.actions}>
             {multi ? (
               <Pressable
                 onPress={close}
                 accessibilityRole="button"
                 accessibilityLabel={t('explainer.skipA11y', { defaultValue: 'Skip explanation' })}
-                style={({ pressed }) => [styles.btn, styles.btnSkip, pressed && styles.skipPressed]}
+                hitSlop={8}
+                style={({ pressed }) => [styles.skip, pressed && styles.skipPressed]}
               >
-                <Text style={styles.btnText} maxFontSizeMultiplier={1.3}>
+                <Text style={styles.skipText} maxFontSizeMultiplier={1.3}>
                   {t('explainer.skip', { defaultValue: 'SKIP' })}
                 </Text>
               </Pressable>
             ) : null}
-            <Pressable
+            <SlantButton
+              label={primaryLabel}
               onPress={next}
-              accessibilityRole="button"
+              variant="primary"
+              size="lg"
+              trailingChevron={!isLast}
               accessibilityLabel={isLast
                 ? t('explainer.gotItA11y', { defaultValue: 'Got it, close explanation' })
                 : t('explainer.nextA11y', { defaultValue: 'Next' })}
-              style={({ pressed }) => [styles.btn, styles.btnPrimary, multi && styles.btnPrimaryWide, pressed && styles.primaryPressed]}
-            >
-              <Text style={styles.btnText} maxFontSizeMultiplier={1.3}>
-                {primaryLabel}
-              </Text>
-            </Pressable>
+              style={styles.primary}
+            />
           </View>
         </View>
       </View>
@@ -169,19 +193,21 @@ export default function FeatureExplainer({ userId, name, pages, reopen = 0, onCl
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.82)', // Ink, dimmed — no blur
-    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.72)', // the screen stays visible, dimmed
   },
-  scrimCenter: { justifyContent: 'center' },
-  scrimBottom: { justifyContent: 'flex-end', paddingBottom: 88 },
+  scrimCenter: { justifyContent: 'center', padding: 24 },
+  scrimBottom: { justifyContent: 'flex-end' },
+  sheet: {
+    overflow: 'hidden',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceLine,
+  },
   card: {
-    backgroundColor: colors.ink2,
+    paddingBottom: 24,
     borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderTopWidth: 3,
-    borderTopColor: colors.lime, // Figma: Signal Lime top edge
-    borderRadius: 0,
-    padding: 24,
+    borderColor: colors.surfaceLine,
   },
   headRow: {
     flexDirection: 'row',
@@ -194,77 +220,75 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.6,
-    color: colors.slate2,
+    color: colors.muted2,
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 30,
-    color: colors.bone,
+    fontSize: 26,
     lineHeight: 32,
+    color: colors.white,
+    textAlign: 'center',
     textTransform: 'uppercase',
   },
   body: {
-    marginTop: 12,
+    marginTop: 10,
     fontFamily: fonts.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.bone2,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted2,
+    textAlign: 'center',
   },
-  rows: { marginTop: 8 },
+  rows: { marginTop: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.hairlineStrong,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.surfaceLine,
   },
   rowIcon: { width: 32 },
   rowText: { flex: 1 },
   rowTitle: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.6,
+    fontFamily: fonts.action,
+    fontSize: 15,
+    letterSpacing: 0.75,
     textTransform: 'uppercase',
-    color: colors.bone,
+    color: colors.white,
   },
   rowBody: {
     marginTop: 2,
     fontFamily: fonts.body,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.bone2,
+    color: colors.muted2,
   },
   footer: {
     marginTop: 12,
     fontFamily: fonts.body,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.bone2,
+    color: colors.muted2,
+    textAlign: 'center',
   },
   actions: {
     marginTop: 20,
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 12,
   },
-  btn: {
+  skip: {
     flex: 1,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 0,
-    paddingHorizontal: 16,
   },
-  // Figma F1/F2: SKIP is a bare text button beside the blue primary.
-  btnSkip: { backgroundColor: 'transparent' },
-  skipPressed: { backgroundColor: colors.ink3 },
-  btnPrimary: { backgroundColor: colors.action },
-  btnPrimaryWide: { flex: 2 },
-  primaryPressed: { backgroundColor: colors.actionPressed },
-  btnText: {
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    letterSpacing: 1.6,
+  skipPressed: { opacity: 0.6 },
+  skipText: {
+    fontFamily: fonts.action,
+    fontSize: 19,
+    letterSpacing: 0.95,
     textTransform: 'uppercase',
-    color: colors.bone,
+    color: colors.muted2,
   },
+  primary: { flex: 2 },
 });

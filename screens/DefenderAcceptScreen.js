@@ -10,18 +10,18 @@ import { useFlag } from '../lib/flags';
 import { defenceGoldGate } from '../lib/defendPopup';
 import { GoldGlyph } from '../components/ResourceGlyphs';
 
-const INK = '#101010';
-const INK_2 = '#1A1A1A';
-const BONE = '#F5F4EF';
-const SLATE = '#6C6C69';
-const SLATE_2 = '#A3A29F';
-const CLAIM = '#22D65E';
-const CLAIM_BUTTON = '#3155FF'; // Claim Red darkened for AA contrast under Bone button text
-const CLAIM_SOFT = 'rgba(34,214,94,0.14)';
-const ALLIANCE = '#3155FF';
-const ALLIANCE_SOFT = 'rgba(49,85,255,0.14)';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const INK_2 = '#0E0E10';
+const BONE = '#FDFDFD';
+const SLATE = 'rgba(253,253,253,0.30)';
+const SLATE_2 = 'rgba(253,253,253,0.62)';
+const CLAIM = '#84FF44';
+const CLAIM_BUTTON = '#0731D1'; // = colors.action (primary button blue)
+const CLAIM_SOFT = 'rgba(132,255,68,0.14)';
+const ALLIANCE = '#5B7BF5'; // = colors.alliance
+const ALLIANCE_SOFT = 'rgba(91,123,245,0.14)'; // = colors.allianceSoft
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 export default function DefenderAcceptScreen() {
   const { contestId } = useRoute().params ?? {};
@@ -400,24 +400,24 @@ const styles = StyleSheet.create({
     height: 60,
   },
   eyebrow: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.8,
     textAlign: 'center',
     marginBottom: 20,
   },
   territoryName: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 29,
     color: BONE,
     letterSpacing: -1,
     textAlign: 'center',
-    lineHeight: 38,
+    lineHeight: 30,
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   headline: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 22,
     color: BONE,
     letterSpacing: -0.5,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   errorMessage: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.4,
     color: SLATE_2,
@@ -443,19 +443,19 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     borderWidth: 1,
-    borderColor: '#C8FF3D',
+    borderColor: '#84FF44',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: '#C8FF3D',
+    color: '#84FF44',
     textTransform: 'uppercase',
   },
   tierSubtitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.4,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   attackerLine: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: BONE,
     letterSpacing: 0.4,
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     backgroundColor: HAIRLINE_STRONG,
   },
   progressText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE,
     letterSpacing: 1,
@@ -509,13 +509,13 @@ const styles = StyleSheet.create({
     borderLeftColor: HAIRLINE,
   },
   previewRowLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
   },
   previewRowDistance: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 16,
     color: BONE,
     letterSpacing: -0.5,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   stoneToggleMarker: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 18,
     color: SLATE_2,
   },
@@ -541,13 +541,13 @@ const styles = StyleSheet.create({
     color: ALLIANCE,
   },
   stoneToggleLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
   },
   stoneToggleHelper: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE_2,
     letterSpacing: 1.2,
@@ -574,15 +574,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   feeShortfall: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE_2,
     textAlign: 'center',
   },
   submitErrorText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#E8432B',
+    color: '#E34234',
     letterSpacing: 0.4,
     textAlign: 'center',
     marginBottom: 12,
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaPrimaryText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     color: BONE,
     letterSpacing: 1.8,
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaSecondaryText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.6,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   terminalSubline: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE,
     letterSpacing: 0.4,

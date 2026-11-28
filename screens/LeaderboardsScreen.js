@@ -1,14 +1,13 @@
 // Screen: LeaderboardsScreen — Power, Territory, Battles boards (players + alliances)
-// Surface: Ink #101010 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
+// Surface: Ink #000000 background. M2 Phase 1: state, strips, 4-state branches, placeholder rows.
 // Typography: Geist Mono 500 11px labels, Instrument Sans 500 14px names — mirrors ActivityLogScreen patterns.
 // Brand rule applied: text-only header with hairline-strong; strips always visible; retry is sole CTA on error.
 //
 // legacy_tabs ON (default): the Power / Territory / Battles board above, unchanged.
-// legacy_tabs OFF: the Figma layout (plan U17; G6/G7 parity in plan
-// 2026-11-27 U13) — TERRITORIES | DISTANCE tab, city + season label with the
-// SOLO / ALLIANCE toggle, numbered top-three podium, list, and a pinned
-// "Your position" row from the response's `self`. View logic lives in
-// lib/leaderboardView.js.
+// legacy_tabs OFF: the Dominia-Temp layout (board 39, plan 2026-11-28 U11) —
+// Territories / Distance dropdown, SOLO / ALLIANCE tabs, name search, podium,
+// ranked rows and a pinned YOUR POSITION row from the response's `self`.
+// View logic lives in lib/leaderboardView.js.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,9 +25,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { getLeaderboard, parseLeaderboard } from '../lib/leaderboardApi';
+import { getLeaderboard, parseLeaderboard, shouldRetryWithoutQuery } from '../lib/leaderboardApi';
 import { useFlag } from '../lib/flags';
 import { useUnits } from '../lib/units';
+import Svg, { Polygon } from 'react-native-svg';
 import {
   SCOPES,
   DEFAULT_BOARD,
@@ -36,10 +36,17 @@ import {
   apiParamsFor,
   boardTabs,
   buildLeaderboardView,
-  seasonLabel,
 } from '../lib/leaderboardView';
 import AllianceEmblem from '../components/AllianceEmblem';
-import BackTitleHeader from '../components/BackTitleHeader';
+import {
+  ChevronDownGlyph,
+  CrownGlyph,
+  PeopleGlyph,
+  PersonGlyph,
+  SearchGlyph,
+} from '../components/SocialGlyphs';
+import { BackHeader, CutCard, CutField, SlantButton, SlantTabs, SlantTile } from '../components/ui';
+import { parallelogramPoints } from '../lib/slantGeometry';
 import { colors, fonts } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 import { supabase } from '../lib/supabase';
@@ -272,7 +279,7 @@ function LegacyLeaderboards() {
     if (loading && rows.length === 0) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#6C6C69" />
+          <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
@@ -326,8 +333,8 @@ function LegacyLeaderboards() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F5F4EF"
-            colors={['#F5F4EF']}
+            tintColor="#FDFDFD"
+            colors={['#FDFDFD']}
           />
         }
       />
@@ -395,11 +402,21 @@ function LegacyLeaderboards() {
   );
 }
 
-// ─── Figma layout (legacy_tabs OFF) ───────────────────────────────────────
-// G6 / G7 (plan 2026-11-27 U13): back arrow + LEADERBOARDS, a TERRITORIES |
-// DISTANCE segmented tab, "{CITY} · THIS SEASON" beside the SOLO / ALLIANCE
-// toggle, numbered podium blocks with a lime #1, "04" rows with the value on
-// the right, and the pinned YOUR POSITION row built from `self`.
+// ─── Dominia-Temp layout (legacy_tabs OFF) ───────────────────────────────
+// Board 39 (plan 2026-11-28 U11): "‹ Leaderboards" with a Territories /
+// Distance dropdown chip, SOLO / ALLIANCE slanted tabs, a Search chip that
+// opens a name field, a three-tile podium (3rd · 1st · 2nd), cut-corner rows
+// with gold / bronze / silver rank tiles, and the pinned YOUR POSITION row
+// built from `self`.
+
+// Rank tile fills (board 39): 1st gold, 2nd bronze, 3rd silver.
+const RANK_TONES = {
+  gold: { fill: '#F5B700', text: colors.obsidian, border: 'rgba(245,183,0,0.55)' },
+  bronze: { fill: '#D9772B', text: colors.obsidian, border: 'rgba(217,119,43,0.55)' },
+  silver: { fill: '#E6E6E6', text: colors.obsidian, border: 'rgba(230,230,230,0.55)' },
+  neutral: { fill: colors.raised, text: colors.white, border: colors.surfaceLine },
+  self: { fill: colors.actionDeep, text: colors.white, border: colors.action },
+};
 
 function tc(t, copy) {
   if (!copy) return '';
@@ -412,25 +429,23 @@ function entryName(t, entry) {
 }
 
 function entryLine(t, entry) {
-  return [entryName(t, entry), tc(t, entry.tag), tc(t, entry.valueCopy), tc(t, entry.placeCopy)]
+  return [entry.rankLabel, entryName(t, entry), tc(t, entry.kind), tc(t, entry.valueCopy), tc(t, entry.placeCopy)]
     .filter((part) => part)
     .join(' · ');
 }
 
-function EntryMark({ entry, scope, size }) {
+// Avatar or emblem inside a slanted tile: the player's photo when there is
+// one, else the person glyph; an alliance's emblem.
+function EntryMark({ entry, scope, size, color = colors.white }) {
   if (scope === 'alliance') {
-    return <AllianceEmblem emblem={entry.emblem} size={size} />;
+    return <AllianceEmblem emblem={entry.emblem} size={Math.round(size * 0.62)} />;
   }
   const thumb = avatarThumb(entry.avatarUrl, size);
-  const box = { width: size, height: size };
   if (thumb) {
-    return <Image source={{ uri: thumb }} style={[figma.avatar, box]} />;
+    const s = Math.round(size * 0.7);
+    return <Image source={{ uri: thumb }} style={{ width: s, height: s }} />;
   }
-  return (
-    <View style={[figma.avatar, figma.avatarPlaceholder, box]}>
-      <Text style={figma.avatarInitials}>{avatarInitials(entry.name || '')}</Text>
-    </View>
-  );
+  return <PersonGlyph size={Math.round(size * 0.5)} color={color} />;
 }
 
 // Player entries open the public profile; alliance entries do not navigate.
@@ -448,7 +463,7 @@ function EntryPressable({ entry, style, accessibilityLabel, children }) {
             avatarUrl: entry.avatarUrl,
           })
         }
-        style={({ pressed }) => [style, pressed && { opacity: 0.6 }]}
+        style={({ pressed }) => [style, pressed && { opacity: 0.7 }]}
       >
         {children}
       </Pressable>
@@ -461,72 +476,89 @@ function EntryPressable({ entry, style, accessibilityLabel, children }) {
   );
 }
 
-// "21" in bone + " TERR." / " KM" muted.
-function ValueText({ t, parts, style }) {
-  if (!parts) return null;
-  const unit = tc(t, parts.unit);
+// A parallelogram with a fill and an outline (podium tiles).
+function SlantFrame({ width, height, fill, stroke, children }) {
   return (
-    <Text style={style} numberOfLines={1}>
-      <Text style={figma.valueNumber}>{parts.number}</Text>
-      {unit ? <Text style={figma.valueUnit}>{` ${unit}`}</Text> : null}
-    </Text>
-  );
-}
-
-const PODIUM_BLOCK = { 1: 126, 2: 94, 3: 70 };
-
-function Podium({ t, entries, scope }) {
-  return (
-    <View style={figma.podium}>
-      {entries.map((entry) => {
-        const first = entry.slot === 1;
-        return (
-          <EntryPressable
-            key={entry.key}
-            entry={entry}
-            accessibilityLabel={entryLine(t, entry)}
-            style={figma.podiumCol}
-          >
-            <View style={[figma.podiumMarkWrap, entry.isSelf && figma.podiumMarkSelf]}>
-              <EntryMark entry={entry} scope={scope} size={first ? 52 : 44} />
-            </View>
-            <Text style={[figma.podiumName, entry.isSelf && figma.selfText]} numberOfLines={1}>
-              {entryName(t, entry)}
-            </Text>
-            <ValueText t={t} parts={entry.valueParts} style={figma.podiumValue} />
-            <View
-              style={[
-                figma.podiumBlock,
-                first && figma.podiumBlockFirst,
-                { height: PODIUM_BLOCK[entry.slot] || 70 },
-              ]}
-            >
-              <Text style={[figma.podiumNum, first && figma.podiumNumFirst]} maxFontSizeMultiplier={1.1}>
-                {entry.slot}
-              </Text>
-            </View>
-          </EntryPressable>
-        );
-      })}
+    <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+        <Polygon points={parallelogramPoints(width, height, 14, 1)} fill={fill} stroke={stroke} strokeWidth={2} />
+      </Svg>
+      {children}
     </View>
   );
 }
 
-function EntryRow({ t, entry, scope, pinned }) {
-  const self = entry.isSelf || pinned;
-  const name = pinned && entry.youCopy ? tc(t, entry.youCopy) : entryName(t, entry);
+function PodiumSlot({ t, entry, scope }) {
+  const first = entry.slot === 1;
+  const tone = RANK_TONES[entry.tone] || RANK_TONES.neutral;
+  const w = first ? 64 : 48;
+  const h = first ? 72 : 54;
   return (
-    <EntryPressable
-      entry={entry}
-      accessibilityLabel={entryLine(t, entry)}
-      style={[figma.row, self && figma.rowSelf, pinned && figma.rowPinned]}
-    >
-      <Text style={[figma.rowRank, self && figma.rowRankSelf]} maxFontSizeMultiplier={1.2}>
-        {entry.rankLabel}
+    <EntryPressable entry={entry} accessibilityLabel={entryLine(t, entry)} style={figma.podiumCol}>
+      <View style={figma.crownSlot}>{first ? <CrownGlyph size={18} color={RANK_TONES.gold.fill} /> : null}</View>
+      <View>
+        <SlantFrame
+          width={w}
+          height={h}
+          fill={first ? colors.action : colors.raised}
+          stroke={first ? RANK_TONES.gold.fill : tone.fill}
+        >
+          <EntryMark entry={entry} scope={scope} size={first ? 44 : 34} />
+        </SlantFrame>
+        <View style={[figma.podiumBadge, { backgroundColor: tone.fill }]}>
+          <Text style={[figma.podiumBadgeText, { color: tone.text }]} maxFontSizeMultiplier={1.1}>
+            {entry.slot}
+          </Text>
+        </View>
+      </View>
+      <Text style={[figma.podiumName, first && figma.podiumNameFirst]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+        {entryName(t, entry)}
       </Text>
-      <EntryMark entry={entry} scope={scope} size={36} />
-      <Text style={figma.rowName} numberOfLines={2}>{name}</Text>
-      <ValueText t={t} parts={entry.valueParts} style={figma.rowValue} />
+      <Text style={figma.podiumKind} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+        {tc(t, entry.kind)}
+      </Text>
+    </EntryPressable>
+  );
+}
+
+function Podium({ t, entries, scope }) {
+  if (!entries.length) return null;
+  return (
+    <View style={figma.podium}>
+      {entries.map((entry) => (
+        <PodiumSlot key={entry.key} t={t} entry={entry} scope={scope} />
+      ))}
+    </View>
+  );
+}
+
+function EntryRow({ t, entry, scope }) {
+  const tone = RANK_TONES[entry.isSelf && entry.key === 'self' ? 'self' : entry.tone] || RANK_TONES.neutral;
+  return (
+    <EntryPressable entry={entry} accessibilityLabel={entryLine(t, entry)} style={figma.rowWrap}>
+      <CutCard
+        padding={0}
+        stroke={tone.border}
+        from={tone === RANK_TONES.self ? 'rgba(7,49,209,0.35)' : undefined}
+        style={figma.rowCard}
+      >
+        <View style={[figma.rankTile, { backgroundColor: tone.fill }]}>
+          <Text style={[figma.rankText, { color: tone.text }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+            {entry.rankLabel}
+          </Text>
+        </View>
+        <SlantTile size={30} square tone="raised" style={figma.rowMark}>
+          <EntryMark entry={entry} scope={scope} size={30} />
+        </SlantTile>
+        <View style={figma.rowText}>
+          <Text style={figma.rowName} numberOfLines={1} maxFontSizeMultiplier={1.3}>{entryName(t, entry)}</Text>
+          <Text style={figma.rowSub} numberOfLines={1} maxFontSizeMultiplier={1.3}>{tc(t, entry.kind)}</Text>
+        </View>
+        <View style={figma.rowRight}>
+          <Text style={figma.rowValue} numberOfLines={1} maxFontSizeMultiplier={1.3}>{tc(t, entry.valueCopy)}</Text>
+          <Text style={figma.rowSub} numberOfLines={1} maxFontSizeMultiplier={1.3}>{tc(t, entry.placeCopy)}</Text>
+        </View>
+      </CutCard>
     </EntryPressable>
   );
 }
@@ -546,9 +578,12 @@ function FigmaLeaderboards() {
   const [status, setStatus] = useState('loading');
   const [data, setData] = useState({ rows: [], self: null });
   const [refreshing, setRefreshing] = useState(false);
-  const [viewer, setViewer] = useState({ username: null, city: null });
+  const [selfName, setSelfName] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
-  // The caller's name (pinned "You · name") and home city (season label).
+  // The caller's name: the pinned solo row's fallback when `self` has none.
   useEffect(() => {
     if (!userId) return undefined;
     let cancelled = false;
@@ -556,12 +591,12 @@ function FigmaLeaderboards() {
       try {
         const { data: row } = await supabase
           .from('players')
-          .select('username, home_city')
+          .select('username')
           .eq('clerk_id', userId)
           .maybeSingle();
-        if (!cancelled && row) setViewer({ username: row.username ?? null, city: row.home_city ?? null });
+        if (!cancelled && row) setSelfName(row.username ?? null);
       } catch (_) {
-        /* the label falls back to THIS SEASON and the pinned row to "You" */
+        /* the pinned row falls back to "You" */
       }
     })();
     return () => {
@@ -569,28 +604,47 @@ function FigmaLeaderboards() {
     };
   }, [userId]);
 
+  // Search (plan U13): the trimmed query is debounced 300ms and sent as `q`,
+  // so the server filters the full ranking and keeps true ranks. The view
+  // still filters rows by name, which covers a backend that ignores `q`; a
+  // 400 (old backend rejecting the param) retries once without it.
+  const [searchQ, setSearchQ] = useState('');
+  useEffect(() => {
+    const next = query.trim();
+    const id = setTimeout(() => setSearchQ(next), 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
   const fetchBoard = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
     const { board: apiBoard, subject } = apiParamsFor(board, scope);
-    const result = await getLeaderboard({
-      clerkGetToken: () => getTokenRef.current(),
-      board: apiBoard,
-      subject,
-    });
+    const clerkGetToken = () => getTokenRef.current();
+    let result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject, q: searchQ });
+    // The q the returned rows were filtered by ('' after the no-q retry).
+    let rowsQ = searchQ;
+    if (shouldRetryWithoutQuery(result, searchQ)) {
+      result = await getLeaderboard({ clerkGetToken, board: apiBoard, subject });
+      rowsQ = '';
+    }
     if (seq !== fetchSeqRef.current) return;
     if (result.ok) {
-      setData(parseLeaderboard(result.data));
+      setData({ ...parseLeaderboard(result.data), q: rowsQ });
       setStatus('ready');
     } else {
       setData({ rows: [], self: null });
       setStatus('error');
     }
     setRefreshing(false);
-  }, [board, scope]);
+  }, [board, scope, searchQ]);
 
+  // A board or scope switch clears the list; a search change keeps the
+  // current rows on screen while the filtered set loads.
   useEffect(() => {
     setStatus('loading');
     setData({ rows: [], self: null });
+  }, [board, scope]);
+
+  useEffect(() => {
     fetchBoard();
   }, [fetchBoard]);
 
@@ -604,33 +658,51 @@ function FigmaLeaderboards() {
     fetchBoard();
   }, [fetchBoard]);
 
+  // Closing search drops the server-filtered rows at once and shows loading
+  // until the unfiltered board arrives, so they never fill the podium.
+  const closeSearch = useCallback(() => {
+    setQuery('');
+    setSearchOpen(false);
+    if (searchQ) {
+      setSearchQ('');
+      setStatus('loading');
+      setData({ rows: [], self: null });
+    }
+  }, [searchQ]);
+
+  // While the rows on screen still belong to a non-empty q (e.g. the field
+  // was just cleared and the debounce has not fired), stay in search mode.
+  const viewQuery = query.trim() !== '' ? query : (data.q || '');
   const view = useMemo(
     () => buildLeaderboardView({
-      status, rows: data.rows, self: data.self, board, scope, unit, selfName: viewer.username,
+      status, rows: data.rows, self: data.self, board, scope, unit, selfName, query: viewQuery,
     }),
-    [status, data, board, scope, unit, viewer.username],
+    [status, data, board, scope, unit, selfName, viewQuery],
   );
+
+  const boardOptions = boardTabs(board);
+  const activeBoardLabel = tc(t, boardOptions.find((b) => b.active)?.label);
+
+  const scopeTabs = SCOPES.map((s) => ({
+    key: s.key,
+    label: t(s.labelKey, { defaultValue: s.labelDefault }),
+    icon: ({ color }) => (s.key === 'alliance' ? <PeopleGlyph size={16} color={color} /> : <PersonGlyph size={16} color={color} />),
+  }));
 
   const renderBody = () => {
     if (view.state === 'loading') {
       return (
         <View style={styles.centered} accessibilityLiveRegion="polite">
-          <ActivityIndicator size="large" color={colors.slate} />
+          <ActivityIndicator size="large" color={colors.muted} />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       );
     }
     if (view.state === 'error') {
       return (
-        <View style={styles.centered}>
+        <View style={[styles.centered, figma.centeredPad]}>
           <Text style={styles.errorBody}>{t('leaderboards.failedToLoad')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={retry}
-            style={({ pressed }) => [figma.retryBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
-          </Pressable>
+          <SlantButton label={t('common.retry')} onPress={retry} size="md" style={figma.retryBtn} />
         </View>
       );
     }
@@ -642,87 +714,134 @@ function FigmaLeaderboards() {
         </View>
       );
     }
+    if (view.state === 'noResults') {
+      return (
+        <View style={styles.centered} accessibilityLiveRegion="polite">
+          <Text style={styles.emptyBody}>{t('leaderboards.noResults', { defaultValue: 'No results' })}</Text>
+        </View>
+      );
+    }
     return (
       <FlatList
         data={view.list}
         keyExtractor={(item) => item.key}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={<Podium t={t} entries={view.podium} scope={scope} />}
         renderItem={({ item }) => <EntryRow t={t} entry={item} scope={scope} />}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={figma.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.bone}
-            colors={[colors.bone]}
+            tintColor={colors.white}
+            colors={[colors.white]}
           />
         }
       />
     );
   };
 
-  const showPinned = view.pinned != null && (view.state === 'ready' || view.state === 'empty');
+  const showPinned = view.pinned != null && view.state !== 'loading' && view.state !== 'error';
 
   return (
     <View style={styles.screen}>
-      <BackTitleHeader
-        title={t('leaderboards.figmaTitle', { defaultValue: 'Leaderboards' })}
+      <BackHeader
+        label={t('leaderboards.figmaTitle', { defaultValue: 'Leaderboards' })}
+        accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+        right={(
+          <SlantTile
+            size={32}
+            tone="raised"
+            onPress={() => setMenuOpen((v) => !v)}
+            accessibilityLabel={t('leaderboards.boardPicker', { defaultValue: 'Board: {{board}}', board: activeBoardLabel })}
+            style={figma.dropChip}
+          >
+            <Text style={figma.chipText} maxFontSizeMultiplier={1.3}>{activeBoardLabel}</Text>
+            <ChevronDownGlyph size={14} />
+          </SlantTile>
+        )}
       />
 
-      <View style={figma.boardTabs} accessibilityRole="tablist">
-        {boardTabs(board).map((tab) => (
+      {menuOpen ? (
+        <>
           <Pressable
-            key={tab.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab.active }}
-            onPress={() => {
-              if (!tab.active) setBoard(tab.key);
-            }}
-            style={({ pressed }) => [figma.boardTab, tab.active && figma.boardTabActive, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={[figma.boardTabText, tab.active && figma.boardTabTextActive]} maxFontSizeMultiplier={1.3}>
-              {tc(t, tab.label)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={figma.seasonRow}>
-        <Text style={figma.seasonLabel} numberOfLines={2} maxFontSizeMultiplier={1.3}>
-          {tc(t, seasonLabel(viewer.city))}
-        </Text>
-        <View style={figma.toggle} accessibilityRole="tablist">
-          {SCOPES.map((s) => {
-            const selected = s.key === scope;
-            return (
+            style={[StyleSheet.absoluteFill, { zIndex: 3 }]}
+            onPress={() => setMenuOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close', { defaultValue: 'Close' })}
+          />
+          <View style={[figma.menu, { top: insets.top + 52 }]} accessibilityRole="menu">
+            {boardOptions.map((opt) => (
               <Pressable
-                key={s.key}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                hitSlop={{ top: 6, bottom: 6 }}
+                key={opt.key}
+                accessibilityRole="menuitem"
+                accessibilityState={{ selected: opt.active }}
                 onPress={() => {
-                  if (s.key !== scope) setScope(s.key);
+                  setMenuOpen(false);
+                  if (!opt.active) setBoard(opt.key);
                 }}
-                style={({ pressed }) => [figma.toggleCell, selected && figma.toggleCellActive, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [figma.menuItem, opt.active && figma.menuItemActive, pressed && { opacity: 0.7 }]}
               >
-                <Text style={[figma.toggleText, selected && figma.toggleTextActive]} maxFontSizeMultiplier={1.3}>
-                  {t(s.labelKey, { defaultValue: s.labelDefault })}
+                <Text style={[figma.menuText, opt.active && figma.menuTextActive]} maxFontSizeMultiplier={1.3}>
+                  {tc(t, opt.label)}
                 </Text>
               </Pressable>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      <SlantTabs tabs={scopeTabs} value={scope} onChange={setScope} height={40} style={figma.tabs} />
+
+      <View style={figma.searchRow}>
+        {searchOpen ? (
+          <CutField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('leaderboards.search', { defaultValue: 'Search' })}
+            accessibilityLabel={t('leaderboards.search', { defaultValue: 'Search' })}
+            autoFocus
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            keyboardAppearance="dark"
+            containerStyle={figma.searchField}
+            rightAccessory={(
+              <Pressable
+                onPress={closeSearch}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t('leaderboards.closeSearch', { defaultValue: 'Close search' })}
+              >
+                <Text style={figma.searchClose}>✕</Text>
+              </Pressable>
+            )}
+          />
+        ) : (
+          <SlantTile
+            size={30}
+            tone="raised"
+            onPress={() => setSearchOpen(true)}
+            accessibilityLabel={t('leaderboards.search', { defaultValue: 'Search' })}
+            style={figma.searchChip}
+          >
+            <SearchGlyph size={12} />
+            <Text style={figma.chipText} maxFontSizeMultiplier={1.3}>
+              {t('leaderboards.search', { defaultValue: 'Search' })}
+            </Text>
+          </SlantTile>
+        )}
       </View>
 
       <View style={{ flex: 1 }}>{renderBody()}</View>
 
       {showPinned ? (
         <View style={[figma.pinned, { paddingBottom: insets.bottom + 8 }]}>
-          <Text style={figma.pinnedLabel}>
+          <Text style={figma.pinnedLabel} maxFontSizeMultiplier={1.3}>
             {t('leaderboards.yourPosition', { defaultValue: 'YOUR POSITION' })}
           </Text>
-          <EntryRow t={t} entry={view.pinned} scope={scope} pinned />
+          <EntryRow t={t} entry={view.pinned} scope={scope} />
         </View>
       ) : null}
     </View>
@@ -735,227 +854,186 @@ export default function LeaderboardsScreen() {
 }
 
 const figma = StyleSheet.create({
-  // TERRITORIES | DISTANCE: the active half is raised with a lime underline.
-  boardTabs: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 4,
+  dropChip: {
+    gap: 6,
+  },
+  chipText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.white,
+  },
+  menu: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 4,
+    minWidth: 150,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    borderColor: colors.surfaceLine,
   },
-  boardTab: {
-    flex: 1,
+  menuItem: {
     minHeight: 44,
-    alignItems: 'center',
+    paddingHorizontal: 14,
     justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
   },
-  boardTabActive: {
-    backgroundColor: colors.raised,
-    borderBottomColor: colors.lime,
+  menuItemActive: {
+    backgroundColor: colors.actionDeep,
   },
-  boardTabText: {
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: colors.muted,
-  },
-  boardTabTextActive: {
-    fontFamily: fonts.monoMedium,
-    color: colors.bone,
-  },
-  seasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 14,
-    gap: 12,
-  },
-  seasonLabel: {
-    flex: 1,
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    lineHeight: 15,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+  menuText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
     color: colors.muted2,
   },
-  toggle: {
+  menuTextActive: {
+    color: colors.white,
+  },
+  tabs: {
+    marginHorizontal: 16,
+    marginTop: 4,
+  },
+  searchRow: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+    justifyContent: 'flex-end',
+    marginHorizontal: 16,
+    marginTop: 10,
   },
-  toggleCell: {
-    minWidth: 72,
-    minHeight: 32,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  searchChip: {
+    gap: 6,
   },
-  // SOLO / ALLIANCE: the active option is a Signal Lime fill.
-  toggleCellActive: {
-    backgroundColor: colors.lime,
+  searchField: {
+    flex: 1,
   },
-  toggleText: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    color: colors.muted,
+  searchClose: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.muted2,
+    paddingHorizontal: 4,
   },
-  toggleTextActive: {
-    fontFamily: fonts.monoMedium,
-    color: colors.onLime,
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   podium: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 12,
   },
   podiumCol: {
     flex: 1,
+    maxWidth: 120,
     alignItems: 'center',
   },
-  podiumMarkWrap: {
-    padding: 2,
-    borderWidth: 1,
-    borderColor: 'transparent',
+  crownSlot: {
+    height: 22,
+    justifyContent: 'flex-end',
+    marginBottom: 2,
   },
-  podiumMarkSelf: {
-    borderColor: colors.lime,
+  podiumBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  podiumBadgeText: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
   },
   podiumName: {
     marginTop: 8,
-    fontFamily: fonts.body,
+    fontFamily: fonts.bodyMedium,
     fontSize: 13,
-    color: colors.bone,
+    color: colors.white,
   },
-  selfText: {
-    color: colors.lime,
+  podiumNameFirst: {
+    fontSize: 15,
   },
-  podiumValue: {
-    marginTop: 2,
-    fontFamily: fonts.mono,
+  podiumKind: {
+    fontFamily: fonts.body,
     fontSize: 11,
     color: colors.muted2,
   },
-  podiumBlock: {
-    alignSelf: 'stretch',
-    marginTop: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.raised,
-    borderTopWidth: 2,
-    borderTopColor: colors.hairlineStrong,
+  rowWrap: {
+    marginBottom: 8,
   },
-  podiumBlockFirst: {
-    backgroundColor: 'rgba(200,255,61,0.16)',
-    borderTopColor: colors.lime,
-  },
-  podiumNum: {
-    fontFamily: fonts.monoLight,
-    fontSize: 48,
-    color: colors.muted2,
-  },
-  podiumNumFirst: {
-    color: colors.lime,
-  },
-  avatar: {
-    backgroundColor: colors.ink2,
-    borderWidth: 2,
-    borderColor: colors.self,
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 11,
-    color: colors.bone2,
-    textTransform: 'uppercase',
-  },
-  row: {
+  rowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    minHeight: 52,
+    paddingVertical: 8,
+    paddingLeft: 10,
+    paddingRight: 14,
   },
-  rowSelf: {
-    backgroundColor: colors.limeSoft,
+  rankTile: {
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  rowPinned: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.lime,
-    borderBottomWidth: 0,
+  rankText: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
   },
-  rowRank: {
-    width: 44,
-    fontFamily: fonts.monoLight,
-    fontSize: 22,
-    color: colors.muted2,
+  rowMark: {
+    marginLeft: 10,
   },
-  rowRankSelf: {
-    color: colors.lime,
+  rowText: {
+    flex: 1,
+    paddingHorizontal: 10,
   },
   rowName: {
-    flex: 1,
-    paddingHorizontal: 12,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.white,
+  },
+  rowSub: {
     fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.bone,
+    fontSize: 11,
+    color: colors.muted2,
+    textAlign: 'left',
+  },
+  rowRight: {
+    alignItems: 'flex-end',
   },
   rowValue: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.bodyMedium,
     fontSize: 13,
-  },
-  valueNumber: {
-    fontFamily: fonts.mono,
-    color: colors.bone,
-  },
-  valueUnit: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    color: colors.muted,
+    color: colors.white,
   },
   pinned: {
     paddingHorizontal: 16,
-    backgroundColor: colors.ink,
-    borderTopWidth: 1,
-    borderTopColor: colors.hairlineStrong,
+    paddingTop: 10,
+    backgroundColor: colors.obsidian,
   },
   pinnedLabel: {
-    paddingTop: 12,
-    paddingBottom: 6,
+    paddingBottom: 8,
+    textAlign: 'center',
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
-    color: colors.lime,
+    color: colors.white,
+  },
+  centeredPad: {
+    paddingHorizontal: 24,
   },
   retryBtn: {
-    backgroundColor: colors.claimButton,
-    minHeight: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
     marginTop: 16,
+    alignSelf: 'center',
   },
 });
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
   },
   centered: {
     flex: 1,
@@ -963,43 +1041,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   retryBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 16,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   emptyLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   emptyBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#E4E3DE',
+    color: 'rgba(253,253,253,0.85)',
     marginTop: 8,
   },
   header: {
@@ -1008,20 +1086,20 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 4,
   },
   hairline: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.08)',
+    backgroundColor: 'rgba(253,253,253,0.08)',
   },
   boardStrip: {
     flexDirection: 'row',
@@ -1038,25 +1116,25 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   tabLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   tabLabelActive: {
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   tabMarkBoard: {
     height: 1,
     width: 32,
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
     marginTop: 6,
   },
   tabMarkSubject: {
     height: 1,
     width: 28,
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
     marginTop: 4,
   },
   row: {
@@ -1065,58 +1143,58 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.08)',
+    borderBottomColor: 'rgba(253,253,253,0.08)',
   },
   rowSelf: {
-    backgroundColor: 'rgba(200,255,61,0.14)',
+    backgroundColor: 'rgba(132,255,68,0.14)',
   },
   rankCell: {
     width: 32,
   },
   rankText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   avatar: {
     width: 28,
     height: 28,
     borderRadius: 4,
     marginLeft: 8,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 0.4,
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   nameCell: {
     flex: 1,
     paddingLeft: 12,
   },
   nameText: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   subtitleText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 2,
   },
   valueText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
 });

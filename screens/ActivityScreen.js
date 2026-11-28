@@ -1778,7 +1778,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   commanderLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
@@ -1786,21 +1786,21 @@ const styles = StyleSheet.create({
   },
   commanderName: {
     marginTop: 0,
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     // Was 36. The headline no longer has to out-shout the progression block
     // below it, and it names the day rather than the tab.
-    fontSize: 30,
+    fontSize: 24,
     color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
   },
   rankLine: {
     marginTop: 6,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
   },
   rankTitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: colors.bone,
   },
@@ -2148,7 +2148,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   attackDayTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: colors.bone,
     textTransform: 'uppercase',
@@ -2650,7 +2650,7 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     width: '100%',
-    backgroundColor: 'rgba(245,244,239,0.28)',
+    backgroundColor: 'rgba(253,253,253,0.28)',
   },
   chartBarCleared: {
     backgroundColor: colors.bone2,

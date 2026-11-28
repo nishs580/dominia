@@ -1,6 +1,6 @@
-// City intro (Updated UX A7): the city on a full-bleed still map, and a bottom
-// panel with "YOUR CITY · {CITY} MAP", the city as the title, "Let’s start
-// your journey from {City}." and CONTINUE. A step inside FigmaOnboardingScreen.
+// City intro (Dominia-Temp core-loop board): "<CITY> MAP", a lime-tinted
+// "Let's start your journey from <City>", a still map preview with a red pin
+// and a slanted city label, and NEXT ». A step inside FigmaOnboardingScreen.
 //
 // With home_bases off the home pin was already saved silently (rounded to
 // about 1 km) when this step opened; the city name comes from the server's
@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { Camera, MapView, MarkerView, setAccessToken } from '@rnmapbox/maps';
 import { colors, fonts } from '../lib/theme';
 import StaticMapBackdrop from '../components/StaticMapBackdrop';
+import Svg, { Circle, Path, Polygon } from 'react-native-svg';
+import { SlantButton } from '../components/ui';
 
 setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
@@ -43,6 +45,37 @@ function PrimaryButton({ label, onPress, disabled }) {
     >
       <Text style={styles.nextText}>{label}</Text>
     </Pressable>
+  );
+}
+
+const LIME_TINT = 'rgba(132,255,68,0.7)';
+
+// Red drop pin with a white dot, tip at the bottom centre.
+function MapPin() {
+  return (
+    <Svg width={30} height={40} viewBox="0 0 30 40">
+      <Path d="M15 39C15 39 2 23.5 2 14a13 13 0 0 1 26 0c0 9.5-13 25-13 25z" fill={colors.danger} />
+      <Circle cx={15} cy={14} r={5} fill={colors.white} />
+    </Svg>
+  );
+}
+
+// White slanted chip under the pin with the city name in black caps.
+function CityChip({ label }) {
+  const [w, setW] = useState(0);
+  const h = 26;
+  const slant = 6;
+  return (
+    <View style={styles.chip} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      {w > 0 ? (
+        <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
+          <Polygon points={`${slant},0 ${w},0 ${w - slant},${h} 0,${h}`} fill={colors.white} />
+        </Svg>
+      ) : null}
+      <Text style={styles.chipText} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -123,84 +156,89 @@ export default function CityIntroScreen({
   const city = homeCity || t('cityIntro.yourCity', { defaultValue: 'Your city' });
 
   return (
-    <View style={styles.full}>
-      {pin ? <StaticMapBackdrop centre={pin} zoom={12} /> : <View style={styles.mapPlaceholder} />}
-      <View style={styles.mapScrim} pointerEvents="none" />
-      {!pin ? <ActivityIndicator color={colors.white} style={styles.mapLoading} /> : null}
+    <View style={[styles.screen, styles.centred, padding]}>
+      <Text style={styles.cityTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={2}>
+        {saving
+          ? t('cityIntro.locating', { defaultValue: 'Locating…' })
+          : t('cityIntro.title', { city, defaultValue: '{{city}} Map' })}
+      </Text>
+      <Text style={styles.journey} maxFontSizeMultiplier={1.4}>
+        {t('cityIntro.journey', { city, defaultValue: 'Let’s start your journey from {{city}}' })}
+      </Text>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + 24 }]}>
-        <Text style={styles.eyebrow}>
-          {saving
-            ? t('cityIntro.locating', { defaultValue: 'Locating…' })
-            : t('cityIntro.eyebrow', { city, defaultValue: 'Your city · {{city}} map' })}
-        </Text>
-        <Text style={styles.cityTitle} accessibilityRole="header" maxFontSizeMultiplier={1.2} numberOfLines={2}>
-          {city}
-        </Text>
-        <Text style={styles.panelBody}>
-          {t('cityIntro.body', { city, defaultValue: 'Let’s start your journey from {{city}}.' })}
-        </Text>
-
-        {usedFallback ? (
-          <Text style={styles.note}>
-            {t('cityIntro.locationOff', {
-              defaultValue: 'Location is off, so you start from the city centre. You can play from anywhere.',
-            })}
-          </Text>
-        ) : null}
-        {pinStatus === 'failed' ? (
-          <View style={styles.failRow}>
-            <Text style={[styles.note, styles.failText]}>
-              {t('cityIntro.saveFailed', { defaultValue: "Couldn't save your home city." })}
-            </Text>
-            <Pressable accessibilityRole="button" onPress={onRetryPin} hitSlop={8} style={styles.retry}>
-              <Text style={styles.retryText}>{t('common.retry')}</Text>
-            </Pressable>
+      <View style={styles.preview} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        {pin ? <StaticMapBackdrop centre={pin} zoom={13} /> : <View style={styles.mapPlaceholder} />}
+        {pin ? (
+          <View style={styles.pinWrap} pointerEvents="none">
+            <MapPin />
+            <CityChip label={city} />
           </View>
-        ) : null}
-        {claimNote ? <Text style={styles.note}>{claimNote}</Text> : null}
-        {finishError ? <Text style={styles.note}>{t('onboarding.saveFailedBody')}</Text> : null}
-
-        <PrimaryButton
-          label={t('cityIntro.continue', { defaultValue: 'Continue' })}
-          onPress={onNext}
-          disabled={saving || finishing}
-        />
+        ) : (
+          <ActivityIndicator color={colors.white} style={styles.mapLoading} />
+        )}
       </View>
+
+      {usedFallback ? (
+        <Text style={styles.note}>
+          {t('cityIntro.locationOff', {
+            defaultValue: 'Location is off, so you start from the city centre. You can play from anywhere.',
+          })}
+        </Text>
+      ) : null}
+      {pinStatus === 'failed' ? (
+        <View style={styles.failRow}>
+          <Text style={[styles.note, styles.failText]}>
+            {t('cityIntro.saveFailed', { defaultValue: "Couldn't save your home city." })}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={onRetryPin} hitSlop={8} style={styles.retry}>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {claimNote ? <Text style={styles.note}>{claimNote}</Text> : null}
+      {finishError ? <Text style={styles.note}>{t('onboarding.saveFailedBody')}</Text> : null}
+
+      <SlantButton
+        label={t('cityIntro.next', { defaultValue: 'NEXT' })}
+        onPress={onNext}
+        disabled={saving}
+        loading={finishing}
+        style={styles.nextSlant}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.ink, paddingHorizontal: 24 },
-  // Updated UX A7: full-bleed map + bottom panel.
-  full: { flex: 1, backgroundColor: colors.obsidian, justifyContent: 'flex-end' },
-  mapPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.surface },
-  mapScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,16,16,0.25)' },
-  panel: {
-    backgroundColor: colors.obsidian,
-    borderTopWidth: 1,
-    borderTopColor: colors.hairline,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-  },
-  eyebrow: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.lime,
-    textTransform: 'uppercase',
-  },
+  screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 20 },
+  centred: { justifyContent: 'center' },
   cityTitle: {
     fontFamily: fonts.display,
-    fontSize: 52,
-    lineHeight: 54,
-    letterSpacing: -1,
+    fontSize: 32,
+    lineHeight: 36,
     color: colors.white,
     textTransform: 'uppercase',
-    marginTop: 12,
   },
-  panelBody: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2, marginTop: 12, marginBottom: 16 },
+  journey: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: LIME_TINT, marginTop: 8, marginBottom: 20 },
+  preview: {
+    height: 270,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceLine,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  mapPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.surface },
+  pinWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingBottom: 10 },
+  chip: { minHeight: 26, paddingHorizontal: 14, justifyContent: 'center', marginTop: 4 },
+  chipText: {
+    fontFamily: fonts.action,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    color: colors.obsidian,
+    textTransform: 'uppercase',
+  },
+  nextSlant: { marginTop: 4 },
   kicker: {
     fontFamily: fonts.mono,
     fontSize: 11,
@@ -211,7 +249,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 26,
     letterSpacing: -0.9,
     color: colors.bone,
     textTransform: 'uppercase',
@@ -235,7 +273,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.slate2,
     textTransform: 'uppercase',
-    backgroundColor: 'rgba(16,16,16,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },

@@ -1,112 +1,82 @@
-// The five tutorial cards on the map (Updated UX A9–A13): a lime icon and a
-// grey "01 / 05" counter, the title and body, five progress dashes, then
-// SKIP + NEXT on cards 1–4 and BACK + START PLAYING on the last card.
-// Card order and walkthrough names live in lib/onboardingFlow TUTORIAL_CARDS.
-// Rendered by OnboardingTutorialLifecycle inside its Modal.
+// The five core-loop cards over the map (Dominia-Temp core-loop boards): a
+// bottom sheet with a dark-blue gradient, a lime display title, the body, and
+// SKIP (muted) + NEXT » on every card. SKIP or NEXT on the last card ends the
+// deck. Card order and walkthrough names live in lib/onboardingFlow
+// TUTORIAL_CARDS. Rendered by OnboardingTutorialLifecycle inside its Modal.
 
 import React, { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
+import { SlantButton } from './ui';
 import { TUTORIAL_CARDS } from '../lib/onboardingFlow';
 import { colors, fonts } from '../lib/theme';
 
-// English defaults (Updated UX copy); locales carry the translations under
-// tutorialCards.*.
+// English defaults (board copy). Titles and the territories body keep their
+// existing keys; bodies whose copy changed use `<id>.text`.
 const COPY = {
   territories: {
     title: 'WHAT ARE TERRITORIES?',
+    bodyKey: 'body',
     body: 'Territories are areas that players can claim by walking around their perimeter, from anywhere in the world.',
   },
   howToStart: {
     title: 'HOW TO START?',
+    bodyKey: 'text',
     body:
-      'Tap a territory on the map to see its challenge: the steps required and the time limit. Start with Gold, finish the challenge, and it’s yours.',
+      'Click on a territory on the map to view its challenge details, including the steps required and time limit. Start the challenge with gold or iron and complete the challenge to claim the territory.',
   },
   claiming: {
     title: 'CLAIMING TERRITORY',
+    bodyKey: 'text',
     body:
-      'Walk the required steps within the time limit to claim the territory. If you don’t make it, the territory stays unclaimed.',
+      'Walk the required number of steps within the given time limit to claim the territory as your own. If you fail to do so, the territory will remain unclaimed.',
   },
   attackDefend: {
     title: 'ATTACK OR DEFEND',
+    bodyKey: 'text',
     body:
-      'Attack other players’ territories with Gold to make them yours, and defend your own by out-walking anyone who attacks.',
+      'You can attack other player’s territories and make it as your own using Gold and also defend your territory from others attack by bypassing them in the challenge',
   },
   endGoal: {
     title: 'END GOAL',
-    body: 'Claim the most territories before the season ends to top the leaderboard and earn Gold.',
+    bodyKey: 'text',
+    body: 'Claim the most territories before the season ends to top the leaderboard and earn gold.',
   },
 };
 
 export function tutorialCardCopy(t, id) {
+  const c = COPY[id];
   return {
-    title: t(`tutorialCards.${id}.title`, { defaultValue: COPY[id].title }),
-    body: t(`tutorialCards.${id}.body`, { defaultValue: COPY[id].body }),
+    title: t(`tutorialCards.${id}.title`, { defaultValue: c.title }),
+    body: t(`tutorialCards.${id}.${c.bodyKey}`, { defaultValue: c.body }),
   };
 }
 
-// Line icons in Signal Lime, one per card: pin, target, flag, sword, trophy.
-function CardIcon({ id, size = 24 }) {
-  const stroke = { stroke: colors.lime, strokeWidth: 2, fill: 'none', strokeLinecap: 'square', strokeLinejoin: 'miter' };
-  let shape;
-  switch (id) {
-    case 'territories':
-      shape = (
-        <>
-          <Path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z" {...stroke} />
-          <Circle cx="12" cy="9" r="2.5" {...stroke} />
-        </>
-      );
-      break;
-    case 'howToStart':
-      shape = (
-        <>
-          <Circle cx="12" cy="12" r="9" {...stroke} />
-          <Circle cx="12" cy="12" r="4.5" {...stroke} />
-        </>
-      );
-      break;
-    case 'claiming':
-      shape = <Path d="M6 21V3h12l-3 4.5 3 4.5H6" {...stroke} />;
-      break;
-    case 'attackDefend':
-      shape = (
-        <>
-          <Path d="M20 4l-9.5 9.5M20 4h-4M20 4v4" {...stroke} />
-          <Path d="M8 12l4 4M5 19l3.5-3.5M4 20l1-1" {...stroke} />
-        </>
-      );
-      break;
-    case 'endGoal':
-    default:
-      shape = (
-        <>
-          <Path d="M7 4h10v5a5 5 0 0 1-10 0V4z" {...stroke} />
-          <Path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 14v4M8 20h8" {...stroke} />
-        </>
-      );
-      break;
-  }
+function PanelBackground() {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
-      {shape}
-    </Svg>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="coreLoopPanel" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={colors.actionDeep} stopOpacity="1" />
+            <Stop offset="1" stopColor="#01040F" stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#coreLoopPanel)" />
+      </Svg>
+    </View>
   );
 }
 
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-export default function TutorialCards({ index, onNext, onSkip, onBack }) {
+export default function TutorialCards({ index, onNext, onSkip }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const safeIndex = TUTORIAL_CARDS[index] ? index : 0;
   const card = TUTORIAL_CARDS[safeIndex];
   const { title, body } = tutorialCardCopy(t, card.id);
   const total = TUTORIAL_CARDS.length;
-  const isLast = safeIndex === total - 1;
-  const counter = `${pad2(safeIndex + 1)} / ${pad2(total)}`;
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility?.(`${title}. ${body}`);
@@ -114,45 +84,26 @@ export default function TutorialCards({ index, onNext, onSkip, onBack }) {
 
   return (
     <View style={styles.scrim}>
-      <View style={styles.card} accessibilityViewIsModal>
-        <View style={styles.headRow}>
-          <CardIcon id={card.id} />
-          <Text style={styles.counter} accessibilityLabel={`${safeIndex + 1} / ${total}`}>
-            {counter}
-          </Text>
-        </View>
+      <View
+        style={[styles.panel, { paddingBottom: insets.bottom + 20 }]}
+        accessibilityViewIsModal
+        accessibilityLabel={`${safeIndex + 1} / ${total}`}
+      >
+        <PanelBackground />
         <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
           {title}
         </Text>
-        <Text style={styles.body}>{body}</Text>
-
-        <View style={styles.dashes} importantForAccessibility="no-hide-descendants">
-          {TUTORIAL_CARDS.map((c, i) => (
-            <View key={c.id} style={[styles.dash, i === safeIndex && styles.dashActive]} />
-          ))}
-        </View>
+        <Text style={styles.body} maxFontSizeMultiplier={1.4}>
+          {body}
+        </Text>
 
         <View style={styles.actions}>
-          {isLast ? (
-            <Pressable accessibilityRole="button" onPress={onBack} style={styles.ghost} hitSlop={8}>
-              <Text style={styles.ghostText}>{t('tutorialCards.back', { defaultValue: 'BACK' })}</Text>
-            </Pressable>
-          ) : (
-            <Pressable accessibilityRole="button" onPress={onSkip} style={styles.ghost} hitSlop={8}>
-              <Text style={styles.ghostText}>{t('tutorialCards.skip', { defaultValue: 'SKIP' })}</Text>
-            </Pressable>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            onPress={onNext}
-            style={({ pressed }) => [styles.next, pressed && styles.pressed]}
-          >
-            <Text style={styles.nextText}>
-              {isLast
-                ? t('tutorialCards.startPlaying', { defaultValue: 'START PLAYING' })
-                : t('tutorialCards.next', { defaultValue: 'NEXT' })}
+          <Pressable accessibilityRole="button" onPress={onSkip} style={styles.skip} hitSlop={8}>
+            <Text style={styles.skipText} maxFontSizeMultiplier={1.3}>
+              {t('tutorialCards.skip', { defaultValue: 'SKIP' })}
             </Text>
           </Pressable>
+          <SlantButton label={t('tutorialCards.next', { defaultValue: 'NEXT' })} onPress={onNext} style={styles.next} />
         </View>
       </View>
     </View>
@@ -160,44 +111,31 @@ export default function TutorialCards({ index, onNext, onSkip, onBack }) {
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.6)',
-    justifyContent: 'flex-end',
-    padding: 16,
-    paddingBottom: 96,
+  scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'flex-end' },
+  panel: {
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(7,49,209,0.45)',
+    overflow: 'hidden',
   },
-  card: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 3,
-    borderTopColor: colors.lime,
-    padding: 24,
-  },
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  counter: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.6, color: colors.muted },
   title: {
     fontFamily: fonts.display,
-    fontSize: 34,
-    lineHeight: 36,
-    color: colors.white,
+    fontSize: 24,
+    lineHeight: 28,
+    color: colors.lime,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    textAlign: 'center',
   },
-  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.muted2 },
-  dashes: { flexDirection: 'row', gap: 6, marginTop: 16 },
-  dash: { width: 8, height: 3, backgroundColor: colors.raised },
-  dashActive: { width: 22, backgroundColor: colors.lime },
-  actions: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 12 },
-  ghost: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 24 },
-  ghostText: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.8, color: colors.white2, textTransform: 'uppercase' },
-  next: {
-    flex: 1,
-    backgroundColor: colors.action,
-    minHeight: 48,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.muted2, textAlign: 'center', marginTop: 12 },
+  actions: { flexDirection: 'row', alignItems: 'center', marginTop: 24, gap: 16 },
+  skip: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16 },
+  skipText: {
+    fontFamily: fonts.action,
+    fontSize: 17,
+    letterSpacing: 0.8,
+    color: colors.muted2,
+    textTransform: 'uppercase',
   },
-  nextText: { fontFamily: fonts.monoMedium, fontSize: 13, letterSpacing: 1.8, color: colors.white, textTransform: 'uppercase' },
-  pressed: { backgroundColor: colors.actionPressed },
+  next: { flex: 1 },
 });

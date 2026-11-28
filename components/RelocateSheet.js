@@ -191,7 +191,7 @@ export default function RelocateSheet({
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
     zIndex: 50,
     elevation: 50,
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.selfSoft,
     borderWidth: 1,
-    borderColor: 'rgba(34,214,94,0.4)',
+    borderColor: 'rgba(132,255,68,0.4)',
   },
   rowText: {
     flex: 1,

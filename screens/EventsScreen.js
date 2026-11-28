@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   headline: {
     marginTop: 14,
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 26,
     textTransform: 'uppercase',
     color: colors.bone,
     textAlign: 'center',

@@ -9,7 +9,9 @@
     "save": "Сохранить",
     "done": "Готово",
     "continue": "Продолжить",
-    "territoryFallback": "Территория"
+    "territoryFallback": "Территория",
+    "showPassword": "Показать пароль",
+    "hidePassword": "Скрыть пароль"
   },
   "tabs": {
     "map": "КАРТА",

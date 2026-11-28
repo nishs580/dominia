@@ -29,23 +29,23 @@ import {
 import { influenceToDisplay } from '../lib/formulas';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
-const INK = '#101010';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const INK = '#000000';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 // Display copy (label/spend/earn) lives in locales under wallet.resources.<key>.
 // Influence is stored fixed-point ×10; format renders it in display units.
 const RESOURCES = [
-  { key: 'iron', Glyph: IronGlyph, glyphColor: '#F5F4EF' },
-  { key: 'stone', Glyph: StoneGlyph, glyphColor: '#F5F4EF' },
-  { key: 'gold', Glyph: GoldGlyph, glyphColor: '#F5F4EF' },
-  { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#F5F4EF' },
+  { key: 'iron', Glyph: IronGlyph, glyphColor: '#FDFDFD' },
+  { key: 'stone', Glyph: StoneGlyph, glyphColor: '#FDFDFD' },
+  { key: 'gold', Glyph: GoldGlyph, glyphColor: '#FDFDFD' },
+  { key: 'morale', Glyph: MoraleGlyph, glyphColor: '#FDFDFD' },
   {
     key: 'influence',
     Glyph: InfluenceGlyph,
-    glyphColor: '#F5F4EF',
+    glyphColor: '#FDFDFD',
     format: (fixedPoint) => influenceToDisplay(fixedPoint).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
   },
 ];
@@ -319,21 +319,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   backBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
-    color: '#C8FF3D',
+    color: '#84FF44',
     letterSpacing: 1.4,
   },
   headerLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
   },
   headerTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 29,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
@@ -355,19 +355,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
   errorBanner: {
     marginTop: 8,
     padding: 12,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderWidth: 1,
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   donateArrow: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     color: BONE,
     letterSpacing: 1.4,
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   modalSheet: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0E0E10',
     borderTopWidth: 1,
     borderTopColor: HAIRLINE_STRONG,
     paddingHorizontal: 20,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: BONE,
     letterSpacing: 1.6,
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modalBalance: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
     letterSpacing: 1.4,
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 13,
     color: BONE,
     letterSpacing: 1.2,
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   modalDonateBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: BONE,
     letterSpacing: 1.4,
@@ -463,15 +463,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalDonateAllBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     color: BONE,
     letterSpacing: 1.4,
   },
   modalDonateError: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 12,
-    color: '#E8432B',
+    color: '#E34234',
     marginTop: 8,
   },
   sectionDivider: {
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     paddingHorizontal: 8,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
@@ -509,25 +509,25 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   resourceLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     color: SLATE2,
   },
   resourceSpend: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 12,
     color: BONE,
     opacity: 0.7,
   },
   resourceEarn: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 11,
     color: SLATE2,
   },
   resourceBalance: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 28,
     color: BONE,
     letterSpacing: -0.02,

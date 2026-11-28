@@ -66,24 +66,24 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: 'rgba(245,244,239,0.16)',
+    borderColor: 'rgba(253,253,253,0.16)',
     borderRadius: 0,
     padding: 24,
     alignItems: 'flex-start',
   },
   title: {
-    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 22,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   body: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: 'rgba(245,244,239,0.7)',
+    color: 'rgba(253,253,253,0.7)',
     marginBottom: 24,
   },
   dismiss: {
@@ -92,9 +92,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   dismissText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 12,
     letterSpacing: 1.6,
-    color: '#C8FF3D',
+    color: '#84FF44',
   },
 });

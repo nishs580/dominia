@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   },
 
   rewardValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 32,
     lineHeight: 34,
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   },
 
   rewardLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -579,19 +579,19 @@ const styles = StyleSheet.create({
   },
 
   territory: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+    fontFamily: 'Archivo_900Black_Italic',
     color: BONE,
-    fontSize: 28,
+    fontSize: 22,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     textAlign: 'center',
-    lineHeight: 32,
+    lineHeight: 26,
   },
 
   // Bone — the claim-red silhouette above is the ceremony's semantic red;
   // the CTA below is the screen's one red accent.
   territoryCaption: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: BONE,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   },
 
   securingLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   securingProgress: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: BONE,
     fontSize: 11,
     letterSpacing: 0.8,
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
   },
 
   message: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     marginTop: 8,
     color: SLATE2,
     fontSize: 13,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   errorMessage: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     color: BONE,
     fontSize: 15,
     lineHeight: 22,
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   },
 
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 12,
     letterSpacing: 1.6,
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
   },
 
   cardLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
   },
 
   cardValue: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 20,
     letterSpacing: -0.2,
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
   },
 
   firstClaimKicker: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   },
 
   nudgeTitle: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 14,
     textAlign: 'center',
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
 
   nudgeSecondaryText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: SLATE2,
     fontSize: 12,
     letterSpacing: 1.6,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   },
 
   ctaText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     color: BONE,
     fontSize: 12,
     letterSpacing: 1.6,
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
   },
 
   testTitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   },
 
   testBtnText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     color: SLATE2,
     fontSize: 11,
     letterSpacing: 1.2,

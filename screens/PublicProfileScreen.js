@@ -31,13 +31,13 @@ import LegacyMedalsSection from '../components/medals/LegacyMedalsSection';
 import { fetchLegacyMedals } from '../lib/legacyMedalsApi';
 import { useFlag } from '../lib/flags';
 
-const CLAIM = '#22D65E';
-const INK = '#101010';
-const INK2 = '#1A1A1A';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
-const HAIRLINE = 'rgba(245,244,239,0.08)';
-const HAIRLINE_STRONG = 'rgba(245,244,239,0.16)';
+const CLAIM = '#84FF44';
+const INK = '#000000';
+const INK2 = '#0E0E10';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
+const HAIRLINE = 'rgba(253,253,253,0.08)';
+const HAIRLINE_STRONG = 'rgba(253,253,253,0.16)';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -501,13 +501,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   backChevron: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 20,
     color: SLATE2,
     marginTop: -2,
   },
   backLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -538,14 +538,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 24,
     color: SLATE2,
     letterSpacing: -0.01,
     textTransform: 'uppercase',
   },
   commanderLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
@@ -553,36 +553,36 @@ const styles = StyleSheet.create({
   },
   commanderName: {
     marginTop: 0,
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 36,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 29,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
   },
   rankLine: {
     marginTop: 6,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
   },
   rankTitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#C8FF3D',
+    color: '#84FF44',
   },
   rankSeparator: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
   rankAlliance: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
   rankAllianceClaim: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
-    color: '#C8FF3D',
+    color: '#84FF44',
   },
   hairlineStrong: {
     marginTop: 14,
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE_STRONG,
   },
   errorText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -626,11 +626,11 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#C8FF3D',
+    backgroundColor: '#84FF44',
   },
   unlockText: {
     marginTop: 8,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   },
   sectionDividerLabel: {
     paddingHorizontal: 8,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
   },
   xpNumbers: {
     marginTop: 12,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -662,12 +662,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   nextPrefix: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
   nextTitle: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: BONE,
   },
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   statLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.16,
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     marginTop: 8,
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 20,
     color: BONE,
     letterSpacing: -0.02,
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   emptyText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 13,
     color: SLATE2,
   },
@@ -722,12 +722,12 @@ const styles = StyleSheet.create({
   },
   territoryName: {
     flex: 1,
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     color: BONE,
   },
   territoryTier: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   influenceValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   powerValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   powerRowLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
@@ -825,12 +825,12 @@ const styles = StyleSheet.create({
   },
   powerRowReason: {
     marginTop: 4,
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 12,
     color: SLATE2,
   },
   powerRowValueLive: {
-    fontFamily: 'SofiaSansExtraCondensed_700Bold',
+    fontFamily: 'Archivo_900Black_Italic',
     fontSize: 20,
     color: BONE,
     letterSpacing: -0.4,

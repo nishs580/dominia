@@ -32,7 +32,7 @@ export default function NotifPrimeModal({ visible, onAllow, onLater }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.78)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

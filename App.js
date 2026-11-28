@@ -6,6 +6,8 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from './lib/clerk';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from './lib/theme';
+import Svg, { Polygon } from 'react-native-svg';
+import { parallelogramPoints } from './lib/slantGeometry';
 import ActivityScreen from './screens/ActivityScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ProfileAccordionScreen from './screens/ProfileAccordionScreen';
@@ -53,6 +55,9 @@ import {
   AllianceGlyph,
   ProfileGlyph,
   BoardsGlyph,
+  TargetGlyph,
+  TabShieldGlyph,
+  CalendarGlyph,
 } from './components/ResourceGlyphs';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './components/notifications/NotificationCard';
@@ -61,20 +66,13 @@ import { useFonts } from 'expo-font';
 import { useTranslation } from 'react-i18next';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import { Archivo_900Black_Italic } from '@expo-google-fonts/archivo';
 import {
-  SofiaSansExtraCondensed_600SemiBold,
-  SofiaSansExtraCondensed_700Bold,
-  SofiaSansExtraCondensed_800ExtraBold,
-} from '@expo-google-fonts/sofia-sans-extra-condensed';
-import {
-  GeistMono_300Light,
-  GeistMono_400Regular,
-  GeistMono_500Medium,
-} from '@expo-google-fonts/geist-mono';
-import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-} from '@expo-google-fonts/instrument-sans';
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
+} from '@expo-google-fonts/ibm-plex-sans';
+import { IBMPlexSansCondensed_700Bold_Italic } from '@expo-google-fonts/ibm-plex-sans-condensed';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -111,22 +109,23 @@ function OnboardingRoute(props) {
   return legacyTabs ? <OnboardingScreen {...props} /> : <FigmaOnboardingScreen {...props} />;
 }
 
+// Active-tab tile: a small Dominia-blue parallelogram behind the icon.
+const TAB_TILE_W = 44;
+const TAB_TILE_H = 30;
+const TAB_TILE_POINTS = parallelogramPoints(TAB_TILE_W, TAB_TILE_H);
+
 function makeTabOptions(label, Icon) {
-  // Figma tab bar: the active tab gets a 2px Signal Lime top indicator and a
-  // lime icon; its label stays white. Inactive tabs are white at 40%.
+  // Dominia-Temp tab bar (plan U2): the active tab gets a slanted blue tile
+  // behind a white icon and a white label; inactive tabs are muted.
   return {
     tabBarIcon: ({ focused }) => (
-      <View style={{ alignItems: 'center' }}>
-        <View
-          style={{
-            position: 'absolute',
-            top: -10,
-            width: 56,
-            height: 2,
-            backgroundColor: focused ? colors.lime : 'transparent',
-          }}
-        />
-        <Icon size={20} color={focused ? colors.lime : colors.muted} />
+      <View style={styles.tabTile}>
+        {focused ? (
+          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Polygon points={TAB_TILE_POINTS} fill={colors.action} />
+          </Svg>
+        ) : null}
+        <Icon size={20} color={focused ? colors.white : colors.muted2} />
       </View>
     ),
     tabBarLabel: ({ focused }) => (
@@ -134,12 +133,13 @@ function makeTabOptions(label, Icon) {
         maxFontSizeMultiplier={1.3}
         numberOfLines={1}
         style={{
-          fontFamily: focused ? 'GeistMono_500Medium' : 'GeistMono_400Regular',
-          fontSize: 11,
+          fontFamily: 'IBMPlexSans_700Bold',
+          fontSize: 10,
           textTransform: 'uppercase',
-          letterSpacing: 1.4,
+          letterSpacing: 1,
           includeFontPadding: false,
-          color: focused ? colors.white : colors.muted,
+          marginTop: 4,
+          color: focused ? colors.white : colors.muted2,
         }}
       >
         {label}
@@ -154,11 +154,11 @@ function makeTabOptions(label, Icon) {
 const TAB_SCREENS = {
   Map: { component: MapScreen, labelKey: 'tabs.map', Icon: MapGlyph },
   Activity: { component: ActivityScreen, labelKey: 'tabs.activity', Icon: ActivityGlyph },
-  Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph },
+  Alliance: { component: AllianceScreen, labelKey: 'tabs.alliance', Icon: AllianceGlyph, FigmaIcon: TabShieldGlyph },
   Profile: { component: ProfileRoute, labelKey: 'tabs.profile', Icon: ProfileGlyph },
-  // Tab icons stay for now; DESIGN.md's no-icons rule is deferred (plan U9).
-  Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: ActivityGlyph },
-  Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: BoardsGlyph },
+  // Dominia-Temp tab icons (Figma Main screen): target, shield, calendar.
+  Missions: { component: MissionsScreen, labelKey: 'tabs.missions', Icon: TargetGlyph },
+  Events: { component: EventsScreen, labelKey: 'tabs.events', Icon: CalendarGlyph },
 };
 
 // Root stack screens that only exist in one layout. With `legacy_tabs` off,
@@ -176,26 +176,27 @@ const TabNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.obsidian,
           borderTopWidth: 1,
           borderTopColor: colors.hairline,
           elevation: 0,
-          height: 62 + insets.bottom,
-          paddingTop: 10,
-          paddingBottom: insets.bottom + 10,
+          height: 66 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
         },
-        tabBarActiveTintColor: '#F5F4EF',
-        tabBarInactiveTintColor: '#6C6C69',
+        tabBarIconStyle: { width: TAB_TILE_W, height: TAB_TILE_H },
+        tabBarActiveTintColor: colors.white,
+        tabBarInactiveTintColor: colors.muted2,
         headerShown: false,
       }}
     >
       {tabsFor(legacyTabs).map((name) => {
-        const { component, labelKey, Icon } = TAB_SCREENS[name];
+        const { component, labelKey, Icon, FigmaIcon } = TAB_SCREENS[name];
         return (
           <Tab.Screen
             key={name}
             name={name}
-            options={makeTabOptions(t(labelKey), Icon)}
+            options={makeTabOptions(t(labelKey), (!legacyTabs && FigmaIcon) || Icon)}
             component={component}
           />
         );
@@ -207,14 +208,11 @@ const TabNavigator = () => {
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    SofiaSansExtraCondensed_600SemiBold,
-    SofiaSansExtraCondensed_700Bold,
-    SofiaSansExtraCondensed_800ExtraBold,
-    GeistMono_300Light,
-    GeistMono_400Regular,
-    GeistMono_500Medium,
-    InstrumentSans_400Regular,
-    InstrumentSans_500Medium,
+    Archivo_900Black_Italic,
+    IBMPlexSans_500Medium,
+    IBMPlexSans_600SemiBold,
+    IBMPlexSans_700Bold,
+    IBMPlexSansCondensed_700Bold_Italic,
   });
 
   // Start on the last activated flag values so the first frame is already in
@@ -308,6 +306,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  tabTile: {
+    width: TAB_TILE_W,
+    height: TAB_TILE_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: {
     flex: 1,
     backgroundColor: '#fff',

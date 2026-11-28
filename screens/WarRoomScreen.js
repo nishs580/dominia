@@ -452,11 +452,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: fonts.display,
-    fontSize: 40,
+    fontSize: 32,
     color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
-    lineHeight: 44,
+    lineHeight: 35,
   },
   headerSub: {
     fontFamily: fonts.mono,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   influenceValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: fontSize.xl4,
     letterSpacing: fontSize.xl4 * -0.02,
     color: colors.bone,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.claimSoft,
   },
   countdownValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 40,
     color: colors.bone,
     letterSpacing: -0.02,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   warChestMoraleValue: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 40,
     color: colors.alliance,
     letterSpacing: -0.02,

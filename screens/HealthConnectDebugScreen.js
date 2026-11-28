@@ -29,7 +29,7 @@ const BONE = colors.bone;
 const SLATE2 = colors.slate2;
 const HAIRLINE = colors.hairline;
 const HAIRLINE_STRONG = colors.hairlineStrong;
-const ERROR_RED = '#E8432B';
+const ERROR_RED = '#E34234';
 
 const SDK_STATUS_NAMES = {
   [SdkAvailabilityStatus.SDK_AVAILABLE]: 'SDK_AVAILABLE',
@@ -478,15 +478,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   backBtnText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
     color: SLATE2,
     textTransform: 'uppercase',
   },
   headerTitle: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 28,
+    fontFamily: 'Archivo_900Black_Italic',
+    fontSize: 22,
     color: BONE,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     color: ERROR_RED,
   },
   bigSteps: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 48,
     color: BONE,
     letterSpacing: -0.02,
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   rawText: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     color: SLATE2,
   },
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: spacing.sm,
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     paddingVertical: 14,
     width: '100%',
     alignItems: 'center',
@@ -609,14 +609,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   primaryBtnStep: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,
-    color: 'rgba(245,244,239,0.75)',
+    color: 'rgba(253,253,253,0.75)',
     textTransform: 'uppercase',
   },
   primaryBtnAction: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 14,
     letterSpacing: 2.4,
     color: BONE,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     borderColor: ERROR_RED,
   },
   errorBlockText: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 12,
     color: ERROR_RED,
   },

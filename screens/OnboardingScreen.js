@@ -74,7 +74,7 @@ function PrimaryButton({ stepLabel, actionLabel, onPress, disabled }) {
     >
       <Text
         style={{
-          fontFamily: 'GeistMono_400Regular',
+          fontFamily: 'IBMPlexSans_700Bold',
           fontSize: 11,
           letterSpacing: 1.6,
           color: BONE,
@@ -85,7 +85,7 @@ function PrimaryButton({ stepLabel, actionLabel, onPress, disabled }) {
       </Text>
       <Text
         style={{
-          fontFamily: 'GeistMono_500Medium',
+          fontFamily: 'IBMPlexSans_600SemiBold',
           fontSize: 14,
           letterSpacing: 2.4,
           color: BONE,
@@ -103,7 +103,7 @@ function SectionLabel({ label }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
       <Text
         style={{
-          fontFamily: 'GeistMono_400Regular',
+          fontFamily: 'IBMPlexSans_700Bold',
           fontSize: 11,
           letterSpacing: 1.6,
           color: SLATE2,
@@ -130,14 +130,14 @@ function NumberedRow({ num, title, subtitle, last = false }) {
         ...(last ? { borderBottomWidth: 0.5, borderBottomColor: HAIRLINE_STRONG } : {}),
       }}
     >
-      <Text style={{ fontFamily: 'GeistMono_500Medium', fontSize: 11, color: SLATE2, paddingTop: 2, minWidth: 16 }}>
+      <Text style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, color: SLATE2, paddingTop: 2, minWidth: 16 }}>
         {num}
       </Text>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'InstrumentSans_500Medium', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 15, color: BONE, marginBottom: 3, textAlign: 'left' }}>
           {title}
         </Text>
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 13, color: SLATE2, lineHeight: 19, textAlign: 'left' }}>
           {subtitle}
         </Text>
       </View>
@@ -275,17 +275,17 @@ export default function OnboardingScreen({ route }) {
       return (
         <Animated.View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 4, opacity: introOpacity }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 0 }}>
-            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 34, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+            <Text maxFontSizeMultiplier={1.2} style={{ fontFamily: 'Archivo_900Black_Italic', fontSize: 27, color: BONE, letterSpacing: 0.7, textTransform: 'uppercase' }}>
               DOMINIA
             </Text>
-            <Text style={{ fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 11, color: BONE, marginLeft: 4, marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'Archivo_900Black_Italic', fontSize: 11, color: BONE, marginLeft: 4, marginBottom: 6 }}>
               ▪
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 20 }}>
             <Text
               style={{
-                fontFamily: 'GeistMono_400Regular',
+                fontFamily: 'IBMPlexSans_700Bold',
                 fontSize: 11,
                 letterSpacing: 1.6,
                 color: SLATE2,
@@ -298,7 +298,7 @@ export default function OnboardingScreen({ route }) {
             <View style={{ flex: 1, height: 0.5, backgroundColor: HAIRLINE_STRONG }} />
           </View>
           <View>
-            <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 16, color: BONE, lineHeight: 24 }}>{t('onboarding.introBody')}</Text>
+            <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 16, color: BONE, lineHeight: 24 }}>{t('onboarding.introBody')}</Text>
           </View>
         </Animated.View>
       );
@@ -310,7 +310,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionHowItWorks')} />
           <Text
             style={{
-              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+              fontFamily: 'Archivo_900Black_Italic',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',
@@ -343,7 +343,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionBeforeStart')} />
           <Text
             style={{
-              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+              fontFamily: 'Archivo_900Black_Italic',
               fontSize: 24,
               color: BONE,
               textTransform: 'uppercase',
@@ -368,7 +368,7 @@ export default function OnboardingScreen({ route }) {
           >
             <Text
               style={{
-                fontFamily: 'GeistMono_400Regular',
+                fontFamily: 'IBMPlexSans_700Bold',
                 fontSize: 11,
                 letterSpacing: 2,
                 color: SLATE2,
@@ -379,7 +379,7 @@ export default function OnboardingScreen({ route }) {
             >
               {t('onboarding.privacyLabel')}
             </Text>
-            <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: BONE, lineHeight: 17, textAlign: 'left' }}>
+            <Text style={{ fontFamily: 'IBMPlexSans_700Bold', fontSize: 11, color: BONE, lineHeight: 17, textAlign: 'left' }}>
               {t('onboarding.privacyBody')}
             </Text>
           </View>
@@ -393,7 +393,7 @@ export default function OnboardingScreen({ route }) {
           <SectionLabel label={t('onboarding.sectionSetBase')} />
           <Text
             style={{
-              fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
+              fontFamily: 'Archivo_900Black_Italic',
               fontSize: 19,
               color: BONE,
               textTransform: 'uppercase',
@@ -405,7 +405,7 @@ export default function OnboardingScreen({ route }) {
           >
             {t('onboarding.heading3')}
           </Text>
-          <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 11, color: SLATE2, marginBottom: 12, textAlign: 'left' }}>
+          <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 11, color: SLATE2, marginBottom: 12, textAlign: 'left' }}>
             {t('onboarding.setCitySub')}
           </Text>
           <View
@@ -468,12 +468,12 @@ export default function OnboardingScreen({ route }) {
               <View style={{ position: 'absolute', bottom: 12, alignSelf: 'center', maxWidth: '92%' }} pointerEvents="none">
                 <Text
                   style={{
-                    fontFamily: 'GeistMono_400Regular',
+                    fontFamily: 'IBMPlexSans_700Bold',
                     fontSize: 11,
                     letterSpacing: 1.4,
                     color: SLATE2,
                     textTransform: 'uppercase',
-                    backgroundColor: 'rgba(16,16,16,0.75)',
+                    backgroundColor: 'rgba(0,0,0,0.75)',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     textAlign: 'center',
@@ -489,7 +489,7 @@ export default function OnboardingScreen({ route }) {
               <View style={{ marginTop: 8, alignItems: 'center' }}>
                 <Text
                   style={{
-                    fontFamily: 'InstrumentSans_400Regular',
+                    fontFamily: 'IBMPlexSans_500Medium',
                     fontSize: 13,
                     color: BONE,
                     marginBottom: 8,
@@ -506,7 +506,7 @@ export default function OnboardingScreen({ route }) {
                 >
                   <Text
                     style={{
-                      fontFamily: 'GeistMono_500Medium',
+                      fontFamily: 'IBMPlexSans_600SemiBold',
                       fontSize: 11,
                       color: BONE,
                       textTransform: 'uppercase',
@@ -521,7 +521,7 @@ export default function OnboardingScreen({ route }) {
             ) : (
               <Text
                 style={{
-                  fontFamily: 'GeistMono_400Regular',
+                  fontFamily: 'IBMPlexSans_700Bold',
                   fontSize: 11,
                   color: SLATE2,
                   textTransform: 'uppercase',
@@ -541,29 +541,29 @@ export default function OnboardingScreen({ route }) {
     return (
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <Text style={{ fontFamily: 'GeistMono_400Regular', fontSize: 11, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
+          <Text style={{ fontFamily: 'IBMPlexSans_700Bold', fontSize: 11, color: SLATE2, textTransform: 'uppercase', letterSpacing: 1.6 }}>
             {t('onboarding.commanderLabel')}
           </Text>
         </View>
         <Text
           maxFontSizeMultiplier={1.2}
           style={{
-            fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-            fontSize: 32,
+            fontFamily: 'Archivo_900Black_Italic',
+            fontSize: 26,
             color: BONE,
             textTransform: 'uppercase',
             letterSpacing: 0.7,
-            lineHeight: 36,
+            lineHeight: 29,
           }}
         >
           {username || t('onboarding.defaultCommander')}
         </Text>
         <View style={{ height: 0.5, backgroundColor: HAIRLINE_STRONG, marginBottom: 18 }} />
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours', { city: homeCity || t('onboarding.cityFallback') })}</Text>
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 14, color: BONE, lineHeight: 22, marginBottom: 8 }}>{t('onboarding.cityYours', { city: homeCity || t('onboarding.cityFallback') })}</Text>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 14, color: SLATE2, lineHeight: 22, marginBottom: 6 }}>
           {t('onboarding.threeNearby')}
         </Text>
-        <Text style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
+        <Text style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 14, color: SLATE2, lineHeight: 22 }}>{t('onboarding.claimNext')}</Text>
       </View>
     );
   }, [step, homePin, homeCity, userCoord, introOpacity, username, resolvedPlayerId, resolveError, locationDenied, i18n.language, t]);
@@ -651,7 +651,7 @@ export default function OnboardingScreen({ route }) {
         {saveError ? (
           <Text
             style={{
-              fontFamily: 'InstrumentSans_400Regular',
+              fontFamily: 'IBMPlexSans_500Medium',
               fontSize: 13,
               color: BONE,
               textAlign: 'center',
@@ -673,7 +673,7 @@ export default function OnboardingScreen({ route }) {
           >
             <Text
               style={{
-                fontFamily: 'GeistMono_400Regular',
+                fontFamily: 'IBMPlexSans_700Bold',
                 fontSize: 11,
                 color: SLATE,
                 textTransform: 'uppercase',

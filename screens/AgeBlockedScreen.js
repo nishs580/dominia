@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center' },
   title: {
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 26,
     letterSpacing: -0.9,
     color: colors.bone,
     textTransform: 'uppercase',

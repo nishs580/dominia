@@ -64,13 +64,13 @@ export default function ConnectionBanner({ visible, topInset = 0 }) {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: 'rgba(232,67,43,0.24)',
+    backgroundColor: 'rgba(227,66,52,0.24)',
     borderBottomWidth: 1,
     borderBottomColor: colors.danger,
     paddingHorizontal: 18,
     paddingBottom: 10,
     gap: 4,
   },
-  title: { fontFamily: 'GeistMono_500Medium', color: colors.danger, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: colors.bone, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: 'IBMPlexSans_600SemiBold', color: colors.danger, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  body: { fontFamily: 'IBMPlexSans_500Medium', color: colors.bone, fontSize: 13, lineHeight: 18 },
 });

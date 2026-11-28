@@ -489,11 +489,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: fonts.display,
-    fontSize: 40,
+    fontSize: 32,
     color: colors.bone,
     textTransform: 'uppercase',
     letterSpacing: -0.02,
-    lineHeight: 44,
+    lineHeight: 35,
   },
   headerSub: {
     fontFamily: fonts.mono,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.displayBold, fontSize: fontSize.xl, color: colors.bone, textTransform: 'uppercase', marginTop: 4, marginBottom: spacing.lg },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   statCell: { width: '50%', paddingVertical: spacing.md },
-  statValue: { fontFamily: 'GeistMono_400Regular', fontSize: fontSize.xl2, color: colors.bone, textTransform: 'uppercase' },
+  statValue: { fontFamily: 'IBMPlexSans_700Bold', fontSize: fontSize.xl2, color: colors.bone, textTransform: 'uppercase' },
   statLabel: { fontFamily: fonts.mono, fontSize: fontSize.xs, color: colors.slate2, textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 2 },
   shareBtn: {
     marginTop: spacing.lg,

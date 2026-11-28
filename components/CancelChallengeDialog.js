@@ -1,13 +1,19 @@
 // components/CancelChallengeDialog.js
-// "CANCEL THE CLAIM?" confirm (plan U9, Figma B6). CONTINUE CHALLENGE keeps
-// walking; the red-outline button confirms. Copy comes from
-// lib/challengeScreen.js challengeHeaderModel().dialog, so attacks and
-// defends read "CANCEL THE ATTACK?" / "CANCEL THE DEFENCE?".
+// Cancel confirm of the Dominia-Temp challenge flow (plan 2026-11-28 U7;
+// board "Cancel claim?", Challenge case 2): a dark-blue gradient panel at the
+// bottom of the dimmed challenge screen — "Are you sure that you want to
+// cancel the claim?" — with CONTINUE CHALLENGE (primary) and CANCEL CLAIM
+// (ghost) side by side. Copy comes from lib/challengeScreen.js
+// challengeHeaderModel().dialog, so attacks and defends read their own words.
 
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-import { colors } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
+import { SlantButton } from './ui';
+import { useSvgId } from './ui/shared';
 
 function tr(t, copy) {
   return t(copy.key, { defaultValue: copy.defaultValue, ...(copy.params || {}) });
@@ -17,39 +23,61 @@ function tr(t, copy) {
  * @param {object}   props
  * @param {boolean}  props.visible
  * @param {object}   props.dialog     challengeHeaderModel().dialog
- * @param {Function} props.onKeep     CONTINUE CHALLENGE / back gesture.
+ * @param {Function} props.onKeep     CONTINUE CHALLENGE / back gesture / tap outside.
  * @param {Function} props.onConfirm  cancel the challenge.
  */
 export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfirm }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const gradId = useSvgId('chcancel');
   if (!dialog) return null;
-  const title = tr(t, dialog.title);
-  const body = tr(t, dialog.body);
+  const prompt = tr(t, dialog.prompt);
   const keep = tr(t, dialog.keep);
   const confirm = tr(t, dialog.confirm);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeep}>
-      <View style={styles.scrim}>
-        <View style={styles.card} accessibilityViewIsModal accessibilityRole="alert">
-          <Text style={styles.title} accessibilityRole="header">{title}</Text>
-          <Text style={styles.body}>{body}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={keep}
-            onPress={onKeep}
-            style={({ pressed }) => [styles.keepBtn, pressed && { backgroundColor: colors.actionPressed }]}
-          >
-            <Text style={styles.keepText}>{keep}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={confirm}
-            onPress={onConfirm}
-            style={({ pressed }) => [styles.confirmBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Text style={styles.confirmText}>{confirm}</Text>
-          </Pressable>
+      <View style={styles.root}>
+        <Pressable
+          style={styles.scrim}
+          onPress={onKeep}
+          accessibilityRole="button"
+          accessibilityLabel={keep}
+        />
+        <View
+          style={[styles.panel, { paddingBottom: insets.bottom + 20 }]}
+          accessibilityViewIsModal
+          accessibilityRole="alert"
+        >
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Svg width="100%" height="100%">
+              <Defs>
+                <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={colors.actionDeep} />
+                  <Stop offset="1" stopColor="#000000" />
+                </LinearGradient>
+              </Defs>
+              <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradId})`} />
+            </Svg>
+          </View>
+          <Text style={styles.prompt} accessibilityRole="header">{prompt}</Text>
+          <View style={styles.row}>
+            <SlantButton
+              label={keep}
+              variant="primary"
+              size="sm"
+              trailingChevron={false}
+              onPress={onKeep}
+              style={styles.btn}
+            />
+            <SlantButton
+              label={confirm}
+              variant="ghost"
+              size="sm"
+              onPress={onConfirm}
+              style={styles.btn}
+            />
+          </View>
         </View>
       </View>
     </Modal>
@@ -57,42 +85,26 @@ export default function CancelChallengeDialog({ visible, dialog, onKeep, onConfi
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(16,16,16,0.72)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+  root: { flex: 1, justifyContent: 'flex-end' },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  panel: {
+    paddingTop: 22,
+    paddingHorizontal: 18,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceLine,
+    overflow: 'hidden',
+    gap: 18,
   },
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
-    padding: 20,
-    gap: 14,
+  prompt: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.white,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
-  title: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    color: colors.bone,
-    fontSize: 30,
-    lineHeight: 32,
-    textTransform: 'uppercase',
-  },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: colors.bone, fontSize: 14, lineHeight: 20 },
-  keepBtn: {
-    marginTop: 6,
-    backgroundColor: colors.action,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  keepText: { fontFamily: 'GeistMono_500Medium', color: colors.bone, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
-  confirmBtn: {
-    borderWidth: 1,
-    borderColor: colors.danger,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmText: { fontFamily: 'GeistMono_500Medium', color: colors.danger, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  row: { flexDirection: 'row', gap: 10 },
+  // Two buttons share the row: the small label size keeps "CONTINUE
+  // CHALLENGE" on one line at a readable size; Figma height kept.
+  btn: { flex: 1, minHeight: 48 },
 });

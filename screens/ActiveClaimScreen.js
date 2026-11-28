@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, AppState, Easing, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -18,7 +18,7 @@ import {
 } from '../lib/health';
 import * as claimWalkSamples from '../lib/claimWalkSamples';
 import { supabase } from '../lib/supabase';
-import { colors } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
 import { logDebug } from '../lib/debug';
 import { hasFired, markFired } from '../lib/walkthroughFlags';
 import { holdFlagChanges, useFlag } from '../lib/flags';
@@ -36,18 +36,22 @@ import {
   securedClaimToMap,
   challengeHeaderModel,
   progressCaption,
-  opponentBars,
+  opponentProgress,
+  formatClock,
+  readyScreenModel,
   startsContestWalk,
 } from '../lib/challengeScreen';
 import { challengeResultModel } from '../lib/challengeResult';
-import { useUnits } from '../lib/units';
 import { claimHaptic, contestHaptic } from '../lib/haptics';
 import ChallengeMap from '../components/ChallengeMap';
 import ChallengeResultOverlay from '../components/ChallengeResultOverlay';
 import CancelChallengeDialog from '../components/CancelChallengeDialog';
 import ConnectionBanner, { useConnectionLost } from '../components/ConnectionBanner';
 import ChallengeStatusScreen from '../components/ChallengeStatusScreen';
-import { ChallengeKindIcon, ClockIcon, StepsIcon, TargetIcon } from '../components/ChallengeIcons';
+import ChallengeTerritoryTile from '../components/ChallengeTerritoryTile';
+import { CutCard, SlantButton, SlantTile } from '../components/ui';
+
+const GOLD_BISCUITS = require('../assets/figma/gold-biscuits.png');
 import * as contestWalk from '../lib/contestWalk';
 import {
   claimState,
@@ -172,13 +176,6 @@ function formatTimeLeft(remainingMs) {
 }
 
 const TIME_LEFT_ESCALATE_MS = 2 * 60 * 1000; // last two minutes read as caution
-
-// Figma header tone (lib/challengeScreen challengeHeaderModel) → colour.
-const TONE_COLORS = {
-  lime: colors.lime,
-  red: colors.enemy,
-  blue: colors.alliance,
-};
 
 // "3240" -> "3,240".
 function formatCount(n) {
@@ -569,10 +566,25 @@ function runCalibrationWindow(now) {
   calibrationWindowStart = { steps: countedSessionSteps, timestamp: now, lat: fix.latitude, lon: fix.longitude };
 }
 
+// Step tracking blocked (Health Connect / activity permission denied):
+// Dominia-Temp danger card with slanted actions.
+function HcBlockedCard({ flush = false, onBack }) {
+  const { t } = useTranslation();
+  return (
+    <CutCard variant="danger" padding={16} style={[styles.hcBlocked, flush && { marginTop: 0 }]}>
+      <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
+      <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
+      <SlantButton label={t('activeClaim.hcOpenSettings')} variant="primary" size="md" onPress={() => Linking.openSettings()} />
+      <SlantButton label={t('activeClaim.hcBack')} variant="ghost" size="md" onPress={onBack} />
+    </CutCard>
+  );
+}
+
 export default function ActiveClaimScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { t } = useTranslation();
   const { userId, getToken } = useAuth();
 
@@ -611,6 +623,7 @@ export default function ActiveClaimScreen() {
     armExpiresAt = null,
     walkWindowMinutes = null,
     contestId,
+    contestExpiresAt = null,
     requiredWalkM: requiredWalkMParam,
     attackerAllianceId,
     role = 'attacker',
@@ -693,11 +706,14 @@ export default function ActiveClaimScreen() {
 
   // Claim-window countdown (claim mode only). One second tick — the GPS watch
   // already runs at 1s, so this adds no meaningful battery cost.
+  // A contest counts down to its own expiry (Figma challenge cases 3–4:
+  // TIME LEFT under the fill hint).
   const expiryMs = useMemo(() => {
-    if (mode !== 'claim' || !windowExpiresAt) return null;
-    const ms = new Date(windowExpiresAt).getTime();
+    const at = mode === 'claim' ? windowExpiresAt : mode === 'contest' ? contestExpiresAt : null;
+    if (!at) return null;
+    const ms = new Date(at).getTime();
     return Number.isFinite(ms) ? ms : null;
-  }, [mode, windowExpiresAt]);
+  }, [mode, windowExpiresAt, contestExpiresAt]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (expiryMs == null && armExpiryMs == null) return undefined;
@@ -775,7 +791,7 @@ export default function ActiveClaimScreen() {
   // full-screen "Cancelling…" then goes back; a secured claim shows its TAKEN
   // moment here before returning to the map.
   const figma = figmaArmMap;
-  const units = useUnits();
+  const [mapPanned, setMapPanned] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancelTimerRef = useRef(null);
@@ -1120,7 +1136,7 @@ export default function ActiveClaimScreen() {
           foregroundService: {
             notificationTitle: t('activeClaim.fgServiceTitle'),
             notificationBody: t('activeClaim.fgServiceBody'),
-            notificationColor: '#C8FF3D',
+            notificationColor: '#84FF44',
           },
           pausesUpdatesAutomatically: false,
         });
@@ -1297,88 +1313,74 @@ export default function ActiveClaimScreen() {
   }
 
   if (armPhase === 'arming' && figma) {
-    // Start walk (plan U9, Figma B4): tag chip, territory, a left-aligned
-    // countdown, three icon rows, the territory on the map, START WALK.
-    const showStake = goldPaid > 0 && !freeClaim;
+    // Ready screen (plan 2026-11-28 U7; board "Ready to claim"): CLAIMING
+    // header, the big rotated blue tile counting SECONDS TO START, the walk
+    // line, the window line, the Gold stake, START WALK » and NOT YET.
+    const ready = readyScreenModel({
+      secondsLeft: armSecondsLeft,
+      perimeterM,
+      walkWindowMinutes,
+      goldPaid,
+      freeClaim,
+      armError,
+    });
+    const trr = (copy) => t(copy.key, { defaultValue: copy.defaultValue, ...(copy.params || {}) });
+    const header = challengeHeaderModel(kind);
+    const tileSize = Math.min(300, Math.round(windowWidth * 0.66));
+    const countdownLabel = trr(ready.countdownLabel);
     return (
       <View
         style={[
-          styles.screen,
-          { flex: 1, backgroundColor: INK, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 16 },
+          styles.readyScreen,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
         ]}
       >
-        <View style={styles.armChip}>
-          <Text style={styles.armChipText} numberOfLines={1}>
-            {freeClaim
-              ? t('activeClaim.figma.armChipFree', { defaultValue: 'FREE CLAIM · {{territory}}', territory: territoryName })
-              : t('activeClaim.figma.armChip', { defaultValue: 'CLAIM · {{territory}}', territory: territoryName })}
-          </Text>
-        </View>
-        <Text style={styles.armFigmaTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>
-          {territoryName}
-        </Text>
+        <ChallengeHeader eyebrow={trr(header.eyebrow)} name={territoryName} />
 
-        <View style={styles.armCountdownRow} accessible accessibilityLabel={`${armSecondsLeft ?? 0} ${t('activeClaim.arm.countdownLabel')}`}>
-          <Text style={styles.armFigmaCountdown} maxFontSizeMultiplier={1.2}>{armSecondsLeft ?? 0}</Text>
-          <Text style={styles.armFigmaCountdownLabel}>{t('activeClaim.arm.countdownLabel')}</Text>
-        </View>
-
-        <View style={styles.armRows}>
-          <View style={styles.armRow}>
-            <StepsIcon size={16} color={SLATE2} />
-            <Text style={styles.armRowText}>
-              {t('activeClaim.figma.armWalk', { defaultValue: 'Walk {{metres}} m to claim it', metres: formatMetres(perimeterM) })}
-            </Text>
-          </View>
-          <View style={[styles.armRow, styles.armRowDivider]}>
-            <ClockIcon size={16} color={SLATE2} />
-            <Text style={styles.armRowText}>
-              {walkWindowMinutes
-                ? t('activeClaim.figma.armWindow', {
-                    defaultValue: "Start when you're ready to move. You get {{minutes}} minutes — walk anywhere",
-                    minutes: walkWindowMinutes,
-                  })
-                : t('activeClaim.figma.armWindowNone', { defaultValue: "Start when you're ready to move. Walk anywhere" })}
-            </Text>
-          </View>
-          {showStake ? (
-            <View style={[styles.armRow, styles.armRowDivider]}>
-              <TargetIcon size={16} color={colors.lime} />
-              <Text style={[styles.armRowText, { color: colors.lime }]}>
-                {t('activeClaim.figma.armStake', { defaultValue: '{{gold}} Gold is used once you start', gold: goldPaid })}
+        <View style={styles.readyTileWrap}>
+          <ChallengeTerritoryTile size={tileSize} variant="blue">
+            <View
+              style={styles.readyTileInner}
+              accessible
+              accessibilityRole="timer"
+              accessibilityLabel={`${ready.countdown} ${countdownLabel}`}
+            >
+              <Text style={styles.readyCount} maxFontSizeMultiplier={1.1} numberOfLines={1} adjustsFontSizeToFit>
+                {ready.countdown}
               </Text>
+              <Text style={styles.readyCountLabel} maxFontSizeMultiplier={1.2}>{countdownLabel}</Text>
             </View>
-          ) : null}
+          </ChallengeTerritoryTile>
         </View>
 
-        <View style={styles.armFigmaMap} importantForAccessibility="no-hide-descendants">
-          {territoryGeojson ? <ChallengeMap geometry={territoryGeojson} progress={0} /> : null}
-        </View>
-
-        {armError ? (
-          <Text style={[styles.armError, { marginTop: 8 }]}>{t('activeClaim.arm.error')}</Text>
+        <Text style={styles.readyTitle} accessibilityRole="header">{trr(ready.title)}</Text>
+        <Text style={styles.readyBody}>{trr(ready.body)}</Text>
+        {ready.stake ? (
+          <View style={styles.readyStakeRow}>
+            <Image source={GOLD_BISCUITS} style={styles.readyBiscuit} accessibilityIgnoresInvertColors />
+            <Text style={styles.readyStake}>{trr(ready.stake)}</Text>
+          </View>
+        ) : null}
+        {ready.hint ? (
+          <Text style={styles.readyHint} accessibilityLiveRegion="polite">{trr(ready.hint)}</Text>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={activating}
+        <SlantButton
+          label={trr(ready.start)}
+          variant="primary"
+          size="lg"
+          loading={activating}
+          disabled={ready.startDisabled}
           onPress={handleStartWalk}
-          style={({ pressed }) => [
-            styles.armPrimary,
-            (pressed || activating) && { opacity: 0.9 },
-          ]}
-        >
-          <Text style={styles.armPrimaryText}>
-            {activating ? t('activeClaim.arm.starting') : t('activeClaim.arm.startWalk')}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+          style={styles.readyStart}
+        />
+        <SlantButton
+          label={trr(ready.notYet)}
+          variant="ghost"
+          size="lg"
           onPress={exitClaim}
-          style={({ pressed }) => [styles.armFigmaSecondary, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.armSecondaryText}>{t('activeClaim.arm.notYet')}</Text>
-        </Pressable>
+          style={styles.readyNotYet}
+        />
       </View>
     );
   }
@@ -1448,22 +1450,21 @@ export default function ActiveClaimScreen() {
   }
 
   if (mapMode && figma) {
-    // In progress (plan U9, Figma B5 / C6 / D2 / D3): coloured header with
-    // icon and rule, big percentage, progress bar(s), TIME LEFT / STEPS tiles.
+    // In progress (plan 2026-11-28 U7; Challenge cases 1–5): CLAIMING /
+    // ATTACKING / DEFENDING header with the IN PROGRESS chip, the territory
+    // on the map with the perimeter traced in lime (and the opponent in red
+    // on contests), the big percentage, TIME LEFT, STEPS WALKED and CANCEL.
     const rawOpponent = kind === 'defend' ? (attackerUsername ?? opponentNameRef.current) : opponentNameRef.current;
     const opponentDisplay = rawOpponent && rawOpponent !== 'opponent' ? rawOpponent : null;
-    const header = challengeHeaderModel(kind, { opponentName: opponentDisplay });
-    const toneColor = TONE_COLORS[header.tone] ?? colors.lime;
+    const header = challengeHeaderModel(kind);
     const tr = (copy) => t(copy.key, { defaultValue: copy.defaultValue, ...(copy.params || {}) });
     const fillFraction = progressThresholdM > 0 ? claimState.distanceM / progressThresholdM : 0;
-    const bars = opponentBars(kind, {
-      myPct: pct,
-      opponentPct: mode === 'contest' ? contestWalk.getOpponentPct() : undefined,
-      opponentName: opponentDisplay,
-    });
+    const opponentFraction = opponentProgress(
+      kind,
+      mode === 'contest' ? contestWalk.getOpponentPct() : undefined,
+    );
     const caption = progressCaption(kind, { walkedM: claimState.distanceM, requiredM: progressThresholdM });
     const opponentForResult = opponentDisplay ?? t('contestResult.opponentFallback');
-    const goldPaidNum = Number(goldPaid);
     const moment = contestOutcome
       ? challengeResultModel({
           kind,
@@ -1472,26 +1473,9 @@ export default function ActiveClaimScreen() {
           opponentName: (contestOutcome.opponentName && contestOutcome.opponentName !== 'opponent')
             ? contestOutcome.opponentName
             : opponentForResult,
-          walkedM: contestOutcome.myWalkedM,
-          elapsedMs: contestOutcome.elapsedMs,
-          unit: units,
-          goldAwarded: contestOutcome.goldAwarded,
-          goldLost: Number.isFinite(goldPaidNum) && goldPaidNum > 0 ? goldPaidNum : undefined,
-          myPct: progressThresholdM > 0 && Number.isFinite(contestOutcome.myWalkedM)
-            ? (contestOutcome.myWalkedM / progressThresholdM) * 100
-            : undefined,
-          opponentPct: contestOutcome.opponentPct,
         })
       : claimMoment
-        ? challengeResultModel({
-            kind: 'claim',
-            territoryName,
-            walkedM: claimMoment.walkedM,
-            elapsedMs: claimMoment.elapsedMs,
-            unit: units,
-            freeClaim: !!freeClaim || !(goldPaidNum > 0),
-            goldAwarded: claimMoment.goldAwarded,
-          })
+        ? challengeResultModel({ kind: 'claim', territoryName })
         : null;
     const secureErrorMessage = secureState?.phase === 'error'
       ? claimCompleteErrorMessage(t, secureState.error, { freeClaim, goldPaid })
@@ -1499,7 +1483,6 @@ export default function ActiveClaimScreen() {
     const secureErrorRetry = secureState?.phase === 'error'
       && completeErrorShowsRetry(secureState.error?.code);
     const verifyProgress = secureState?.verifyProgress;
-    const cancelLabel = tr(header.cancel);
     const timeCritical = timeLeftCritical && !['paused', 'vehicle', 'shake'].includes(claimState.bannerState);
 
     const confirmCancel = () => {
@@ -1520,11 +1503,28 @@ export default function ActiveClaimScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: INK }}>
         <ChallengeMap
+          trace
           geometry={territoryGeojson}
           progress={fillFraction}
+          opponentProgress={opponentFraction}
           topInset={chromeInsets.top}
           bottomInset={chromeInsets.bottom}
+          onPannedChange={setMapPanned}
         />
+
+        {/* The big percentage sits over the framed territory; it hides once
+            the player pans the map away (case 5). */}
+        {!mapPanned ? (
+          <View
+            pointerEvents="none"
+            style={[styles.tracePctWrap, { top: chromeInsets.top, bottom: chromeInsets.bottom }]}
+            accessible
+            accessibilityLabel={caption ? `${pct}%, ${tr(caption)}` : `${pct}%`}
+          >
+            <Text style={styles.tracePct} maxFontSizeMultiplier={1.2}>{`${pct}%`}</Text>
+            {caption ? <Text style={styles.traceCaption}>{tr(caption)}</Text> : null}
+          </View>
+        ) : null}
 
         <View
           style={styles.figmaHeaderWrap}
@@ -1534,50 +1534,29 @@ export default function ActiveClaimScreen() {
           }}
         >
           <ConnectionBanner visible={connectionLost} topInset={insets.top} />
-          <View
-            style={[
-              styles.figmaHeader,
-              { paddingTop: connectionLost ? 12 : insets.top + 12, borderBottomColor: toneColor },
-            ]}
-          >
-            <View style={styles.figmaEyebrowRow}>
-              <ChallengeKindIcon icon={header.icon} size={15} color={toneColor} />
-              <Text style={[styles.figmaEyebrow, { color: toneColor }]} numberOfLines={1}>
-                {tr(header.eyebrow)}
-              </Text>
-            </View>
-            <Text style={styles.figmaTerritory} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.65}>
-              {territoryName}
-            </Text>
+          <View style={[styles.traceHeader, { paddingTop: connectionLost ? 12 : insets.top + 12 }]}>
+            <ChallengeHeader eyebrow={tr(header.eyebrow)} name={territoryName} chip={tr(header.chip)} />
           </View>
         </View>
 
         <View
-          style={[styles.figmaFooter, { paddingBottom: insets.bottom + 16 }]}
+          style={[styles.traceFooter, { paddingBottom: insets.bottom + 16 }]}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
             setChromeInsets((c) => (c.bottom === h ? c : { ...c, bottom: h }));
           }}
         >
+          <Svg style={styles.traceFade} pointerEvents="none">
+            <Defs>
+              <SvgLinearGradient id="traceFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#000000" stopOpacity={0} />
+                <Stop offset="1" stopColor="#000000" stopOpacity={1} />
+              </SvgLinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#traceFade)" />
+          </Svg>
           {hcDenied ? (
-            <View style={[styles.hcBlocked, { marginTop: 0 }]}>
-              <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-              <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => Linking.openSettings()}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={exitClaim}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-              </Pressable>
-            </View>
+            <HcBlockedCard flush onBack={exitClaim} />
           ) : (
             <>
               <View style={styles.bannerZoneMap}>
@@ -1608,44 +1587,31 @@ export default function ActiveClaimScreen() {
                 <Text style={styles.mapHint}>{t('activeClaim.hcChecking')}</Text>
               ) : null}
 
-              <View
-                style={styles.figmaPctRow}
-                accessible
-                accessibilityLabel={`${pct}% ${tr(caption)}`}
+              <Text style={styles.traceInstruction}>{tr(header.fillHint)}</Text>
+
+              {timeLeftMs != null ? (
+                <View
+                  style={styles.traceTimeRow}
+                  accessible
+                  accessibilityLabel={`${t('activeClaim.statTimeLeft')} ${formatTimeLeft(timeLeftMs)}`}
+                >
+                  <Text style={styles.traceTimeLabel}>{t('activeClaim.statTimeLeft')}</Text>
+                  <Text style={[styles.traceTimeValue, timeCritical ? { color: AMBER } : null]}>
+                    {formatClock(timeLeftMs)}
+                  </Text>
+                </View>
+              ) : null}
+
+              <CutCard
+                padding={0}
+                style={styles.traceSteps}
+                accessibilityLabel={`${t('activeClaim.statSteps')} ${formatCount(claimState.liveSteps)}`}
               >
-                <Text style={styles.figmaPct} maxFontSizeMultiplier={1.2}>{`${pct}%`}</Text>
-                <Text style={styles.figmaCaption} numberOfLines={1}>{tr(caption)}</Text>
-              </View>
-
-              {bars ? (
-                <View style={styles.figmaBars}>
-                  <ProgressBar label={tr(bars.you.label)} pct={bars.you.pct} color={colors.lime} labelColor={colors.lime} />
-                  <ProgressBar label={tr(bars.opponent.label)} pct={bars.opponent.pct} color={colors.enemy} labelColor={colors.enemy} />
+                <View style={styles.traceStepsRow}>
+                  <Text style={styles.traceStepsLabel}>{t('activeClaim.statSteps')}</Text>
+                  <Text style={styles.traceStepsValue}>{formatCount(claimState.liveSteps)}</Text>
                 </View>
-              ) : (
-                <ProgressBar pct={pct} color={colors.lime} />
-              )}
-
-              <View style={styles.figmaTiles}>
-                {timeLeftMs != null ? (
-                  <View style={styles.figmaTile}>
-                    <View style={styles.figmaTileLabelRow}>
-                      <ClockIcon size={13} color={SLATE2} />
-                      <Text style={styles.figmaTileLabel}>{t('activeClaim.statTimeLeft')}</Text>
-                    </View>
-                    <Text style={[styles.figmaTileValue, timeCritical ? { color: AMBER } : null]}>
-                      {formatTimeLeft(timeLeftMs)}
-                    </Text>
-                  </View>
-                ) : null}
-                <View style={[styles.figmaTile, timeLeftMs != null && styles.figmaTileDivider]}>
-                  <View style={styles.figmaTileLabelRow}>
-                    <StepsIcon size={13} color={SLATE2} />
-                    <Text style={styles.figmaTileLabel}>{t('activeClaim.statSteps')}</Text>
-                  </View>
-                  <Text style={styles.figmaTileValue}>{formatCount(claimState.liveSteps)}</Text>
-                </View>
-              </View>
+              </CutCard>
 
               {DEV_MODE_MANUAL && (
                 <Pressable onPress={handleManualComplete} style={[styles.devBtn, { marginTop: 12, marginBottom: 0 }]}>
@@ -1653,19 +1619,13 @@ export default function ActiveClaimScreen() {
                 </Pressable>
               )}
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={cancelLabel}
+              <SlantButton
+                label={tr(header.cancel)}
+                variant="ghost"
+                size="lg"
                 onPress={() => setCancelDialogOpen(true)}
-                style={({ pressed }) => [
-                  header.cancelOutlined ? styles.figmaCancelOutlined : styles.figmaCancelQuiet,
-                  pressed && { opacity: 0.8 },
-                ]}
-              >
-                <Text style={[styles.figmaCancelText, header.cancelOutlined && { color: colors.enemy }]}>
-                  {cancelLabel}
-                </Text>
-              </Pressable>
+                style={styles.traceCancel}
+              />
             </>
           )}
         </View>
@@ -1673,46 +1633,45 @@ export default function ActiveClaimScreen() {
         {secureState ? (
           secureState.phase === 'securing' ? (
             <ChallengeStatusScreen
-              title={t('activeClaim.figma.securingTitle', { defaultValue: 'SECURING THE CLAIM…' })}
-              body={verifyProgress?.walkedM != null && verifyProgress?.requiredM != null
+              name={territoryName}
+              caption={verifyProgress?.walkedM != null && verifyProgress?.requiredM != null
                 ? t('claimSuccess.securingProgress', {
                     walked: Math.round(verifyProgress.walkedM),
                     required: Math.round(verifyProgress.requiredM),
                   })
-                : t('activeClaim.figma.securingBody', { defaultValue: 'Syncing your walk with the server.' })}
+                : tr(header.securing)}
               bottomInset={insets.bottom}
             />
           ) : (
             <ChallengeStatusScreen
-              title={t('activeClaim.figma.secureFailedTitle', { defaultValue: 'CLAIM NOT SECURED' })}
-              body={secureErrorMessage}
+              name={territoryName}
+              alert={t('activeClaim.figma.secureFailedTitle', { defaultValue: 'CLAIM NOT SECURED' })}
+              caption={secureErrorMessage}
               pulse={false}
               bottomInset={insets.bottom}
             >
               {secureErrorRetry ? (
-                <Pressable
-                  accessibilityRole="button"
+                <SlantButton
+                  label={t('common.retry')}
+                  variant="primary"
+                  size="lg"
                   onPress={() => runSecureClaim({ manual: true })}
-                  style={({ pressed }) => [styles.armPrimary, { marginTop: 0 }, pressed && { opacity: 0.9 }]}
-                >
-                  <Text style={styles.armPrimaryText}>{t('common.retry')}</Text>
-                </Pressable>
+                />
               ) : null}
-              <Pressable
-                accessibilityRole="button"
+              <SlantButton
+                label={t('claimSuccess.backToMap')}
+                variant="ghost"
+                size="lg"
                 onPress={leaveAfterSecureError}
-                style={({ pressed }) => [styles.keepWalkingBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.keepWalkingText}>{t('claimSuccess.backToMap')}</Text>
-              </Pressable>
+              />
             </ChallengeStatusScreen>
           )
         ) : null}
 
         {cancelling ? (
           <ChallengeStatusScreen
-            title={tr(header.cancelling.title)}
-            body={tr(header.cancelling.body)}
+            name={territoryName}
+            caption={tr(header.cancelling)}
             bottomInset={insets.bottom}
           />
         ) : null}
@@ -1839,24 +1798,7 @@ export default function ActiveClaimScreen() {
               )}
             </View>
           ) : hcDenied ? (
-            <View style={[styles.hcBlocked, { marginTop: 0 }]}>
-              <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-              <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => Linking.openSettings()}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={exitClaim}
-                style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-              </Pressable>
-            </View>
+            <HcBlockedCard flush onBack={exitClaim} />
           ) : (
             <>
               <View style={styles.bannerZoneMap}>
@@ -1979,24 +1921,7 @@ export default function ActiveClaimScreen() {
       </View>
 
       {hcDenied ? (
-        <View style={styles.hcBlocked}>
-          <Text style={styles.hcBlockedTitle}>{t('activeClaim.hcBlockedTitle')}</Text>
-          <Text style={styles.hcBlockedBody}>{t('activeClaim.hcBlockedBody')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => Linking.openSettings()}
-            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcOpenSettings')}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={exitClaim}
-            style={({ pressed }) => [styles.hcBlockedBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.hcBlockedBtnText}>{t('activeClaim.hcBack')}</Text>
-          </Pressable>
-        </View>
+        <HcBlockedCard onBack={exitClaim} />
       ) : (
       <>
       <View style={styles.ringWrap}>
@@ -2007,7 +1932,7 @@ export default function ActiveClaimScreen() {
               cx={ring.cx}
               cy={ring.cy}
               r={ring.radius}
-              stroke={'#C8FF3D'}
+              stroke={'#84FF44'}
               strokeWidth={ring.strokeWidth}
               fill="none"
               strokeLinecap="butt"
@@ -2133,34 +2058,42 @@ export default function ActiveClaimScreen() {
   );
 }
 
+// Dominia-Temp challenge header (plan 2026-11-28 U7): a short blue dash and
+// the CLAIMING / ATTACKING / DEFENDING eyebrow, the territory name in the
+// display face with an optional slanted IN PROGRESS chip, and a hairline.
+function ChallengeHeader({ eyebrow, name, chip }) {
+  return (
+    <View style={styles.chHeader}>
+      <View style={styles.chEyebrowRow}>
+        <View style={styles.chDash} />
+        <Text style={styles.chEyebrow} numberOfLines={1}>{eyebrow}</Text>
+      </View>
+      <View style={styles.chNameRow}>
+        <Text
+          style={styles.chName}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.65}
+          accessibilityRole="header"
+        >
+          {name}
+        </Text>
+        {chip ? (
+          <SlantTile size={26} tone="raised" paddingHorizontal={14} accessibilityLabel={chip}>
+            <Text style={styles.chChip} maxFontSizeMultiplier={1.3}>{chip}</Text>
+          </SlantTile>
+        ) : null}
+      </View>
+      <View style={styles.chRule} />
+    </View>
+  );
+}
+
 function StatRow({ label, value, valueStyle = null, last }) {
   return (
     <View style={[styles.statRow, last && { borderBottomWidth: 0 }]}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statValue, valueStyle]}>{value}</Text>
-    </View>
-  );
-}
-
-// Figma progress bar: optional mono label row (label left, % right) over a
-// hairline track with a solid fill.
-function ProgressBar({ label, pct, color, labelColor }) {
-  const width = `${Math.max(0, Math.min(100, Number(pct) || 0))}%`;
-  return (
-    <View
-      style={styles.pbWrap}
-      accessible={!!label}
-      accessibilityLabel={label ? `${label} ${Math.round(Number(pct) || 0)}%` : undefined}
-    >
-      {label ? (
-        <View style={styles.pbLabelRow}>
-          <Text style={[styles.pbLabel, { color: labelColor ?? SLATE2 }]} numberOfLines={1}>{label}</Text>
-          <Text style={styles.pbValue}>{`${Math.round(Number(pct) || 0)}%`}</Text>
-        </View>
-      ) : null}
-      <View style={styles.pbTrack}>
-        <View style={[styles.pbFill, { width, backgroundColor: color }]} />
-      </View>
     </View>
   );
 }
@@ -2176,114 +2109,120 @@ function Banner({ color, label }) {
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, backgroundColor: INK, paddingHorizontal: 18, paddingTop: 48, paddingBottom: 24 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  claimingLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
-  territoryName: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
+  claimingLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6 },
+  territoryName: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 24, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 28 },
   // Neutral instrument — the progress ring is this screen's one red element.
   badge: { marginTop: 4, backgroundColor: INK2, borderColor: HAIRLINE_STRONG, borderWidth: 1, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  badgeText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
   ringWrap: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   ringStack: { alignItems: 'center', justifyContent: 'center' },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  pctText: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 48, letterSpacing: -1, textTransform: 'uppercase' },
+  pctText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 48, letterSpacing: -1, textTransform: 'uppercase' },
   // Bone, not slate — this is the real number, read mid-walk in direct sun.
-  metresText: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
+  metresText: { fontFamily: 'IBMPlexSans_700Bold', color: BONE, fontSize: 11, letterSpacing: 0.8, marginTop: 4 },
 
   // The deadline is a first-class instrument, not a table row.
   timeLeftBlock: { marginTop: 18, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
-  timeLeftLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  timeLeftValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 18, letterSpacing: 1 },
+  timeLeftLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  timeLeftValue: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 18, letterSpacing: 1 },
 
   statsPanel: { marginTop: 24, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
-  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  statValue: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 14, letterSpacing: 0.2 },
+  statLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  statValue: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 14, letterSpacing: 0.2 },
 
-  firstWalkHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
+  firstWalkHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 12, textAlign: 'center', marginTop: 14, paddingHorizontal: 24 },
   bannerZone: { marginTop: 12, minHeight: 36 },
   banner: { borderWidth: 1, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'transparent' },
-  bannerText: { fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
+  bannerText: { fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
 
   devBtn: { marginBottom: 8, backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 12, alignItems: 'center' },
-  devBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  devBtnText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  cancelText: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  cancelText: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   cancelConfirmBlock: { gap: 10 },
-  cancelConfirmText: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
+  cancelConfirmText: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12 },
   keepWalkingBtn: { backgroundColor: INK2, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  keepWalkingText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  keepWalkingText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   // Health-Connect blocking state — the walk cannot count; say so and route out.
-  hcBlocked: { marginTop: 32, backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
-  hcBlockedTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  hcBlockedBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19 },
-  hcBlockedBtn: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  hcBlockedBtnText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlocked: { marginTop: 32, gap: 12 },
+  hcBlockedTitle: { fontFamily: 'IBMPlexSans_700Bold', color: '#E34234', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  hcBlockedBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19 },
 
   // Map mode (plan U13): chrome laid over the live challenge map. The map's
   // fill is the one red element; panels are Ink 2 instruments.
   mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 18, paddingBottom: 12, backgroundColor: INK2, borderBottomWidth: 1, borderBottomColor: HAIRLINE_STRONG },
-  mapFillHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  mapFillHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 13, lineHeight: 19, marginTop: 8 },
   mapFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 12, backgroundColor: INK, borderTopWidth: 1, borderTopColor: HAIRLINE_STRONG },
-  mapHint: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 12, textAlign: 'center', marginBottom: 8 },
+  mapHint: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 12, textAlign: 'center', marginBottom: 8 },
   bannerZoneMap: { marginBottom: 8 },
   securePanel: { backgroundColor: INK2, borderWidth: 1, borderColor: HAIRLINE_STRONG, borderRadius: 0, padding: 16, gap: 12 },
-  secureTitle: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
-  secureBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  secureTitle: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  secureBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
   // Arm gate — fee paid, walk clock not started. The countdown is the one loud
   // element; everything else stays quiet so START WALK is the obvious target.
   armBlock: { flex: 1, justifyContent: 'center', gap: 12 },
-  armCountdown: { fontFamily: 'GeistMono_300Light', color: '#C8FF3D', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
-  armLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
-  armTitle: { fontFamily: 'SofiaSansExtraCondensed_700Bold', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },
-  armBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 21 },
-  armStake: { fontFamily: 'GeistMono_500Medium', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  armError: { fontFamily: 'InstrumentSans_400Regular', color: AMBER, fontSize: 13, lineHeight: 19 },
+  armCountdown: { fontFamily: 'IBMPlexSans_600SemiBold', color: '#84FF44', fontSize: 72, letterSpacing: -2, textAlign: 'center', textTransform: 'uppercase' },
+  armLabel: { fontFamily: 'IBMPlexSans_700Bold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', textAlign: 'center' },
+  armTitle: { fontFamily: 'Archivo_900Black_Italic', color: BONE, fontSize: 22, lineHeight: 28, marginTop: 8, textTransform: 'uppercase' },
+  armBody: { fontFamily: 'IBMPlexSans_500Medium', color: BONE, fontSize: 14, lineHeight: 21 },
+  armStake: { fontFamily: 'IBMPlexSans_600SemiBold', color: AMBER, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  armError: { fontFamily: 'IBMPlexSans_500Medium', color: AMBER, fontSize: 13, lineHeight: 19 },
   armPrimary: { backgroundColor: CLAIM_BUTTON, borderRadius: 0, paddingVertical: 16, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  armPrimaryText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  armPrimaryText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
   armSecondary: { backgroundColor: INK, borderRadius: 0, borderWidth: 1, borderColor: HAIRLINE_STRONG, paddingVertical: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  armSecondaryText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  armSecondaryText: { fontFamily: 'IBMPlexSans_600SemiBold', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
 
-  // Figma Start walk (plan U9, B4).
-  armChip: { alignSelf: 'flex-start', borderWidth: 1, borderColor: HAIRLINE_STRONG, backgroundColor: INK2, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '100%' },
-  armChipText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  armFigmaTitle: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 32, lineHeight: 36, textTransform: 'uppercase', marginTop: 10 },
-  armCountdownRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 14 },
-  armFigmaCountdown: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 56, lineHeight: 60, letterSpacing: -1.5 },
-  armFigmaCountdownLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 },
-  armRows: { marginTop: 14, borderBottomWidth: 1, borderBottomColor: colors.hairline },
-  armRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 10 },
-  armRowDivider: { borderTopWidth: 1, borderTopColor: colors.hairline },
-  armRowText: { flex: 1, fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 14, lineHeight: 20 },
-  armFigmaMap: { flex: 1, minHeight: 160, marginTop: 14, overflow: 'hidden' },
-  armFigmaSecondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  // Dominia-Temp challenge flow (plan 2026-11-28 U7).
+  chHeader: { paddingHorizontal: 0 },
+  chEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chDash: { width: 18, height: 3, backgroundColor: colors.action },
+  chEyebrow: { flex: 1, fontFamily: fonts.mono, color: colors.muted2, fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase' },
+  chNameRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+  chName: { flex: 1, fontFamily: fonts.display, color: colors.white, fontSize: 24, lineHeight: 30, textTransform: 'uppercase' },
+  chChip: { fontFamily: fonts.action, color: colors.white, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' },
+  chRule: { height: 1, backgroundColor: colors.surfaceLine, marginTop: 12 },
 
-  // Figma in progress (plan U9, B5 / C6 / D2 / D3).
+  readyScreen: { flex: 1, backgroundColor: INK, paddingHorizontal: 18 },
+  readyTileWrap: { flex: 1, minHeight: 200, alignItems: 'center', justifyContent: 'center' },
+  readyTileInner: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  readyCount: { fontFamily: fonts.display, color: colors.white, fontSize: 88, lineHeight: 100, letterSpacing: -1 },
+  readyCountLabel: { fontFamily: fonts.mono, color: colors.white, fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', marginTop: 2 },
+  readyTitle: { fontFamily: fonts.display, color: colors.white, fontSize: 24, lineHeight: 30, textTransform: 'uppercase' },
+  readyBody: { fontFamily: fonts.body, color: colors.muted2, fontSize: 14, lineHeight: 20, marginTop: 8 },
+  readyStakeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  readyBiscuit: { width: 22, height: 22, resizeMode: 'contain' },
+  readyStake: { flex: 1, fontFamily: fonts.bodyMedium, color: colors.white, fontSize: 13, lineHeight: 18 },
+  readyHint: { fontFamily: fonts.bodyMedium, color: colors.danger, fontSize: 13, lineHeight: 18, marginTop: 10 },
+  readyStart: { marginTop: 18 },
+  readyNotYet: { marginTop: 10 },
+
   figmaHeaderWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
-  figmaHeader: { paddingHorizontal: 18, paddingBottom: 12, backgroundColor: INK, borderBottomWidth: 1.5 },
-  figmaEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  figmaEyebrow: { flex: 1, fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
-  figmaTerritory: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', color: BONE, fontSize: 30, lineHeight: 34, textTransform: 'uppercase' },
-  figmaFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 16, backgroundColor: INK },
-  figmaPctRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  figmaPct: { fontFamily: 'GeistMono_300Light', color: BONE, fontSize: 52, lineHeight: 56, letterSpacing: -1.5 },
-  figmaCaption: { flexShrink: 1, fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 10 },
-  figmaBars: { gap: 12, marginTop: 8 },
-  figmaTiles: { flexDirection: 'row', marginTop: 16, borderWidth: 1, borderColor: HAIRLINE_STRONG, backgroundColor: INK2 },
-  figmaTile: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, gap: 6 },
-  figmaTileDivider: { borderLeftWidth: 1, borderLeftColor: HAIRLINE_STRONG },
-  figmaTileLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  figmaTileLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  figmaTileValue: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 20, letterSpacing: 0.2 },
-  figmaCancelQuiet: { marginTop: 12, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  figmaCancelOutlined: { marginTop: 14, minHeight: 48, borderWidth: 1, borderColor: colors.enemy, alignItems: 'center', justifyContent: 'center' },
-  figmaCancelText: { fontFamily: 'GeistMono_500Medium', color: SLATE2, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
-  pbWrap: { marginTop: 10, gap: 6 },
-  pbLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  pbLabel: { flex: 1, fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' },
-  pbValue: { fontFamily: 'GeistMono_400Regular', color: BONE, fontSize: 12 },
-  pbTrack: { height: 4, backgroundColor: colors.raised },
-  pbFill: { height: 4 },
+  traceHeader: { paddingHorizontal: 18, paddingBottom: 4, backgroundColor: INK },
+  tracePctWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
+  tracePct: {
+    fontFamily: fonts.display,
+    color: colors.white,
+    fontSize: 46,
+    lineHeight: 54,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 8,
+  },
+  traceCaption: { fontFamily: fonts.monoMedium, color: colors.white, fontSize: 13, marginTop: 2 },
+  traceFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 18, paddingTop: 8, backgroundColor: INK },
+  traceFade: { position: 'absolute', left: 0, right: 0, top: -64, height: 64 },
+  traceInstruction: { fontFamily: fonts.body, color: colors.white, fontSize: 15, lineHeight: 22, textAlign: 'center', paddingHorizontal: 12 },
+  traceTimeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12 },
+  traceTimeLabel: { fontFamily: fonts.mono, color: colors.muted2, fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase' },
+  traceTimeValue: { fontFamily: fonts.monoMedium, color: colors.white, fontSize: 22, letterSpacing: 0.5 },
+  traceSteps: { marginTop: 14 },
+  traceStepsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, minHeight: 48 },
+  traceStepsLabel: { fontFamily: fonts.mono, color: colors.white, fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase' },
+  traceStepsValue: { fontFamily: fonts.monoMedium, color: colors.white, fontSize: 17 },
+  traceCancel: { marginTop: 18 },
 });
+

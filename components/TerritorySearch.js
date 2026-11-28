@@ -7,9 +7,13 @@
 // loading, results, empty, error with retry. Updated UX C3 (plan U8): a
 // magnifier, lime focus, and rows with an ownership chip (owner_scope) and
 // the distance from the home pin (distance_m); either hides when absent.
+// Dominia-Temp (plan U5): a glass field with a cut bottom-right corner and
+// the "Search places, runners, alliances" placeholder (search is still by
+// territory name); result rows are CutCards.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Svg, { Polygon } from 'react-native-svg';
 import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { SEARCH_MAX_LEN, searchTerritories } from '../lib/territorySearchApi';
@@ -17,6 +21,10 @@ import { formatKm } from '../lib/relocate';
 import { colors, fonts } from '../lib/theme';
 import { SearchIcon } from './MapIcons';
 import TagChip from './TagChip';
+import { CutCard } from './ui';
+import { useLayoutSize } from './ui/shared';
+import { cutCornerPoints } from '../lib/slantGeometry';
+import { SHAPE_LAYER } from './ui/shared';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 2;
@@ -103,19 +111,28 @@ export default function TerritorySearch({ onSelect, onActiveChange, dismissKey =
   };
 
   const showPanel = status !== 'idle';
+  const [fieldBox, onFieldLayout] = useLayoutSize();
 
   return (
     <View>
-      <View style={[styles.field, focused && styles.fieldFocused]}>
-        <SearchIcon size={16} color={focused ? colors.lime : colors.slate2} />
+      <View style={styles.field} onLayout={onFieldLayout}>
+        <Svg style={SHAPE_LAYER} width={fieldBox.w || 0} height={fieldBox.h || 0} pointerEvents="none">
+          <Polygon
+            points={cutCornerPoints(fieldBox.w, fieldBox.h, 10, 'br', 0.5)}
+            fill={focused ? 'rgba(7,49,209,0.16)' : 'rgba(20,24,40,0.72)'}
+            stroke={focused ? colors.action : 'rgba(253,253,253,0.14)'}
+            strokeWidth={1}
+          />
+        </Svg>
+        <SearchIcon size={16} color={focused ? colors.white : colors.muted2} />
         <TextInput
           ref={inputRef}
           value={query}
           onChangeText={setQuery}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={t('map.search.placeholder', { defaultValue: 'Search territories' })}
-          placeholderTextColor={colors.slate2}
+          placeholder={t('map.search.placeholderAll', { defaultValue: 'Search places, runners, alliances' })}
+          placeholderTextColor={colors.muted2}
           accessibilityLabel={t('map.search.a11y', { defaultValue: 'Search territories by name' })}
           maxLength={SEARCH_MAX_LEN}
           returnKeyType="search"
@@ -168,27 +185,29 @@ export default function TerritorySearch({ onSelect, onActiveChange, dismissKey =
               </Pressable>
             </View>
           ) : null}
-          {(status === 'done' || status === 'loading') && results.map((r, i) => {
+          {(status === 'done' || status === 'loading') && results.map((r) => {
             const tag = r.ownerScope ? SCOPE_TAGS[r.ownerScope] : null;
             const km = r.distanceM != null ? formatKm(r.distanceM) : null;
             return (
-              <Pressable
+              <CutCard
                 key={String(r.id)}
-                accessibilityRole="button"
+                padding={0}
                 accessibilityLabel={t('map.search.resultA11y', { defaultValue: 'Show {{name}} on the map', name: r.name })}
                 onPress={() => pick(r)}
-                style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.rowPressed]}
+                style={styles.rowCard}
               >
-                <Text style={styles.rowText} numberOfLines={1} maxFontSizeMultiplier={1.3}>{r.name}</Text>
-                {tag ? (
-                  <TagChip kind={tag.kind}>{t(tag.key, { defaultValue: tag.defaultValue })}</TagChip>
-                ) : null}
-                {km ? (
-                  <Text style={styles.rowDistance} maxFontSizeMultiplier={1.3}>
-                    {t('map.search.distanceKm', { defaultValue: '{{km}} KM', km })}
-                  </Text>
-                ) : null}
-              </Pressable>
+                <View style={styles.row}>
+                  <Text style={styles.rowText} numberOfLines={1} maxFontSizeMultiplier={1.3}>{r.name}</Text>
+                  {tag ? (
+                    <TagChip kind={tag.kind}>{t(tag.key, { defaultValue: tag.defaultValue })}</TagChip>
+                  ) : null}
+                  {km ? (
+                    <Text style={styles.rowDistance} maxFontSizeMultiplier={1.3}>
+                      {t('map.search.distanceKm', { defaultValue: '{{km}} KM', km })}
+                    </Text>
+                  ) : null}
+                </View>
+              </CutCard>
             );
           })}
         </View>
@@ -199,25 +218,18 @@ export default function TerritorySearch({ onSelect, onActiveChange, dismissKey =
 
 const styles = StyleSheet.create({
   field: {
-    minHeight: 44,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    backgroundColor: colors.ink2,
-    borderWidth: 0.5,
-    borderColor: colors.hairline,
-    borderRadius: 0,
-  },
-  fieldFocused: {
-    borderColor: colors.lime,
+    gap: 10,
+    paddingHorizontal: 16,
   },
   input: {
     flex: 1,
-    paddingVertical: 10,
-    fontFamily: fonts.mono,
-    fontSize: 13,
-    color: colors.bone,
+    paddingVertical: 12,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.white,
   },
   clearButton: {
     minWidth: 24,
@@ -229,11 +241,11 @@ const styles = StyleSheet.create({
     color: colors.slate2,
   },
   panel: {
-    backgroundColor: colors.ink2,
-    borderWidth: 0.5,
-    borderTopWidth: 0,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 0,
+    marginTop: 6,
+    gap: 6,
+  },
+  rowCard: {
+    overflow: 'hidden',
   },
   stateText: {
     fontFamily: fonts.body,
@@ -241,8 +253,10 @@ const styles = StyleSheet.create({
     color: colors.slate2,
     paddingHorizontal: 12,
     paddingVertical: 12,
+    backgroundColor: 'rgba(14,14,16,0.94)',
   },
   errorRow: {
+    backgroundColor: 'rgba(14,14,16,0.94)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -264,11 +278,11 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
   row: {
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   rowDistance: {
     minWidth: 48,
@@ -277,10 +291,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.1,
     color: colors.slate2,
-  },
-  rowDivider: {
-    borderTopWidth: 0.5,
-    borderTopColor: colors.hairline,
   },
   rowPressed: {
     backgroundColor: colors.ink3,

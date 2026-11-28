@@ -1,30 +1,33 @@
 // Component: ActivityLogEvent — per-event_type renderer (17 event_types: 8 styled, 10 stubs)
-// Surfaces: transparent rows on Ink #101010, 1px hairline-standard divider between rows
+// Surfaces: transparent rows on Ink #000000, 1px hairline-standard divider between rows
 // Typography: Geist Mono 500 10px labels, Instrument Sans 500 16px headlines, Geist Mono 400 11px metadata, Archivo 700 32px streak hero number
 // Territory colors used (one per row max — accent bar only, never fills):
-//   Claim #22D65E: contest_won, streak_milestone (Claim underline per brand "Streak display")
-//   Alliance #3155FF: contest_held, contest_defended
-//   Enemy #E8432B: contest_lost
-//   Slate #6C6C69: contest_expired, streak_broken, all stub rows
+//   Claim #84FF44: contest_won, streak_milestone (Claim underline per brand "Streak display")
+//   Alliance (colors.alliance): contest_held, contest_defended
+//   Enemy #E34234: contest_lost
+//   Slate rgba(253,253,253,0.30): contest_expired, streak_broken, all stub rows
 // Brand rules applied: meaning-locked colors (Claim=yours, Alliance=ours, Enemy=theirs), 0px radius, no icons, type-driven hierarchy, hairlines visible
 //
-// HistoryRow (named export) is the Figma-mode row (legacy_tabs off, G8): icon
-// tile + territory name + Final event label + time, fed by lib/activityHistory.
+// HistoryRow (named export) is the Dominia-Temp row (legacy_tabs off, board
+// 40): icon tile + territory name + Final event label + day and time, fed by
+// lib/activityHistory.
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Line, Path, Rect } from 'react-native-svg';
+import Svg, { Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { getMeta } from '../lib/activityLogMeta';
 import { timeAgo } from '../lib/timeAgo';
 import { colors, fonts } from '../lib/theme';
+import { CutCard, SlantTile } from './ui';
+import { FlagGlyph, ShieldGlyph, SwordsGlyph } from './SocialGlyphs';
 
-const CLAIM = '#22D65E';
-const ALLIANCE = '#3155FF';
-const ENEMY = '#E8432B';
-const SLATE = '#6C6C69';
-const BONE = '#F5F4EF';
-const SLATE2 = '#A3A29F';
+const CLAIM = '#84FF44';
+const ALLIANCE = colors.alliance;
+const ENEMY = '#E34234';
+const SLATE = 'rgba(253,253,253,0.30)';
+const BONE = '#FDFDFD';
+const SLATE2 = 'rgba(253,253,253,0.62)';
 
 function RowHeader({ label, labelColor, event }) {
   return (
@@ -226,44 +229,22 @@ export default function ActivityLogEvent({ event }) {
   }
 }
 
-// ─── Figma History row (legacy_tabs off; plan 2026-11-27 U13, G8) ──────────
-// An icon tile, the territory name as the headline, the Final event label
-// under it and the time on the right. `item` comes from
+// ─── Dominia-Temp History row (legacy_tabs off; board 40, plan 2026-11-28 U11)
+// A cut-corner card: a slanted icon tile (flag / swords / shield, lime on
+// success and red on failure), the territory name over the event label, and
+// the day stamp over the time on the right. `item` comes from
 // lib/activityHistory.historyItem.
 
 const TONES = {
-  self: { fg: colors.self, bg: 'rgba(34,214,94,0.24)' },
-  alliance: { fg: colors.alliance, bg: 'rgba(49,85,255,0.24)' },
-  enemy: { fg: colors.enemy, bg: 'rgba(232,67,43,0.24)' },
-  neutral: { fg: colors.muted2, bg: colors.raised },
+  success: colors.lime,
+  failure: colors.danger,
+  neutral: colors.muted2,
 };
 
 function TileGlyph({ icon, color }) {
-  if (icon === 'flag') {
-    return (
-      <Svg width={18} height={18} viewBox="0 0 18 18">
-        <Line x1="4" y1="2" x2="4" y2="16" stroke={color} strokeWidth={1.8} />
-        <Path d="M4 3 H13 L11 6 L13 9 H4" stroke={color} strokeWidth={1.8} fill="none" strokeLinejoin="miter" />
-      </Svg>
-    );
-  }
-  if (icon === 'shield') {
-    return (
-      <Svg width={18} height={18} viewBox="0 0 18 18">
-        <Path d="M9 2 L15 4.5 V9 C15 12.5 12.5 15 9 16 C5.5 15 3 12.5 3 9 V4.5 Z" stroke={color} strokeWidth={1.8} fill="none" />
-      </Svg>
-    );
-  }
-  if (icon === 'swords') {
-    return (
-      <Svg width={18} height={18} viewBox="0 0 18 18">
-        <Line x1="3" y1="3" x2="13" y2="13" stroke={color} strokeWidth={1.8} />
-        <Line x1="11" y1="15" x2="15" y2="11" stroke={color} strokeWidth={1.8} />
-        <Line x1="13" y1="13" x2="15.5" y2="15.5" stroke={color} strokeWidth={1.8} />
-        <Line x1="6" y1="8" x2="8" y2="6" stroke={color} strokeWidth={1.8} />
-      </Svg>
-    );
-  }
+  if (icon === 'flag') return <FlagGlyph size={18} color={color} />;
+  if (icon === 'shield') return <ShieldGlyph size={18} color={color} />;
+  if (icon === 'swords') return <SwordsGlyph size={18} color={color} />;
   return (
     <Svg width={18} height={18} viewBox="0 0 18 18">
       <Rect x="6" y="6" width="6" height="6" fill={color} />
@@ -273,71 +254,82 @@ function TileGlyph({ icon, color }) {
 
 export function HistoryRow({ item }) {
   const { t } = useTranslation();
-  const tone = TONES[item.label.tone] || TONES.neutral;
-  const label = t(item.label.key, { defaultValue: item.label.defaultValue });
+  const color = TONES[item.label.tone] || TONES.neutral;
+  const raw = t(item.label.key, { defaultValue: item.label.defaultValue });
+  // Legacy stub copy is shouted ("TERRITORY DEVELOPED"); the Figma history
+  // rows are sentence case.
+  const label = raw === raw.toUpperCase() ? raw.charAt(0) + raw.slice(1).toLowerCase() : raw;
   const headline = item.headline || t('activityLog.territoryFallback', { defaultValue: 'Territory' });
   return (
-    <View style={styles.historyRow} accessible accessibilityLabel={`${headline}, ${label}, ${item.time}`}>
-      <View style={[styles.historyTile, { backgroundColor: tone.bg }]}>
-        <TileGlyph icon={item.label.icon} color={tone.fg} />
+    <CutCard
+      padding={0}
+      style={styles.historyCard}
+      accessibilityLabel={[headline, label, item.date, item.time].filter(Boolean).join(', ')}
+    >
+      <View style={styles.historyRow}>
+        <SlantTile size={36} square tone="raised">
+          <TileGlyph icon={item.label.icon} color={color} />
+        </SlantTile>
+        <View style={styles.historyText}>
+          <Text style={styles.historyHeadline} numberOfLines={1} maxFontSizeMultiplier={1.3}>{headline}</Text>
+          <Text style={styles.historyLabel} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</Text>
+        </View>
+        <View style={styles.historyWhen}>
+          {item.date ? (
+            <Text style={styles.historyDate} maxFontSizeMultiplier={1.3}>{item.date}</Text>
+          ) : null}
+          <Text style={styles.historyTime} maxFontSizeMultiplier={1.3}>{item.time}</Text>
+        </View>
       </View>
-      <View style={styles.historyText}>
-        <Text style={styles.historyHeadline} numberOfLines={1} maxFontSizeMultiplier={1.3}>{headline}</Text>
-        <Text style={[styles.historyLabel, { color: tone.fg }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-          {label}
-        </Text>
-      </View>
-      <Text style={styles.historyTime} maxFontSizeMultiplier={1.3}>{item.time}</Text>
-    </View>
+    </CutCard>
   );
 }
 
 const styles = StyleSheet.create({
+  historyCard: {
+    marginBottom: 8,
+  },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 68,
-    paddingVertical: 14,
-    paddingLeft: 16,
-    paddingRight: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
-  },
-  historyTile: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 56,
+    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 14,
   },
   historyText: {
     flex: 1,
     paddingHorizontal: 12,
   },
   historyHeadline: {
-    fontFamily: fonts.displayBold,
-    fontSize: 20,
-    lineHeight: 22,
-    color: colors.bone,
-    textTransform: 'uppercase',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    color: colors.white,
   },
   historyLabel: {
-    marginTop: 4,
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    marginTop: 1,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.muted2,
+  },
+  historyWhen: {
+    alignItems: 'flex-end',
+  },
+  historyDate: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.white,
   },
   historyTime: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 0.8,
+    fontFamily: fonts.body,
+    fontSize: 12,
     color: colors.muted2,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,244,239,0.08)',
+    borderBottomColor: 'rgba(253,253,253,0.08)',
     paddingVertical: 14,
     paddingRight: 16,
   },
@@ -356,13 +348,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   label: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
   },
   timestamp: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.26,
     textTransform: 'uppercase',
@@ -372,13 +364,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   headline: {
-    fontFamily: 'InstrumentSans_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 16,
     color: BONE,
     letterSpacing: -0.24,
   },
   supporting: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 0.22,
     textTransform: 'uppercase',
@@ -386,7 +378,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   graceDayLine: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
@@ -394,13 +386,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   distanceBody: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 13,
     letterSpacing: 0.26,
     color: BONE,
   },
   heroNumber: {
-    fontFamily: 'GeistMono_300Light',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 32,
     color: BONE,
     letterSpacing: -0.96,

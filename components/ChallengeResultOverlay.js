@@ -5,14 +5,18 @@
 // Content comes from lib/challengeScreen.js challengeResult(); this component
 // only lays it out and announces it.
 //
-// Figma mode (plan U9) passes `moment` instead: a full-screen TAKEN / HELD /
-// LOST moment with an eyebrow, body, three stats tiles and BACK TO MAP.
-// Content comes from lib/challengeResult.js challengeResultModel().
+// Dominia-Temp mode (plan 2026-11-28 U7) passes `moment` instead: VICTORY in
+// lime or DEFEAT in red over the dimmed challenge screen, the glowing or
+// cracked territory tile, a headline and the owner line with the names in
+// bold. Tapping anywhere continues. Content comes from lib/challengeResult.js
+// challengeResultModel().
 
 import React, { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
+import { emphasisSegments } from '../lib/challengeResult';
+import ChallengeTerritoryTile from './ChallengeTerritoryTile';
 
 const INK2 = colors.ink2;
 const BONE = colors.bone;
@@ -48,24 +52,20 @@ export default function ChallengeResultOverlay({ result, moment, onContinue, top
 
 function ChallengeMoment({ moment, onContinue, topInset, bottomInset }) {
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
   const fade = useRef(new Animated.Value(0)).current;
 
-  const eyebrow = tr(t, moment.eyebrow);
-  const word = tr(t, moment.moment);
+  const word = tr(t, moment.word);
+  const title = tr(t, moment.title);
   const body = tr(t, moment.body);
-  const backLabel = tr(t, moment.backToMap);
+  const continueLabel = tr(t, moment.continue);
   const accent = MOMENT_COLORS[moment.color] ?? BONE;
-  const stats = moment.stats.map((s) => ({
-    label: tr(t, s.label),
-    value: s.valueCopy ? tr(t, s.valueCopy) : s.value,
-    color: MOMENT_COLORS[s.color] ?? BONE,
-  }));
+  const segments = emphasisSegments(body, moment.emphasis);
+  const tileSize = Math.min(220, Math.round(width * 0.52));
 
   useEffect(() => {
-    const statLine = stats.map((s) => `${s.label} ${s.value}`).join(', ');
-    AccessibilityInfo.announceForAccessibility?.(`${word}. ${eyebrow}. ${body} ${statLine}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word, eyebrow, body]);
+    AccessibilityInfo.announceForAccessibility?.(`${word}. ${title}. ${body}`);
+  }, [word, title, body]);
 
   useEffect(() => {
     Animated.timing(fade, {
@@ -76,37 +76,31 @@ function ChallengeMoment({ moment, onContinue, topInset, bottomInset }) {
     }).start();
   }, [fade]);
 
+  // The whole dimmed screen is the CONTINUE target (the board has no button).
   return (
-    <Animated.View
-      style={[styles.momentScrim, { opacity: fade, paddingTop: topInset + 120, paddingBottom: bottomInset + 24 }]}
-      accessibilityViewIsModal
-    >
-      <View accessible accessibilityRole="alert" accessibilityLabel={`${word}. ${eyebrow}. ${body}`}>
-        <Text style={[styles.momentEyebrow, { color: accent }]}>{eyebrow}</Text>
-        <Text style={[styles.momentWord, { color: accent }]} maxFontSizeMultiplier={1.1}>{word}</Text>
-        <Text style={styles.momentBody}>{body}</Text>
-      </View>
-      <View style={styles.statsRow}>
-        {stats.map((s, i) => (
-          <View
-            key={i}
-            style={[styles.statTile, i > 0 && styles.statTileDivider]}
-            accessible
-            accessibilityLabel={`${s.label} ${s.value}`}
-          >
-            <Text style={styles.statLabel} numberOfLines={1}>{s.label}</Text>
-            <Text style={[styles.statValue, { color: s.color }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={{ flex: 1 }} />
+    <Animated.View style={[styles.momentScrim, { opacity: fade }]} accessibilityViewIsModal>
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={backLabel}
         onPress={onContinue}
-        style={({ pressed }) => [styles.continueBtn, pressed && { backgroundColor: colors.actionPressed }]}
+        accessibilityRole="button"
+        accessibilityLabel={`${word}. ${title}. ${body}`}
+        accessibilityHint={continueLabel}
+        style={[styles.momentPress, { paddingTop: topInset + 24, paddingBottom: bottomInset + 24 }]}
       >
-        <Text style={styles.continueText}>{backLabel}</Text>
+        <View style={styles.momentCenter}>
+          <Text style={[styles.momentWord, { color: accent }]} maxFontSizeMultiplier={1.1}>{word}</Text>
+          <ChallengeTerritoryTile
+            size={tileSize}
+            variant={moment.variant === 'victory' ? 'victory' : 'defeat'}
+            style={styles.momentTile}
+          />
+          <Text style={styles.momentTitle}>{title}</Text>
+          <Text style={styles.momentBody}>
+            {segments.map((s, i) => (
+              <Text key={i} style={s.bold ? styles.momentBold : null}>{s.text}</Text>
+            ))}
+          </Text>
+        </View>
+        <Text style={styles.momentContinue}>{continueLabel}</Text>
       </Pressable>
     </Animated.View>
   );
@@ -165,7 +159,7 @@ function VictoryDefeatOverlay({ result, onContinue, bottomInset = 0 }) {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.72)', // Ink at 72% — the map stays visible beneath
+    backgroundColor: 'rgba(0,0,0,0.72)', // Ink at 72% — the map stays visible beneath
     justifyContent: 'flex-end',
     paddingHorizontal: 18,
     gap: 12,
@@ -179,9 +173,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Ceremony moment: Archivo display is sanctioned here.
-  label: { fontFamily: 'SofiaSansExtraCondensed_800ExtraBold', fontSize: 48, letterSpacing: -1.4, textTransform: 'uppercase' },
-  title: { fontFamily: 'InstrumentSans_500Medium', color: BONE, fontSize: 15, lineHeight: 21 },
-  body: { fontFamily: 'InstrumentSans_400Regular', color: SLATE2, fontSize: 13, lineHeight: 19 },
+  label: { fontFamily: 'Archivo_900Black_Italic', fontSize: 38, letterSpacing: -1.4, textTransform: 'uppercase' },
+  title: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 15, lineHeight: 21 },
+  body: { fontFamily: 'IBMPlexSans_500Medium', color: SLATE2, fontSize: 13, lineHeight: 19 },
   continueBtn: {
     backgroundColor: CLAIM_BUTTON,
     borderRadius: 0,
@@ -190,33 +184,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  continueText: { fontFamily: 'GeistMono_500Medium', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
+  continueText: { fontFamily: 'IBMPlexSans_600SemiBold', color: BONE, fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase' },
 
-  // Figma result moment (plan U9): full screen over a dimmed map.
+  // Dominia-Temp result overlay (plan 2026-11-28 U7): VICTORY / DEFEAT over
+  // the dimmed challenge screen.
   momentScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(16,16,16,0.82)',
-    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
-  momentEyebrow: { fontFamily: 'GeistMono_500Medium', fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' },
+  momentPress: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
+  momentCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Ceremony moment: the display face at its largest.
   momentWord: {
-    fontFamily: 'SofiaSansExtraCondensed_800ExtraBold',
-    fontSize: 72,
-    lineHeight: 76,
-    letterSpacing: -1,
+    fontFamily: fonts.display,
+    fontSize: 44,
+    lineHeight: 50,
+    letterSpacing: -0.5,
     textTransform: 'uppercase',
-    marginTop: 10,
+    textAlign: 'center',
   },
-  momentBody: { fontFamily: 'InstrumentSans_400Regular', color: BONE, fontSize: 15, lineHeight: 22, marginTop: 8 },
-  statsRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: HAIRLINE_STRONG,
+  momentTile: { marginTop: 8, marginBottom: 12 },
+  momentTitle: { fontFamily: fonts.body, color: BONE, fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  momentBody: { fontFamily: fonts.body, color: BONE, fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 10 },
+  momentBold: { fontFamily: fonts.mono },
+  momentContinue: {
+    fontFamily: fonts.mono,
+    color: colors.muted2,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
-  statTile: { flex: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
-  statTileDivider: { borderLeftWidth: 1, borderLeftColor: HAIRLINE_STRONG },
-  statLabel: { fontFamily: 'GeistMono_400Regular', color: SLATE2, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
-  statValue: { fontFamily: 'GeistMono_400Regular', fontSize: 20, letterSpacing: 0.2, textTransform: 'uppercase' },
 });

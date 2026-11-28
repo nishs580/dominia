@@ -1,8 +1,9 @@
 // Component: ActivityLogScreen — unified activity feed
-// Surface: Ink #101010 background, rows transparent on Ink, 1px hairline-standard rgba(245,244,239,0.08) divider between rows
+// Surface: Ink #000000 background, rows transparent on Ink, 1px hairline-standard rgba(253,253,253,0.08) divider between rows
 // Typography: section label Geist Mono 500 11px, body Instrument Sans 400 14px Bone, timestamps Geist Mono 400 9px Slate-2
 // Territory colors: delegated to ActivityLogEvent row accent bars (Claim, Alliance, Enemy, Slate)
 // Brand rule applied: text-only header with hairline-strong, retry button is the single Claim CTA on the screen, end-of-list signaled by hairline + Geist Mono label (grids are visible — brand rule).
+// legacy_tabs off: the Dominia-Temp History board (40), see the figma branch below.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -10,7 +11,6 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SectionList,
   StatusBar,
   StyleSheet,
   Text,
@@ -21,11 +21,11 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import ActivityLogEvent, { HistoryRow } from '../components/ActivityLogEvent';
-import BackTitleHeader from '../components/BackTitleHeader';
+import { BackHeader, ScreenTitle, SlantButton } from '../components/ui';
 import { getActivityLog, markActivityLogRead } from '../lib/activityLogApi';
-import { buildHistorySections } from '../lib/activityHistory';
+import { buildHistoryRows } from '../lib/activityHistory';
 import { useFlag } from '../lib/flags';
-import { colors, fonts } from '../lib/theme';
+import { colors } from '../lib/theme';
 import { useFirstTapTips, rectFromRef } from '../components/FirstTapTips';
 
 export default function ActivityLogScreen() {
@@ -33,8 +33,9 @@ export default function ActivityLogScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { userId, getToken } = useAuth();
-  // legacy_tabs off: Figma G8 History — back arrow + HISTORY title, rows
-  // grouped TODAY / YESTERDAY / date, Final event labels (plan 2026-11-27 U13).
+  // legacy_tabs off: Dominia-Temp History (board 40, plan 2026-11-28 U11) —
+  // "‹ Log" header, HISTORY title, cut-corner rows with a typed icon tile,
+  // the event label and the day stamp + time.
   const figma = !useFlag('legacy_tabs');
 
   // First-tap tip anywhere on the screen (header + feed are one surface).
@@ -102,7 +103,7 @@ export default function ActivityLogScreen() {
 
   const renderFooter = () => {
     if (loadingMore) {
-      return <ActivityIndicator color="#6C6C69" style={{ paddingVertical: 16 }} />;
+      return <ActivityIndicator color="rgba(253,253,253,0.30)" style={{ paddingVertical: 16 }} />;
     }
     if (endReached && events.length > 0) {
       return (
@@ -115,18 +116,31 @@ export default function ActivityLogScreen() {
     return null;
   };
 
-  const sections = useMemo(
-    () => (figma ? buildHistorySections(events, { now: new Date(), locale: i18n.language }) : []),
+  const rows = useMemo(
+    () => (figma ? buildHistoryRows(events, { now: new Date(), locale: i18n.language }) : []),
     [figma, events, i18n.language],
   );
 
-  // Figma mode keeps its header on every state so the back arrow is always there.
-  const wrapFigma = (body) => (
-    <View style={styles.screen}>
-      <BackTitleHeader
-        title={t('activityLog.historyTitle', { defaultValue: 'History' })}
+  const figmaHeader = (
+    <>
+      <BackHeader
+        label={t('activityLog.logBack', { defaultValue: 'Log' })}
+        accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
+        bordered
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
       />
+      <ScreenTitle
+        title={t('activityLog.historyHeading', { defaultValue: 'HISTORY' })}
+        size={26}
+        style={styles.figmaTitle}
+      />
+    </>
+  );
+
+  // Figma mode keeps its header on every state so the back link is always there.
+  const wrapFigma = (body) => (
+    <View style={styles.screen}>
+      {figmaHeader}
       <View style={[styles.figmaBody, styles.centered]}>{body}</View>
     </View>
   );
@@ -135,14 +149,14 @@ export default function ActivityLogScreen() {
     if (figma) {
       return wrapFigma(
         <>
-          <ActivityIndicator size="large" color="#6C6C69" />
+          <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
           <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </>,
       );
     }
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator size="large" color="#6C6C69" />
+        <ActivityIndicator size="large" color="rgba(253,253,253,0.30)" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
@@ -153,13 +167,7 @@ export default function ActivityLogScreen() {
       return wrapFigma(
         <>
           <Text style={styles.errorBody}>{t('activityLog.failedToLoad')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={fetchFirstPage}
-            style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
-          </Pressable>
+          <SlantButton label={t('common.retry')} onPress={fetchFirstPage} size="md" style={styles.figmaRetry} />
         </>,
       );
     }
@@ -179,7 +187,7 @@ export default function ActivityLogScreen() {
 
   // In Figma mode a page of only hidden rows (streaks, levels) still reads as
   // empty; keep paging in the list below once anything is visible.
-  const figmaEmpty = figma && sections.length === 0 && endReached;
+  const figmaEmpty = figma && rows.length === 0 && endReached;
   if ((events.length === 0 && !error && !initialLoading) || figmaEmpty) {
     if (figma) {
       return wrapFigma(
@@ -200,22 +208,11 @@ export default function ActivityLogScreen() {
   if (figma) {
     return (
       <View ref={walkthroughRootRef} collapsable={false} style={styles.screen} onTouchStart={tips.onTouchStart}>
-        <BackTitleHeader
-          title={t('activityLog.historyTitle', { defaultValue: 'History' })}
-          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
-        />
-        <SectionList
-          sections={sections}
-          stickySectionHeadersEnabled={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        {figmaHeader}
+        <FlatList
+          data={rows}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 16 }}
           keyExtractor={(item) => item.id}
-          renderSectionHeader={({ section }) => (
-            <Text style={styles.groupHeader} accessibilityRole="header">
-              {section.title.key
-                ? t(section.title.key, { defaultValue: section.title.defaultValue })
-                : section.title.text}
-            </Text>
-          )}
           renderItem={({ item }) => <HistoryRow item={item} />}
           onEndReached={fetchNextPage}
           onEndReachedThreshold={0.5}
@@ -224,8 +221,8 @@ export default function ActivityLogScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#F5F4EF"
-              colors={['#F5F4EF']}
+              tintColor="#FDFDFD"
+              colors={['#FDFDFD']}
             />
           }
         />
@@ -253,8 +250,8 @@ export default function ActivityLogScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#F5F4EF"
-            colors={['#F5F4EF']}
+            tintColor="#FDFDFD"
+            colors={['#FDFDFD']}
           />
         }
       />
@@ -267,7 +264,7 @@ export default function ActivityLogScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#101010',
+    backgroundColor: '#000000',
   },
   centered: {
     alignItems: 'center',
@@ -276,54 +273,52 @@ const styles = StyleSheet.create({
   figmaBody: {
     flex: 1,
   },
-  groupHeader: {
+  figmaTitle: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 4,
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    color: colors.muted2,
+    paddingBottom: 12,
+  },
+  figmaRetry: {
+    marginTop: 16,
   },
   loadingText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     marginTop: 12,
   },
   errorBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   retryBtn: {
-    backgroundColor: '#3155FF',
+    backgroundColor: colors.action,
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 16,
   },
   retryBtnText: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#F5F4EF',
+    color: '#FDFDFD',
   },
   emptyLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   emptyBody: {
-    fontFamily: 'InstrumentSans_400Regular',
+    fontFamily: 'IBMPlexSans_500Medium',
     fontSize: 14,
-    color: '#E4E3DE',
+    color: 'rgba(253,253,253,0.85)',
     marginTop: 8,
   },
   header: {
@@ -332,28 +327,28 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontFamily: 'GeistMono_500Medium',
+    fontFamily: 'IBMPlexSans_600SemiBold',
     fontSize: 11,
     letterSpacing: 1.76,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
   },
   hairlineStrong: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginTop: 4,
   },
   endDivider: {
     height: 1,
-    backgroundColor: 'rgba(245,244,239,0.16)',
+    backgroundColor: 'rgba(253,253,253,0.16)',
     marginHorizontal: 16,
   },
   endLabel: {
-    fontFamily: 'GeistMono_400Regular',
+    fontFamily: 'IBMPlexSans_700Bold',
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
-    color: '#A3A29F',
+    color: 'rgba(253,253,253,0.62)',
     textAlign: 'center',
     paddingVertical: 16,
   },

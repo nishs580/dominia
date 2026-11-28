@@ -1,7 +1,6 @@
-// Daily Reward (Updated UX A6): DAILY REWARD eyebrow, DAY n, the gold icon
-// with today's amount and GOLD, the D1–D7 strip with today in lime, "Come
-// back tomorrow to collect Day n+1." and a full-width lime TAP TO COLLECT, on
-// plain Ink. The strip comes from lib/dailyReward (GET ladder → economy
+// Daily Rewards (Dominia-Temp core-loop board): the DAILY REWARDS title, the
+// gold-biscuit art on a blue glow, "Day n: amount" and a lime TAP TO COLLECT,
+// on black. Day and amount come from lib/dailyReward (GET ladder → economy
 // daily_reward_ladder → flat daily_reward_gold).
 //
 // Two uses:
@@ -15,11 +14,11 @@
 // Failures show retry / skip and never block the player.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@clerk/clerk-expo';
-import { GoldGlyph } from '../components/ResourceGlyphs';
 import { claimDailyReward, isAlreadyClaimed } from '../lib/dailyRewardApi';
 import { dailyRewardView } from '../lib/dailyReward';
 import { getEconomy } from '../lib/flags';
@@ -27,18 +26,23 @@ import { colors, fonts } from '../lib/theme';
 
 const CLOSE_AFTER_CLAIM_MS = 1200;
 
-function StripCell({ cell }) {
-  const today = cell.state === 'today';
-  const collected = cell.state === 'collected';
+const BISCUITS = require('../assets/figma/gold-biscuits.png');
+const ART = 220;
+const GLOW = Math.round(ART * 1.4);
+
+// Soft Dominia-blue glow behind the biscuits.
+function Glow() {
   return (
-    <View style={[styles.cell, today && styles.cellToday, collected && styles.cellCollected]}>
-      <Text style={[styles.cellDay, today && styles.cellDayToday]} maxFontSizeMultiplier={1.2}>
-        {cell.label}
-      </Text>
-      <Text style={[styles.cellAmount, today && styles.cellAmountToday]} maxFontSizeMultiplier={1.2}>
-        {cell.amount}
-      </Text>
-    </View>
+    <Svg width={GLOW} height={GLOW} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <RadialGradient id="dailyRewardGlow" cx="50%" cy="50%" r="50%">
+          <Stop offset="0" stopColor={colors.action} stopOpacity="0.75" />
+          <Stop offset="0.55" stopColor={colors.action} stopOpacity="0.25" />
+          <Stop offset="1" stopColor={colors.action} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Circle cx={GLOW / 2} cy={GLOW / 2} r={GLOW / 2} fill="url(#dailyRewardGlow)" />
+    </Svg>
   );
 }
 
@@ -47,14 +51,14 @@ function StripCell({ cell }) {
  * @param {'loading'|'ready'|'error'|'claiming'|'claimed'} props.status
  * @param {{day:number, amount:number, ladder?:number[]|null}|null} props.reward
  * @param {number|null} [props.claimedAmount]
- * @param {string} [props.background] ignored; kept for callers (A6 is plain Ink)
+ * @param {string} [props.background] ignored; kept for callers (the board is plain black)
  */
 // eslint-disable-next-line no-unused-vars
 export function DailyRewardView({ status, reward, claimedAmount = null, onCollect, onRetry, onSkip, background }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const view = dailyRewardView({ reward, economy: getEconomy() });
-  const { day, amount, nextDay, strip } = view;
+  const { day, amount } = view;
 
   useEffect(() => {
     if (status === 'claimed') {
@@ -75,10 +79,14 @@ export function DailyRewardView({ status, reward, claimedAmount = null, onCollec
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
       <View style={styles.content}>
-        <Text style={styles.eyebrow}>{t('dailyReward.eyebrow', { defaultValue: 'Daily reward' })}</Text>
         <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.2}>
-          {t('dailyReward.dayTitle', { day, defaultValue: 'Day {{day}}' })}
+          {t('dailyReward.title', { defaultValue: 'DAILY REWARDS' })}
         </Text>
+
+        <View style={styles.art} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <Glow />
+          <Image source={BISCUITS} style={styles.biscuits} resizeMode="contain" />
+        </View>
 
         {status === 'loading' ? (
           <ActivityIndicator color={colors.white} style={styles.loading} />
@@ -98,50 +106,29 @@ export function DailyRewardView({ status, reward, claimedAmount = null, onCollec
           </View>
         ) : (
           <>
-            <View
-              style={styles.amountRow}
-              accessible
-              accessibilityLabel={`${amount} ${t('dailyReward.gold', { defaultValue: 'Gold' })}`}
-            >
-              <GoldGlyph size={40} color={colors.lime} strokeWidth={2} />
-              <Text style={styles.amount} maxFontSizeMultiplier={1.2}>
-                {amount}
-              </Text>
-              <Text style={styles.goldLabel}>{t('dailyReward.gold', { defaultValue: 'Gold' })}</Text>
-            </View>
-
-            <View style={styles.strip} importantForAccessibility="no-hide-descendants">
-              {strip.map((cell) => (
-                <StripCell key={cell.day} cell={cell} />
-              ))}
-            </View>
-
-            <Text style={styles.comeBack}>
-              {t('dailyReward.comeBack', {
-                day: nextDay,
-                defaultValue: 'Come back tomorrow to collect Day {{day}}.',
-              })}
+            <Text style={styles.dayAmount} maxFontSizeMultiplier={1.3}>
+              {t('dailyReward.dayAmount', { day, amount, defaultValue: 'Day {{day}}: {{amount}}' })}
             </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('dailyReward.collectA11y', {
+                day,
+                amount,
+                defaultValue: 'Day {{day}}: {{amount}} Gold. Tap to collect',
+              })}
+              accessibilityState={{ disabled: !canCollect, busy: status === 'claiming' }}
+              disabled={!canCollect}
+              onPress={onCollect}
+              hitSlop={12}
+              style={({ pressed }) => [styles.collect, pressed && canCollect && styles.collectPressed]}
+            >
+              <Text style={[styles.collectText, !canCollect && styles.collectDim]} maxFontSizeMultiplier={1.3}>
+                {ctaLabel}
+              </Text>
+            </Pressable>
           </>
         )}
       </View>
-
-      {status !== 'error' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('dailyReward.collectA11y', {
-            day,
-            amount,
-            defaultValue: 'Day {{day}}: {{amount}} Gold. Tap to collect',
-          })}
-          accessibilityState={{ disabled: !canCollect }}
-          disabled={!canCollect}
-          onPress={onCollect}
-          style={({ pressed }) => [styles.collect, !canCollect && styles.collectDim, pressed && canCollect && styles.collectPressed]}
-        >
-          <Text style={styles.collectText}>{ctaLabel}</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -191,65 +178,29 @@ export default function DailyRewardScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.obsidian, paddingHorizontal: 24 },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.lime,
-    textTransform: 'uppercase',
-  },
   title: {
     fontFamily: fonts.display,
-    fontSize: 36,
-    lineHeight: 40,
-    letterSpacing: -0.6,
+    fontSize: 32,
+    lineHeight: 36,
     color: colors.white,
     textTransform: 'uppercase',
-    marginTop: 12,
+    textAlign: 'center',
   },
-  loading: { marginVertical: 48 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
-  amount: { fontFamily: fonts.monoLight, fontSize: 56, lineHeight: 64, letterSpacing: -1.6, color: colors.white },
-  goldLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: colors.muted2,
+  art: { width: GLOW, height: GLOW, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  biscuits: { width: ART, height: ART },
+  loading: { marginVertical: 24 },
+  dayAmount: { fontFamily: fonts.bodyMedium, fontSize: 28, lineHeight: 34, color: colors.white, textAlign: 'center' },
+  collect: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, marginTop: 40 },
+  collectPressed: { opacity: 0.7 },
+  collectText: {
+    fontFamily: fonts.action,
+    fontSize: 16,
+    letterSpacing: 0.8,
+    color: colors.lime,
     textTransform: 'uppercase',
-  },
-  strip: { flexDirection: 'row', gap: 6, width: '100%', marginTop: 16 },
-  cell: {
-    flex: 1,
-    minHeight: 52,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-  },
-  cellToday: { borderColor: colors.lime, backgroundColor: colors.limeSoft },
-  cellCollected: { opacity: 0.5 },
-  cellDay: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.8, color: colors.muted },
-  cellDayToday: { color: colors.lime },
-  cellAmount: { fontFamily: fonts.mono, fontSize: 13, color: colors.muted2, marginTop: 2 },
-  cellAmountToday: { color: colors.white },
-  comeBack: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 16, textAlign: 'center' },
-  collect: {
-    backgroundColor: colors.lime,
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    textAlign: 'center',
   },
   collectDim: { opacity: 0.6 },
-  collectPressed: { opacity: 0.85 },
-  collectText: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    letterSpacing: 1.8,
-    color: colors.onLime,
-    textTransform: 'uppercase',
-  },
   errorBox: { alignItems: 'center', marginTop: 24 },
   errorText: { fontFamily: fonts.body, fontSize: 13, color: colors.white, textAlign: 'center' },
   row: { flexDirection: 'row', gap: 24, marginTop: 16 },

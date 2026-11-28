@@ -8,7 +8,7 @@ import React from 'react';
 import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 
 const DEFAULT_SIZE = 18;
-const DEFAULT_COLOR = '#F5F4EF';
+const DEFAULT_COLOR = '#FDFDFD';
 const STROKE = 1.75;
 
 function Icon({ size, children }) {
@@ -135,6 +135,54 @@ export function ShieldIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeW
         {...line(color, strokeWidth)}
         d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
       />
+    </Icon>
+  );
+}
+
+// Dominia-Temp map header and rail (plan U5): coin and bolt for the gold
+// and level pills, locate arrow, history (log) and square chat bubble.
+export function CoinIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  const p = line(color, strokeWidth);
+  return (
+    <Icon size={size}>
+      <Circle {...p} cx="12" cy="12" r="9" />
+      <Line {...p} x1="12" y1="8" x2="12" y2="12" />
+      <Line {...p} x1="12" y1="16" x2="12.01" y2="16" />
+    </Icon>
+  );
+}
+
+export function BoltIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Icon size={size}>
+      <Path {...line(color, strokeWidth)} d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+    </Icon>
+  );
+}
+
+export function NavigateIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Icon size={size}>
+      <Path {...line(color, strokeWidth)} d="M3 11 22 2l-9 19-2-8-8-2Z" />
+    </Icon>
+  );
+}
+
+export function HistoryIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  const p = line(color, strokeWidth);
+  return (
+    <Icon size={size}>
+      <Path {...p} d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <Path {...p} d="M3 3v5h5" />
+      <Polyline {...p} points="12 7 12 12 16 14" />
+    </Icon>
+  );
+}
+
+export function MessageSquareIcon({ size = DEFAULT_SIZE, color = DEFAULT_COLOR, strokeWidth = STROKE }) {
+  return (
+    <Icon size={size}>
+      <Path {...line(color, strokeWidth)} d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </Icon>
   );
 }
